@@ -45,25 +45,3 @@ function telegram_login_bot_username(): string {
 function telegram_login_enabled(): bool {
   return telegram_login_bot_username() !== '';
 }
-
-function session_user_id(): int {
-  if (session_status() === PHP_SESSION_NONE) {
-    try { @session_start(); } catch (Throwable $e) {}
-  }
-  $id = $_SESSION['user_id'] ?? 0;
-  return is_int($id) ? $id : (is_numeric($id) ? (int)$id : 0);
-}
-
-function session_csrf_token(): string {
-  if (session_status() === PHP_SESSION_NONE) {
-    try { @session_start(); } catch (Throwable $e) {}
-  }
-  if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-  }
-  return $_SESSION['csrf_token'];
-}
-
-function verify_csrf_token(string $token): bool {
-  return hash_equals(session_csrf_token(), $token);
-}
