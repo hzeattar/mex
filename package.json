@@ -1,0 +1,8 @@
+{
+  "name": "mex-trading-platform",
+  "version": "3.0.0",
+  "description": "MEX Trading Platform",
+  "scripts": {
+    "start": "php -S 0.0.0.0:${PORT:-8080} -t ."
+  }
+}
