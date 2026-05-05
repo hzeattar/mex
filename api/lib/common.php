@@ -199,8 +199,43 @@ function json_body(): array {
   return read_json_body();
 }
 
+function env_nonempty(string $key): string {
+  $v = getenv($key);
+  return ($v === false) ? '' : trim((string)$v);
+}
+
+function env_placeholder_value(string $value): bool {
+  $v = strtolower(trim($value));
+  if ($v === '') return true;
+  return in_array($v, ['your_password_here', 'your-password-here', 'change_me', 'changeme', 'xxx', 'null'], true);
+}
+
+function railway_runtime(): bool {
+  return env_nonempty('RAILWAY_ENVIRONMENT') !== '' || env_nonempty('RAILWAY_SERVICE_NAME') !== '';
+}
+
+function mysql_url_config(): array {
+  $url = env_nonempty('MYSQL_URL') ?: env_nonempty('DATABASE_URL');
+  if ($url === '') return [];
+  $parts = parse_url($url);
+  if (!is_array($parts)) return [];
+  $path = trim((string)($parts['path'] ?? ''), '/');
+  return [
+    'host' => (string)($parts['host'] ?? ''),
+    'port' => (string)($parts['port'] ?? ''),
+    'name' => $path,
+    'user' => isset($parts['user']) ? rawurldecode((string)$parts['user']) : '',
+    'pass' => isset($parts['pass']) ? rawurldecode((string)$parts['pass']) : '',
+  ];
+}
+
 function db_driver(): string {
-  return strtolower(env('DB_DRIVER', 'sqlite') ?? 'sqlite');
+  $configured = strtolower(trim((string)env('DB_DRIVER', '')));
+  if ($configured !== '') return $configured;
+  if (env_nonempty('MYSQLHOST') !== '' || env_nonempty('MYSQL_URL') !== '' || env_nonempty('DATABASE_URL') !== '') {
+    return 'mysql';
+  }
+  return 'sqlite';
 }
 
 function require_pdo_driver(string $driverName): void {
@@ -228,13 +263,33 @@ function db(): PDO {
   $driver = db_driver();
   if ($driver === 'mysql') {
     require_pdo_driver('mysql');
-    $host = env('DB_HOST', 'localhost');
-    $port = env('DB_PORT', '3306');
-    $name = env('DB_NAME', '');
-    $user = env('DB_USER', '');
-    $pass = env('DB_PASS', '');
+    $urlCfg = mysql_url_config();
+    $railway = railway_runtime();
+    $mysqlHost = env_nonempty('MYSQLHOST') ?: (string)($urlCfg['host'] ?? '');
+    $mysqlName = env_nonempty('MYSQLDATABASE') ?: (string)($urlCfg['name'] ?? '');
+    $mysqlUser = env_nonempty('MYSQLUSER') ?: (string)($urlCfg['user'] ?? '');
+    $mysqlPass = env_nonempty('MYSQLPASSWORD') ?: (string)($urlCfg['pass'] ?? '');
+    $mysqlPort = env_nonempty('MYSQLPORT') ?: (string)($urlCfg['port'] ?? '');
+
+    $host = trim((string)env('DB_HOST', ''));
+    if ($host === '' || ($railway && in_array(strtolower($host), ['localhost', '127.0.0.1'], true) && $mysqlHost !== '')) {
+      $host = $mysqlHost !== '' ? $mysqlHost : 'localhost';
+    }
+    $port = trim((string)env('DB_PORT', ''));
+    if ($port === '' || ($railway && $mysqlPort !== '' && $port === '3306')) $port = $mysqlPort !== '' ? $mysqlPort : '3306';
+
+    $name = trim((string)env('DB_NAME', ''));
+    if ($name === '' || ($railway && $mysqlName !== '' && in_array(strtolower($name), ['mex', 'vertexpluse', 'vertexpluse_meg'], true))) {
+      $name = $mysqlName;
+    }
+    $user = trim((string)env('DB_USER', ''));
+    if ($user === '' || ($railway && $mysqlUser !== '' && in_array(strtolower($user), ['root', 'vertexpluse_user', 'vertexpluse_mega'], true))) {
+      $user = $mysqlUser;
+    }
+    $pass = (string)env('DB_PASS', '');
+    if (env_placeholder_value($pass) && $mysqlPass !== '') $pass = $mysqlPass;
     if (!$name || !$user) {
-      throw new RuntimeException('DB is not configured. Please set DB_* in .env');
+      throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }
     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
     $pdo = new PDO($dsn, $user, $pass, [
