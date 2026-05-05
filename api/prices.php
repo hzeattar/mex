@@ -8,45 +8,36 @@
  * GET /api/prices.php?type=commodities
  * GET /api/prices.php?type=arab
  * GET /api/prices.php?type=futures
- * 
- * GET /api/prices.php?type=crypto&symbols=BTCUSDT,ETHUSDT
  */
 
 require_once __DIR__ . '/lib/unified_price_provider.php';
 
 $type = price_normalize_type($_GET['type'] ?? 'crypto');
 $symbols = isset($_GET['symbols']) ? explode(',', $_GET['symbols']) : [];
-$single = $_GET['single'] ?? null;
 
 // Validate type
 $allowedTypes = ['crypto', 'forex', 'stocks', 'commodities', 'arab', 'futures'];
 if (!in_array($type, $allowedTypes)) {
     http_response_code(400);
-    json_response([
+    header('Content-Type: application/json');
+    echo json_encode([
         'ok' => false,
         'error' => 'Invalid type. Allowed: ' . implode(', ', $allowedTypes),
     ]);
+    exit;
 }
 
 // Get prices
-$prices = empty($symbols) 
-    ? price_get($type) 
-    : price_get($type, $symbols);
+$prices = price_get($type, $symbols);
 
 // Format for API response
 $items = [];
-$source = 'unknown';
-
 foreach ($prices as $symbol => $data) {
     $formatted = price_format_for_api($data);
     $items[] = array_merge([
         'symbol' => $symbol,
         'type' => $type,
     ], $formatted);
-    
-    if ($source === 'unknown' && !empty($data['source'])) {
-        $source = $data['source'];
-    }
 }
 
 // Sort by symbol
@@ -55,11 +46,12 @@ usort($items, function($a, $b) {
 });
 
 // Response
-json_response([
+header('Content-Type: application/json');
+echo json_encode([
     'ok' => true,
     'type' => $type,
     'count' => count($items),
     'items' => $items,
     'updated' => time(),
-    'source' => $source,
+    'source' => 'simulated',
 ]);

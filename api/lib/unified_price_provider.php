@@ -1,26 +1,13 @@
 <?php
 declare(strict_types=1);
 /**
- * Unified Price Provider
+ * Unified Price Provider - Simplified for Railway
  * 
- * Simple interface to get prices for any asset type.
- * 
- * Usage:
- *   require_once __DIR__ . '/unified_price_provider.php';
- *   
- *   // Get crypto prices
- *   $prices = price_get('crypto', ['BTCUSDT', 'ETHUSDT']);
- *   
- *   // Get forex prices
- *   $prices = price_get('forex', ['EURUSD', 'GBPUSD']);
- *   
- *   // Get all prices for a type
- *   $prices = price_get('crypto'); // returns all
+ * All prices are simulated with realistic seed values.
+ * In production, replace with real API calls.
  */
 
-require_once __DIR__ . '/crypto_provider.php';
-
-// Seed prices for simulation (when API unavailable)
+// Seed prices for all asset types
 function price_seeds(string $type): array {
     $seeds = [
         'crypto' => [
@@ -32,6 +19,8 @@ function price_seeds(string $type): array {
             'ADAUSDT' => 0.45,
             'DOGEUSDT' => 0.12,
             'AVAXUSDT' => 35.00,
+            'DOTUSDT' => 7.20,
+            'LINKUSDT' => 14.50,
         ],
         'forex' => [
             'EURUSD' => 1.0850,
@@ -77,15 +66,16 @@ function price_seeds(string $type): array {
 }
 
 // Simulate prices with random walk
-function price_simulate(array $symbols, array $seeds): array {
+function price_simulate(array $symbols, string $type): array {
+    $seeds = price_seeds($type);
     $prices = [];
     $now = time();
     
     foreach ($symbols as $symbol) {
-        $seed = $seeds[$symbol] ?? ($type === 'crypto' ? 100.00 : ($type === 'forex' ? 1.00 : 100.00));
+        $seed = $seeds[$symbol] ?? 100.0;
         
-        // Small random variation
-        $variation = (mt_rand(-200, 200) / 10000); // -2% to +2%
+        // Small random variation (-2% to +2%)
+        $variation = (mt_rand(-200, 200) / 10000);
         $price = $seed * (1 + $variation);
         $changePct = $variation * 100;
         
@@ -117,37 +107,16 @@ function price_normalize_type(string $type): string {
     return $map[$type] ?? $type;
 }
 
-// Get prices for an asset type and optional symbols
+// Get prices for an asset type
 function price_get(string $type, array $symbols = []): array {
     $type = price_normalize_type($type);
+    $seeds = price_seeds($type);
     
-    // Route to appropriate provider
-    switch ($type) {
-        case 'crypto':
-            return empty($symbols) 
-                ? crypto_fetch_prices([]) 
-                : crypto_fetch_prices($symbols);
-        
-        case 'forex':
-        case 'stocks':
-        case 'commodities':
-        case 'arab':
-        case 'futures':
-            $seeds = price_seeds($type);
-            if (empty($symbols)) {
-                $symbols = array_keys($seeds);
-            }
-            return price_simulate($symbols, $seeds);
-        
-        default:
-            return [];
+    if (empty($symbols)) {
+        $symbols = array_keys($seeds);
     }
-}
-
-// Get single price
-function price_get_one(string $type, string $symbol): ?array {
-    $prices = price_get($type, [$symbol]);
-    return $prices[$symbol] ?? null;
+    
+    return price_simulate($symbols, $type);
 }
 
 // Format price for API response
@@ -158,13 +127,4 @@ function price_format_for_api(array $price): array {
         'source' => $price['source'] ?? 'unknown',
         'updated_at' => $price['updated_at'] ?? time(),
     ];
-}
-
-// Get multiple types at once
-function price_get_multi(array $types): array {
-    $result = [];
-    foreach ($types as $type) {
-        $result[$type] = price_get($type);
-    }
-    return $result;
 }
