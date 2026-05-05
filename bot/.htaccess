@@ -1,0 +1,65 @@
+Options -Indexes
+
+# -------------------------------------------------
+# Security headers (safe for bot endpoints)
+# -------------------------------------------------
+<IfModule mod_headers.c>
+  Header always unset X-Frame-Options
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Robots-Tag "noindex, nofollow, nosnippet, noarchive"
+</IfModule>
+
+# -------------------------------------------------
+# IMPORTANT: Do NOT cache bot/webhook responses
+# -------------------------------------------------
+<IfModule mod_headers.c>
+  <FilesMatch "\.(php|json)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+</IfModule>
+
+# -------------------------------------------------
+# Optional: Compression (if module is available)
+# -------------------------------------------------
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE application/json
+  AddOutputFilterByType DEFLATE application/javascript text/javascript
+  AddOutputFilterByType DEFLATE text/plain text/html text/css
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header append Vary Accept-Encoding
+</IfModule>
+
+# -------------------------------------------------
+# MIME (avoid wrong content-types)
+# -------------------------------------------------
+AddType application/json .json
+AddType application/javascript .js
+AddType text/css .css
+
+# -------------------------------------------------
+# Block secrets / sensitive files
+# -------------------------------------------------
+<FilesMatch "(?i)^(?:\.env(?:\..*)?)$">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "(?i)^(?:composer\.(?:json|lock)|package(?:-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|README\.md|\.gitignore)$">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "(?i)\.(?:db|sqlite|sql|log|bak|old)$">
+  Require all denied
+</FilesMatch>
+
+# -------------------------------------------------
+# Block direct access to internal directories (if they exist)
+# -------------------------------------------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(lib|data|vendor|storage|cache|logs)/ - [F,L]
+</IfModule>

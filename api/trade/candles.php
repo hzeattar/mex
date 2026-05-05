@@ -14,6 +14,7 @@ if (!function_exists('vp_ends_with')) {
 
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
+require_once __DIR__ . '/../lib/quote_authority.php';
 require_once __DIR__ . '/../lib/marketdata.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
 
@@ -632,6 +633,20 @@ try {
 
   // Fallback synthetic (so UI never breaks)
   $last = candles_best_live_price($symbol, $market, $type, $meta);
+  if (!($last > 0) && function_exists('qa_quote_payload')) {
+    try {
+      $qa = qa_quote_payload($type, [$symbol], [
+        'allow_live' => ($type === 'crypto'),
+        'allow_crypto_seed' => true,
+        'allow_noncrypto_seed' => false,
+        'direct_budget' => 1,
+        'direct_yahoo_budget' => 1,
+        'chart_budget' => 1,
+      ]);
+      $qaItem = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
+      if ($qaItem && (float)($qaItem['price'] ?? 0) > 0) $last = (float)$qaItem['price'];
+    } catch (Throwable $ignored) {}
+  }
   if (!($last > 0) && !empty($cachedAll)) {
     $tail = candles_from_cache($cachedAll, $end, max(1, min($limit, 8)));
     $lastBar = $tail ? end($tail) : null;
@@ -663,6 +678,20 @@ try {
     }
     $last = 0.0;
     try { $last = (float)quote_price($symbol, $market, $type); } catch (Throwable $ignored) { $last = 0.0; }
+    if (!($last > 0) && function_exists('qa_quote_payload')) {
+      try {
+        $qa = qa_quote_payload($type, [$symbol], [
+          'allow_live' => ($type === 'crypto'),
+          'allow_crypto_seed' => true,
+          'allow_noncrypto_seed' => false,
+          'direct_budget' => 1,
+          'direct_yahoo_budget' => 1,
+          'chart_budget' => 1,
+        ]);
+        $qaItem = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
+        if ($qaItem && (float)($qaItem['price'] ?? 0) > 0) $last = (float)$qaItem['price'];
+      } catch (Throwable $ignoredQa) {}
+    }
     if (!($last > 0) && !empty($cachedAll)) {
       $tail = candles_from_cache($cachedAll, $end, max(1, min($limit, 4)));
       $lastBar = $tail ? end($tail) : null;

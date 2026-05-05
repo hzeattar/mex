@@ -2,6 +2,16 @@
 declare(strict_types=1);
 require_once __DIR__ . '/api/lib/common.php';
 require_once __DIR__ . '/api/lib/settings.php';
+require_once __DIR__ . '/api/lib/schema.php';
+
+try {
+  $pdo = db();
+  schema_install($pdo, db_driver());
+  schema_upgrade($pdo, db_driver());
+  schema_seed_defaults($pdo, db_driver());
+} catch (Throwable $e) {
+  // ignore, public pages will use defaults
+}
 
 function site_setting(string $key, string $default = ''): string {
   try {
@@ -27,6 +37,7 @@ function site_defaults(): array {
   ];
 }
 
+
 function telegram_login_bot_username(): string {
   $candidates = [];
   try { $candidates[] = site_setting('bot.username', ''); } catch (Throwable $e) {}
@@ -37,11 +48,18 @@ function telegram_login_bot_username(): string {
     if ($v === '') continue;
     $v = ltrim($v, '@');
     $v = preg_replace('/[^A-Za-z0-9_]/', '', $v);
-    if (strlen($v) >= 3) return $v;
+    if ($v !== '') return $v;
   }
   return '';
 }
 
-function telegram_login_enabled(): bool {
-  return telegram_login_bot_username() !== '';
+
+
+function safe_public_redirect_target(?string $target, string $fallback = '/app.php#/home'): string {
+  $target = trim((string)$target);
+  if ($target === '') return $fallback;
+  if (preg_match('~^[a-z][a-z0-9+.-]*://~i', $target)) return $fallback;
+  if (str_starts_with($target, '//')) return $fallback;
+  if (!str_starts_with($target, '/')) return $fallback;
+  return $target;
 }

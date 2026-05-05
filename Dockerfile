@@ -1,18 +1,26 @@
-# MEX Trading Platform - PHP with built-in server
-
 FROM php:8.2-cli
 
-# Set working directory
 WORKDIR /app
 
-# Copy all files
-COPY . /app/
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      libfreetype6-dev \
+      libjpeg62-turbo-dev \
+      libonig-dev \
+      libpng-dev \
+      libzip-dev; \
+    docker-php-ext-configure gd --with-freetype --with-jpeg; \
+    docker-php-ext-install -j"$(nproc)" gd mbstring mysqli pdo_mysql zip; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
 
-# Create cache directory
-RUN mkdir -p /app/data/cache && chmod 777 /app/data/cache
+COPY . /app
 
-# Expose port (Railway sets $PORT)
+RUN set -eux; \
+    mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads; \
+    chmod -R 775 api/data api/uploads
+
 ENV PORT=8080
 
-# Start PHP built-in server
-CMD ["sh", "-c", "php -S 0.0.0.0:$PORT -t ."]
+CMD ["sh", "-lc", "mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads && chmod -R 775 api/data api/uploads && php -S 0.0.0.0:${PORT:-8080} -t . railway-router.php"]

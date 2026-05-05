@@ -317,6 +317,25 @@ if ($quoteSymbols) {
         $p = 0.0;
       }
     }
+    if ($p <= 0 && function_exists('qa_quote_payload')) {
+      try {
+        $qa = qa_quote_payload($assetTypeForSym, [$sym], [
+          'allow_live' => ($assetTypeForSym === 'crypto'),
+          'allow_crypto_seed' => true,
+          'allow_noncrypto_seed' => false,
+          'direct_budget' => 1,
+          'direct_yahoo_budget' => 1,
+          'chart_budget' => 1,
+        ]);
+        $item = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
+        if ($item && (float)($item['price'] ?? 0) > 0) {
+          $p = (float)$item['price'];
+          $chg = (float)($item['change_pct'] ?? $chg);
+          $src = (string)($item['source'] ?? $src);
+          $updTs = (int)($item['updated_at'] ?? $updTs) ?: $updTs;
+        }
+      } catch (Throwable $ignored) {}
+    }
     $quotes[$sym] = [
       'symbol' => $sym,
       'type' => $resolveStreamReturnType($sym) ?: ($marketInfoBySymbol[$sym]['type'] ?? $returnType ?: $assetTypeForSym ?: 'crypto'),

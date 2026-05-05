@@ -1,0 +1,181 @@
+<?php
+require_once __DIR__ . '/../lib/common.php';
+
+require_method('GET');
+$uid = require_auth();
+$pdo = db();
+
+$symbol = strtoupper(trim((string)($_GET['symbol'] ?? '')));
+$side   = strtoupper(trim((string)($_GET['side'] ?? '')));
+$mode   = strtolower(trim((string)($_GET['mode'] ?? 'demo')));
+$mode   = in_array($mode, ['demo','real'], true) ? $mode : 'demo';
+$limit  = (int)($_GET['limit'] ?? 60);
+$limit  = max(1, min(200, $limit));
+
+// Demo vs Real is differentiated by prefixing the stored symbol:
+//   demo: @D@BTCUSDT
+//   real: @R@BTCUSDT
+// Some legacy rows may have no prefix.
+$wantMode   = ($mode === 'real') ? 'real' : 'demo';
+
+$where  = 'user_id=?';
+$params = [$uid];
+
+// Symbol filtering: UI passes clean symbols (BTCUSDT) while DB stores prefixed symbols.
+if ($symbol !== '' && preg_match('/^[A-Z0-9:._-]{2,32}$/', $symbol)) {
+  $where .= ' AND (symbol=? OR symbol=? OR symbol=?)';
+  $params[] = $symbol;
+  $params[] = '@R@' . $symbol;
+  $params[] = '@D@' . $symbol;
+} else {
+  // Mode filtering by prefix
+  if ($wantMode === 'real') {
+    $where .= " AND symbol LIKE '@R@%'";
+  } else {
+    // demo: include @D@ rows + legacy rows (no prefix)
+    $where .= " AND (symbol LIKE '@D@%' OR (symbol NOT LIKE '@R@%' AND symbol NOT LIKE '@D@%'))";
+  }
+}
+
+if ($side === 'BUY' || $side === 'SELL') {
+  $where .= ' AND side=?';
+  $params[] = $side;
+}
+
+// Pull raw rows (including CLOSE rows) then collapse to one row per position.
+$sql = "SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,position_id,pnl_usd,close_reason,closed_at,status,created_at
+        FROM orders
+        WHERE $where
+        ORDER BY id DESC
+        LIMIT " . ($limit * 3);
+
+$st = $pdo->prepare($sql);
+$st->execute($params);
+$rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$byPos = [];
+foreach ($rows as $r) {
+  $pid = (int)($r['position_id'] ?? 0);
+  if ($pid <= 0) $pid = (int)($r['id'] ?? 0);
+  if (!isset($byPos[$pid])) $byPos[$pid] = ['open'=>null,'close'=>null,'last'=>null];
+  $byPos[$pid]['last'] = $byPos[$pid]['last'] ?? $r;
+
+  $s   = strtoupper((string)($r['side'] ?? ''));
+  $stt = strtolower((string)($r['status'] ?? ''));
+
+  if ($s !== 'CLOSE' && !$byPos[$pid]['open']) {
+    $byPos[$pid]['open'] = $r;
+  }
+  // Prefer explicit CLOSE rows, otherwise accept updated open rows (status=closed)
+  if ($s === 'CLOSE') {
+    $byPos[$pid]['close'] = $byPos[$pid]['close'] ?: $r; // rows are DESC
+  } elseif ($stt === 'closed' && !$byPos[$pid]['close']) {
+    $byPos[$pid]['close'] = $r;
+  }
+}
+
+$items = [];
+foreach ($byPos as $pid => $pack) {
+  $open = $pack['open'] ?: $pack['last'];
+  if (!$open) continue;
+  $close = $pack['close'];
+
+  $rawSymbol = (string)($open['symbol'] ?? '');
+  $cleanSymbol = $rawSymbol;
+  if (str_starts_with($cleanSymbol, '@R@') || str_starts_with($cleanSymbol, '@D@')) {
+    $cleanSymbol = substr($cleanSymbol, 3);
+  }
+
+  $accountMode = str_starts_with($rawSymbol, '@R@') ? 'real' : 'demo';
+  if ($accountMode !== $wantMode) continue;
+
+  $entryPrice = (float)($open['fill_price'] ?? 0);
+  $usdAmount  = (float)($open['usd_amount'] ?? 0);
+  $marketType = strtolower((string)($open['market_type'] ?? 'spot'));
+  $lev        = (int)($open['leverage'] ?? 1);
+
+  // For PERP, used_usdt is margin (notional/leverage). For SPOT it's the notional.
+  $usedUsdt = 0.0;
+  if ($marketType === 'perp') {
+    if ($usdAmount > 0 && $lev > 0) {
+      $usedUsdt = $usdAmount / max(1,$lev);
+    } else {
+      $q = (float)($open['qty'] ?? 0);
+      if ($q > 0 && $entryPrice > 0) $usedUsdt = ($q * $entryPrice) / max(1,$lev);
+    }
+  } else {
+    if ($usdAmount > 0) {
+      $usedUsdt = $usdAmount;
+    } else {
+      $q = (float)($open['qty'] ?? 0);
+      if ($q > 0 && $entryPrice > 0) $usedUsdt = ($q * $entryPrice);
+    }
+  }
+
+  $exitPrice = null;
+  if ($close) {
+    // In this project schema:
+    // - fill_price is the ENTRY price
+    // - limit_price is used to store the EXIT price for closed rows
+    // So for CLOSE/closed rows we must prefer limit_price (exit) first.
+    $ep = (float)($close['limit_price'] ?? 0);
+    if (!$ep) $ep = (float)($close['fill_price'] ?? 0);
+    if ($ep > 0) $exitPrice = $ep;
+  }
+
+  $pnl = 0.0;
+  if ($close) {
+    $pnl = (float)($close['pnl_usd'] ?? 0);
+    if ($pnl == 0.0) $pnl = (float)($open['pnl_usd'] ?? 0);
+  } else {
+    $pnl = (float)($open['pnl_usd'] ?? 0);
+  }
+
+  $feeTotal = (float)($open['fee_paid'] ?? 0);
+  if ($close) $feeTotal += (float)($close['fee_paid'] ?? 0);
+
+  $stt = strtolower((string)(($close['status'] ?? null) ?: ($open['status'] ?? '')));
+  $isClosed = ($stt === 'closed' || ($close && (int)($close['closed_at'] ?? 0) > 0));
+  $closedAt = null;
+  if ($isClosed) {
+    $ca = (int)(($close['closed_at'] ?? null) ?: ($open['closed_at'] ?? null) ?: 0);
+    $closedAt = $ca > 0 ? $ca : null;
+  }
+
+  $items[] = [
+    'position_id'      => (int)$pid,
+    'account_mode'     => $accountMode,
+    'symbol'           => $cleanSymbol,
+    'symbol_raw'       => $rawSymbol,
+    'asset_type'       => (string)($open['asset_type'] ?? ''),
+    'market_type'      => $marketType,
+    'side'             => (string)($open['side'] ?? ''),
+    'order_type'       => (string)($open['order_type'] ?? ''),
+    'qty'              => (float)($open['qty'] ?? 0),
+    'leverage'         => $lev,
+    // usd_amount is notional (qty*entry). For PERP, the "money you entered with" is margin (notional/leverage).
+    'usd_amount'       => $usdAmount,
+    'used_usdt'        => $usedUsdt,
+    'entry_price'      => $entryPrice,
+    'exit_price'       => $exitPrice,
+    'pnl_usd'          => $pnl,
+    'total_value_usd'  => ($usdAmount > 0 ? ($usdAmount + $pnl) : null),
+    'final_value_usdt' => ($isClosed && $marketType === 'perp') ? ($usedUsdt + $pnl - $feeTotal) : null,
+    'fee_paid'         => $feeTotal,
+    'status'           => $isClosed ? 'closed' : 'open',
+    'created_at'       => (int)($open['created_at'] ?? 0),
+    'closed_at'        => $closedAt,
+    'close_reason'     => (string)(($close['close_reason'] ?? null) ?: ($open['close_reason'] ?? '')),
+  ];
+}
+
+usort($items, function($a,$b){
+  $ta = (int)($a['created_at'] ?? 0);
+  $tb = (int)($b['created_at'] ?? 0);
+  if ($ta === $tb) return (int)$b['position_id'] <=> (int)$a['position_id'];
+  return $tb <=> $ta;
+});
+
+$items = array_slice($items, 0, $limit);
+
+json_response(['ok'=>true,'items'=>$items]);

@@ -1,57 +1,39 @@
 <?php
-/**
- * Prices API - Main endpoint for all price data
- * 
- * GET /api/prices.php?type=crypto
- * GET /api/prices.php?type=forex
- * GET /api/prices.php?type=stocks
- * GET /api/prices.php?type=commodities
- * GET /api/prices.php?type=arab
- * GET /api/prices.php?type=futures
- */
+declare(strict_types=1);
 
-require_once __DIR__ . '/lib/unified_price_provider.php';
+require_once __DIR__ . '/lib/common.php';
+require_once __DIR__ . '/lib/quote_authority.php';
+require_once __DIR__ . '/lib/quote_cache_policy.php';
 
-$type = price_normalize_type($_GET['type'] ?? 'crypto');
-$symbols = isset($_GET['symbols']) ? explode(',', $_GET['symbols']) : [];
+$type = vp_normalize_asset_type((string)($_GET['type'] ?? 'crypto'));
+if ($type === '' || $type === 'all') $type = 'crypto';
 
-// Validate type
-$allowedTypes = ['crypto', 'forex', 'stocks', 'commodities', 'arab', 'futures'];
-if (!in_array($type, $allowedTypes)) {
-    http_response_code(400);
-    header('Content-Type: application/json');
-    echo json_encode([
-        'ok' => false,
-        'error' => 'Invalid type. Allowed: ' . implode(', ', $allowedTypes),
-    ]);
-    exit;
+$allowed = ['crypto', 'forex', 'stocks', 'commodities', 'arab', 'futures'];
+if (!in_array($type, $allowed, true)) {
+  json_response(['ok' => false, 'error' => 'Invalid type. Allowed: ' . implode(', ', $allowed)], 400);
 }
 
-// Get prices
-$prices = price_get($type, $symbols);
+$symbols = qa_parse_symbols((string)($_GET['symbols'] ?? ($_GET['symbol'] ?? '')));
 
-// Format for API response
-$items = [];
-foreach ($prices as $symbol => $data) {
-    $formatted = price_format_for_api($data);
-    $items[] = array_merge([
-        'symbol' => $symbol,
-        'type' => $type,
-    ], $formatted);
+if (!$symbols) {
+  $pdo = db();
+  $st = $pdo->prepare("SELECT symbol FROM markets WHERE status='active' AND type=? ORDER BY sort_order ASC, symbol ASC LIMIT 200");
+  $st->execute([$type]);
+  $symbols = array_map('strtoupper', array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN) ?: []));
 }
 
-// Sort by symbol
-usort($items, function($a, $b) {
-    return strcmp($a['symbol'], $b['symbol']);
-});
-
-// Response
-header('Content-Type: application/json');
-echo json_encode([
-    'ok' => true,
-    'type' => $type,
-    'count' => count($items),
-    'items' => $items,
-    'updated' => time(),
-    'source' => 'simulated',
+$payload = qa_quote_payload($type, $symbols, [
+  'allow_live' => ($type === 'crypto') || count($symbols) <= 12,
+  'allow_crypto_seed' => true,
+  'allow_noncrypto_seed' => false,
+  'direct_budget' => min(12, max(1, count($symbols))),
+  'direct_yahoo_budget' => min(8, max(1, count($symbols))),
+  'chart_budget' => min(6, max(1, count($symbols))),
 ]);
+
+$payload['type'] = $type;
+$payload['count'] = count($payload['items'] ?? []);
+$payload['updated'] = time();
+$payload['source'] = 'quote_authority';
+
+json_response($payload);

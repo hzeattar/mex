@@ -1,0 +1,8 @@
+# ضع هذه السطور داخل cPanel > Cron Jobs
+# ثم احذف السطور القديمة الخاصة بـ quotes_tick / market_ingest / markets_sync إن كانت موجودة بتوقيت أبطأ.
+
+* * * * * wget -qO- "https://mexgroup-bot.com/api/cron/quotes_tick.php?token=master" >/dev/null 2>&1
+* * * * * wget -qO- "https://mexgroup-bot.com/api/cron/market_ingest.php?token=master" >/dev/null 2>&1
+*/15 * * * * wget -qO- "https://mexgroup-bot.com/api/cron/markets_sync.php?token=master" >/dev/null 2>&1
+*/5 * * * * wget -qO- "https://mexgroup-bot.com/api/cron/holds_expire.php?token=master" >/dev/null 2>&1
+0 * * * * wget -qO- "https://mexgroup-bot.com/api/cron/invest_tick.php?token=master" >/dev/null 2>&1
