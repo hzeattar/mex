@@ -2,16 +2,6 @@
 declare(strict_types=1);
 require_once __DIR__ . '/api/lib/common.php';
 require_once __DIR__ . '/api/lib/settings.php';
-require_once __DIR__ . '/api/lib/schema.php';
-
-try {
-  $pdo = db();
-  schema_install($pdo, db_driver());
-  schema_upgrade($pdo, db_driver());
-  schema_seed_defaults($pdo, db_driver());
-} catch (Throwable $e) {
-  // ignore, public pages will use defaults
-}
 
 function site_setting(string $key, string $default = ''): string {
   try {
@@ -37,7 +27,6 @@ function site_defaults(): array {
   ];
 }
 
-
 function telegram_login_bot_username(): string {
   $candidates = [];
   try { $candidates[] = site_setting('bot.username', ''); } catch (Throwable $e) {}
@@ -48,18 +37,33 @@ function telegram_login_bot_username(): string {
     if ($v === '') continue;
     $v = ltrim($v, '@');
     $v = preg_replace('/[^A-Za-z0-9_]/', '', $v);
-    if ($v !== '') return $v;
+    if (strlen($v) >= 3) return $v;
   }
   return '';
 }
 
+function telegram_login_enabled(): bool {
+  return telegram_login_bot_username() !== '';
+}
 
+function session_user_id(): int {
+  if (session_status() === PHP_SESSION_NONE) {
+    try { @session_start(); } catch (Throwable $e) {}
+  }
+  $id = $_SESSION['user_id'] ?? 0;
+  return is_int($id) ? $id : (is_numeric($id) ? (int)$id : 0);
+}
 
-function safe_public_redirect_target(?string $target, string $fallback = '/app.php#/home'): string {
-  $target = trim((string)$target);
-  if ($target === '') return $fallback;
-  if (preg_match('~^[a-z][a-z0-9+.-]*://~i', $target)) return $fallback;
-  if (str_starts_with($target, '//')) return $fallback;
-  if (!str_starts_with($target, '/')) return $fallback;
-  return $target;
+function session_csrf_token(): string {
+  if (session_status() === PHP_SESSION_NONE) {
+    try { @session_start(); } catch (Throwable $e) {}
+  }
+  if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+  }
+  return $_SESSION['csrf_token'];
+}
+
+function verify_csrf_token(string $token): bool {
+  return hash_equals(session_csrf_token(), $token);
 }
