@@ -1,21 +1,18 @@
-# MEX Trading Platform
+# MEX Trading Platform - PHP with built-in server
 
-FROM php:8.2-apache
-
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+FROM php:8.2-cli
 
 # Set working directory
-WORKDIR /var/www/html
+WORKDIR /app
 
 # Copy all files
-COPY . /var/www/html/
+COPY . /app/
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html
+# Create cache directory
+RUN mkdir -p /app/data/cache && chmod 777 /app/data/cache
 
-# Expose port
-EXPOSE 80
+# Expose port (Railway sets $PORT)
+ENV PORT=8080
 
-# Start Apache
-CMD ["apache2-foreground"]
+# Start PHP built-in server
+CMD ["sh", "-c", "php -S 0.0.0.0:$PORT -t ."]
