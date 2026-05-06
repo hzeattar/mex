@@ -88,8 +88,11 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
   if ($providerType === 'crypto') {
     return in_array($src, ['binance','trade_stream','stream','provider_live'], true);
   }
-  if (in_array($assetType, ['forex','stocks'], true)) {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live'], true);
+  if ($assetType === 'forex') {
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','frankfurter','stooq'], true);
+  }
+  if ($assetType === 'stocks') {
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','stooq'], true);
   }
   if (in_array($assetType, ['arab','commodities','futures'], true)) {
     return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo_chart_live','yahoo'], true);
