@@ -168,7 +168,7 @@ function http_get_json(string $url, array $headers = []): array {
 
 function binance_ticker_24h(array $symbols): array {
   // Public endpoint
-  $items = http_get_json('https://api.binance.com/api/v3/ticker/24hr');
+  $items = binance_spot_json('/api/v3/ticker/24hr');
   $map = [];
   foreach ($items as $it) {
     if (!isset($it['symbol'])) continue;
@@ -206,8 +206,35 @@ function http_get_raw(string $url, array $headers = []): string {
   return (string)$raw;
 }
 
+function binance_spot_api_bases(): array {
+  $configured = trim((string)env('BINANCE_SPOT_API_BASE', env('BINANCE_API_BASE', 'https://api.binance.com')));
+  $bases = [$configured, 'https://api.binance.com', 'https://api.binance.us'];
+  $out = [];
+  foreach ($bases as $base) {
+    $base = rtrim(trim((string)$base), '/');
+    if ($base === '' || !preg_match('~^https://~i', $base)) continue;
+    if (!in_array($base, $out, true)) $out[] = $base;
+  }
+  return $out ?: ['https://api.binance.com', 'https://api.binance.us'];
+}
+
+function binance_spot_json(string $path, array $query = []): array {
+  $path = '/' . ltrim($path, '/');
+  $qs = $query ? ('?' . http_build_query($query)) : '';
+  $last = null;
+  foreach (binance_spot_api_bases() as $base) {
+    try {
+      return http_get_json($base . $path . $qs);
+    } catch (Throwable $e) {
+      $last = $e;
+    }
+  }
+  if ($last instanceof Throwable) throw $last;
+  throw new RuntimeException('No Binance endpoint configured');
+}
+
 function binance_price(string $symbol): float {
-  $data = http_get_json('https://api.binance.com/api/v3/ticker/price?symbol=' . urlencode($symbol));
+  $data = binance_spot_json('/api/v3/ticker/price', ['symbol' => $symbol]);
   if (!isset($data['price'])) throw new RuntimeException('No price');
   return (float)$data['price'];
 }
@@ -250,7 +277,7 @@ function binance_price_cached(string $symbol, int $ttl = 2): float {
  * MUCH lighter than downloading the full /ticker/24hr list every time.
  */
 function binance_ticker_24hr_one(string $symbol): array {
-  $d = http_get_json('https://api.binance.com/api/v3/ticker/24hr?symbol=' . urlencode(binance_norm_symbol($symbol)));
+  $d = binance_spot_json('/api/v3/ticker/24hr', ['symbol' => binance_norm_symbol($symbol)]);
   return [
     'price' => isset($d['lastPrice']) ? (float)$d['lastPrice'] : 0.0,
     'change_pct' => isset($d['priceChangePercent']) ? (float)$d['priceChangePercent'] : 0.0,
@@ -341,8 +368,7 @@ function binance_ticker_24hr_many_cached(array $symbols, int $ttl = 1): array {
   // Binance supports ?symbols=["BTCUSDT","ETHUSDT",...]
   $chunks = array_chunk($symbols, 80);
   foreach ($chunks as $chunk) {
-    $url = 'https://api.binance.com/api/v3/ticker/24hr?symbols=' . urlencode(json_encode(array_values($chunk)));
-    $items = http_get_json($url);
+    $items = binance_spot_json('/api/v3/ticker/24hr', ['symbols' => json_encode(array_values($chunk))]);
 
     // Error shape: {"code":-xxx,"msg":"..."}
     if (isset($items['code']) && isset($items['msg'])) {

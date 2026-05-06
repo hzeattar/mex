@@ -5,12 +5,14 @@ WORKDIR /app
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
+      ca-certificates \
       libfreetype6-dev \
       libcurl4-openssl-dev \
       libjpeg62-turbo-dev \
       libonig-dev \
       libpng-dev \
       libzip-dev; \
+    update-ca-certificates; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-install -j"$(nproc)" curl gd mbstring mysqli pdo_mysql zip; \
     apt-get clean; \
