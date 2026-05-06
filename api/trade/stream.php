@@ -708,6 +708,20 @@ if ($candlesEnabled && $symbolForCandles !== '' && preg_match('/^[A-Z0-9:._-]{2,
   }
 }
 
+foreach ($quotes as $sym => &$q) {
+  $assetTypeForSym = vp_normalize_asset_type((string)($q['type'] ?? $returnType ?: $reqType ?: 'crypto'));
+  if ($assetTypeForSym !== 'crypto') continue;
+  $mark = (float)($q['mark_price'] ?? $q['price'] ?? 0);
+  $idx = isset($q['index_price']) ? (float)$q['index_price'] : 0.0;
+  if ($mark > 0 && $idx > 0 && abs($idx - $mark) / max(1.0, abs($mark)) > 0.02) {
+    $q['index_price'] = $mark;
+  }
+  if (isset($q['next_funding_time']) && $q['next_funding_time'] !== null && (int)$q['next_funding_time'] < ($now - 3600)) {
+    $q['next_funding_time'] = null;
+  }
+}
+unset($q);
+
 $quoteSingle = null;
 if (count($symbols) === 1) {
   $only = $symbols[0];

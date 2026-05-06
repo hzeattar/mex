@@ -367,12 +367,25 @@ function binance_ticker_24hr_many_cached(array $symbols, int $ttl = 1): array {
 
   // Binance supports ?symbols=["BTCUSDT","ETHUSDT",...]
   $chunks = array_chunk($symbols, 80);
+  $fullTickerItems = null;
   foreach ($chunks as $chunk) {
-    $items = binance_spot_json('/api/v3/ticker/24hr', ['symbols' => json_encode(array_values($chunk))]);
-
-    // Error shape: {"code":-xxx,"msg":"..."}
-    if (isset($items['code']) && isset($items['msg'])) {
-      throw new RuntimeException('Binance error: ' . $items['msg']);
+    try {
+      $items = binance_spot_json('/api/v3/ticker/24hr', ['symbols' => json_encode(array_values($chunk))]);
+      // Error shape: {"code":-xxx,"msg":"..."}
+      if (isset($items['code']) && isset($items['msg'])) {
+        throw new RuntimeException('Binance error: ' . $items['msg']);
+      }
+    } catch (Throwable $e) {
+      if ($fullTickerItems === null) {
+        $fullTickerItems = binance_spot_json('/api/v3/ticker/24hr');
+      }
+      $wanted = array_flip(array_map('strtoupper', $chunk));
+      $items = [];
+      foreach ((array)$fullTickerItems as $it) {
+        if (!is_array($it) || !isset($it['symbol'])) continue;
+        $sym = strtoupper((string)$it['symbol']);
+        if (isset($wanted[$sym])) $items[] = $it;
+      }
     }
 
     foreach ($items as $it) {
