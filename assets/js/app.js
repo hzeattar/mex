@@ -4807,7 +4807,7 @@ function vpRestoreRememberedQuotes(){
         const maxAge = type === 'crypto' ? 90 : 45;
         const source = String(item?.source || '').toLowerCase();
         if(!symbol || !(updatedAt > 0) || age > maxAge) return;
-        if(type !== 'crypto' && !isTrustedUiLiveSource(source, symbol, type)) return;
+        if(!isTrustedUiLiveSource(source, symbol, type)) return;
         vpRememberLiveQuote(Object.assign({}, item, { symbol, type, market, updated_at: updatedAt }));
       }catch(e){}
     });
@@ -4869,7 +4869,7 @@ const VPQuoteStore = (()=>{
     };
     let rank = Object.prototype.hasOwnProperty.call(map, src) ? map[src] : 40;
     if(safeType === 'crypto' && safeMarket === 'perp' && src === 'binance') rank += 2;
-    if(safeType !== 'crypto' && !isTrustedUiLiveSource(src, symbol, safeType)) rank = Math.min(rank, 12);
+    if(!isTrustedUiLiveSource(src, symbol, safeType)) rank = Math.min(rank, 12);
     return rank;
   }
 
@@ -4903,12 +4903,12 @@ const VPQuoteStore = (()=>{
     const nextPrice = safeNum(next.price || next.last || next.mark_price, 0);
     const prevRank = sourceRank(prev.source || prev.provider, prevType, prev.symbol, prev.market);
     const nextRank = sourceRank(next.source || next.provider, nextType, next.symbol, next.market);
-    const prevTrusted = prevType === 'crypto' ? true : isTrustedUiLiveSource(prev.source || prev.provider, prev.symbol, prevType);
-    const nextTrusted = nextType === 'crypto' ? true : isTrustedUiLiveSource(next.source || next.provider, next.symbol, nextType);
+    const prevTrusted = isTrustedUiLiveSource(prev.source || prev.provider, prev.symbol, prevType);
+    const nextTrusted = isTrustedUiLiveSource(next.source || next.provider, next.symbol, nextType);
     if(!(nextPrice > 0)) return false;
     if(!(prevPrice > 0)) return true;
+    const rankGap = nextRank - prevRank;
     if(nextType !== 'crypto'){
-      const rankGap = nextRank - prevRank;
       if(!nextTrusted && prevTrusted) return false;
       if(nextTrusted && !prevTrusted) return true;
       if(nextTrusted && prevTrusted && rankGap >= 8 && nextTs + 1800 >= prevTs) return true;
@@ -4916,6 +4916,8 @@ const VPQuoteStore = (()=>{
       if(nextTs === prevTs && nextRank < prevRank && prevTrusted) return false;
       return (nextTs > prevTs) || (rankGap >= 4 && nextTrusted) || (nextTs === prevTs && (nextRank >= prevRank || Math.abs(nextPrice - prevPrice) > 1e-12)) || (!prevTrusted && nextTrusted);
     }
+    if(nextTrusted && !prevTrusted) return true;
+    if(!nextTrusted && prevTrusted) return false;
     if(nextTs + 1 < prevTs) return false;
     if(nextTs > prevTs) return true;
     if(nextTs === prevTs){
@@ -4965,7 +4967,7 @@ const VPQuoteStore = (()=>{
     const price = safeNum(resolveQuoteLivePrice(candidate, safeMarket, safeType) || candidate.price || candidate.last || candidate.mark_price, 0);
     if(!(price > 0)) return null;
     const source = String(candidate.source || candidate.provider || '').trim().toLowerCase();
-    if(safeType !== 'crypto' && !isTrustedUiLiveSource(source, sym, safeType)) return null;
+    if(!isTrustedUiLiveSource(source, sym, safeType)) return null;
     return Object.assign({}, candidate, { symbol:sym, type:safeType, market:safeMarket, price, source, updated_at:ts });
   }
 
@@ -5048,7 +5050,7 @@ function vpNormalizeUiQuoteCandidate(quote, fallback={}){
     const price = safeNum(resolveQuoteLivePrice(quote, market, type) || quote.price || quote.last || quote.mark_price, 0);
     if(!symbol || !(price > 0)) return null;
     const source = String(quote.source || quote.provider || fallback.source || '').trim().toLowerCase();
-    const trusted = type === 'crypto' ? true : !!(typeof isTrustedUiLiveSource === 'function' ? isTrustedUiLiveSource(source, symbol, type) : true);
+    const trusted = !!(typeof isTrustedUiLiveSource === 'function' ? isTrustedUiLiveSource(source, symbol, type) : true);
     const ts = vpTradeQuoteTsSec(quote.updated_at || quote.ts || quote.time || fallback.updated_at || Date.now());
     const nowSec = Math.floor(Date.now()/1000);
     const ageSec = ts > 0 ? Math.max(0, nowSec - ts) : 1e9;
@@ -5169,7 +5171,7 @@ function vpCanonicalQuoteForUi(symbol, type, market, opts={}){
       source:String(chosen.source || chosen.provider || '').toLowerCase(),
       authority_rank:Number(chosen.authority_rank || vpUiQuoteAuthorityRank(chosen.source || chosen.provider || '', safeType, safeMarket, sym) || 0),
       age_sec:Number(chosen.age_sec || 0),
-      trusted: safeType === 'crypto' ? true : !!(typeof isTrustedUiLiveSource === 'function' ? isTrustedUiLiveSource(chosen.source || chosen.provider || '', sym, safeType) : true)
+      trusted: !!(typeof isTrustedUiLiveSource === 'function' ? isTrustedUiLiveSource(chosen.source || chosen.provider || '', sym, safeType) : true)
     });
   }catch(e){
     return null;
@@ -5252,7 +5254,10 @@ function vpGetFreshRememberedQuote(symbol, assetType, maxAgeSec){
         if(preferred) return preferred;
       }
     }catch(_storeErr){}
-    const candidate = __vpLiveQuoteByKey.get(`${type}:${sym}:spot`) || __vpLiveQuoteByKey.get(`${type}:${sym}:perp`) || __vpLiveQuoteByKey.get(`${type}:${sym}`) || __vpLiveQuoteByKey.get(sym) || null;
+    const preferredMarkets = (type === 'crypto' || type === 'futures') ? ['perp','spot'] : ['spot','perp'];
+    const candidate = preferredMarkets
+      .map(mk => __vpLiveQuoteByKey.get(`${type}:${sym}:${mk}`))
+      .find(Boolean) || __vpLiveQuoteByKey.get(`${type}:${sym}`) || __vpLiveQuoteByKey.get(sym) || null;
     if(!candidate) return null;
     const ts = vpTradeQuoteTsSec(candidate.updated_at || candidate.ts || candidate.time || 0);
     if(!(ts > 0)) return null;
@@ -5262,7 +5267,7 @@ function vpGetFreshRememberedQuote(symbol, assetType, maxAgeSec){
     const price = safeNum(resolveQuoteLivePrice(candidate, market, type) || candidate.price || candidate.last || candidate.mark_price, 0);
     const source = String(candidate?.source || candidate?.provider || '').trim().toLowerCase();
     if(!(price > 0)) return null;
-    if(type !== 'crypto' && !isTrustedUiLiveSource(source, sym, type)) return null;
+    if(!isTrustedUiLiveSource(source, sym, type)) return null;
     return Object.assign({}, candidate, {symbol: sym, type, market, price, source, updated_at: ts});
   }catch(_err){
     return null;
@@ -5277,7 +5282,7 @@ function vpMarketAuthorityMeta(item, typeHint){
   const src = String(item?.source || item?.provider || '').trim().toLowerCase();
   const nowSec = Math.floor(Date.now()/1000);
   const age = ts > 0 ? Math.max(0, nowSec - ts) : 999999;
-  const trusted = type === 'crypto' ? (price > 0) : (price > 0 && isTrustedUiLiveSource(src, symbol, type));
+  const trusted = price > 0 && isTrustedUiLiveSource(src, symbol, type);
   const freshAge = type === 'crypto'
     ? 18
     : (['stocks','arab'].includes(type) ? 18 : (type === 'forex' ? 10 : (['commodities','futures'].includes(type) ? 8 : 12)));
@@ -5291,7 +5296,16 @@ function vpMergeMarketItemAuthority(existing, incoming, typeHint){
   const prev = vpMarketAuthorityMeta(existing, typeHint);
   const next = vpMarketAuthorityMeta(incoming, typeHint);
   let chosen = incoming;
-  if(!(next.price > 0) && prev.price > 0){
+  const prevRank = vpUiQuoteAuthorityRank(prev.src, prev.type, String(existing?.market || ''), prev.symbol);
+  const nextRank = vpUiQuoteAuthorityRank(next.src, next.type, String(incoming?.market || ''), next.symbol);
+  const isCryptoQuote = prev.type === 'crypto' || next.type === 'crypto';
+  if(isCryptoQuote && next.price > 0 && next.trusted && (!prev.trusted || nextRank >= prevRank || prev.age > next.age + 2)){
+    chosen = incoming;
+  }else if(isCryptoQuote && prev.price > 0 && prev.trusted && !next.trusted){
+    chosen = existing;
+  }else if(isCryptoQuote && prev.price > 0 && prev.trusted && next.trusted && prev.ts > next.ts + 8 && prevRank >= nextRank){
+    chosen = existing;
+  }else if(!(next.price > 0) && prev.price > 0){
     chosen = existing;
   }else if(prev.liveish && !next.liveish){
     chosen = existing;
@@ -5380,7 +5394,7 @@ function vpReadWarmMarketsCache(type = state.selectedAssetType){
 }
 
 function marketsCacheKey(type = state.selectedAssetType){
-  return 'mk_v2_cache_' + String(type || 'all');
+  return 'mk_v3_live_cache_' + String(type || 'all');
 }
 
 function warmMarketsFromLocal(type = state.selectedAssetType){
@@ -5413,6 +5427,7 @@ function updateMarketCachesFromLiveQuote(quote){
   const changePct = safeNum(quote.change_pct ?? quote.changePct ?? 0, 0);
   const source = String(quote?.source || quote?.provider || '').trim().toLowerCase();
   const trusted = isTrustedUiLiveSource(source, symbol, type);
+  if(!trusted && type === 'crypto') return false;
   if(type !== 'crypto' && !trusted){
     try{
       const prev = vpGetFreshRememberedQuote(symbol, type, 20);
@@ -5431,7 +5446,11 @@ function updateMarketCachesFromLiveQuote(quote){
       if(itemType && type && itemType !== type) return item;
       const prevTs = safeNum(item?.updated_at || 0, 0);
       const prevPrice = safeNum(item?.price || 0, 0);
-      if(prevTs > updatedAt + 1 && prevPrice > 0) return item;
+      const prevSource = String(item?.source || item?.provider || '').trim().toLowerCase();
+      const prevTrusted = isTrustedUiLiveSource(prevSource, symbol, itemType);
+      const prevRank = vpUiQuoteAuthorityRank(prevSource, itemType, item?.market || market, symbol);
+      const nextRank = vpUiQuoteAuthorityRank(source, type, market, symbol);
+      if(prevTs > updatedAt + 1 && prevPrice > 0 && (prevTrusted && prevRank >= nextRank)) return item;
       if(prevPrice > 0 && Math.abs(prevPrice - price) < 1e-12 && Math.abs(safeNum(item?.change_pct || 0, 0) - changePct) < 1e-12 && prevTs === updatedAt) return item;
       changed = true;
       return Object.assign({}, item, {
@@ -5625,7 +5644,7 @@ async function refreshMarkets(opts={}){
   if (warm && applyToState) warmMarketsFromLocal(selectedType);
 
   const ttlMs = Number(opts.ttlMs || (selectedType==='crypto' ? 350 : 1800));
-  const effectiveWithQuotes = selectedType === 'crypto' ? true : (!!withQuotes && selectedType === 'crypto');
+  const effectiveWithQuotes = selectedType === 'crypto' ? true : !!withQuotes;
   const qs = `?type=${encodeURIComponent(selectedType)}${lite ? '&lite=1' : ''}${effectiveWithQuotes ? '&with_quotes=1&force_live=1' : ''}`;
   const r = await apiGetCached(`/markets.php${qs}`, ttlMs);
   let nextItems = vpOverlayMarketsWithFreshQuotes(Array.isArray(r?.items) ? r.items : [], selectedType);
@@ -8007,6 +8026,10 @@ function createTradeWatchlistPanel(symbol, assetType, onSelect, opts={}){
     const live = hasDirectQuote ? quote : (remembered || (fallbackItem && typeof fallbackItem === 'object' ? fallbackItem : null));
     if(!live) return;
     const market = getCurrentMarket();
+    const liveType = normalizeLiveAssetType(live?.type || assetType || 'crypto');
+    const liveSource = String(live?.source || live?.provider || '').trim().toLowerCase();
+    const liveTs = vpTradeQuoteTsSec(live?.updated_at || live?.ts || live?.time || 0);
+    const liveTrusted = isTrustedUiLiveSource(liveSource, symbolKey, liveType);
     const px = Number(resolveQuoteLivePrice(live, market, assetType) || live?.price || live?.last || live?.mark_price || fallbackItem?.price || 0) || 0;
     const ch = Number(live?.change_pct ?? live?.changePct ?? live?.change ?? fallbackItem?.change_pct ?? 0) || 0;
     if(px > 0){
@@ -8016,15 +8039,16 @@ function createTradeWatchlistPanel(symbol, assetType, onSelect, opts={}){
     ref.changeEl.textContent = `${ch>=0?'+':''}${fmt(ch,2)}%`;
     ref.changeEl.classList.toggle('up', ch >= 0);
     ref.changeEl.classList.toggle('down', ch < 0);
-    ref.liveEl.textContent = (px > 0) ? vpDelayedBadgeText(assetType, false) : vpDelayedBadgeText(assetType, true);
-    ref.liveEl.classList.toggle('ready', px > 0);
+    ref.liveEl.textContent = (px > 0 && liveTrusted) ? vpDelayedBadgeText(assetType, false) : vpDelayedBadgeText(assetType, true);
+    ref.liveEl.classList.toggle('ready', px > 0 && liveTrusted);
     try{
       if(Array.isArray(state.markets)){
         state.markets = state.markets.map(item => String(item?.symbol || '').toUpperCase() === symbolKey
           ? Object.assign({}, item, {
               price: px > 0 ? px : Number(item?.price || 0),
               change_pct: Number.isFinite(ch) ? ch : Number(item?.change_pct || 0),
-              updated_at: Math.floor(Date.now()/1000)
+              updated_at: (px > 0 && liveTrusted) ? (liveTs || Math.floor(Date.now()/1000)) : safeNum(item?.updated_at, 0),
+              source: liveTrusted ? liveSource : (item?.source || item?.provider || '')
             })
           : item);
       }
@@ -8400,7 +8424,7 @@ function vpResolveFreshQuoteCacheQuote(symbol, assetType, nextMarket){
     const remembered = vpGetFreshRememberedQuote(symbol, safeType, maxAgeSec);
     if(remembered){
       const remSrc = String(remembered?.source || remembered?.provider || '').toLowerCase();
-      if(safeType === 'crypto' || isTrustedUiLiveSource(remSrc, symbol, safeType)) return remembered;
+      if(isTrustedUiLiveSource(remSrc, symbol, safeType)) return remembered;
     }
     if(typeof QuoteCache === 'undefined' || !QuoteCache || typeof QuoteCache.get !== 'function') return null;
     const cached = QuoteCache.get();
@@ -9183,9 +9207,8 @@ function tradePage(){
         const rememberedTs = vpTradeQuoteTsSec(remembered?.updated_at || remembered?.ts || remembered?.time || 0);
         const fetchedTs = vpTradeQuoteTsSec(fresh?.updated_at || fresh?.ts || fresh?.time || 0);
         const rememberedSrc = String(remembered?.source || remembered?.provider || '').trim().toLowerCase();
-        const rememberedTrusted = normalizeLiveAssetType(assetType || 'crypto') === 'crypto'
-          ? (rememberedPx > 0)
-          : (rememberedPx > 0 && isTrustedUiLiveSource(rememberedSrc, symbol, assetType || 'crypto') && rememberedTs > 0 && ((Math.floor(Date.now()/1000) - rememberedTs) <= 2));
+        const rememberedTrusted = rememberedPx > 0 && isTrustedUiLiveSource(rememberedSrc, symbol, assetType || 'crypto') && rememberedTs > 0
+          && (normalizeLiveAssetType(assetType || 'crypto') === 'crypto' || ((Math.floor(Date.now()/1000) - rememberedTs) <= 2));
         if(rememberedTrusted && !(px > 0)){
           fresh = Object.assign({}, fresh || {}, remembered, { symbol: String(remembered?.symbol || symbol).toUpperCase(), type: String(remembered?.type || assetType || 'crypto') });
           px = rememberedPx;
@@ -9315,7 +9338,7 @@ function tradePage(){
     }catch(e){}
   });
 
-  const tradeCandlesCacheKey = (mk='')=>`trade_candles_v2:${String(symbol || '').toUpperCase()}:${String(assetType || 'crypto').toLowerCase()}:${String(mk || marketTypeRef.value || 'spot').toLowerCase()}:${String(tf || '1m').toLowerCase()}`;
+  const tradeCandlesCacheKey = (mk='')=>`trade_candles_v3:${String(symbol || '').toUpperCase()}:${String(assetType || 'crypto').toLowerCase()}:${String(mk || marketTypeRef.value || 'spot').toLowerCase()}:${String(tf || '1m').toLowerCase()}`;
   let tradeSeedAppliedSig = '';
   const tradeSeedLocalSeedItems = (price, tfValue, count=72)=>{
     const px = safeNum(price, 0);
@@ -9330,6 +9353,36 @@ function tradePage(){
       items.push({ time:t, open:px, high:px, low:px, close:px, volume:0 });
     }
     return items;
+  };
+  const tradeCandlesHaveMovement = (items, sample=36)=>{
+    try{
+      const list = Array.isArray(items) ? items.filter(Boolean) : [];
+      if(list.length < 2) return false;
+      const take = Math.max(2, Math.min(list.length, safeNum(sample, 36)));
+      const tail = list.slice(-take);
+      let minClose = Infinity;
+      let maxClose = -Infinity;
+      let bodyMoves = 0;
+      let wickMoves = 0;
+      tail.forEach(item=>{
+        const o = safeNum(item?.open, 0);
+        const h = safeNum(item?.high, 0);
+        const l = safeNum(item?.low, 0);
+        const c = safeNum(item?.close, 0);
+        if(c > 0){
+          minClose = Math.min(minClose, c);
+          maxClose = Math.max(maxClose, c);
+        }
+        const ref = Math.max(Math.abs(o), Math.abs(c), Math.abs(h), Math.abs(l), 1);
+        if(Math.abs(c - o) / ref > 1e-9) bodyMoves++;
+        if(Math.abs(h - l) / ref > 1e-9) wickMoves++;
+      });
+      if(!(maxClose > 0) || !(minClose > 0)) return false;
+      if((maxClose - minClose) / Math.max(maxClose, 1) > 1e-9) return true;
+      return bodyMoves >= 2 || wickMoves >= 2;
+    }catch(_e){
+      return false;
+    }
   };
   const tradeResolveImmediateSeedPrice = ()=>{
     let px = safeNum(lastLiveQuotePrice, 0);
@@ -9389,6 +9442,10 @@ function tradePage(){
       const maxAgeMs = typeNorm === 'crypto' ? 120000 : 300000;
       const ts = Number(parsed?.ts || 0) || 0;
       if(ts > 0 && (Date.now() - ts) > maxAgeMs) return null;
+      if(typeNorm === 'crypto' && !tradeCandlesHaveMovement(items)){
+        try{ localStorage.removeItem(tradeCandlesCacheKey(mk)); }catch(_e){}
+        return null;
+      }
       return items;
     }catch(e){
       return null;
@@ -9397,7 +9454,12 @@ function tradePage(){
   const writeTradeCandlesCache = (items, mk='')=>{
     try{
       if(!Array.isArray(items) || !items.length) return;
-      localStorage.setItem(tradeCandlesCacheKey(mk), JSON.stringify({ ts: Date.now(), items }));
+      const key = tradeCandlesCacheKey(mk);
+      if(normalizeLiveAssetType(assetType || 'crypto') === 'crypto' && !tradeCandlesHaveMovement(items)){
+        try{ localStorage.removeItem(key); }catch(_e){}
+        return;
+      }
+      localStorage.setItem(key, JSON.stringify({ ts: Date.now(), items }));
     }catch(e){}
   };
 
@@ -11674,7 +11736,7 @@ async function warmRouteData(force=false, hash=location.hash || '#/home'){
     }
           } else if(route === 'trade'){
     const tradeRoute = syncTradeRouteIntoState(getTradeRouteSnapshot());
-    jobs.push(refreshMarkets({type: tradeRoute.type || state.selectedAssetType || 'crypto', warm:true, ttlMs:500, withQuotes:false}));
+    jobs.push(refreshMarkets({type: tradeRoute.type || state.selectedAssetType || 'crypto', warm:true, ttlMs:500, withQuotes:true}));
     jobs.push(Promise.resolve().then(()=>{
       try{
         QuoteCache.setActive(String(tradeRoute.symbol || state.selectedSymbol || 'BTCUSDT').toUpperCase(), tradeRoute.type || state.selectedAssetType || 'crypto', tradeRoute.market || state.tradeMarket || 'spot');
