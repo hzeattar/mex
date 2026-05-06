@@ -15,6 +15,10 @@ $css = __DIR__ . '/assets/css/app.css';
 $js  = __DIR__ . '/assets/js/app.js';
 $css_v = is_file($css) ? (int)@filemtime($css) : time();
 $js_v  = is_file($js)  ? (int)@filemtime($js)  : time();
+$trade_v2_css = __DIR__ . '/assets/css/trade-v2.css';
+$trade_v2_js  = __DIR__ . '/assets/js/trade-v2.js';
+$trade_v2_css_v = is_file($trade_v2_css) ? (int)@filemtime($trade_v2_css) : $css_v;
+$trade_v2_js_v  = is_file($trade_v2_js)  ? (int)@filemtime($trade_v2_js)  : $js_v;
 $theme_css = __DIR__ . '/assets/css/multibank-theme.css';
 $theme_js  = __DIR__ . '/assets/js/multibank-theme.js';
 $theme_css_v = is_file($theme_css) ? (int)@filemtime($theme_css) : $css_v;
@@ -43,10 +47,12 @@ $theme_js_v  = is_file($theme_js)  ? (int)@filemtime($theme_js)  : $js_v;
   </script>
   <link rel="stylesheet" href="./assets/css/app.css?v=<?php echo $css_v; ?>" />
   <link rel="stylesheet" href="./assets/css/multibank-theme.css?v=<?php echo $theme_css_v; ?>" />
+  <link rel="stylesheet" href="./assets/css/trade-v2.css?v=<?php echo $trade_v2_css_v; ?>" />
 </head>
 <body>
   <div id="app"></div>
   <script>
+    window.__VP_TRADE_V2 = true;
     window.__SUPPORT_EMAIL = <?php echo json_encode(site_setting('site.support_email', 'support@vertexpluse.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
     window.__BRAND_NAME = <?php echo json_encode(site_setting('site.brand', 'VertexPluse'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
     window.__BRAND_TAGLINE = <?php echo json_encode(site_setting('site.tagline', 'Professional trading & investment platform'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
@@ -56,6 +62,7 @@ $theme_js_v  = is_file($theme_js)  ? (int)@filemtime($theme_js)  : $js_v;
   </script>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js" defer></script>
   <script src="./assets/js/app.js?v=<?php echo $js_v; ?>" defer></script>
+  <script src="./assets/js/trade-v2.js?v=<?php echo $trade_v2_js_v; ?>" defer></script>
   <script src="./assets/js/multibank-theme.js?v=<?php echo $theme_js_v; ?>" defer></script>
 </body>
 </html>

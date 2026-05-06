@@ -607,10 +607,10 @@ const QuoteCache = (() => {
       if(norm === 'stocks' || norm === 'arab') return 26000;
       return 18000;
     }
-    if(norm === 'crypto') return 900;
-    if(norm === 'commodities') return 2600;
+    if(norm === 'crypto') return 850;
+    if(norm === 'commodities') return 1900;
     if(norm === 'futures') return 3200;
-    if(norm === 'forex') return 2200;
+    if(norm === 'forex') return 1500;
     if(norm === 'stocks' || norm === 'arab') return 12000;
     return 10000;
   }
@@ -826,7 +826,7 @@ const QuoteCache = (() => {
       ensure();
       try{ setSpeed(preferredQuotePollMs(next.type, next.market, !!document.hidden)); }catch(e){}
       if(unchanged && last){ try{ notify(); }catch(e){} }
-      if(!unchanged){ activeSeq += 1; lastTickAt = 0; }
+      if(!unchanged){ activeSeq += 1; lastTickAt = 0; last = null; lastAt = 0; }
       tick();
     },
     get(){ return last; },
@@ -11737,7 +11737,10 @@ async function warmRouteData(force=false, hash=location.hash || '#/home'){
       jobs.push(refreshMarkets({type:'crypto', warm:true, ttlMs:900, withQuotes:false}));
       jobs.push(Promise.resolve().then(()=>primePlatformMarketUniverse({ route:'home', preferredType: state.selectedAssetType || 'crypto', force:false })).catch(()=>{}));
     }
-          } else if(route === 'trade'){
+  } else if(route === 'trade' && window.__VP_TRADE_V2){
+    // Trade V2 owns its own market, quote, chart, and portfolio orchestration.
+    // Keep the old global warm-up from starting duplicate quote polling.
+  } else if(route === 'trade'){
     const tradeRoute = syncTradeRouteIntoState(getTradeRouteSnapshot());
     jobs.push(refreshMarkets({type: tradeRoute.type || state.selectedAssetType || 'crypto', warm:true, ttlMs:500, withQuotes:true}));
     jobs.push(Promise.resolve().then(()=>{
@@ -12190,6 +12193,15 @@ function nav(){
   );
 }
 
+function tradeV2Page(){
+  return h('div', { id:'vp-trade-v2-root', class:'vp-trade-v2-host' },
+    h('div', { class:'vp2-boot' },
+      h('div', { class:'vp2-boot-mark' }, 'V'),
+      h('div', {}, 'Loading trading desk...')
+    )
+  );
+}
+
 function route(){
   const hash = location.hash || '#/home';
   if(hash.startsWith('#/wallet')) return walletPage();
@@ -12199,9 +12211,11 @@ function route(){
   if(hash.startsWith('#/news')) return newsPage();
   if(hash.startsWith('#/markets')) {
     try{ state.__vpTradeSymbolsDrawerOpen = true; }catch(e){}
+    if(window.__VP_TRADE_V2) return tradeV2Page();
     return tradePage();
   }
   if(hash.startsWith('#/portfolio')) return portfolioPage();
+  if(hash.startsWith('#/trade') && window.__VP_TRADE_V2) return tradeV2Page();
   if(hash.startsWith('#/trade')) return tradePage();
   if(hash.startsWith('#/invest')) return investPage();
   if(hash.startsWith('#/account')) return accountPage();
