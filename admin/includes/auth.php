@@ -314,8 +314,9 @@ function admin_footer(): void {
 }
 
 function admin_credentials_ok(string $email, string $pass): bool {
-  $cfgEmail = env('ADMIN_EMAIL', 'admin@example.com') ?? 'admin@example.com';
-  $cfgPass = env('ADMIN_PASSWORD', '') ?? '';
+  $cfgEmail = trim((string)(env('ADMIN_EMAIL', '') ?? ''));
+  $cfgPass = (string)(env('ADMIN_PASSWORD', '') ?? '');
+  if ($cfgEmail === '' || $cfgPass === '') return false;
   if ($email !== $cfgEmail) return false;
   // If ADMIN_PASSWORD is plain, compare; if starts with $2y$ assume bcrypt hash
   if (str_starts_with($cfgPass, '$2y$') || str_starts_with($cfgPass, '$2b$')) {
