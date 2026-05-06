@@ -214,8 +214,20 @@ function railway_runtime(): bool {
   return env_nonempty('RAILWAY_ENVIRONMENT') !== '' || env_nonempty('RAILWAY_SERVICE_NAME') !== '';
 }
 
+function mysql_url_env(): string {
+  foreach (['MYSQL_URL', 'MYSQL_PRIVATE_URL', 'MYSQL_PUBLIC_URL', 'DATABASE_URL'] as $key) {
+    $url = env_nonempty($key);
+    if ($url === '') continue;
+    $parts = parse_url($url);
+    if (!is_array($parts)) continue;
+    $scheme = strtolower((string)($parts['scheme'] ?? ''));
+    if ($scheme === 'mysql' || $scheme === 'mariadb') return $url;
+  }
+  return '';
+}
+
 function mysql_url_config(): array {
-  $url = env_nonempty('MYSQL_URL') ?: env_nonempty('DATABASE_URL');
+  $url = mysql_url_env();
   if ($url === '') return [];
   $parts = parse_url($url);
   if (!is_array($parts)) return [];
@@ -229,10 +241,27 @@ function mysql_url_config(): array {
   ];
 }
 
+function railway_mysql_placeholders_only(): bool {
+  if (!railway_runtime()) return false;
+  if (env_nonempty('MYSQLHOST') !== '' || mysql_url_env() !== '') return false;
+  $host = strtolower(env_nonempty('DB_HOST'));
+  $name = strtolower(env_nonempty('DB_NAME'));
+  $user = strtolower(env_nonempty('DB_USER'));
+  $pass = env_nonempty('DB_PASS');
+  $localHost = ($host === '' || in_array($host, ['localhost', '127.0.0.1'], true));
+  $placeholderName = ($name === '' || in_array($name, ['mex', 'vertexpluse', 'vertexpluse_meg'], true));
+  $placeholderUser = ($user === '' || in_array($user, ['root', 'vertexpluse_user', 'vertexpluse_mega'], true));
+  return $localHost && $placeholderName && $placeholderUser && env_placeholder_value($pass);
+}
+
 function db_driver(): string {
   $configured = strtolower(trim((string)env('DB_DRIVER', '')));
+  if ($configured === 'mariadb') $configured = 'mysql';
+  if ($configured === 'mysql' && railway_mysql_placeholders_only() && env('DB_ALLOW_SQLITE_FALLBACK', '1') !== '0') {
+    return 'sqlite';
+  }
   if ($configured !== '') return $configured;
-  if (env_nonempty('MYSQLHOST') !== '' || env_nonempty('MYSQL_URL') !== '' || env_nonempty('DATABASE_URL') !== '') {
+  if (env_nonempty('MYSQLHOST') !== '' || mysql_url_env() !== '') {
     return 'mysql';
   }
   return 'sqlite';
