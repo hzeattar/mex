@@ -192,6 +192,7 @@ function quote_provider_prefers_eodhd(string $assetType, array $meta = [], strin
   $providerType = vp_provider_asset_type($assetType);
   $preferredProvider = strtolower((string)env('PRICE_PROVIDER', 'eodhd'));
   if ($preferredProvider !== 'eodhd') return false;
+  if (function_exists('eodhd_enabled') && !eodhd_enabled()) return false;
   if ($providerType === 'crypto' || $providerType === 'futures') return false;
   if ($providerType === 'forex') return true;
   if ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $assetType)) return true;
@@ -221,7 +222,7 @@ function quote_provider_prefers_yahoo(string $assetType, array $meta = [], strin
   }
   if ($providerType === 'forex') return !quote_provider_prefers_eodhd($assetType, $meta, $symbol);
   if (in_array($assetType, ['futures'], true)) return true;
-  if ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $assetType)) return false;
+  if ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $assetType)) return !quote_provider_prefers_eodhd($assetType, $meta, $symbol);
   if ($providerType === 'commodities' && !vp_is_spot_metal_symbol($symbol, $assetType)) return true;
   return false;
 }

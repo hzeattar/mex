@@ -968,7 +968,7 @@ function yahoo_live_quote_or_chart(string $symbol, string $tf = '1m'): array {
     // fall through to chart fallback only when explicitly allowed
   }
 
-  if ((int)env('YAHOO_ALLOW_CHART_QUOTE_FALLBACK', '0') !== 1) {
+  if ((int)env('YAHOO_ALLOW_CHART_QUOTE_FALLBACK', '1') !== 1) {
     throw new RuntimeException('Yahoo quote unavailable without chart fallback');
   }
 
