@@ -376,9 +376,16 @@ if ($quoteSymbols) {
         if (is_array($m) && isset($m['mark_price']) && (float)$m['mark_price'] > 0) {
           $quotes[$sym]['mark_price'] = (float)$m['mark_price'];
           $quotes[$sym]['price'] = (float)$m['mark_price'];
-          if (isset($m['index_price'])) $quotes[$sym]['index_price'] = $m['index_price'];
+          if (isset($m['index_price'])) {
+            $idx = (float)$m['index_price'];
+            $mark = (float)$m['mark_price'];
+            $quotes[$sym]['index_price'] = ($idx > 0 && abs($idx - $mark) / max(1.0, abs($mark)) <= 0.02) ? $idx : $mark;
+          }
           if (isset($m['funding_rate'])) $quotes[$sym]['funding_rate'] = $m['funding_rate'];
-          if (isset($m['next_funding_time'])) $quotes[$sym]['next_funding_time'] = $m['next_funding_time'];
+          if (isset($m['next_funding_time'])) {
+            $nft = $m['next_funding_time'] !== null ? (int)$m['next_funding_time'] : null;
+            $quotes[$sym]['next_funding_time'] = ($nft !== null && $nft >= ($now - 3600)) ? $nft : null;
+          }
           $quotes[$sym]['updated_at'] = $now;
         }
       } catch (Throwable $e) {

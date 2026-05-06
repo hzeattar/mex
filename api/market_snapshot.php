@@ -62,12 +62,12 @@ function vp_snapshot_quote_usable(array $row, string $assetType, bool $strict = 
   $assetType = vp_normalize_asset_type($assetType);
   $price = (float)($row['price'] ?? 0);
   if (!($price > 0)) return false;
-  if ($assetType === 'crypto') return true;
   $src = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
   if (!quote_source_is_liveish($src, $assetType)) return false;
   $updatedAt = (int)($row['updated_at'] ?? 0);
   if ($updatedAt <= 0) return false;
   $age = max(0, time() - $updatedAt);
+  if ($assetType === 'crypto') return $age <= ($strict ? 6 : 12);
   if ($strict) {
     $maxAge = in_array($assetType, ['stocks','arab'], true) ? 8 : (in_array($assetType, ['commodities','futures'], true) ? 6 : 6);
   } else {
@@ -122,11 +122,11 @@ try {
       // Snapshot is a hydration/read path. Keep non-crypto provider refreshes out of
       // page bootstrap so dashboards render from the DB immediately; focus quotes own live refresh.
       'with_live' => ($type === 'crypto') || ($forceLive && $type === $preferred),
-      'allow_crypto_seed' => true,
+      'allow_crypto_seed' => false,
       'allow_noncrypto_seed' => false,
-      'allow_stale_display' => true,
-      'direct_budget' => ($type === 'crypto') ? (($route === 'trade') ? 6 : 4) : ((in_array($type, ['stocks','arab'], true) && $route === 'trade') ? 2 : (($route === 'trade') ? 1 : 0)),
-      'direct_yahoo_budget' => ($type === 'crypto') ? (($route === 'trade') ? 6 : 4) : ((in_array($type, ['stocks','arab'], true) && $route === 'trade') ? 2 : (($route === 'trade') ? 1 : 0)),
+      'allow_stale_display' => $type !== 'crypto',
+      'direct_budget' => ($type === 'crypto') ? (($route === 'trade') ? 18 : 12) : ((in_array($type, ['stocks','arab'], true) && $route === 'trade') ? 2 : (($route === 'trade') ? 1 : 0)),
+      'direct_yahoo_budget' => ($type === 'crypto') ? (($route === 'trade') ? 18 : 12) : ((in_array($type, ['stocks','arab'], true) && $route === 'trade') ? 2 : (($route === 'trade') ? 1 : 0)),
       'chart_budget' => ($type === 'crypto') ? (($route === 'trade') ? 6 : 4) : (in_array($type, ['stocks','arab'], true) ? 0 : 1),
     ]);
 

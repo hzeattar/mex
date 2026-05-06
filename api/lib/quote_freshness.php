@@ -59,8 +59,14 @@ function qa_quote_is_usable($row, string $assetType, bool $strict = false): bool
   $assetType = vp_normalize_asset_type($assetType);
   $price = (float)($row['price'] ?? 0);
   if (!($price > 0)) return false;
-  if ($assetType === 'crypto') return true;
   $source = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
+  if ($assetType === 'crypto') {
+    if (!quote_source_is_liveish($source, $assetType)) return false;
+    $updatedAt = qa_quote_row_ts($row);
+    if ($updatedAt <= 0) return false;
+    $age = max(0, time() - $updatedAt);
+    return $age <= qa_quote_max_age($assetType, $strict);
+  }
   if (!quote_source_is_liveish($source, $assetType)) return false;
   $updatedAt = qa_quote_row_ts($row);
   if ($updatedAt <= 0) return false;
@@ -93,14 +99,13 @@ function qa_choose_authoritative_quote(?array $cached, ?array $live, string $ass
     return $cached;
   }
 
-  // Never promote stale non-crypto rows to authoritative just because they have a positive price.
-  if ($assetType === 'crypto') {
-    if (is_array($live) && (float)($live['price'] ?? 0) > 0) return $live;
-    if (is_array($cached) && (float)($cached['price'] ?? 0) > 0) return $cached;
-  }
-
-  if ($assetType === 'crypto' && $allowCryptoSeed && is_array($cached) && (float)($cached['price'] ?? 0) > 0) {
-    return $cached;
+  // Never promote stale rows to authoritative just because they have a positive price.
+  if ($assetType === 'crypto' && $allowCryptoSeed) {
+    foreach ([$live, $cached] as $candidate) {
+      if (!is_array($candidate) || (float)($candidate['price'] ?? 0) <= 0) continue;
+      $src = strtolower(trim((string)($candidate['source'] ?? $candidate['provider'] ?? '')));
+      if (quote_source_is_untrusted($src)) return $candidate;
+    }
   }
   if ($assetType !== 'crypto' && $allowNonCryptoSeed && is_array($cached) && (float)($cached['price'] ?? 0) > 0) {
     return $cached;

@@ -25,10 +25,10 @@ header('Pragma: no-cache');
 function vp_markets_quote_is_usable(string $assetType, float $price, int $updatedAt, string $source): bool {
   if (!($price > 0)) return false;
   $assetType = vp_normalize_asset_type($assetType);
-  if ($assetType === 'crypto') return true;
   if (!quote_source_is_liveish($source, $assetType)) return false;
   if ($updatedAt <= 0) return false;
   $age = max(0, time() - $updatedAt);
+  if ($assetType === 'crypto') return $age <= 12;
   $maxAge = function_exists('qa_quote_max_age')
     ? qa_quote_max_age($assetType, false)
     : (in_array($assetType, ['stocks','arab'], true) ? 7200 : (in_array($assetType, ['commodities','futures'], true) ? 1800 : 360));
@@ -334,11 +334,11 @@ try {
     // Market lists are bootstrap/read paths. Non-crypto live refresh is handled
     // by quotes.php focus/cron so a slow provider cannot block the whole list.
     'with_live' => $withQuotes && ($typeAlias === 'crypto' || $forceLive),
-    'allow_crypto_seed' => true,
+    'allow_crypto_seed' => false,
     'allow_noncrypto_seed' => false,
-    'allow_stale_display' => true,
-    'direct_budget' => in_array($typeAlias, ['arab','futures'], true) ? 18 : 8,
-    'direct_yahoo_budget' => in_array($typeAlias, ['arab','futures'], true) ? 18 : 8,
+    'allow_stale_display' => $typeAlias !== 'crypto',
+    'direct_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
+    'direct_yahoo_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
     'chart_budget' => in_array($typeAlias, ['arab','futures'], true) ? 12 : 6,
   ]);
 

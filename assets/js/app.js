@@ -1068,10 +1068,10 @@ function isTrustedUiLiveSource(source, symbol='', type=''){
   const src = String(source || '').trim().toLowerCase();
   const sym = String(symbol || '').trim().toUpperCase();
   const kind = normalizeLiveAssetType(type || 'crypto');
-  if(kind === 'crypto') return true;
-  if(!src) return false;
   const hardReject = ['seed','seed_fallback','seed_price','cache','stale_cache','chart_seed','seed_candle','yahoo_chart','aggs','synthetic'];
+  if(!src) return false;
   if(hardReject.includes(src)) return false;
+  if(kind === 'crypto') return ['binance','binance_spot','binance_futures','binance_spot_klines','binance_futures_klines','trade_stream','stream','provider_live'].includes(src);
   if((kind === 'commodities' || kind === 'futures') && /^X(?:AU|AG|PT|PD)USD$/.test(sym)) {
     return ['provider_live','provider_fallback','massive','polygon','trade_stream','stream','eodhd','eodhd_rest','eodhd_intraday'].includes(src);
   }
@@ -5188,6 +5188,7 @@ function vpRememberLiveQuote(quote){
     if(!(price > 0)) return null;
     const source = String(quote?.source || quote?.provider || '').trim().toLowerCase();
     const trusted = isTrustedUiLiveSource(source, symbol, type);
+    if(type === 'crypto' && !trusted) return null;
     const updatedAt = vpTradeQuoteTsSec(quote.updated_at || quote.ts || quote.time || Date.now());
     const next = Object.assign({}, quote, {
       symbol,
@@ -5558,6 +5559,25 @@ async function vpFetchFreshMarketQuotes(type, items, ttlMs=1200){
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   if(!list.length || normType === 'all') return list;
 
+  if(normType === 'crypto'){
+    const symbols = [...new Set(list.map(item => String(item?.symbol || '').toUpperCase()).filter(Boolean))].slice(0, 30);
+    if(!symbols.length) return list;
+    const path = `/quotes.php?fresh=1&type=crypto&symbols=${encodeURIComponent(symbols.join(','))}&_=${Date.now()}`;
+    try{
+      const resp = await apiLiveQuotes(path, normType, 5200);
+      const by = new Map((Array.isArray(resp?.items) ? resp.items : [])
+        .filter(item => isTrustedUiLiveSource(item?.source || item?.provider || '', item?.symbol || '', normType))
+        .map(item => [String(item?.symbol || '').toUpperCase(), item]));
+      const merged = list.map(item => {
+        const sym = String(item?.symbol || '').toUpperCase();
+        return by.has(sym) ? vpMergeMarketItemAuthority(item, by.get(sym), normType) : item;
+      });
+      return vpOverlayMarketsWithFreshQuotes(merged, normType);
+    }catch(e){
+      return vpOverlayMarketsWithFreshQuotes(list, normType);
+    }
+  }
+
   if(normType !== 'crypto'){
     const tradeDrawerOpen = !!state.__vpTradeSymbolsDrawerOpen && String(location.hash || '').indexOf('#/trade') === 0;
     const currentHash = String(location.hash || '');
@@ -5604,9 +5624,9 @@ async function refreshMarkets(opts={}){
 
   if (warm && applyToState) warmMarketsFromLocal(selectedType);
 
-  const ttlMs = Number(opts.ttlMs || (selectedType==='crypto' ? 900 : 1800));
-  const effectiveWithQuotes = !!withQuotes && selectedType === 'crypto';
-  const qs = `?type=${encodeURIComponent(selectedType)}${lite ? '&lite=1' : ''}${effectiveWithQuotes ? '&with_quotes=1' : ''}`;
+  const ttlMs = Number(opts.ttlMs || (selectedType==='crypto' ? 350 : 1800));
+  const effectiveWithQuotes = selectedType === 'crypto' ? true : (!!withQuotes && selectedType === 'crypto');
+  const qs = `?type=${encodeURIComponent(selectedType)}${lite ? '&lite=1' : ''}${effectiveWithQuotes ? '&with_quotes=1&force_live=1' : ''}`;
   const r = await apiGetCached(`/markets.php${qs}`, ttlMs);
   let nextItems = vpOverlayMarketsWithFreshQuotes(Array.isArray(r?.items) ? r.items : [], selectedType);
   const needsFreshHydration = Array.isArray(nextItems)
@@ -11476,7 +11496,8 @@ async function vpFetchMarketSnapshot(route='home', preferredType=state.selectedA
           ? [...new Set([preferred, 'crypto', 'forex', 'stocks', 'commodities'].map(v=>normalizeLiveAssetType(v)))]
           : [preferred]);
     const typesParam = snapshotTypes.filter(Boolean).join(',');
-    const resp = await api(`/market_snapshot.php?route=${encodeURIComponent(routeName)}&preferred=${encodeURIComponent(preferred)}${typesParam ? `&types=${encodeURIComponent(typesParam)}` : ''}${force ? '&force=1' : ''}`, { timeoutMs: preferred === 'crypto' ? 5200 : 7600 });
+    const wantsLive = force || routeName === 'trade' || preferred === 'crypto';
+    const resp = await api(`/market_snapshot.php?route=${encodeURIComponent(routeName)}&preferred=${encodeURIComponent(preferred)}${typesParam ? `&types=${encodeURIComponent(typesParam)}` : ''}${force ? '&force=1' : ''}${wantsLive ? '&force_live=1' : ''}`, { timeoutMs: preferred === 'crypto' ? 6200 : 7600 });
     const pools = (resp && typeof resp.pools === 'object' && resp.pools) ? resp.pools : {};
     const normalizedPools = {};
     Object.keys(pools).forEach(type=>{

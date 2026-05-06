@@ -64,7 +64,7 @@ if ($isNonCrypto) {
 $payload = qa_quote_payload($typeAlias, $list, [
   'strict_live_noncrypto' => $strictLive,
   'allow_live' => $allowLive,
-  'allow_crypto_seed' => true,
+  'allow_crypto_seed' => false,
   'allow_noncrypto_seed' => false,
   'direct_budget' => ($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list))),
   'direct_yahoo_budget' => ($direct || $fresh) ? max(1, min(count($list), 12)) : min(4, count($list)),

@@ -164,6 +164,55 @@ function map_klines_to_candles(array $klines): array {
   return $out;
 }
 
+function candles_series_has_real_movement(array $items, int $sample = 24): bool {
+  $items = candles_normalize_series($items);
+  if (count($items) < 3) return false;
+  $slice = array_slice($items, -max(3, $sample));
+  $min = null;
+  $max = null;
+  $volume = 0.0;
+  foreach ($slice as $c) {
+    foreach (['open','high','low','close'] as $key) {
+      $v = (float)($c[$key] ?? 0);
+      if (!($v > 0)) continue;
+      $min = $min === null ? $v : min($min, $v);
+      $max = $max === null ? $v : max($max, $v);
+    }
+    $volume += max(0.0, (float)($c['volume'] ?? 0));
+  }
+  if ($min === null || $max === null) return false;
+  $spread = abs($max - $min) / max(1.0, abs((float)$max));
+  return $spread > 0.000001 || $volume > 0.0;
+}
+
+function candles_crypto_yahoo_symbol(string $symbol): string {
+  $sym = strtoupper(preg_replace('/[^A-Z0-9]/', '', $symbol));
+  if (str_ends_with($sym, 'USDT')) return substr($sym, 0, -4) . '-USD';
+  if (str_ends_with($sym, 'BUSD')) return substr($sym, 0, -4) . '-USD';
+  if (str_ends_with($sym, 'USDC')) return substr($sym, 0, -4) . '-USD';
+  if (str_ends_with($sym, 'USD')) return substr($sym, 0, -3) . '-USD';
+  return $sym . '-USD';
+}
+
+function candles_crypto_respond_from_provider(array $newItems, string $source, string $symbol, string $market, string $type, string $tf, int $end, int $limit): void {
+  $newItems = candles_normalize_series($newItems);
+  if (count($newItems) < 2) throw new RuntimeException('Provider returned too few candles');
+  $cached = candles_cache_load($symbol, $market, $tf, $type);
+  $by = [];
+  foreach ($cached as $c) {
+    if (!is_array($c)) continue;
+    $by[(int)($c['time'] ?? 0)] = $c;
+  }
+  foreach ($newItems as $c) { $by[(int)$c['time']] = $c; }
+  unset($by[0]);
+  ksort($by);
+  $merged = array_values($by);
+  candles_cache_save($symbol, $market, $tf, $merged, $type);
+  $items = candles_from_cache($merged, $end, $limit);
+  $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+  json_response(['ok'=>true,'items'=>$out,'source'=>$source,'provider_count'=>count($newItems)]);
+}
+
 
 function candles_normalize_series(array $items): array {
   if (!$items) return [];
@@ -350,11 +399,12 @@ function candles_recent_anchor_close(array $items, int $take = 6): float {
 
 function candles_series_matches_live(array $items, string $symbol, string $market, string $assetType): bool {
   if (!$items) return true;
+  $kind = strtolower(trim($assetType));
+  if ($kind === 'crypto' && !candles_series_has_real_movement($items, 24)) return false;
   $live = candles_best_live_price($symbol, $market, $assetType);
   if (!($live > 0)) return true;
   $anchor = candles_recent_anchor_close($items, 8);
   if (!($anchor > 0)) return true;
-  $kind = strtolower(trim($assetType));
   $drift = abs($live - $anchor) / max(1.0, abs($anchor));
   if ($kind === 'futures') return $drift <= 0.12;
   if ($kind === 'commodities') return $drift <= 0.10;
@@ -446,35 +496,51 @@ try {
       if ($end < $min) $end = $min;
       $endMs = $end * 1000;
     }
+    $providerErrors = [];
+    $providers = [];
     if ($market === 'perp') {
       $url = 'https://fapi.binance.com/fapi/v1/klines?symbol=' . urlencode($symbol) . '&interval=' . urlencode($tf) . '&limit=' . $limit;
       if ($endMs > 0) $url .= '&endTime=' . $endMs;
-      $kl = http_get_json($url);
-      $newItems = map_klines_to_candles($kl);
-      $cached = candles_cache_load($symbol,$market,$tf,$type);
-      // merge by time
-      $by = [];
-      foreach ($cached as $c) { $by[(int)$c['time']] = $c; }
-      foreach ($newItems as $c) { $by[(int)$c['time']] = $c; }
-      $merged = array_values($by);
-      candles_cache_save($symbol,$market,$tf,$merged,$type);
-      $items = candles_from_cache($merged, $end, $limit);
-      json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end)]);
+      $providers[] = ['source' => 'binance_futures_klines', 'url' => $url];
     }
-    // Spot
-    $url = 'https://api.binance.com/api/v3/klines?symbol=' . urlencode($symbol) . '&interval=' . urlencode($tf) . '&limit=' . $limit;
-    if ($endMs > 0) $url .= '&endTime=' . $endMs;
-    $kl = http_get_json($url);
-    $newItems = map_klines_to_candles($kl);
-      $cached = candles_cache_load($symbol,$market,$tf,$type);
-      // merge by time
-      $by = [];
-      foreach ($cached as $c) { $by[(int)$c['time']] = $c; }
-      foreach ($newItems as $c) { $by[(int)$c['time']] = $c; }
-      $merged = array_values($by);
-      candles_cache_save($symbol,$market,$tf,$merged,$type);
-      $items = candles_from_cache($merged, $end, $limit);
-      json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end)]);
+    $spotPath = '/api/v3/klines';
+    $spotQuery = ['symbol' => $symbol, 'interval' => $tf, 'limit' => $limit];
+    if ($endMs > 0) $spotQuery['endTime'] = $endMs;
+    $providers[] = ['source' => 'binance_spot_klines', 'spot_path' => $spotPath, 'query' => $spotQuery];
+
+    foreach ($providers as $provider) {
+      try {
+        $kl = isset($provider['spot_path'])
+          ? binance_spot_json((string)$provider['spot_path'], (array)$provider['query'])
+          : http_get_json((string)$provider['url']);
+        $newItems = map_klines_to_candles($kl);
+        if (count($newItems) >= 2 && candles_series_has_real_movement($newItems, 24)) {
+          candles_crypto_respond_from_provider($newItems, (string)$provider['source'], $symbol, $market, $type, $tf, $end, $limit);
+        }
+        $providerErrors[] = (string)$provider['source'] . ': empty_or_flat';
+      } catch (Throwable $e) {
+        $providerErrors[] = (string)$provider['source'] . ': ' . $e->getMessage();
+      }
+    }
+
+    try {
+      $yahooSymbol = candles_crypto_yahoo_symbol($symbol);
+      $newItems = yahoo_chart_candles($yahooSymbol, $tf, $limit);
+      if (count($newItems) >= 2 && candles_series_has_real_movement($newItems, 24)) {
+        candles_crypto_respond_from_provider($newItems, 'yahoo_crypto_chart', $symbol, $market, $type, $tf, $end, $limit);
+      }
+      $providerErrors[] = 'yahoo_crypto_chart: empty_or_flat';
+    } catch (Throwable $e) {
+      $providerErrors[] = 'yahoo_crypto_chart: ' . $e->getMessage();
+    }
+
+    $cached = candles_cache_load($symbol,$market,$tf,$type);
+    if ($cached && candles_series_has_real_movement($cached, 24)) {
+      $items = candles_from_cache($cached, $end, $limit);
+      json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end),'cached'=>true,'source'=>'cache_preserve','provider_errors'=>$providerErrors]);
+    }
+
+    throw new RuntimeException('Crypto candle providers unavailable: ' . implode(' | ', array_slice($providerErrors, -3)));
   }
 
     // Non-crypto candles: try Massive/Polygon aggregates first (real candles).
@@ -703,7 +769,7 @@ try {
     $price = $last;
     $step = max(1, tf_seconds($tf));
     $items = candles_quote_seed_items($price, time(), $step, $limit);
-    json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, $step, $end),'synthetic'=>true,'soft_error'=>$e->getMessage()]);
+    json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, $step, $end),'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>$e->getMessage()]);
   } catch (Throwable $ignored2) {
     json_response(['ok'=>false,'error'=>$e->getMessage()], 500);
   }

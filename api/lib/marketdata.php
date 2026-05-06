@@ -424,11 +424,20 @@ function binance_futures_mark_price(string $symbol): array {
   // https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT
   $d = http_get_json('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=' . urlencode(binance_norm_symbol($symbol)));
   // Response includes markPrice, indexPrice, lastFundingRate, nextFundingTime
+  $mark = isset($d['markPrice']) ? (float)$d['markPrice'] : null;
+  $index = isset($d['indexPrice']) ? (float)$d['indexPrice'] : null;
+  if ($mark !== null && $mark > 0 && $index !== null && $index > 0) {
+    $drift = abs($mark - $index) / max(1.0, abs($mark));
+    if ($drift > 0.02) $index = $mark;
+  }
+  $nextFunding = isset($d['nextFundingTime']) ? (int)round(((float)$d['nextFundingTime'])/1000.0) : null;
+  if ($nextFunding !== null && $nextFunding < (time() - 3600)) $nextFunding = null;
   return [
-    'mark_price' => isset($d['markPrice']) ? (float)$d['markPrice'] : null,
-    'index_price' => isset($d['indexPrice']) ? (float)$d['indexPrice'] : null,
+    'mark_price' => $mark,
+    'index_price' => $index,
     'funding_rate' => isset($d['lastFundingRate']) ? (float)$d['lastFundingRate'] : null,
-    'next_funding_time' => isset($d['nextFundingTime']) ? (int)round(((float)$d['nextFundingTime'])/1000.0) : null,
+    'next_funding_time' => $nextFunding,
+    'provider_time' => isset($d['time']) ? (int)round(((float)$d['time'])/1000.0) : time(),
   ];
 }
 
@@ -458,6 +467,15 @@ function binance_futures_mark_price_cached(string $symbol, int $ttl = 2): array 
       if ($raw !== false && $raw !== '') {
         $j = json_decode($raw, true);
         if (is_array($j) && isset($j['mark_price'])) {
+          $mark = (float)($j['mark_price'] ?? 0);
+          $index = isset($j['index_price']) ? (float)$j['index_price'] : null;
+          if ($mark > 0 && $index !== null && $index > 0) {
+            $drift = abs($mark - $index) / max(1.0, abs($mark));
+            if ($drift > 0.02) $j['index_price'] = $mark;
+          }
+          if (isset($j['next_funding_time']) && (int)$j['next_funding_time'] < ($now - 3600)) {
+            $j['next_funding_time'] = null;
+          }
           return $j;
         }
       }
