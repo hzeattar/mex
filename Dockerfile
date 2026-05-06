@@ -21,6 +21,7 @@ RUN set -eux; \
 COPY . /app
 
 RUN set -eux; \
+    if [ -f php.ini ]; then cp php.ini /usr/local/etc/php/conf.d/vertexpluse.ini; fi; \
     mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads; \
     chmod -R 775 api/data api/uploads
 
