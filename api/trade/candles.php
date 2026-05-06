@@ -182,7 +182,10 @@ function candles_series_has_real_movement(array $items, int $sample = 24): bool 
   }
   if ($min === null || $max === null) return false;
   $spread = abs($max - $min) / max(1.0, abs((float)$max));
-  return $spread > 0.000001 || $volume > 0.0;
+  // Volume by itself does not prove the chart is useful. A cached sequence of
+  // identical OHLC values with one non-zero volume bar was being treated as
+  // real history, which made the trading chart look frozen.
+  return $spread > 0.000001;
 }
 
 function candles_crypto_yahoo_symbol(string $symbol): string {
