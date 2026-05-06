@@ -5361,7 +5361,8 @@ function vpMarketItemsLookFreshEnough(items, typeHint){
     const ts = vpTradeQuoteTsSec(item?.updated_at || item?.ts || item?.time || 0);
     const age = ts > 0 ? Math.max(0, nowSec - ts) : 999999;
     if(itemType === 'crypto'){
-      if(age <= 6) trusted++;
+      const src = String(item?.source || item?.provider || '').trim().toLowerCase();
+      if(ts > 0 && age <= 6 && isTrustedUiLiveSource(src, item?.symbol || '', itemType)) trusted++;
       return;
     }
     const src = String(item?.source || item?.provider || '').trim().toLowerCase();
@@ -8075,14 +8076,16 @@ function createTradeWatchlistPanel(symbol, assetType, onSelect, opts={}){
       const rowItem = rowLive ? Object.assign({}, x, {
         price: safeNum(rowLive.price || rowLive.last || rowLive.mark_price, safeNum(x?.price, 0)),
         change_pct: safeNum(rowLive.change_pct ?? x?.change_pct ?? 0, safeNum(x?.change_pct, 0)),
-        updated_at: Math.max(vpTradeQuoteTsSec(x?.updated_at || 0), vpTradeQuoteTsSec(rowLive.updated_at || 0))
+        updated_at: Math.max(vpTradeQuoteTsSec(x?.updated_at || 0), vpTradeQuoteTsSec(rowLive.updated_at || 0)),
+        source: rowLive.source || rowLive.provider || x?.source || ''
       }) : x;
       const active = symbolKey === String(symbol||'').toUpperCase();
       const ch = Number(rowItem.change_pct||0);
       const signalPill = Number(x.signal_count||0) > 0 ? h('div',{class:'trade-watch-signal'}, `${Number(x.signal_count||0)} ${state.t('trade.signals')}`) : null;
       const priceEl = h('div',{class:'trade-watch-price'}, fmtRowPrice(Number(rowItem.price||0)));
       const changeEl = h('div',{class:'trade-watch-change '+(ch>=0?'up':'down')}, `${ch>=0?'+':''}${fmt(ch,2)}%`);
-      const liveEl = h('div',{class:'trade-watch-live'+(Number(rowItem.price||0) > 0 ? ' ready' : '')}, vpDelayedBadgeText(assetType, !(Number(rowItem.price||0) > 0)));
+      const rowTrusted = Number(rowItem.price||0) > 0 && isTrustedUiLiveSource(String(rowItem?.source || rowItem?.provider || '').trim().toLowerCase(), symbolKey, normalizeLiveAssetType(rowItem?.type || assetType || 'crypto'));
+      const liveEl = h('div',{class:'trade-watch-live'+(rowTrusted ? ' ready' : '')}, vpDelayedBadgeText(assetType, !rowTrusted));
       const row = h('button',{class:'trade-watch-row'+(active?' active':''), onclick:()=>onSelect(rowItem)},
         h('div',{class:'trade-watch-main'},
           h('div',{class:'trade-watch-sym'}, String(x.symbol||'')),
