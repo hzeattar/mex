@@ -62,6 +62,7 @@ if ($isNonCrypto) {
 }
 $visibleNonCrypto = $visible && $isNonCrypto;
 $focusNonCrypto = $isNonCrypto && (($purpose === 'focus') || $direct || $strictLive);
+$visibleChartBudget = $visibleNonCrypto ? max(0, min(5, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_LIMIT_NONCRYPTO', '4'))) : 0;
 $payload = qa_quote_payload($typeAlias, $list, [
   'strict_live_noncrypto' => $strictLive,
   'allow_live' => $allowLive,
@@ -69,7 +70,7 @@ $payload = qa_quote_payload($typeAlias, $list, [
   'allow_noncrypto_seed' => false,
   'direct_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list)))),
   'direct_yahoo_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh || $focusNonCrypto) ? max(1, min(count($list), 3)) : min(2, count($list))),
-  'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? 0 : min(1, count($list))),
+  'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? $visibleChartBudget : min(1, count($list))),
   'allow_direct_batch' => $visibleNonCrypto,
   'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 2 : 4),
 ]);
