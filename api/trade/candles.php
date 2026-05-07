@@ -441,7 +441,8 @@ try {
       $fastItems = candles_finalize_items(candles_from_cache($cachedAll, 0, $limit), $symbol, $market, $type, $step, 0);
       $allowWarmNonCrypto = in_array($providerType, ['stocks','arab','commodities','futures','forex'], true);
       $cacheDeepEnough = candles_cache_depth_enough($fastItems, $limit, $providerType, $tf);
-      if ($allowWarmNonCrypto && $cacheDeepEnough) {
+      $cacheMovesEnough = candles_series_has_real_movement($fastItems, 24);
+      if ($allowWarmNonCrypto && $cacheDeepEnough && $cacheMovesEnough) {
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['ok'=>true,'items'=>$fastItems, 'cached'=>true, 'warm'=>true, 'source'=>'cache_warm'], JSON_UNESCAPED_SLASHES);
         exit;
@@ -604,7 +605,9 @@ try {
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
           candles_cache_save($symbol,$market,$tf, $merged, $type);
           if (in_array($providerType, ['stocks','arab','commodities','futures'], true)) {
-            json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart','warm'=>true]);
+            if (candles_series_has_real_movement($out, 24)) {
+              json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart','warm'=>true]);
+            }
           }
           $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
           if ($outMatchesLive) {
@@ -656,7 +659,9 @@ try {
       $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
       candles_cache_save($symbol,$market,$tf, $merged, $type);
       if (in_array($providerType, ['stocks','arab','commodities','futures','forex'], true)) {
-        json_response(['ok'=>true,'items'=>$out,'source'=>'aggs','warm'=>true]);
+        if (candles_series_has_real_movement($out, 24)) {
+          json_response(['ok'=>true,'items'=>$out,'source'=>'aggs','warm'=>true]);
+        }
       }
       $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
       if ($outMatchesLive) {
@@ -679,7 +684,9 @@ try {
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
           candles_cache_save($symbol,$market,$tf, $merged, $type);
           if (in_array($providerType, ['forex','commodities'], true)) {
-            json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart_fallback','warm'=>true]);
+            if (candles_series_has_real_movement($out, 24)) {
+              json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart_fallback','warm'=>true]);
+            }
           }
           $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
           if ($outMatchesLive) {
