@@ -458,7 +458,8 @@
     marketsBusy = true;
     try{
       const cache = force ? '&_=' + Date.now() : '';
-      const data = await api(`/markets.php?type=${encodeURIComponent(state.type)}&lite=1&with_quotes=1${cache}`, { timeoutMs:15000 });
+      const liveList = state.type !== 'crypto' ? '&force_live=1' : '';
+      const data = await api(`/markets.php?type=${encodeURIComponent(state.type)}&lite=1&with_quotes=1${liveList}${cache}`, { timeoutMs:10000 });
       let rows = Array.isArray(data.items) ? data.items : (Array.isArray(data.markets) ? data.markets : []);
       if(!rows.length && data.groups && typeof data.groups === 'object'){
         rows = Object.values(data.groups).flatMap(v => Array.isArray(v) ? v : (Array.isArray(v?.items) ? v.items : []));
@@ -784,9 +785,9 @@
     lastQuote = null;
     lastCandle = null;
     updateHeader();
-    await loadMarkets(force);
+    const marketLoad = loadMarkets(force).catch(() => {});
+    await Promise.allSettled([loadQuote(), loadCandles(force), loadPortfolio(force), marketLoad]);
     if(myRun !== runId) return;
-    await Promise.allSettled([loadQuote(), loadCandles(force), loadPortfolio(force)]);
   }
 
   function startLoops(){

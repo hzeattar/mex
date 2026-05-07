@@ -17,6 +17,7 @@ $typeProvider = ($typeAlias === 'all') ? 'all' : vp_provider_asset_type($typeAli
 $grouped = isset($_GET['grouped']);
 $withQuotes = (int)($_GET['with_quotes'] ?? 0) === 1;
 $lite = (int)($_GET['lite'] ?? 0) === 1;
+$forceLive = ((int)($_GET['force_live'] ?? 0) === 1);
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -199,7 +200,7 @@ function vp_build_fallback_commodity_row(array $def, int $idBase = 920000): arra
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v3_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '.json';
+$cacheKey = 'markets_v3_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '2') : (int)env('MARKETS_CACHE_TTL', '10');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -329,7 +330,6 @@ try {
 
   $now = time();
 
-  $forceLive = ((int)($_GET['force_live'] ?? 0) === 1);
   $authoritativeQuotes = qa_overlay_market_rows($rows, [
     // Market lists are bootstrap/read paths. Non-crypto live refresh is handled
     // by quotes.php focus/cron so a slow provider cannot block the whole list.
