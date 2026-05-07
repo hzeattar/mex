@@ -1,575 +1,928 @@
-(function () {
-  'use strict';
+(function(){
+  if(window.__VP_APP_LITE_LOADED) return;
+  window.__VP_APP_LITE_LOADED = true;
+  window.__VP_TRADE_V2 = true;
 
-  const root = document.getElementById('app');
-  const api = {
-    bootstrap: '/api/bootstrap.php',
-    quotes: '/api/quotes.php',
-    candles: '/api/trade/candles.php',
-    portfolio: '/api/trade/portfolio.php',
-    orders: '/api/trade/orders.php',
-    wallet: '/api/wallet/summary.php',
-    placeOrder: '/api/trade/place_order.php',
-    closePosition: '/api/trade/close_position.php'
-  };
-  const tabs = [
-    { key: 'crypto', label: 'Crypto' },
-    { key: 'forex', label: 'Forex' },
-    { key: 'stocks', label: 'Stocks' },
-    { key: 'commodities', label: 'Commodities' },
-    { key: 'futures', label: 'Futures' },
-    { key: 'arab', label: 'Arab' }
+  const API = window.__API_BASE || '/api';
+  const HOST_ID = 'app';
+  const CHART_SRC = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js';
+  const TYPES = [
+    { key:'crypto', label:'Crypto', defaultSymbol:'BTCUSDT', markets:['spot','perp'] },
+    { key:'forex', label:'Forex', defaultSymbol:'EURUSD', markets:['spot'] },
+    { key:'stocks', label:'Stocks', defaultSymbol:'AAPL', markets:['spot'] },
+    { key:'commodities', label:'Commodities', defaultSymbol:'XAUUSD', markets:['spot'] },
+    { key:'futures', label:'Futures', defaultSymbol:'ES_F', markets:['perp'] },
+    { key:'arab', label:'Arab', defaultSymbol:'2222', markets:['spot'] }
   ];
-  const state = {
-    booted: false,
-    brand: {
-      name: window.__BRAND_NAME || 'VertexPluse',
-      tagline: window.__BRAND_TAGLINE || 'Professional trading & investment platform',
-      logo_url: window.__BRAND_LOGO_URL || './assets/img/vertexpluse-logo.svg',
-      support_email: window.__SUPPORT_EMAIL || 'support@vertexpluse.com'
-    },
-    user: null,
-    wallet: null,
-    markets: {},
-    flags: {},
-    route: normalizeRoute(location.hash),
-    mode: localStorage.getItem('vp-lite-mode') === 'real' ? 'real' : 'demo',
-    activeTab: localStorage.getItem('vp-lite-tab') || 'crypto',
-    activeSymbol: localStorage.getItem('vp-lite-symbol') || '',
-    activeType: localStorage.getItem('vp-lite-type') || 'crypto',
-    activeMarket: localStorage.getItem('vp-lite-market') || 'spot',
-    timeframe: localStorage.getItem('vp-lite-tf') || '1m',
-    quote: null,
-    quoteMap: {},
-    portfolio: null,
-    orders: [],
-    intervals: {},
-    inflight: {},
-    chart: null,
-    candleSeries: null,
-    chartSymbolKey: '',
-    lastCandle: null
-  };
+  const TYPE_KEYS = new Set(TYPES.map(t => t.key));
 
-  function normalizeRoute(hash) {
-    const route = (hash || '#/home').replace(/^#/, '');
-    return ['/home', '/trade', '/portfolio', '/wallet', '/account'].includes(route) ? route : '/home';
+  let root = null;
+  let mounted = false;
+  let chart = null;
+  let candleSeries = null;
+  let volumeSeries = null;
+  let resizeObserver = null;
+  let timers = [];
+  let boundRoot = null;
+  let runId = 0;
+  let activeBusy = false;
+  let marketsBusy = false;
+  let marketHydrateBusy = false;
+  let marketHydrateKey = '';
+  let portfolioBusy = false;
+  let candlesBusy = false;
+  let marketItems = [];
+  let positions = [];
+  let orders = [];
+  let lastQuote = null;
+  let lastCandle = null;
+  let state = readRoute();
+
+  function $(sel){ return root ? root.querySelector(sel) : null; }
+  function $all(sel){ return root ? Array.from(root.querySelectorAll(sel)) : []; }
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
+  function fmt(n, d){
+    n = Number(n || 0);
+    if(!isFinite(n)) n = 0;
+    if(d == null) d = n >= 1000 ? 2 : (n >= 10 ? 4 : 5);
+    return n.toLocaleString('en-US', { minimumFractionDigits:d, maximumFractionDigits:d });
+  }
+  function money(n, d){ return '$' + fmt(n, d); }
+  function pct(n){
+    n = Number(n || 0);
+    return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+  }
+  function typeDef(key){ return TYPES.find(t => t.key === key) || TYPES[0]; }
+  function normType(v){
+    v = String(v || '').toLowerCase();
+    if(v === 'fx') v = 'forex';
+    if(v === 'perpetual') v = 'crypto';
+    return TYPE_KEYS.has(v) ? v : 'crypto';
+  }
+  function defaultMarket(type){
+    const def = typeDef(type);
+    if(def.markets.includes('perp') && (type === 'futures')) return 'perp';
+    return def.markets[0] || 'spot';
+  }
+  function cleanSymbol(sym){ return String(sym || '').toUpperCase().replace(/^@R@|^@D@/, '').trim(); }
+  function readRoute(){
+    const hash = String(location.hash || '#/trade');
+    const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+    const params = new URLSearchParams(query);
+    const type = normType(params.get('type') || localStorage.getItem('vp2_type') || localStorage.getItem('marketType') || 'crypto');
+    const def = typeDef(type);
+    const symbol = cleanSymbol(params.get('symbol') || localStorage.getItem('vp2_symbol_' + type) || localStorage.getItem('marketSymbol') || def.defaultSymbol);
+    const marketRaw = String(params.get('market') || localStorage.getItem('vp2_market_' + type) || defaultMarket(type)).toLowerCase();
+    const market = def.markets.includes(marketRaw) ? marketRaw : defaultMarket(type);
+    const tf = String(params.get('tf') || localStorage.getItem('vp2_tf') || '1m').toLowerCase();
+    const mode = String(localStorage.getItem('trade_mode') || 'demo').toLowerCase() === 'real' ? 'real' : 'demo';
+    return { type, symbol, market, tf: normalizeTf(tf), mode, search:'' };
+  }
+  function writeRoute(next){
+    localStorage.setItem('vp2_type', next.type);
+    localStorage.setItem('vp2_symbol_' + next.type, next.symbol);
+    localStorage.setItem('vp2_market_' + next.type, next.market);
+    localStorage.setItem('vp2_tf', next.tf);
+    localStorage.setItem('marketSymbol', next.symbol);
+    localStorage.setItem('marketType', next.type);
+    const hash = `#/trade?symbol=${encodeURIComponent(next.symbol)}&type=${encodeURIComponent(next.type)}&market=${encodeURIComponent(next.market)}&tf=${encodeURIComponent(next.tf)}`;
+    if(location.hash !== hash) location.hash = hash;
+  }
+  function normalizeTf(tf){
+    const allowed = ['1m','3m','5m','15m','30m','1h','4h','1d'];
+    return allowed.includes(tf) ? tf : '1m';
+  }
+  function tfSeconds(tf){
+    return { '1m':60, '3m':180, '5m':300, '15m':900, '30m':1800, '1h':3600, '4h':14400, '1d':86400 }[tf] || 60;
+  }
+  function pollMs(type){
+    if(document.hidden) return 15000;
+    return 2600;
+  }
+  function apiUrl(path){
+    if(/^https?:\/\//i.test(path)) return path;
+    if(path.startsWith('/api/')) return path;
+    return API + (path.startsWith('/') ? path : '/' + path);
+  }
+  async function api(path, opts){
+    opts = opts || {};
+    const timeoutMs = Number(opts.timeoutMs || 12000);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const init = {
+      method: opts.method || 'GET',
+      credentials: 'same-origin',
+      signal: controller.signal,
+      headers: Object.assign({ 'Accept':'application/json' }, opts.headers || {})
+    };
+    if(opts.body !== undefined){
+      init.headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(opts.body);
+    }
+    try{
+      const res = await fetch(apiUrl(path), init);
+      const text = await res.text();
+      let data = null;
+      try{ data = text ? JSON.parse(text) : null; }catch(e){ data = { ok:false, error:text || 'Bad JSON' }; }
+      if(!res.ok || (data && data.ok === false)){
+        throw new Error((data && data.error) || ('HTTP ' + res.status));
+      }
+      return data || {};
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+  function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
-  function esc(value) {
-    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
-      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char];
+  function ensureCharts(){
+    if(window.LightweightCharts) return Promise.resolve(true);
+    return new Promise(resolve => {
+      const existing = document.querySelector('script[data-vp2-chart]');
+      if(existing){
+        existing.addEventListener('load', () => resolve(!!window.LightweightCharts), { once:true });
+        existing.addEventListener('error', () => resolve(false), { once:true });
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = CHART_SRC;
+      s.defer = true;
+      s.dataset.vp2Chart = '1';
+      s.onload = () => resolve(!!window.LightweightCharts);
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
     });
   }
-
-  function money(value, currency) {
-    const number = Number(value || 0);
-    const digits = Math.abs(number) >= 1000 ? 2 : Math.abs(number) >= 1 ? 4 : 6;
-    return number.toLocaleString(undefined, { maximumFractionDigits: digits }) + (currency ? ' ' + currency : '');
+  function routeIsTrade(){ return true; }
+  function schedule(fn, ms){
+    const id = setInterval(fn, ms);
+    timers.push(id);
+    return id;
+  }
+  function clearTimers(){
+    timers.forEach(id => { try{ clearInterval(id); }catch(e){} });
+    timers = [];
+  }
+  function cleanup(){
+    clearTimers();
+    try{
+      if(boundRoot) boundRoot.removeEventListener('click', onClick);
+    }catch(e){}
+    boundRoot = null;
+    mounted = false;
+    activeBusy = false;
+    marketsBusy = false;
+    marketHydrateBusy = false;
+    marketHydrateKey = '';
+    portfolioBusy = false;
+    candlesBusy = false;
+    try{ if(resizeObserver) resizeObserver.disconnect(); }catch(e){}
+    resizeObserver = null;
+    try{ if(chart) chart.remove(); }catch(e){}
+    chart = null;
+    candleSeries = null;
+    volumeSeries = null;
   }
 
-  function compactPrice(value) {
-    const number = Number(value || 0);
-    if (!number) return '—';
-    const digits = Math.abs(number) >= 1000 ? 2 : Math.abs(number) >= 1 ? 4 : 6;
-    return number.toLocaleString(undefined, { maximumFractionDigits: digits });
-  }
-
-  function pct(value) {
-    const number = Number(value || 0);
-    const sign = number > 0 ? '+' : '';
-    return sign + number.toFixed(2) + '%';
-  }
-
-  function sourceLabel(item) {
-    if (!item) return 'waiting';
-    const timing = String(item.timing_class || '').toLowerCase();
-    const source = String(item.source || '').toLowerCase();
-    if (item.delayed || timing === 'delayed') return 'delayed';
-    if (timing === 'stale' || item.is_stale) return 'stale';
-    if (source.includes('synthetic') || source.includes('seed')) return 'reference';
-    if (source && source !== 'unavailable') return source.replace(/_/g, ' ');
-    return 'unavailable';
-  }
-
-  async function getJson(url, options) {
-    const response = await fetch(url, Object.assign({ credentials: 'same-origin', headers: { Accept: 'application/json' } }, options || {}));
-    const data = await response.json().catch(function () { return { ok: false, error: 'Invalid JSON response' }; });
-    if (!response.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + response.status));
-    return data;
-  }
-
-  async function postJson(url, body) {
-    return getJson(url, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
-    });
-  }
-
-  function toast(message) {
-    let node = document.querySelector('.vp-toast');
-    if (!node) {
-      node = document.createElement('div');
-      node.className = 'vp-toast';
-      document.body.appendChild(node);
-    }
-    node.textContent = message;
-    node.classList.add('is-visible');
-    clearTimeout(node._timer);
-    node._timer = setTimeout(function () { node.classList.remove('is-visible'); }, 3600);
-  }
-
-  function setBusy(key, busy) {
-    state.inflight[key] = busy;
-  }
-
-  function clearPollers() {
-    Object.keys(state.intervals).forEach(function (key) {
-      clearInterval(state.intervals[key]);
-      delete state.intervals[key];
-    });
-  }
-
-  function setPoller(key, fn, ms, immediate) {
-    clearInterval(state.intervals[key]);
-    if (immediate) fn();
-    state.intervals[key] = setInterval(fn, ms);
-  }
-
-  async function bootstrap() {
-    root.innerHTML = bootHtml();
-    try {
-      const data = await getJson(api.bootstrap);
-      state.booted = true;
-      state.user = data.user || null;
-      state.wallet = data.wallet || null;
-      state.markets = data.markets || {};
-      state.flags = data.feature_flags || {};
-      state.brand = Object.assign(state.brand, data.brand || {});
-      chooseInitialMarket();
-      render();
-      startRouteWork();
-    } catch (error) {
-      root.innerHTML = '<div class="vp-error"><div class="vp-card"><div class="vp-card__body"><h2>Unable to load workspace</h2><p class="vp-muted">' + esc(error.message) + '</p><button class="vp-btn" data-action="retry">Retry</button></div></div></div>';
-    }
-  }
-
-  function bootHtml() {
-    return '<div class="vp-boot"><div class="vp-boot__mark">V</div><div><strong>' + esc(state.brand.name) + '</strong><span>Loading trading workspace...</span></div></div>';
-  }
-
-  function chooseInitialMarket() {
-    const groups = state.markets || {};
-    if (!groups[state.activeTab] || !groups[state.activeTab].length) {
-      const found = tabs.find(function (tab) { return groups[tab.key] && groups[tab.key].length; });
-      state.activeTab = found ? found.key : 'crypto';
-    }
-    const list = groups[state.activeTab] || [];
-    const selected = list.find(function (item) { return item.symbol === state.activeSymbol; }) || list[0];
-    if (selected) setActiveMarket(selected, false);
-  }
-
-  function setActiveMarket(item, rerender) {
-    state.activeSymbol = String(item.symbol || '').toUpperCase();
-    state.activeType = item.type || state.activeTab || 'crypto';
-    state.activeMarket = item.market || (state.activeType === 'futures' ? 'perp' : 'spot');
-    localStorage.setItem('vp-lite-symbol', state.activeSymbol);
-    localStorage.setItem('vp-lite-type', state.activeType);
-    localStorage.setItem('vp-lite-market', state.activeMarket);
-    if (rerender !== false) {
-      state.chartSymbolKey = '';
-      state.quote = null;
-      render();
-      startRouteWork();
-    }
-  }
-
-  function navHtml() {
-    const items = [['/home', 'Home'], ['/trade', 'Trade'], ['/portfolio', 'Portfolio'], ['/wallet', 'Wallet'], ['/account', 'Account']];
-    return '<nav class="vp-nav">' + items.map(function (item) {
-      return '<a class="' + (state.route === item[0] ? 'is-active' : '') + '" href="#' + item[0] + '">' + item[1] + '</a>';
-    }).join('') + '</nav>';
-  }
-
-  function topbarHtml() {
-    const wallet = state.wallet && state.wallet[state.mode] ? state.wallet[state.mode] : {};
-    return '<header class="vp-topbar"><div class="vp-brand"><div class="vp-logo">V</div><div><h1>' + esc(state.brand.name) + '</h1><span>' + esc(state.brand.tagline) + '</span></div></div><div class="vp-account"><span class="vp-balance">' + esc(state.mode.toUpperCase()) + ' · ' + esc(money(wallet.available, wallet.currency)) + '</span><select class="vp-mode" data-action="mode"><option value="demo"' + (state.mode === 'demo' ? ' selected' : '') + '>Demo</option><option value="real"' + (state.mode === 'real' ? ' selected' : '') + '>Real</option></select></div></header>';
-  }
-
-  function render() {
-    if (!state.booted) return;
-    root.innerHTML = '<div class="vp-shell">' + topbarHtml() + navHtml() + '<main class="vp-main"><section class="vp-page">' + routeHtml() + '</section></main></div>';
+  function renderShell(){
+    const def = typeDef(state.type);
+    root.innerHTML = `
+      <div class="vp2-shell">
+        <aside class="vp2-side">
+          <div class="vp2-brand">V</div>
+          <nav class="vp2-nav" aria-label="Main">
+            <a href="#/home">Home</a>
+            <a href="#/portfolio">Portfolio</a>
+            <a class="active" href="#/trade">Trade</a>
+            <a href="#/invest">Earn</a>
+            <a href="#/wallet">Assets</a>
+          </nav>
+        </aside>
+        <main class="vp2-main">
+          <section class="vp2-top">
+            <div class="vp2-title">
+              <div>
+                <div class="vp2-symbol" data-active-symbol>${esc(state.symbol)}</div>
+                <div class="vp2-subtitle"><span data-active-name>${esc(state.symbol)}</span> / ${esc(def.label)} / <span data-active-market>${esc(state.market.toUpperCase())}</span></div>
+              </div>
+              <div class="vp2-live" data-live-badge>SYNCING</div>
+            </div>
+            <div class="vp2-actions">
+              <div>
+                <div class="vp2-price" data-active-price>--</div>
+                <div class="vp2-change" data-active-change>+0.00%</div>
+              </div>
+              <button class="vp2-btn ghost" data-action="mode">${state.mode === 'real' ? 'Real' : 'Demo'}</button>
+              <button class="vp2-btn primary" data-action="refresh">Refresh</button>
+            </div>
+          </section>
+          <section class="vp2-grid">
+            <aside class="vp2-panel vp2-watch">
+              <div class="vp2-panel-head">
+                <div>
+                  <div class="vp2-panel-title">Markets</div>
+                  <div class="vp2-muted">Only visible symbols are refreshed.</div>
+                </div>
+              </div>
+              <div class="vp2-watch-tools">
+                <div class="vp2-tabs" data-type-tabs>
+                  ${TYPES.map(t => `<button class="vp2-chip ${t.key === state.type ? 'active' : ''}" data-type="${t.key}">${esc(t.label)}</button>`).join('')}
+                </div>
+                <div class="vp2-tabs" data-market-tabs>
+                  ${def.markets.map(m => `<button class="vp2-chip ${m === state.market ? 'active' : ''}" data-market="${m}">${esc(m.toUpperCase())}</button>`).join('')}
+                </div>
+                <input class="vp2-field" data-search placeholder="Search symbols" value="${esc(state.search)}" />
+              </div>
+              <div class="vp2-list" data-market-list><div class="vp2-empty">Loading markets...</div></div>
+            </aside>
+            <section class="vp2-panel vp2-chart-panel">
+              <div class="vp2-panel-head">
+                <div>
+                  <div class="vp2-panel-title" data-chart-title>${esc(state.symbol)}</div>
+                  <div class="vp2-muted" data-chart-source>Quote authority + native candles</div>
+                </div>
+                <div class="vp2-live" data-source-badge>LIVE</div>
+              </div>
+              <div class="vp2-chart-wrap">
+                <div class="vp2-chart" data-chart></div>
+                <div class="vp2-chart-state" data-chart-state>Loading chart...</div>
+              </div>
+              <div class="vp2-chart-foot">
+                <div class="vp2-tfs">
+                  ${['1m','3m','5m','15m','30m','1h','4h'].map(tf => `<button class="vp2-chip ${tf === state.tf ? 'active' : ''}" data-tf="${tf}">${tf}</button>`).join('')}
+                </div>
+                <button class="vp2-btn ghost" data-action="fit">Fit chart</button>
+              </div>
+            </section>
+            <aside class="vp2-panel vp2-ticket">
+              <div class="vp2-panel-head">
+                <div>
+                  <div class="vp2-panel-title">Order Ticket</div>
+                  <div class="vp2-muted">${esc(state.mode.toUpperCase())} internal trading</div>
+                </div>
+                <span class="vp2-chip active">${esc(state.market.toUpperCase())}</span>
+              </div>
+              <div class="vp2-form">
+                <div class="vp2-two">
+                  <div class="vp2-stat"><span class="vp2-muted">Available</span><b data-available>--</b></div>
+                  <div class="vp2-stat"><span class="vp2-muted">PnL</span><b data-pnl>--</b></div>
+                </div>
+                <label class="vp2-label">Order type
+                  <select class="vp2-select" data-order-type><option value="MARKET">Market</option><option value="LIMIT">Limit</option></select>
+                </label>
+                <label class="vp2-label">Amount USD
+                  <input class="vp2-field" data-amount type="number" min="1" step="1" value="100" />
+                </label>
+                <label class="vp2-label">Limit price
+                  <input class="vp2-field" data-limit-price type="number" min="0" step="0.000001" placeholder="Optional" />
+                </label>
+                <label class="vp2-label">Leverage
+                  <select class="vp2-select" data-leverage>
+                    ${[1,2,3,5,10,20,50,100].map(v => `<option value="${v}" ${v === 10 ? 'selected' : ''}>${v}x</option>`).join('')}
+                  </select>
+                </label>
+                <div class="vp2-two">
+                  <button class="vp2-sell" data-order="SELL">Sell / Short<br><span data-sell-price>--</span></button>
+                  <button class="vp2-buy" data-order="BUY">Buy / Long<br><span data-buy-price>--</span></button>
+                </div>
+                <div class="vp2-muted" data-ticket-note>Market orders fill using the current quote authority price.</div>
+              </div>
+            </aside>
+          </section>
+          <section class="vp2-bottom">
+            <div class="vp2-panel">
+              <div class="vp2-panel-head">
+                <div class="vp2-panel-title">Active Positions</div>
+                <button class="vp2-btn ghost" data-action="portfolio">Refresh</button>
+              </div>
+              <div data-positions><div class="vp2-empty">Loading positions...</div></div>
+            </div>
+            <div class="vp2-panel">
+              <div class="vp2-panel-head">
+                <div class="vp2-panel-title">Orders History</div>
+              </div>
+              <div data-orders><div class="vp2-empty">Loading orders...</div></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    `;
     bindUi();
-    if (state.route === '/trade') requestAnimationFrame(initChart);
   }
 
-  function routeHtml() {
-    if (state.route === '/trade') return tradeHtml();
-    if (state.route === '/portfolio') return portfolioHtml();
-    if (state.route === '/wallet') return walletHtml();
-    if (state.route === '/account') return accountHtml();
-    return homeHtml();
+  function bindUi(){
+    if(boundRoot !== root){
+      try{ if(boundRoot) boundRoot.removeEventListener('click', onClick); }catch(e){}
+      root.addEventListener('click', onClick);
+      boundRoot = root;
+    }
+    const search = $('[data-search]');
+    if(search){
+      search.addEventListener('input', () => {
+        state.search = search.value || '';
+        renderMarketList();
+      });
+    }
   }
 
-  function homeHtml() {
-    const active = activeMarket();
-    const wallet = state.wallet || {};
-    const positions = (state.portfolio && state.portfolio.positions) || [];
-    return '<div class="vp-grid vp-dashboard"><div class="vp-card"><div class="vp-card__head"><div><h2>Trading dashboard</h2><span class="vp-muted">Fast shell · controlled network usage</span></div><a class="vp-btn" href="#/trade">Open Trade</a></div><div class="vp-card__body"><div class="vp-kpis"><div class="vp-kpi"><span>Demo available</span><strong>' + esc(money(wallet.demo && wallet.demo.available, wallet.demo && wallet.demo.currency)) + '</strong></div><div class="vp-kpi"><span>Real available</span><strong>' + esc(money(wallet.real && wallet.real.available, wallet.real && wallet.real.currency)) + '</strong></div><div class="vp-kpi"><span>Active symbol</span><strong>' + esc(active.symbol || '—') + '</strong></div><div class="vp-kpi"><span>Open positions</span><strong>' + positions.length + '</strong></div></div></div></div><div class="vp-card"><div class="vp-card__head"><h3>Market focus</h3><span class="vp-source">' + esc(sourceLabel(state.quote || active)) + '</span></div><div class="vp-card__body">' + heroPriceHtml() + '</div></div></div>';
+  function onClick(e){
+    const typeBtn = e.target.closest('[data-type]');
+    if(typeBtn){
+      const type = normType(typeBtn.dataset.type);
+      const def = typeDef(type);
+      state = Object.assign({}, state, { type, symbol:def.defaultSymbol, market:defaultMarket(type), search:'' });
+      writeRoute(state);
+      return;
+    }
+    const marketBtn = e.target.closest('[data-market]');
+    if(marketBtn){
+      const def = typeDef(state.type);
+      const market = String(marketBtn.dataset.market || '').toLowerCase();
+      if(def.markets.includes(market)){
+        state.market = market;
+        writeRoute(state);
+      }
+      return;
+    }
+    const tfBtn = e.target.closest('[data-tf]');
+    if(tfBtn){
+      state.tf = normalizeTf(tfBtn.dataset.tf);
+      localStorage.setItem('vp2_tf', state.tf);
+      $all('[data-tf]').forEach(b => b.classList.toggle('active', b.dataset.tf === state.tf));
+      loadCandles(true).catch(showChartError);
+      return;
+    }
+    const row = e.target.closest('[data-row-symbol]');
+    if(row){
+      state.symbol = cleanSymbol(row.dataset.rowSymbol);
+      const rowType = normType(row.dataset.rowType || state.type);
+      state.type = rowType;
+      state.market = String(row.dataset.rowMarket || state.market || defaultMarket(rowType)).toLowerCase();
+      writeRoute(state);
+      return;
+    }
+    const order = e.target.closest('[data-order]');
+    if(order){
+      placeOrder(order.dataset.order).catch(err => setNote(err.message || 'Order failed', true));
+      return;
+    }
+    const close = e.target.closest('[data-close-position]');
+    if(close){
+      closePosition(Number(close.dataset.closePosition || 0)).catch(err => setNote(err.message || 'Close failed', true));
+      return;
+    }
+    const action = e.target.closest('[data-action]');
+    if(!action) return;
+    const name = action.dataset.action;
+    if(name === 'refresh') loadAll(true).catch(() => {});
+    if(name === 'portfolio') loadPortfolio(true).catch(() => {});
+    if(name === 'fit') fitChart();
+    if(name === 'mode') toggleMode();
   }
 
-  function tradeHtml() {
-    return '<div class="vp-grid vp-trade-grid"><div class="vp-card"><div class="vp-card__head"><h3>Watchlist</h3></div><div class="vp-card__body">' + tabsHtml() + '<div class="vp-watchlist">' + watchlistHtml() + '</div></div></div><div class="vp-trade-main vp-grid"><div class="vp-card"><div class="vp-card__head">' + heroPriceHtml(true) + timeframeHtml() + '</div><div class="vp-chart-wrap"><div id="vp-chart"></div><div id="vp-chart-note" class="vp-chart-note">Loading chart...</div></div></div><div class="vp-card"><div class="vp-card__head"><h3>Active positions</h3><button class="vp-btn vp-btn--ghost" data-action="refresh-portfolio">Refresh</button></div><div class="vp-scroll" data-panel="positions">' + positionsTableHtml() + '</div></div></div><div class="vp-side-stack"><div class="vp-card"><div class="vp-card__head"><h3>Order ticket</h3><span class="vp-status">' + esc(state.mode.toUpperCase()) + '</span></div><div class="vp-card__body">' + orderTicketHtml() + '</div></div><div class="vp-card"><div class="vp-card__head"><h3>Orders / history</h3></div><div class="vp-scroll" data-panel="orders">' + ordersTableHtml() + '</div></div></div></div>';
+  function setNote(text, error){
+    const el = $('[data-ticket-note]');
+    if(!el) return;
+    el.textContent = text;
+    el.classList.toggle('vp2-error', !!error);
   }
 
-  function portfolioHtml() {
-    return '<div class="vp-grid"><div class="vp-card"><div class="vp-card__head"><h2>Portfolio</h2><button class="vp-btn vp-btn--ghost" data-action="refresh-portfolio">Refresh</button></div><div class="vp-card__body"><div class="vp-kpis"><div class="vp-kpi"><span>Equity</span><strong>' + esc(money(state.portfolio && state.portfolio.equity, 'USDT')) + '</strong></div><div class="vp-kpi"><span>Unrealized PnL</span><strong class="' + pnlClass(state.portfolio && state.portfolio.unrealized_pnl) + '">' + esc(money(state.portfolio && state.portfolio.unrealized_pnl, 'USDT')) + '</strong></div><div class="vp-kpi"><span>Realized PnL</span><strong class="' + pnlClass(state.portfolio && state.portfolio.realized_pnl) + '">' + esc(money(state.portfolio && state.portfolio.realized_pnl, 'USDT')) + '</strong></div><div class="vp-kpi"><span>Mode</span><strong>' + esc(state.mode.toUpperCase()) + '</strong></div></div></div></div><div class="vp-card"><div class="vp-card__head"><h3>Positions</h3></div><div class="vp-scroll">' + positionsTableHtml() + '</div></div><div class="vp-card"><div class="vp-card__head"><h3>Orders</h3></div><div class="vp-scroll">' + ordersTableHtml() + '</div></div></div>';
-  }
-
-  function walletHtml() {
-    const wallet = state.wallet || {};
-    return '<div class="vp-grid vp-dashboard"><div class="vp-card"><div class="vp-card__head"><h2>Wallet summary</h2><button class="vp-btn vp-btn--ghost" data-action="refresh-wallet">Refresh</button></div><div class="vp-card__body"><div class="vp-kpis"><div class="vp-kpi"><span>Demo balance</span><strong>' + esc(money(wallet.demo && wallet.demo.balance, wallet.demo && wallet.demo.currency)) + '</strong><span>Available ' + esc(money(wallet.demo && wallet.demo.available, wallet.demo && wallet.demo.currency)) + '</span></div><div class="vp-kpi"><span>Real balance</span><strong>' + esc(money(wallet.real && wallet.real.balance, wallet.real && wallet.real.currency)) + '</strong><span>Available ' + esc(money(wallet.real && wallet.real.available, wallet.real && wallet.real.currency)) + '</span></div></div></div></div><div class="vp-card"><div class="vp-card__head"><h3>Funding</h3></div><div class="vp-card__body"><p class="vp-muted">Use the existing deposit and withdrawal pages for funding operations. This lightweight shell keeps trading fast and avoids background wallet spam.</p></div></div></div>';
-  }
-
-  function accountHtml() {
-    const user = state.user || {};
-    return '<div class="vp-card"><div class="vp-card__head"><h2>Account</h2></div><div class="vp-card__body"><div class="vp-kpis"><div class="vp-kpi"><span>Name</span><strong>' + esc(user.display_name || user.name || 'User') + '</strong></div><div class="vp-kpi"><span>Email</span><strong>' + esc(user.email || '—') + '</strong></div><div class="vp-kpi"><span>Language</span><strong>' + esc(user.lang || user.locale || 'en') + '</strong></div><div class="vp-kpi"><span>Support</span><strong>' + esc(state.brand.support_email) + '</strong></div></div></div></div>';
-  }
-
-  function tabsHtml() {
-    return '<div class="vp-tabs">' + tabs.filter(function (tab) { return state.markets[tab.key] && state.markets[tab.key].length; }).map(function (tab) {
-      return '<button class="vp-tab ' + (state.activeTab === tab.key ? 'is-active' : '') + '" data-tab="' + esc(tab.key) + '">' + esc(tab.label) + '</button>';
-    }).join('') + '</div>';
-  }
-
-  function watchlistHtml() {
-    const list = state.markets[state.activeTab] || [];
-    if (!list.length) return '<div class="vp-empty">No markets available.</div>';
-    return list.map(function (item) {
-      const quote = state.quoteMap[item.symbol] || item;
-      const change = Number(quote.change_pct || item.change_pct || 0);
-      return '<button class="vp-market-row ' + (item.symbol === state.activeSymbol ? 'is-active' : '') + '" data-symbol="' + esc(item.symbol) + '"><div><div class="vp-symbol">' + esc(item.symbol) + '</div><div class="vp-name">' + esc(item.name || item.symbol) + '</div></div><div><div class="vp-price">' + esc(compactPrice(quote.price || item.price)) + '</div><div class="vp-change ' + (change >= 0 ? 'is-up' : 'is-down') + '">' + esc(pct(change)) + '</div></div></button>';
+  function renderMarketList(){
+    const list = $('[data-market-list]');
+    if(!list) return;
+    const term = String(state.search || '').trim().toUpperCase();
+    const rows = marketItems
+      .filter(item => !term || cleanSymbol(item.symbol).includes(term) || String(item.name || '').toUpperCase().includes(term))
+      .slice(0, 40);
+    if(!rows.length){
+      list.innerHTML = '<div class="vp2-empty">No symbols found for this market.</div>';
+      return;
+    }
+    list.innerHTML = rows.map(item => {
+      const sym = cleanSymbol(item.symbol);
+      const price = Number(item.price || item.q_price || 0);
+      const change = Number(item.change_pct || item.q_change || 0);
+      const rowType = normType(item.type || state.type);
+      const rowMarket = String(item.market || item.market_type || defaultMarket(rowType)).toLowerCase();
+      const active = sym === state.symbol && rowType === state.type;
+      return `
+        <button class="vp2-row ${active ? 'active' : ''}" data-row-symbol="${esc(sym)}" data-row-type="${esc(rowType)}" data-row-market="${esc(rowMarket)}">
+          <span>
+            <span class="vp2-row-symbol">${esc(sym)}</span>
+            <span class="vp2-row-name">${esc(item.name || sym)}</span>
+          </span>
+          <span>
+            <span class="vp2-row-price">${price > 0 ? money(price) : '--'}</span>
+            <span class="vp2-row-change ${change < 0 ? 'down' : ''}">${pct(change)}</span>
+          </span>
+        </button>
+      `;
     }).join('');
   }
 
-  function activeMarket() {
-    const list = state.markets[state.activeTab] || [];
-    return list.find(function (item) { return item.symbol === state.activeSymbol; }) || list[0] || {};
-  }
-
-  function heroPriceHtml() {
-    const active = activeMarket();
-    const quote = state.quote || active;
-    const change = Number((quote && quote.change_pct) || 0);
-    return '<div class="vp-hero-price"><span class="vp-muted">' + esc(active.name || state.activeSymbol || 'Market') + '</span><strong>' + esc(compactPrice(quote && quote.price)) + '</strong><div class="vp-hero-line"><span class="' + (change >= 0 ? 'is-up' : 'is-down') + '">' + esc(pct(change)) + '</span><span class="vp-status">' + esc(state.activeSymbol || '—') + '</span><span class="vp-source">' + esc(sourceLabel(quote)) + '</span></div></div>';
-  }
-
-  function timeframeHtml() {
-    const frames = ['1m', '5m', '15m', '1h', '1d'];
-    return '<div class="vp-segment">' + frames.map(function (tf) { return '<button class="vp-chip ' + (state.timeframe === tf ? 'is-active' : '') + '" data-tf="' + tf + '">' + tf + '</button>'; }).join('') + '</div>';
-  }
-
-  function orderTicketHtml() {
-    return '<form class="vp-form" data-form="order"><div class="vp-field"><label>Symbol</label><input readonly value="' + esc(state.activeSymbol || '') + '"></div><div class="vp-field"><label>USD amount</label><input name="amount" type="number" min="1" step="1" value="100"></div><div class="vp-field"><label>Market</label><select name="market_type"><option value="spot"' + (state.activeMarket === 'spot' ? ' selected' : '') + '>Spot</option><option value="perp"' + (state.activeMarket === 'perp' ? ' selected' : '') + '>Perp</option></select></div><div class="vp-field"><label>Leverage</label><input name="leverage" type="number" min="1" max="125" step="1" value="1"></div><div class="vp-actions"><button class="vp-btn" name="side" value="BUY" type="submit">Buy</button><button class="vp-btn vp-btn--danger" name="side" value="SELL" type="submit">Sell</button></div></form>';
-  }
-
-  function pnlClass(value) {
-    return Number(value || 0) >= 0 ? 'is-up' : 'is-down';
-  }
-
-  function positionsTableHtml() {
-    const positions = (state.portfolio && state.portfolio.positions) || [];
-    if (!positions.length) return '<div class="vp-empty">No open positions.</div>';
-    return '<table class="vp-table"><thead><tr><th>Symbol</th><th>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>PnL</th><th></th></tr></thead><tbody>' + positions.map(function (item) {
-      return '<tr><td>' + esc(item.symbol) + '</td><td>' + esc(item.side) + '</td><td>' + esc(money(item.margin_initial || item.qty * item.entry_price, '')) + '</td><td>' + esc(compactPrice(item.entry_price)) + '</td><td>' + esc(compactPrice(item.mark_price)) + '</td><td class="' + pnlClass(item.unrealized_pnl) + '">' + esc(money(item.unrealized_pnl, 'USDT')) + '</td><td><button class="vp-btn vp-btn--danger" data-close="' + esc(item.id) + '">Close</button></td></tr>';
-    }).join('') + '</tbody></table>';
-  }
-
-  function ordersTableHtml() {
-    const orders = state.orders || [];
-    if (!orders.length) return '<div class="vp-empty">No orders yet.</div>';
-    return '<table class="vp-table"><thead><tr><th>Symbol</th><th>Side</th><th>Status</th><th>Entry</th><th>PnL</th></tr></thead><tbody>' + orders.slice(0, 12).map(function (item) {
-      return '<tr><td>' + esc(item.symbol) + '</td><td>' + esc(item.side) + '</td><td>' + esc(item.status) + '</td><td>' + esc(compactPrice(item.entry_price || item.fill_price)) + '</td><td class="' + pnlClass(item.pnl_usd) + '">' + esc(money(item.pnl_usd, 'USDT')) + '</td></tr>';
-    }).join('') + '</tbody></table>';
-  }
-
-  function updateTradeTables() {
-    const positionWrap = root.querySelector('[data-panel="positions"]');
-    if (positionWrap) {
-      positionWrap.innerHTML = positionsTableHtml();
-      positionWrap.querySelectorAll('[data-close]').forEach(function (node) {
-        node.addEventListener('click', function () { closePosition(node.dataset.close); });
-      });
-    }
-    const orderWrap = root.querySelector('[data-panel="orders"]');
-    if (orderWrap) orderWrap.innerHTML = ordersTableHtml();
-  }
-  function bindMarketRows(scope) {
-    (scope || root).querySelectorAll('[data-symbol]').forEach(function (node) {
-      node.addEventListener('click', function () {
-        const item = (state.markets[state.activeTab] || []).find(function (market) { return market.symbol === node.dataset.symbol; });
-        if (item) setActiveMarket(item, true);
-      });
+  function updateHeader(){
+    const item = marketItems.find(x => cleanSymbol(x.symbol) === state.symbol);
+    const name = item ? (item.name || state.symbol) : state.symbol;
+    const q = lastQuote || {};
+    const price = Number(q.price || item?.price || item?.q_price || 0);
+    const change = Number((q.change_pct ?? item?.change_pct ?? item?.q_change ?? 0) || 0);
+    const delayed = !!q.delayed || ['stocks','arab'].includes(state.type) || String(q.timing_class || '').includes('stale');
+    const source = String(q.source || item?.source || item?.provider || '').toUpperCase() || 'QUOTE';
+    const spread = price > 0 ? price * (state.type === 'crypto' ? 0.0002 : 0.0001) : 0;
+    const sell = price > 0 ? price - spread : 0;
+    const buy = price > 0 ? price + spread : 0;
+    const setText = (sel, text) => { const el = $(sel); if(el) el.textContent = text; };
+    setText('[data-active-symbol]', state.symbol);
+    setText('[data-active-name]', name);
+    setText('[data-active-market]', state.market.toUpperCase());
+    setText('[data-active-price]', price > 0 ? money(price) : '--');
+    setText('[data-active-change]', pct(change));
+    setText('[data-chart-title]', state.symbol);
+    setText('[data-chart-source]', source + ' / ' + state.tf);
+    setText('[data-buy-price]', buy > 0 ? fmt(buy) : '--');
+    setText('[data-sell-price]', sell > 0 ? fmt(sell) : '--');
+    const changeEl = $('[data-active-change]');
+    if(changeEl) changeEl.classList.toggle('down', change < 0);
+    const live = $('[data-live-badge]');
+    const sourceBadge = $('[data-source-badge]');
+    [live, sourceBadge].forEach(el => {
+      if(!el) return;
+      el.textContent = delayed ? 'DELAYED' : 'LIVE';
+      el.classList.toggle('delayed', delayed);
     });
-  }
-  function bindUi() {
-    root.querySelectorAll('[data-tab]').forEach(function (node) {
-      node.addEventListener('click', function () {
-        state.activeTab = node.dataset.tab;
-        localStorage.setItem('vp-lite-tab', state.activeTab);
-        const next = (state.markets[state.activeTab] || [])[0];
-        if (next) setActiveMarket(next, true);
-      });
-    });
-
-    bindMarketRows(root);
-
-    root.querySelectorAll('[data-tf]').forEach(function (node) {
-      node.addEventListener('click', function () {
-        state.timeframe = node.dataset.tf || '1m';
-        localStorage.setItem('vp-lite-tf', state.timeframe);
-        state.chartSymbolKey = '';
-        render();
-        startRouteWork();
-      });
-    });
-    const mode = root.querySelector('[data-action="mode"]');
-    if (mode) mode.addEventListener('change', function () {
-      state.mode = mode.value === 'real' ? 'real' : 'demo';
-      localStorage.setItem('vp-lite-mode', state.mode);
-      render();
-      refreshAfterTrade();
-      startRouteWork();
-    });
-    root.querySelectorAll('[data-action="refresh-portfolio"]').forEach(function (node) { node.addEventListener('click', refreshAfterTrade); });
-    root.querySelectorAll('[data-action="refresh-wallet"]').forEach(function (node) { node.addEventListener('click', refreshWallet); });
-    root.querySelectorAll('[data-close]').forEach(function (node) { node.addEventListener('click', function () { closePosition(node.dataset.close); }); });
-    const form = root.querySelector('[data-form="order"]');
-    if (form) form.addEventListener('submit', submitOrder);
+    updateOrderSizing();
   }
 
-  async function refreshActiveQuote() {
-    if (!state.activeSymbol || state.inflight.activeQuote) return;
-    setBusy('activeQuote', true);
-    try {
-      const params = new URLSearchParams({ symbol: state.activeSymbol, type: state.activeType, purpose: 'focus' });
-      const data = await getJson(api.quotes + '?' + params.toString());
-      const quote = data.items && data.items[0] ? data.items[0] : null;
-      if (quote) {
-        state.quote = quote;
-        state.quoteMap[quote.symbol] = quote;
-        updateQuoteDom(quote);
-        updateChartTail(quote);
+  function updateOrderSizing(){
+    const price = Number(lastQuote?.price || 0);
+    const amount = Number($('[data-amount]')?.value || 0);
+    const lev = Math.max(1, Number($('[data-leverage]')?.value || 1));
+    const note = $('[data-ticket-note]');
+    if(!note || !(price > 0) || !(amount > 0)) return;
+    const qty = state.market === 'perp' ? (amount * lev / price) : (amount / price);
+    note.textContent = `Estimated size: ${fmt(qty, qty < 1 ? 6 : 4)} ${state.symbol}`;
+    note.classList.remove('vp2-error');
+  }
+
+  async function loadMarkets(force){
+    if(marketsBusy) return;
+    marketsBusy = true;
+    try{
+      const cache = force ? '&_=' + Date.now() : '';
+      const data = await api(`/markets.php?type=${encodeURIComponent(state.type)}&lite=1&with_quotes=1${cache}`, { timeoutMs:6500 });
+      let rows = Array.isArray(data.items) ? data.items : (Array.isArray(data.markets) ? data.markets : []);
+      if(!rows.length && data.groups && typeof data.groups === 'object'){
+        rows = Object.values(data.groups).flatMap(v => Array.isArray(v) ? v : (Array.isArray(v?.items) ? v.items : []));
       }
-    } catch (error) {
-      console.warn('active quote failed', error.message);
-    } finally {
-      setBusy('activeQuote', false);
-    }
-  }
-
-  async function refreshWatchlistQuotes() {
-    const list = (state.markets[state.activeTab] || []).slice(0, 16);
-    if (!list.length || state.inflight.watchlist) return;
-    setBusy('watchlist', true);
-    try {
-      const params = new URLSearchParams({ symbols: list.map(function (item) { return item.symbol; }).join(','), type: state.activeTab, visible: '1' });
-      const data = await getJson(api.quotes + '?' + params.toString());
-      (data.items || []).forEach(function (item) { state.quoteMap[item.symbol] = item; });
-      if (state.route === '/trade') {
-        const watch = root.querySelector('.vp-watchlist');
-        if (watch) {
-          watch.innerHTML = watchlistHtml();
-          bindMarketRows(watch);
+      rows = rows.filter(x => cleanSymbol(x.symbol));
+      marketItems = rows;
+      if(!marketItems.some(x => cleanSymbol(x.symbol) === state.symbol)){
+        const first = marketItems[0];
+        if(first){
+          state.symbol = cleanSymbol(first.symbol);
+          state.market = String(first.market || first.market_type || state.market || defaultMarket(state.type)).toLowerCase();
+          localStorage.setItem('vp2_symbol_' + state.type, state.symbol);
         }
       }
-    } catch (error) {
-      console.warn('watchlist quotes failed', error.message);
-    } finally {
-      setBusy('watchlist', false);
+      renderMarketList();
+      updateHeader();
+      if(state.type !== 'crypto') hydrateMarketQuotes(force).catch(() => {});
+    }catch(err){
+      const list = $('[data-market-list]');
+      if(list) list.innerHTML = `<div class="vp2-error">Markets unavailable: ${esc(err.message || err)}</div>`;
+    }finally{
+      marketsBusy = false;
     }
   }
 
-  function updateQuoteDom(quote) {
-    if (state.route !== '/trade' && state.route !== '/home') return;
-    root.querySelectorAll('.vp-hero-price strong').forEach(function (node) { node.textContent = compactPrice(quote.price); });
-    root.querySelectorAll('.vp-source').forEach(function (node) { node.textContent = sourceLabel(quote); });
-  }
-
-  async function refreshPortfolio() {
-    if (state.inflight.portfolio) return;
-    setBusy('portfolio', true);
-    try {
-      const data = await getJson(api.portfolio + '?mode=' + encodeURIComponent(state.mode));
-      state.portfolio = data;
-      const orders = await getJson(api.orders + '?mode=' + encodeURIComponent(state.mode) + '&limit=60');
-      state.orders = orders.items || data.orders || [];
-    } catch (error) {
-      console.warn('portfolio refresh failed', error.message);
-    } finally {
-      setBusy('portfolio', false);
-    }
-  }
-
-  async function refreshWallet() {
-    try {
-      const data = await getJson(api.wallet);
-      state.wallet = { real: data.real, demo: data.demo };
-      render();
-    } catch (error) {
-      toast(error.message);
-    }
-  }
-
-  async function refreshAfterTrade() {
-    await Promise.all([refreshPortfolio(), refreshWallet()]);
-    render();
-  }
-
-  async function submitOrder(event) {
-    event.preventDefault();
-    const submitter = event.submitter;
-    const form = event.currentTarget;
-    const amount = Number(form.elements.amount.value || 0);
-    const marketType = form.elements.market_type.value || state.activeMarket || 'spot';
-    const leverage = Number(form.elements.leverage.value || 1);
-    const side = submitter && submitter.value === 'SELL' ? 'SELL' : 'BUY';
-    if (!state.activeSymbol || !(amount > 0)) {
-      toast('Enter a valid amount.');
-      return;
-    }
-    submitter.disabled = true;
-    try {
-      await postJson(api.placeOrder, { symbol: state.activeSymbol, asset_type: state.activeType, market_type: marketType, side: side, order_type: 'MARKET', usd: amount, leverage: leverage, mode: state.mode });
-      toast(side + ' order filled.');
-      await refreshAfterTrade();
-    } catch (error) {
-      toast(error.message);
-    } finally {
-      submitter.disabled = false;
-    }
-  }
-
-  async function closePosition(id) {
-    if (!id) return;
-    try {
-      await postJson(api.closePosition, { id: Number(id), mode: state.mode });
-      toast('Position closed.');
-      await refreshAfterTrade();
-    } catch (error) {
-      toast(error.message);
-    }
-  }
-
-  function initChart() {
-    const container = document.getElementById('vp-chart');
-    if (!container || typeof LightweightCharts === 'undefined') return;
-    state.chart = LightweightCharts.createChart(container, {
-      layout: { background: { color: 'transparent' }, textColor: '#8fa2bd' },
-      grid: { vertLines: { color: 'rgba(148,163,184,.08)' }, horzLines: { color: 'rgba(148,163,184,.08)' } },
-      rightPriceScale: { borderColor: 'rgba(148,163,184,.16)' },
-      timeScale: { borderColor: 'rgba(148,163,184,.16)', timeVisible: true },
-      crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+  async function hydrateMarketQuotes(force){
+    if(marketHydrateBusy || state.type === 'crypto') return;
+    const symbols = [];
+    if(state.symbol) symbols.push(state.symbol);
+    marketItems.forEach(item => {
+      const sym = cleanSymbol(item.symbol);
+      if(sym && !symbols.includes(sym)) symbols.push(sym);
     });
-    state.candleSeries = state.chart.addCandlestickSeries({ upColor: '#18c98b', downColor: '#ff5c7a', borderUpColor: '#18c98b', borderDownColor: '#ff5c7a', wickUpColor: '#18c98b', wickDownColor: '#ff5c7a' });
-    resizeChart();
-    state.chartSymbolKey = '';
-    loadCandles();
-  }
-
-  function resizeChart() {
-    const container = document.getElementById('vp-chart');
-    if (state.chart && container) state.chart.applyOptions({ width: container.clientWidth, height: container.clientHeight || 330 });
-  }
-
-  function chartNote(message, visible) {
-    const node = document.getElementById('vp-chart-note');
-    if (!node) return;
-    node.textContent = message;
-    node.classList.toggle('is-visible', !!visible);
-  }
-
-  async function loadCandles() {
-    const key = [state.activeSymbol, state.activeType, state.activeMarket, state.timeframe].join('|');
-    if (!state.activeSymbol || state.chartSymbolKey === key || state.inflight.candles) return;
-    state.chartSymbolKey = key;
-    state.lastCandle = null;
-    chartNote('Loading chart...', true);
-    setBusy('candles', true);
-    const timer = setTimeout(function () { chartNote('Real chart temporarily unavailable', true); }, 3500);
-    try {
-      const params = new URLSearchParams({ symbol: state.activeSymbol, type: state.activeType, market: state.activeMarket, tf: state.timeframe, limit: '180' });
-      const data = await getJson(api.candles + '?' + params.toString());
-      const items = (data.items || []).map(function (item) { return { time: Number(item.time), open: Number(item.open), high: Number(item.high), low: Number(item.low), close: Number(item.close) }; }).filter(function (item) { return item.time && item.open > 0 && item.high > 0 && item.low > 0 && item.close > 0; });
-      const source = String(data.source || '').toLowerCase();
-      const synthetic = data.synthetic === true || source.indexOf('synthetic') === 0 || !items.length;
-      if (state.candleSeries) state.candleSeries.setData(items);
-      state.lastCandle = items.length ? items[items.length - 1] : null;
-      if (state.chart) state.chart.timeScale().fitContent();
-      chartNote(synthetic ? 'Real chart temporarily unavailable' : '', synthetic);
-    } catch (error) {
-      chartNote('Real chart temporarily unavailable', true);
-    } finally {
-      clearTimeout(timer);
-      setBusy('candles', false);
+    const wanted = symbols.slice(0, 6);
+    if(!wanted.length) return;
+    const key = `${state.type}|${wanted.join(',')}`;
+    if(!force && marketHydrateKey === key) return;
+    marketHydrateKey = key;
+    marketHydrateBusy = true;
+    try{
+      for(const sym of wanted){
+        const data = await api(`/quotes.php?purpose=focus&symbol=${encodeURIComponent(sym)}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`, { timeoutMs:4200 });
+        const q = Array.isArray(data.items) ? data.items.find(item => cleanSymbol(item.symbol) === sym) : null;
+        if(!q || !(Number(q.price || 0) > 0)) continue;
+        marketItems = marketItems.map(row => {
+          if(cleanSymbol(row.symbol) !== sym) return row;
+          if(!q || !(Number(q.price || 0) > 0)) return row;
+          return Object.assign({}, row, {
+            price: Number(q.price || 0),
+            change_pct: Number(q.change_pct ?? row.change_pct ?? 0),
+            updated_at: Number(q.updated_at || row.updated_at || 0),
+            source: q.source || row.source || '',
+            timing_class: q.timing_class || row.timing_class || 'live',
+            is_stale: q.timing_class === 'stale'
+          });
+        });
+        renderMarketList();
+        updateHeader();
+        await sleep(120);
+      }
+    }finally{
+      marketHydrateBusy = false;
     }
   }
 
-  function updateChartTail(quote) {
-    if (!state.candleSeries || !state.lastCandle || !quote || !(Number(quote.price) > 0)) return;
-    const price = Number(quote.price);
-    const step = timeframeSeconds(state.timeframe);
-    const bucket = Math.floor(Date.now() / 1000 / step) * step;
-    let candle = state.lastCandle;
-    if (bucket > candle.time) {
-      candle = { time: bucket, open: candle.close, high: Math.max(candle.close, price), low: Math.min(candle.close, price), close: price };
-    } else {
-      candle = Object.assign({}, candle, { high: Math.max(candle.high, price), low: Math.min(candle.low, price), close: price });
+  async function loadQuote(){
+    if(activeBusy) return;
+    activeBusy = true;
+    const myRun = runId;
+    try{
+      const path = `/quotes.php?purpose=focus&symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`;
+      const data = await api(path, { timeoutMs: state.type === 'crypto' ? 5000 : 8500 });
+      if(myRun !== runId) return;
+      const q = Array.isArray(data.items) ? data.items[0] : data.item;
+      if(q && Number(q.price || 0) > 0){
+        lastQuote = Object.assign({}, q, { symbol:state.symbol, type:state.type, market:state.market });
+        rememberQuote(lastQuote);
+        updateHeader();
+        updateLiveCandle(Number(lastQuote.price || 0));
+        updatePositionMarks();
+      }
+    }catch(err){
+      const live = $('[data-live-badge]');
+      if(live){
+        live.textContent = 'WAITING';
+        live.classList.add('delayed');
+      }
+    }finally{
+      activeBusy = false;
     }
-    state.lastCandle = candle;
-    state.candleSeries.update(candle);
   }
 
-  function timeframeSeconds(tf) {
-    if (tf === '5m') return 300;
-    if (tf === '15m') return 900;
-    if (tf === '1h') return 3600;
-    if (tf === '1d') return 86400;
-    return 60;
+  function rememberQuote(q){
+    const sym = cleanSymbol(q.symbol);
+    marketItems = marketItems.map(item => cleanSymbol(item.symbol) === sym ? Object.assign({}, item, {
+      price: Number(q.price || item.price || 0),
+      change_pct: Number(q.change_pct ?? item.change_pct ?? 0),
+      updated_at: Number(q.updated_at || item.updated_at || 0),
+      source: q.source || item.source || item.provider || ''
+    }) : item);
+    renderMarketList();
   }
 
-  function startRouteWork() {
-    clearPollers();
-    if (state.route === '/trade') {
-      refreshPortfolio().then(function () { if (state.route === '/trade') updateTradeTables(); });
-      setPoller('activeQuote', refreshActiveQuote, 2600, true);
-      setPoller('watchlist', refreshWatchlistQuotes, 7000, true);
-      setPoller('portfolio', function () { refreshPortfolio().then(function () { if (state.route === '/trade') updateTradeTables(); }); }, 14000, false);
+  async function loadCandles(force){
+    if(candlesBusy) return;
+    candlesBusy = true;
+    const myRun = runId;
+    const stateEl = $('[data-chart-state]');
+    if(stateEl){
+      stateEl.textContent = 'Loading chart...';
+      stateEl.classList.remove('hide');
+    }
+    try{
+      const limit = window.innerWidth < 760 ? 96 : 140;
+      const data = await api(`/trade/candles.php?symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&market=${encodeURIComponent(state.market)}&tf=${encodeURIComponent(state.tf)}&limit=${limit}${force ? '&_=' + Date.now() : ''}`, { timeoutMs:15000 });
+      if(myRun !== runId) return;
+      const items = Array.isArray(data.items) ? data.items.filter(c => Number(c.close || 0) > 0) : [];
+      if(!items.length) throw new Error('No candles from provider');
+      await initChart();
+      if(!candleSeries) return;
+      candleSeries.setData(items.map(c => ({
+        time:Number(c.time),
+        open:Number(c.open),
+        high:Number(c.high),
+        low:Number(c.low),
+        close:Number(c.close)
+      })));
+      if(volumeSeries){
+        volumeSeries.setData(items.map(c => ({
+          time:Number(c.time),
+          value:Number(c.volume || 0),
+          color:Number(c.close || 0) >= Number(c.open || 0) ? 'rgba(47,230,166,.35)' : 'rgba(255,96,120,.35)'
+        })));
+      }
+      lastCandle = items[items.length - 1] || null;
+      fitChart();
+      if(stateEl){
+        if(synthetic){ stateEl.textContent = 'Real chart temporarily unavailable'; stateEl.classList.remove('hide'); }
+        else stateEl.classList.add('hide');
+      }
+    }catch(err){
+      showChartError(err);
+    }finally{
+      candlesBusy = false;
+    }
+  }
+
+  async function initChart(){
+    if(chart && candleSeries) return;
+    const ok = await ensureCharts();
+    const el = $('[data-chart]');
+    if(!ok || !el) throw new Error('Chart library unavailable');
+    chart = LightweightCharts.createChart(el, {
+      layout: { background: { color:'#07131f' }, textColor:'#9fb1c9', fontFamily:'Inter, system-ui, sans-serif' },
+      grid: { vertLines: { color:'rgba(142,169,214,.08)' }, horzLines: { color:'rgba(142,169,214,.08)' } },
+      rightPriceScale: { borderColor:'rgba(142,169,214,.12)' },
+      timeScale: { borderColor:'rgba(142,169,214,.12)', timeVisible:true, secondsVisible:false },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      handleScale: true,
+      handleScroll: true
+    });
+    candleSeries = chart.addCandlestickSeries({
+      upColor:'#2fe6a6',
+      downColor:'#ff6078',
+      wickUpColor:'#2fe6a6',
+      wickDownColor:'#ff6078',
+      borderVisible:false,
+      priceLineColor:'#58a6ff'
+    });
+    volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type:'volume' },
+      priceScaleId:'',
+      scaleMargins: { top:.82, bottom:0 },
+      color:'rgba(47,230,166,.24)'
+    });
+    const resize = () => {
+      try{
+        const box = el.getBoundingClientRect();
+        chart.applyOptions({ width:Math.max(320, Math.floor(box.width)), height:Math.max(320, Math.floor(box.height)) });
+      }catch(e){}
+    };
+    resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(el);
+    resize();
+  }
+
+  function updateLiveCandle(price){
+    if(!(price > 0) || !candleSeries) return;
+    const step = tfSeconds(state.tf);
+    const bucket = Math.floor(Math.floor(Date.now()/1000) / step) * step;
+    const prev = lastCandle || { time:bucket, open:price, high:price, low:price, close:price, volume:0 };
+    const prevTime = Number(prev.time || bucket);
+    let next;
+    if(prevTime === bucket){
+      next = {
+        time:bucket,
+        open:Number(prev.open || price),
+        high:Math.max(Number(prev.high || price), price),
+        low:Math.min(Number(prev.low || price), price),
+        close:price,
+        volume:Number(prev.volume || 0)
+      };
+    }else{
+      const close = Number(prev.close || price);
+      next = { time:bucket, open:close, high:Math.max(close, price), low:Math.min(close, price), close:price, volume:0 };
+    }
+    lastCandle = next;
+    candleSeries.update(next);
+  }
+
+  function fitChart(){
+    try{ chart && chart.timeScale().fitContent(); }catch(e){}
+  }
+  function showChartError(err){
+    const el = $('[data-chart-state]');
+    if(el){
+      el.textContent = (err && err.message && err.message !== 'No candles from provider') ? err.message : 'Real chart temporarily unavailable';
+      el.classList.remove('hide');
+    }
+  }
+
+  async function loadPortfolio(force){
+    if(portfolioBusy) return;
+    portfolioBusy = true;
+    try{
+      const data = await api(`/trade/portfolio.php?mode=${encodeURIComponent(state.mode)}${force ? '&_=' + Date.now() : ''}`, { timeoutMs:12000 });
+      positions = Array.isArray(data.positions) ? data.positions : [];
+      orders = Array.isArray(data.orders) ? data.orders : [];
+      const wallet = data.wallet || {};
+      const cur = state.mode === 'real' ? 'USDT' : 'USDT_DEMO';
+      const available = Number(wallet[cur]?.available ?? wallet[cur]?.balance ?? data.equity ?? 0);
+      const pnl = Number(data.unrealized_pnl || 0);
+      const avEl = $('[data-available]');
+      const pnlEl = $('[data-pnl]');
+      if(avEl) avEl.textContent = money(available, 2);
+      if(pnlEl){
+        pnlEl.textContent = (pnl >= 0 ? '+' : '') + money(pnl, 2);
+        pnlEl.className = pnl >= 0 ? 'vp2-good' : 'vp2-bad';
+      }
+      renderPositions();
+      renderOrders();
+    }catch(err){
+      const p = $('[data-positions]');
+      if(p) p.innerHTML = `<div class="vp2-error">Portfolio unavailable: ${esc(err.message || err)}</div>`;
+    }finally{
+      portfolioBusy = false;
+    }
+  }
+
+  function renderPositions(){
+    const el = $('[data-positions]');
+    if(!el) return;
+    if(!positions.length){
+      el.innerHTML = '<div class="vp2-empty">No open positions.</div>';
       return;
     }
-    if (state.route === '/home') {
-      setPoller('activeQuote', refreshActiveQuote, 3000, true);
-      refreshPortfolio().then(function () { if (state.route === '/home') render(); });
-      return;
-    }
-    if (state.route === '/portfolio') {
-      refreshPortfolio().then(render);
-      setPoller('portfolio', function () { refreshPortfolio().then(function () { if (state.route === '/portfolio') render(); }); }, 15000, false);
-      return;
-    }
-    if (state.route === '/wallet') setPoller('wallet', refreshWallet, 15000, false);
+    el.innerHTML = `
+      <div style="overflow:auto">
+        <table class="vp2-table">
+          <thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Mark</th><th>PnL</th><th></th></tr></thead>
+          <tbody>
+            ${positions.map(p => {
+              const pnl = Number(p.unrealized_pnl || 0);
+              return `<tr data-pos-row="${Number(p.id || 0)}" data-pos-symbol="${esc(cleanSymbol(p.symbol))}">
+                <td>${esc(cleanSymbol(p.symbol))}</td>
+                <td>${esc(String(p.side || '').toUpperCase())}</td>
+                <td>${fmt(p.entry_price)}</td>
+                <td data-pos-mark>${fmt(p.mark_price)}</td>
+                <td class="${pnl >= 0 ? 'vp2-good' : 'vp2-bad'}" data-pos-pnl>${pnl >= 0 ? '+' : ''}${money(pnl, 2)}</td>
+                <td><button class="vp2-btn danger" data-close-position="${Number(p.id || 0)}">Close</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
-  window.addEventListener('resize', resizeChart, { passive: true });
-  window.addEventListener('hashchange', function () {
-    state.route = normalizeRoute(location.hash);
-    render();
-    startRouteWork();
-  });
-  document.addEventListener('click', function (event) {
-    const retry = event.target.closest('[data-action="retry"]');
-    if (retry) bootstrap();
-  });
-  bootstrap();
+  function renderOrders(){
+    const el = $('[data-orders]');
+    if(!el) return;
+    if(!orders.length){
+      el.innerHTML = '<div class="vp2-empty">No orders yet.</div>';
+      return;
+    }
+    el.innerHTML = `
+      <div style="overflow:auto">
+        <table class="vp2-table">
+          <thead><tr><th>Symbol</th><th>Side</th><th>Status</th><th>Fill</th><th>PnL</th></tr></thead>
+          <tbody>
+            ${orders.slice(0, 20).map(o => {
+              const pnl = Number(o.pnl_usd || 0);
+              return `<tr>
+                <td>${esc(cleanSymbol(o.symbol))}</td>
+                <td>${esc(String(o.side || '').toUpperCase())}</td>
+                <td>${esc(String(o.status || ''))}</td>
+                <td>${fmt(o.fill_price || o.entry_price)}</td>
+                <td class="${pnl >= 0 ? 'vp2-good' : 'vp2-bad'}">${pnl ? ((pnl >= 0 ? '+' : '') + money(pnl, 2)) : '--'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function updatePositionMarks(){
+    if(!lastQuote || !(Number(lastQuote.price) > 0)) return;
+    const price = Number(lastQuote.price);
+    positions.forEach(p => {
+      if(cleanSymbol(p.symbol) !== state.symbol) return;
+      const row = root.querySelector(`[data-pos-row="${Number(p.id || 0)}"]`);
+      if(!row) return;
+      const entry = Number(p.entry_price || 0);
+      const qty = Number(p.qty || 0);
+      const side = String(p.side || 'buy').toLowerCase();
+      const pnl = side === 'sell' ? (entry - price) * qty : (price - entry) * qty;
+      const markEl = row.querySelector('[data-pos-mark]');
+      const pnlEl = row.querySelector('[data-pos-pnl]');
+      if(markEl) markEl.textContent = fmt(price);
+      if(pnlEl){
+        pnlEl.textContent = (pnl >= 0 ? '+' : '') + money(pnl, 2);
+        pnlEl.className = pnl >= 0 ? 'vp2-good' : 'vp2-bad';
+      }
+    });
+  }
+
+  async function placeOrder(side){
+    const amount = Number($('[data-amount]')?.value || 0);
+    const leverage = Math.max(1, Number($('[data-leverage]')?.value || 1));
+    if(!(amount > 0)) throw new Error('Enter amount first');
+    if(!(Number(lastQuote?.price || 0) > 0)) throw new Error('Price is not ready yet');
+    setNote('Sending order...', false);
+    const payload = {
+      symbol: state.symbol,
+      asset_type: state.type,
+      market_type: state.market,
+      side,
+      order_type: String($('[data-order-type]')?.value || 'MARKET'),
+      price: Number($('[data-limit-price]')?.value || 0),
+      usd: amount,
+      leverage,
+      mode: state.mode
+    };
+    const data = await api('/trade/place_order.php', { method:'POST', body:payload, timeoutMs:12000 });
+    setNote(`Order filled at ${fmt(data.fill_price || lastQuote.price)}`, false);
+    await loadPortfolio(true);
+  }
+
+  async function closePosition(id){
+    if(!(id > 0)) return;
+    setNote('Closing position...', false);
+    const data = await api('/trade/close_position.php', { method:'POST', body:{ id, mode:state.mode }, timeoutMs:12000 });
+    setNote(`Position closed. PnL ${money(data.pnl_usd || 0, 2)}`, false);
+    await loadPortfolio(true);
+  }
+
+  function toggleMode(){
+    state.mode = state.mode === 'real' ? 'demo' : 'real';
+    localStorage.setItem('trade_mode', state.mode);
+    const btn = $('[data-action="mode"]');
+    if(btn) btn.textContent = state.mode === 'real' ? 'Real' : 'Demo';
+    loadPortfolio(true).catch(() => {});
+  }
+
+  async function loadAll(force){
+    const myRun = ++runId;
+    lastQuote = null;
+    lastCandle = null;
+    updateHeader();
+    const marketLoad = loadMarkets(force).catch(() => {});
+    await Promise.allSettled([loadQuote(), loadCandles(force), loadPortfolio(force), marketLoad]);
+    if(myRun !== runId) return;
+  }
+
+  function startLoops(){
+    clearTimers();
+    schedule(() => { if(!document.hidden) loadQuote().catch(() => {}); }, pollMs(state.type));
+    schedule(() => { if(!document.hidden) hydrateMarketQuotes(false).catch(() => {}); }, 7000);
+    schedule(() => { if(!document.hidden) loadPortfolio(false).catch(() => {}); }, 14000);
+  }
+
+  function mount(){
+    if(!routeIsTrade()){
+      if(mounted) cleanup();
+      return;
+    }
+    const host = document.getElementById(HOST_ID);
+    if(!host) return;
+    const nextState = readRoute();
+    if(root !== host){
+      cleanup();
+      root = host;
+      mounted = true;
+      state = nextState;
+      marketItems = [];
+      positions = [];
+      orders = [];
+      renderShell();
+      loadAll(true).catch(() => {});
+      startLoops();
+      return;
+    }
+    if(!mounted){
+      mounted = true;
+      state = nextState;
+      renderShell();
+      loadAll(true).catch(() => {});
+      startLoops();
+      return;
+    }
+    const changed = nextState.symbol !== state.symbol || nextState.type !== state.type || nextState.market !== state.market || nextState.tf !== state.tf || nextState.mode !== state.mode;
+    if(changed){
+      state = nextState;
+      marketItems = [];
+      positions = [];
+      orders = [];
+      lastQuote = null;
+      lastCandle = null;
+      activeBusy = false;
+      marketsBusy = false;
+      marketHydrateBusy = false;
+      marketHydrateKey = '';
+      portfolioBusy = false;
+      candlesBusy = false;
+      clearTimers();
+      try{ if(resizeObserver) resizeObserver.disconnect(); }catch(e){}
+      resizeObserver = null;
+      try{ if(chart) chart.remove(); }catch(e){}
+      chart = null;
+      candleSeries = null;
+      volumeSeries = null;
+      renderShell();
+      loadAll(true).catch(() => {});
+      startLoops();
+    }
+  }
+
+  function scheduleMount(){
+    setTimeout(mount, 0);
+    setTimeout(mount, 60);
+    setTimeout(mount, 180);
+  }
+
+  window.addEventListener('hashchange', scheduleMount);
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden) return;
+    if(routeIsTrade()) {
+      loadQuote().catch(() => {});
+      loadPortfolio(false).catch(() => {});
+    }
+  }, { passive:true });
+  document.addEventListener('DOMContentLoaded', scheduleMount);
+  scheduleMount();
 })();
