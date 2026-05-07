@@ -322,7 +322,7 @@
     if (state.route === 'deposit') return 'Deposit';
     if (state.route === 'withdraw') return 'Withdraw';
     if (state.route === 'kyc') return 'KYC Verification';
-    if (state.route === 'invest') return 'Earn & Contracts';
+    if (state.route === 'invest') return 'Copy & Contracts';
     if (state.route === 'account') return 'Account';
     return 'Home Dashboard';
   }
@@ -368,7 +368,7 @@
           ${quickAction('Deposit', 'Start a real funding request', '#/deposit', 'D')}
           ${quickAction('Withdraw', 'Request manual admin payout', '#/withdraw', 'W')}
           ${quickAction('KYC', 'Verify account documents', '#/kyc', 'K')}
-          ${quickAction('Contracts', 'Plans, levels, and invest contracts', '#/invest', 'C')}
+          ${quickAction('Earn', 'Copy signals and level contracts', '#/invest', 'E')}
           ${quickAction('Admin', 'Review users, KYC, deposits, withdrawals', '/admin/', 'A')}
           ${quickAction('Legacy', 'Fallback copy of the original interface', '/legacy-app.php#/home', 'L')}
         </div>
@@ -2367,10 +2367,12 @@
   }
 
   function dateText(ts) {
-    const n = Number(ts || 0);
-    if (!(n > 0)) return '--';
+    if (!ts) return '--';
+    const n = Number(ts);
     try {
-      return new Date(n * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const date = n > 0 ? new Date(n * 1000) : new Date(String(ts).replace(' ', 'T'));
+      if (Number.isNaN(date.getTime())) return '--';
+      return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch (e) {
       return '--';
     }
