@@ -60,7 +60,10 @@
     kyc: null,
     level: null,
     invest: {
-      plans: [],
+      tab: safeStorage('vp_earn_tab', 'copy') === 'contracts' ? 'contracts' : 'copy',
+      signals: [],
+      tradeSignals: [],
+      copies: [],
       contracts: [],
       mine: []
     },
@@ -113,6 +116,7 @@
       finance: false,
       kyc: false,
       invest: false,
+      signals: false,
       funding: false
     };
   }
@@ -509,6 +513,18 @@
             </div>
           </section>
 
+          <section class="panel trade-signals-panel" data-trade-signals-panel>
+            <div class="section-head compact">
+              <div>
+                <span class="eyebrow">Copy Trading</span>
+                <h2>Signals for ${esc(state.symbol)}</h2>
+                <p>Real-only copy desk, loaded without fast polling.</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" data-refresh-signals>Refresh</button>
+            </div>
+            <div data-trade-signals-list>${emptyState('Loading copy signals...')}</div>
+          </section>
+
           <section class="panel positions-panel">
             <div class="section-head compact">
               <div>
@@ -642,6 +658,7 @@
     $('[data-refresh-trade]')?.addEventListener('click', () => applyRoute());
     $('[data-refresh-markets]')?.addEventListener('click', () => loadMarkets(runtime.routeToken, true));
     $('[data-refresh-account]')?.addEventListener('click', () => loadTradingAccount(runtime.routeToken, true));
+    $('[data-refresh-signals]')?.addEventListener('click', () => loadTradeSignals(runtime.routeToken, true));
   }
 
   function setupTrade(token, hardRefresh = false) {
@@ -649,6 +666,8 @@
     loadActiveQuote(token, true);
     loadCandles(token);
     loadTradingAccount(token, true);
+    loadTradeSignals(token, true);
+    loadKyc(token);
     setTimer(() => loadActiveQuote(token, false), ACTIVE_QUOTE_MS);
     setTimer(() => hydrateVisibleQuotes(token), WATCHLIST_QUOTE_MS);
     setTimer(() => loadTradingAccount(token, false), ACCOUNT_POLL_MS);
@@ -732,6 +751,24 @@
       }
     } finally {
       runtime.pending.activeQuote = false;
+    }
+  }
+
+  async function loadTradeSignals(token, immediate = false) {
+    if (runtime.pending.signals && !immediate) return;
+    runtime.pending.signals = true;
+    try {
+      const data = await api(`/signals.php?bot=1&symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&lang=en`, { timeout: immediate ? 8500 : 6500 });
+      if (!isToken(token)) return;
+      state.invest.tradeSignals = (data && data.ok !== false && Array.isArray(data.items)) ? data.items : [];
+      renderTradeSignalsPanel();
+    } catch (err) {
+      if (!isAbort(err)) {
+        state.invest.tradeSignals = [];
+        renderTradeSignalsPanel(err.message || 'Copy signals unavailable');
+      }
+    } finally {
+      runtime.pending.signals = false;
     }
   }
 
@@ -1242,7 +1279,7 @@
       renderKycStatus();
       renderTopbar();
     } catch (err) {
-      if (!isAbort(err)) $('[data-kyc-status]').innerHTML = emptyState(err.message || 'KYC status unavailable');
+      if (!isAbort(err) && $('[data-kyc-status]')) $('[data-kyc-status]').innerHTML = emptyState(err.message || 'KYC status unavailable');
     } finally {
       runtime.pending.kyc = false;
     }
@@ -1294,15 +1331,16 @@
       <section class="panel page-head">
         <div>
           <span class="eyebrow">Earn</span>
-          <h1>Plans, contracts, and levels</h1>
-          <p>Internal investment products and perpetual contracts. Funding and approval remain inside VertexPluse.</p>
+          <h1>Copy trading and contracts</h1>
+          <p>Follow approved trading signals on Real accounts, or subscribe to level-gated contracts managed inside VertexPluse.</p>
         </div>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#/deposit">Deposit</a>
-          <a class="btn btn-ghost" href="/admin/invest_plans.php">Admin plans</a>
+          <a class="btn btn-ghost" href="/admin/signals.php">Admin signals</a>
+          <a class="btn btn-ghost" href="/admin/contracts.php">Admin contracts</a>
         </div>
       </section>
-      <div data-invest-body>${emptyState('Loading earn products...')}</div>`;
+      <div data-invest-body>${emptyState('Loading copy desk...')}</div>`;
     loadInvest(token, true);
     setTimer(() => loadInvest(token, false), FINANCE_POLL_MS);
   }
@@ -1311,16 +1349,18 @@
     if (runtime.pending.invest && !immediate) return;
     runtime.pending.invest = true;
     try {
-      const [plans, contracts, mine, wallet, level, kyc] = await Promise.all([
-        api('/invest/plans.php?kind=plan&lang=en', { timeout: immediate ? 9000 : 7000 }),
-        api('/invest/contracts.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
-        api('/invest/my.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
-        api('/wallet/summary.php', { timeout: immediate ? 9000 : 7000 }),
-        api('/user/level.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
-        api('/kyc/status.php', { timeout: immediate ? 9000 : 7000 })
+      const [signals, copies, contracts, mine, wallet, level, kyc] = await Promise.all([
+        optionalApi('/signals.php?bot=1&home=1&lang=en', { timeout: immediate ? 9000 : 7000 }),
+        optionalApi('/trading_bot/my.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
+        optionalApi('/invest/contracts.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
+        optionalApi('/invest/my.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
+        optionalApi('/wallet/summary.php', { timeout: immediate ? 9000 : 7000 }),
+        optionalApi('/user/level.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
+        optionalApi('/kyc/status.php', { timeout: immediate ? 9000 : 7000 })
       ]);
       if (!isToken(token)) return;
-      if (plans && plans.ok !== false) state.invest.plans = plans.items || [];
+      if (signals && signals.ok !== false) state.invest.signals = signals.items || [];
+      if (copies && copies.ok !== false) state.invest.copies = copies.items || [];
       if (contracts && contracts.ok !== false) state.invest.contracts = contracts.items || [];
       if (mine && mine.ok !== false) state.invest.mine = mine.items || [];
       if (wallet && wallet.ok !== false) state.wallet = wallet;
@@ -1341,26 +1381,291 @@
     const level = (state.level && state.level.current) || null;
     const next = (state.level && state.level.next) || null;
     const real = (state.wallet && state.wallet.real) || {};
+    const contractMine = state.invest.mine.filter((x) => String(x.product_kind || x.kind || 'contract').toLowerCase() !== 'plan');
+    const activeCopies = state.invest.copies.filter((x) => ['active', 'armed', 'copied'].includes(String(x.status || '').toLowerCase())).length;
+    const activeContracts = contractMine.filter((x) => ['active', 'running'].includes(String(x.status || '').toLowerCase())).length;
     node.innerHTML = `
       <section class="metric-grid">
         ${metricCard('Current level', levelName(level), 'Customer tier')}
         ${metricCard('Next level', levelName(next), next ? `${money(next.min_deposit_total || 0)} deposits` : 'Maximum tier')}
         ${metricCard('Real available', money(real.available || 0), real.currency || 'USDT')}
-        ${metricCard('Active contracts', String(state.invest.mine.filter((x) => x.status === 'active').length), 'Running')}
+        ${metricCard('Active copies', String(activeCopies), 'Real copy desk')}
+        ${metricCard('Active contracts', String(activeContracts), 'Running')}
       </section>
       <section class="panel">
-        <div class="section-head"><div><span class="eyebrow">Products</span><h2>Investment plans</h2></div></div>
-        <div class="invest-grid">${productCards(state.invest.plans, 'plan')}</div>
+        <div class="earn-tabs">
+          <button class="${state.invest.tab === 'copy' ? 'active' : ''}" type="button" data-earn-tab="copy">Copy Trading</button>
+          <button class="${state.invest.tab === 'contracts' ? 'active' : ''}" type="button" data-earn-tab="contracts">Contracts</button>
+        </div>
       </section>
-      <section class="panel">
-        <div class="section-head"><div><span class="eyebrow">Contracts</span><h2>Perpetual and term contracts</h2></div></div>
-        <div class="invest-grid">${productCards(state.invest.contracts, 'contract')}</div>
-      </section>
-      <section class="panel">
-        <div class="section-head"><div><span class="eyebrow">My earn</span><h2>Active investments</h2></div></div>
-        <div class="table-shell">${investmentsTable(state.invest.mine)}</div>
-      </section>`;
+      ${state.invest.tab === 'copy' ? `
+        <section class="panel">
+          <div class="section-head">
+            <div><span class="eyebrow">Signal desk</span><h2>Copy trading signals</h2><p>Real-only subscriptions. KYC approval is required before copying.</p></div>
+          </div>
+          <div class="copy-grid">${copySignalCards(state.invest.signals, 'earn')}</div>
+        </section>
+        <section class="panel">
+          <div class="section-head"><div><span class="eyebrow">My copies</span><h2>Copied and armed trades</h2></div></div>
+          <div class="table-shell">${copyHistoryTable(state.invest.copies)}</div>
+        </section>` : `
+        <section class="panel">
+          <div class="section-head"><div><span class="eyebrow">Contracts</span><h2>Perpetual and term contracts</h2></div></div>
+          <div class="invest-grid">${productCards(state.invest.contracts, 'contract')}</div>
+        </section>
+        <section class="panel">
+          <div class="section-head"><div><span class="eyebrow">My contracts</span><h2>Active contracts</h2></div></div>
+          <div class="table-shell">${investmentsTable(contractMine)}</div>
+        </section>`}
+      `;
+    bindEarnTabs();
+    bindCopyButtons(node);
     bindInvestButtons();
+  }
+
+  function bindEarnTabs() {
+    $('#view').querySelectorAll('[data-earn-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.invest.tab = btn.dataset.earnTab === 'contracts' ? 'contracts' : 'copy';
+        safeStorage('vp_earn_tab', state.invest.tab, true);
+        renderInvestBody();
+      });
+    });
+  }
+
+  function copySignalCards(items, context) {
+    if (!items || !items.length) {
+      return emptyState(context === 'trade' ? 'No copy signals for this market right now.' : 'No copy trading signals are available yet.');
+    }
+    return items.map((sig) => signalCard(sig, context === 'trade')).join('');
+  }
+
+  function signalCard(sig, compactMode = false) {
+    const live = signalQuote(sig);
+    const q = quoteState(live);
+    const direction = String(sig.direction || sig.side || 'buy').toLowerCase();
+    const minAmount = Number(sig.copy_min_amount || sig.min_amount || 0);
+    const lockDays = Number(sig.copy_lock_days || 0);
+    const share = Number(sig.copy_profit_share_pct || 0);
+    const confidence = Number(sig.confidence || 0);
+    const subscribers = Number(sig.subscribers || sig.followers || 0);
+    return `<article class="copy-card ${compactMode ? 'is-compact' : ''}" data-signal-card="${escAttr(String(sig.id || ''))}" data-signal-symbol="${escAttr(cleanSymbol(sig.symbol || ''))}">
+      <div class="copy-card-head">
+        <span class="asset-badge ${q.className}">${esc(assetInitial(sig.symbol))}</span>
+        <div>
+          <h3>${esc(cleanSymbol(sig.symbol || state.symbol))}</h3>
+          <small>${esc(sig.bot_name || sig.type || 'Copy signal')} ${sig.timeframe ? `- ${esc(sig.timeframe)}` : ''}</small>
+        </div>
+        <span class="side ${direction.includes('sell') || direction.includes('short') ? 'is-sell' : 'is-buy'}">${esc(direction.includes('sell') || direction.includes('short') ? 'Sell' : 'Buy')}</span>
+      </div>
+      <div class="signal-live">
+        <span class="quality-pill ${q.className}" data-signal-quality>${esc(q.label)}</span>
+        <strong data-signal-live-price>${live.price > 0 ? price(live.price, sig.type || state.type) : '--'}</strong>
+        <small class="${q.changeClass}" data-signal-live-change>${pct(live.change_pct)}</small>
+      </div>
+      <div class="signal-grid">
+        <div><small>Entry</small><strong>${signalPrice(sig.entry, sig.type)}</strong></div>
+        <div><small>Stop loss</small><strong>${signalPrice(sig.sl, sig.type)}</strong></div>
+        <div><small>Take profit</small><strong>${signalPrice(sig.tp1 || sig.tp, sig.type)}</strong></div>
+        <div><small>Confidence</small><strong>${confidence > 0 ? `${compact(confidence)}%` : '--'}</strong></div>
+      </div>
+      <p>${esc(sig.bot_brief || sig.note || 'Copy this approved setup on your Real account after KYC approval.')}</p>
+      <div class="copy-meta">
+        <span>Min ${money(minAmount || 0)}</span>
+        <span>${lockDays > 0 ? `${lockDays}d lock` : 'Flexible'}</span>
+        <span>${share > 0 ? `${compact(share)}% share` : 'No share'}</span>
+        <span>${subscribers} followers</span>
+      </div>
+      <button class="btn btn-primary btn-sm" type="button" data-copy-signal="${escAttr(String(sig.id || ''))}">Copy Real</button>
+    </article>`;
+  }
+
+  function renderTradeSignalsPanel(errorMessage = '') {
+    const panel = $('[data-trade-signals-panel]');
+    if (!panel) return;
+    const title = panel.querySelector('h2');
+    if (title) title.textContent = `Signals for ${state.symbol}`;
+    const list = panel.querySelector('[data-trade-signals-list]');
+    if (!list) return;
+    list.innerHTML = errorMessage ? emptyState(errorMessage) : `<div class="copy-grid compact">${copySignalCards(state.invest.tradeSignals, 'trade')}</div>`;
+    bindCopyButtons(list);
+    updateSignalLiveFromQuote();
+  }
+
+  function bindCopyButtons(root = document) {
+    root.querySelectorAll('[data-copy-signal]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const sig = findSignal(btn.dataset.copySignal);
+        if (sig) openCopyDialog(sig);
+      });
+    });
+  }
+
+  function findSignal(id) {
+    const target = String(id || '');
+    return [...(state.invest.signals || []), ...(state.invest.tradeSignals || [])].find((sig) => String(sig.id || '') === target) || null;
+  }
+
+  function openCopyDialog(sig) {
+    const kyc = kycStatusLabel();
+    const realWallet = (state.wallet && state.wallet.real) || {};
+    const minAmount = Number(sig.copy_min_amount || sig.min_amount || 50);
+    const modeOk = state.mode === 'real';
+    const kycOk = kyc.label === 'Approved';
+    const live = signalQuote(sig);
+    const q = quoteState(live);
+    const guard = !modeOk
+      ? '<div class="modal-warning">Copy Trading is Real Only. Switch to Real mode before copying this signal.</div>'
+      : (!kycOk ? '<div class="modal-warning">KYC approval is required before Real copy trading.</div>' : '');
+    openLiteModal(`
+      <div class="modal-head">
+        <div><span class="eyebrow">Copy trading</span><h2>Copy ${esc(cleanSymbol(sig.symbol || state.symbol))}</h2></div>
+        <button class="icon-btn" type="button" data-modal-close>X</button>
+      </div>
+      <form class="signal-copy-sheet" data-copy-form="${escAttr(String(sig.id || ''))}">
+        ${guard}
+        <div class="signal-copy-summary">
+          <div><small>Direction</small><strong>${esc(String(sig.direction || 'buy').toUpperCase())}</strong></div>
+          <div><small>Live price</small><strong>${live.price > 0 ? price(live.price, sig.type || state.type) : '--'}</strong></div>
+          <div><small>Status</small><strong class="${q.className}">${esc(q.label)}</strong></div>
+          <div><small>Real available</small><strong>${money(realWallet.available || 0)}</strong></div>
+        </div>
+        <div class="signal-grid">
+          <div><small>Entry</small><strong>${signalPrice(sig.entry, sig.type)}</strong></div>
+          <div><small>SL</small><strong>${signalPrice(sig.sl, sig.type)}</strong></div>
+          <div><small>TP1</small><strong>${signalPrice(sig.tp1 || sig.tp, sig.type)}</strong></div>
+          <div><small>Lock</small><strong>${Number(sig.copy_lock_days || 0) || 0}d</strong></div>
+        </div>
+        <label class="field">
+          <span>Copy amount</span>
+          <input name="amount" inputmode="decimal" value="${escAttr(String(minAmount || 50))}" />
+        </label>
+        <div class="modal-actions">
+          ${!modeOk ? '<button class="btn btn-ghost" type="button" data-switch-real>Switch to Real</button>' : ''}
+          ${!kycOk ? '<a class="btn btn-ghost" href="#/kyc" data-modal-close>KYC Verification</a>' : ''}
+          <button class="btn btn-primary" type="submit" ${modeOk && kycOk ? '' : 'disabled'}>Copy on Real</button>
+        </div>
+        <p class="ticket-status" data-copy-status>Real copy subscriptions reserve funds internally and may open when the signal entry is reached.</p>
+      </form>`);
+    const form = document.querySelector('[data-copy-form]');
+    form?.addEventListener('submit', (event) => submitCopyForm(event, sig));
+    document.querySelector('[data-switch-real]')?.addEventListener('click', () => {
+      state.mode = 'real';
+      safeStorage('vp_trade_mode', 'real', true);
+      renderTopbar();
+      closeLiteModal();
+      openCopyDialog(sig);
+    });
+  }
+
+  async function submitCopyForm(event, sig) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const status = form.querySelector('[data-copy-status]');
+    const amount = parseNumber(form.elements.amount?.value) || Number(sig.copy_min_amount || 0);
+    if (status) status.textContent = 'Submitting copy request...';
+    try {
+      const data = await api('/trading_bot/copy.php', {
+        method: 'POST',
+        body: JSON.stringify({ signal_id: sig.id, amount, mode: 'real' }),
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 12000
+      });
+      if (!data || data.ok === false) throw new Error((data && data.error) || 'Copy request failed');
+      showToast(data.armed ? 'Copy armed and waiting for entry' : 'Copy position created');
+      closeLiteModal();
+      await Promise.all([
+        loadInvest(runtime.routeToken, true),
+        loadTradingAccount(runtime.routeToken, true)
+      ]);
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Copy request failed';
+      showToast(err.message || 'Copy request failed', 'danger');
+    }
+  }
+
+  function copyHistoryTable(items) {
+    if (!items || !items.length) return emptyState('No copied trades yet.');
+    return `<table class="data-table copy-history-table">
+      <thead><tr><th>Signal</th><th>Amount</th><th>Entry</th><th>Live</th><th>Status</th><th>Lock</th></tr></thead>
+      <tbody>${items.map((x) => {
+        const live = signalQuote(x);
+        const q = quoteState(live);
+        return `<tr>
+          <td><strong>${esc(cleanSymbol(x.symbol || ''))}</strong><small>${esc(x.bot_name || x.direction || '')}</small></td>
+          <td>${money(x.reserved_amount || x.amount || 0)}<small>${esc(x.mode || 'real')}</small></td>
+          <td>${signalPrice(x.entry_price_snapshot || x.entry, x.type)}</td>
+          <td><strong>${live.price > 0 ? price(live.price, x.type || state.type) : '--'}</strong><small class="${q.changeClass}">${pct(live.change_pct)}</small></td>
+          <td><span class="status-badge ${copyStatusClass(x.status)}">${esc(x.status || 'active')}</span></td>
+          <td>${dateText(x.lock_until)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  }
+
+  function signalQuote(sig) {
+    const symbol = cleanSymbol(sig.symbol || state.symbol);
+    const cached = state.visibleQuotes[symbol];
+    const active = symbol === state.symbol ? state.activeQuote : null;
+    const raw = active || cached || {};
+    return {
+      symbol,
+      type: sig.type || raw.type || state.type,
+      price: Number(raw.price || sig.live_price || sig.price || 0),
+      change_pct: Number(raw.change_pct ?? sig.live_change_pct ?? 0),
+      source: String(raw.source || sig.live_source || sig.source || 'unavailable'),
+      timing_class: String(raw.timing_class || ''),
+      is_stale: !!raw.is_stale
+    };
+  }
+
+  function updateSignalLiveFromQuote() {
+    if (!state.activeQuote) return;
+    const symbol = cleanSymbol(state.activeQuote.symbol || state.symbol);
+    const cssSymbol = window.CSS && CSS.escape ? CSS.escape(symbol) : symbol.replace(/["\\]/g, '\\$&');
+    document.querySelectorAll(`[data-signal-symbol="${cssSymbol}"]`).forEach((card) => {
+      const live = signalQuote({ symbol, type: state.type });
+      const q = quoteState(live);
+      const priceNode = card.querySelector('[data-signal-live-price]');
+      const changeNode = card.querySelector('[data-signal-live-change]');
+      const qualityNode = card.querySelector('[data-signal-quality]');
+      if (priceNode) priceNode.textContent = live.price > 0 ? price(live.price, state.type) : '--';
+      if (changeNode) {
+        changeNode.textContent = pct(live.change_pct);
+        changeNode.className = q.changeClass;
+      }
+      if (qualityNode) {
+        qualityNode.textContent = q.label;
+        qualityNode.className = `quality-pill ${q.className}`;
+      }
+    });
+  }
+
+  function copyStatusClass(status) {
+    const s = String(status || '').toLowerCase();
+    if (['active', 'copied', 'open'].includes(s)) return 'is-live';
+    if (['armed', 'pending', 'waiting'].includes(s)) return 'is-delayed';
+    if (['closed', 'completed'].includes(s)) return 'is-stale';
+    if (['failed', 'rejected', 'cancelled', 'canceled'].includes(s)) return 'is-unavailable';
+    return 'is-stale';
+  }
+
+  function signalPrice(value, type) {
+    const n = Number(value || 0);
+    return n > 0 ? price(n, type || state.type) : '--';
+  }
+
+  function openLiteModal(html) {
+    closeLiteModal();
+    const modal = document.createElement('div');
+    modal.className = 'lite-modal';
+    modal.innerHTML = `<div class="modal-backdrop" data-modal-close></div><div class="modal-panel">${html}</div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-modal-close]').forEach((item) => item.addEventListener('click', closeLiteModal));
+  }
+
+  function closeLiteModal() {
+    document.querySelectorAll('.lite-modal').forEach((modal) => modal.remove());
   }
 
   function productCards(items, fallbackKind) {
@@ -1563,6 +1868,7 @@
     setText('[data-ticket-buy]', quote.price > 0 ? price(quote.price, state.type) : '--');
     updateTicketMetrics();
     updateTradeSummary();
+    updateSignalLiveFromQuote();
   }
 
   function updateTradeSummary() {
@@ -1762,6 +2068,15 @@
     } finally {
       clearTimeout(timeout);
       runtime.controllers.delete(controller);
+    }
+  }
+
+  async function optionalApi(path, options = {}) {
+    try {
+      return await api(path, options);
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      return { ok: false, error: err.message || 'Request failed' };
     }
   }
 

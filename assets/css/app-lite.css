@@ -135,7 +135,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 94px minmax(0, 1fr);
+  grid-template-columns: 84px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -143,7 +143,7 @@ button {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 18px 12px;
+  padding: 16px 10px;
   background: #030916;
   border-right: 1px solid var(--line);
   display: flex;
@@ -179,7 +179,7 @@ button {
 }
 
 .nav-pill {
-  min-height: 64px;
+  min-height: 62px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   display: grid;
@@ -227,7 +227,7 @@ button {
 }
 
 .topbar {
-  min-height: 72px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -427,7 +427,7 @@ button {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
 }
 
@@ -803,6 +803,18 @@ button {
   text-transform: uppercase;
 }
 
+.side.is-buy {
+  background: rgba(36, 210, 141, 0.14);
+  color: var(--green);
+  border-color: rgba(36, 210, 141, 0.34);
+}
+
+.side.is-sell {
+  background: rgba(255, 92, 124, 0.14);
+  color: var(--red);
+  border-color: rgba(255, 92, 124, 0.34);
+}
+
 .quality-pill.is-live {
   background: rgba(36, 210, 141, 0.13);
   color: var(--green);
@@ -1046,6 +1058,150 @@ button {
 .positions-panel,
 .orders-panel {
   overflow: hidden;
+}
+
+.trade-signals-panel {
+  overflow: hidden;
+}
+
+.trade-signals-panel .section-head {
+  border-bottom: 1px solid var(--line);
+}
+
+.earn-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.earn-tabs button {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  background: rgba(7, 17, 38, 0.78);
+  color: var(--muted);
+  border-radius: var(--radius);
+  font-weight: 900;
+}
+
+.earn-tabs button.active {
+  color: white;
+  background: linear-gradient(135deg, rgba(93, 124, 255, 0.9), rgba(36, 183, 255, 0.42));
+  border-color: rgba(93, 124, 255, 0.75);
+}
+
+.copy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.copy-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.copy-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(129, 160, 220, 0.18);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at top right, rgba(93, 124, 255, 0.16), transparent 42%),
+    rgba(7, 17, 38, 0.82);
+  padding: 16px;
+  min-width: 0;
+}
+
+.copy-card.is-compact {
+  padding: 14px;
+}
+
+.copy-card-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.copy-card h3 {
+  margin: 0;
+}
+
+.copy-card small,
+.copy-card p {
+  color: var(--muted);
+}
+
+.copy-card p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.signal-live {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(3, 9, 22, 0.56);
+  padding: 10px;
+}
+
+.signal-live strong {
+  text-align: right;
+  font-size: 18px;
+}
+
+.signal-grid,
+.signal-copy-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.signal-grid div,
+.signal-copy-summary div {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(3, 9, 22, 0.54);
+  padding: 10px;
+  min-width: 0;
+}
+
+.signal-grid small,
+.signal-copy-summary small {
+  display: block;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.signal-grid strong,
+.signal-copy-summary strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.copy-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.copy-meta span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(93, 124, 255, 0.08);
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.copy-history-table td small {
+  color: var(--muted);
 }
 
 .table-shell {
@@ -1423,6 +1579,76 @@ button {
   cursor: not-allowed;
 }
 
+.lite-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(10px);
+}
+
+.modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(720px, 100%);
+  max-height: min(86vh, 760px);
+  overflow: auto;
+  border: 1px solid rgba(129, 160, 220, 0.28);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(145deg, rgba(16, 31, 65, 0.98), rgba(5, 13, 30, 0.98));
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.48);
+}
+
+.modal-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-head h2 {
+  margin: 4px 0 0;
+}
+
+.signal-copy-sheet {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.modal-warning {
+  border: 1px solid rgba(255, 191, 71, 0.32);
+  background: rgba(255, 191, 71, 0.1);
+  color: var(--amber);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.modal-actions .btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
 .account-card,
 .account-menu {
   padding: 22px;
@@ -1582,6 +1808,8 @@ button {
   .funding-layout,
   .kyc-layout,
   .invest-grid,
+  .copy-grid,
+  .copy-grid.compact,
   .trade-balance-strip,
   .account-layout,
   .trade-layout {
@@ -1626,7 +1854,9 @@ button {
   .quote-buttons,
   .funding-status-grid,
   .kyc-summary,
-  .invest-stats {
+  .invest-stats,
+  .signal-grid,
+  .signal-copy-summary {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1695,8 +1925,11 @@ button {
   .funding-status-grid,
   .kyc-summary,
   .invest-stats,
+  .signal-grid,
+  .signal-copy-summary,
   .invest-subscribe,
-  .request-columns {
+  .request-columns,
+  .earn-tabs {
     grid-template-columns: 1fr;
   }
 
