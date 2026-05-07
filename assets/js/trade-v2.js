@@ -134,6 +134,8 @@
       clearTimeout(timer);
     }
   }
+  function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
   function ensureCharts(){
     if(window.LightweightCharts) return Promise.resolve(true);
     return new Promise(resolve => {
@@ -503,14 +505,12 @@
     marketHydrateKey = key;
     marketHydrateBusy = true;
     try{
-      for(let i = 0; i < wanted.length; i += 3){
-        const chunk = wanted.slice(i, i + 3);
-        const data = await api(`/quotes.php?purpose=focus&fresh=1&direct=1&symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`, { timeoutMs:6500 });
-        const items = Array.isArray(data.items) ? data.items : [];
-        if(!items.length) continue;
-        const bySymbol = new Map(items.map(q => [cleanSymbol(q.symbol), q]));
+      for(const sym of wanted){
+        const data = await api(`/quotes.php?purpose=focus&fresh=1&direct=1&symbol=${encodeURIComponent(sym)}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`, { timeoutMs:4200 });
+        const q = Array.isArray(data.items) ? data.items.find(item => cleanSymbol(item.symbol) === sym) : null;
+        if(!q || !(Number(q.price || 0) > 0)) continue;
         marketItems = marketItems.map(row => {
-          const q = bySymbol.get(cleanSymbol(row.symbol));
+          if(cleanSymbol(row.symbol) !== sym) return row;
           if(!q || !(Number(q.price || 0) > 0)) return row;
           return Object.assign({}, row, {
             price: Number(q.price || 0),
@@ -523,6 +523,7 @@
         });
         renderMarketList();
         updateHeader();
+        await sleep(120);
       }
     }finally{
       marketHydrateBusy = false;
