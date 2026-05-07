@@ -5,6 +5,7 @@
   const ACTIVE_QUOTE_MS = 2400;
   const WATCHLIST_QUOTE_MS = 6000;
   const ACCOUNT_POLL_MS = 15000;
+  const FINANCE_POLL_MS = 18000;
   const DEFAULT_AMOUNT = 100;
 
   const TYPES = [
@@ -16,7 +17,14 @@
     { key: 'arab', label: 'Arab', short: 'AR', market: 'spot', symbol: '2222', name: 'Arab Market' }
   ];
   const TYPE_BY_KEY = Object.fromEntries(TYPES.map((item) => [item.key, item]));
+  const MARKET_TABS = [
+    { key: 'favorites', label: 'Favorites' },
+    { key: 'all', label: 'All' },
+    ...TYPES.map((item) => ({ key: item.key, label: displayTypeLabel(item.key) }))
+  ];
   const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h'];
+  const ROUTES = ['home', 'trade', 'portfolio', 'wallet', 'deposit', 'withdraw', 'kyc', 'invest', 'account'];
+  const ROUTE_ALIASES = { assets: 'wallet', funds: 'wallet', earn: 'invest', contracts: 'invest', levels: 'invest' };
 
   const state = {
     route: 'home',
@@ -31,6 +39,7 @@
     wallet: null,
     mode: safeStorage('vp_trade_mode', 'demo') === 'real' ? 'real' : 'demo',
     type: safeStorage('vp_market_type', 'crypto'),
+    marketTab: safeStorage('vp_market_tab', safeStorage('vp_market_type', 'crypto')),
     symbol: safeStorage('vp_symbol', 'BTCUSDT'),
     market: safeStorage('vp_market', 'spot'),
     tf: safeStorage('vp_tf', '1m'),
@@ -43,10 +52,38 @@
     markets: {},
     portfolio: null,
     orders: [],
+    finance: {
+      deposits: [],
+      withdrawals: [],
+      ledger: []
+    },
+    kyc: null,
+    level: null,
+    invest: {
+      plans: [],
+      contracts: [],
+      mine: []
+    },
+    paymentMethods: {
+      deposit: [],
+      withdraw: []
+    },
+    paymentCategories: {
+      deposit: [],
+      withdraw: []
+    },
+    funding: {
+      kind: 'deposit',
+      method: '',
+      amount: 100,
+      currency: 'USDT',
+      result: null
+    },
     lastError: ''
   };
 
   if (!TYPE_BY_KEY[state.type]) state.type = 'crypto';
+  if (!MARKET_TABS.some((tab) => tab.key === state.marketTab)) state.marketTab = state.type;
   if (!TIMEFRAMES.includes(state.tf)) state.tf = '1m';
 
   const runtime = {
@@ -72,7 +109,11 @@
       activeQuote: false,
       candles: false,
       account: false,
-      wallet: false
+      wallet: false,
+      finance: false,
+      kyc: false,
+      invest: false,
+      funding: false
     };
   }
 
@@ -145,7 +186,7 @@
           <nav class="rail-nav" aria-label="Primary">
             ${navItems().map(navButton).join('')}
           </nav>
-          <a class="rail-legacy" href="/legacy-app.php#/home">Legacy</a>
+          <a class="rail-legacy" href="/admin/" title="Admin desk">Admin</a>
         </aside>
         <div class="workspace">
           <header class="topbar" id="topbar"></header>
@@ -167,7 +208,8 @@
       { route: 'home', label: 'Home', icon: 'H' },
       { route: 'trade', label: 'Trade', icon: 'T' },
       { route: 'portfolio', label: 'Portfolio', icon: 'P' },
-      { route: 'wallet', label: 'Wallet', icon: 'W' },
+      { route: 'wallet', label: 'Assets', icon: 'F' },
+      { route: 'invest', label: 'Earn', icon: 'E' },
       { route: 'account', label: 'Account', icon: 'A' }
     ];
   }
@@ -184,7 +226,10 @@
 
     const parsed = parseHash();
     state.route = parsed.route;
-    if (parsed.params.type && TYPE_BY_KEY[parsed.params.type]) state.type = parsed.params.type;
+    if (parsed.params.type && TYPE_BY_KEY[parsed.params.type]) {
+      state.type = parsed.params.type;
+      state.marketTab = parsed.params.type;
+    }
     if (parsed.params.symbol) state.symbol = cleanSymbol(parsed.params.symbol);
     if (parsed.params.market) state.market = parsed.params.market === 'perp' ? 'perp' : 'spot';
     if (parsed.params.tf && TIMEFRAMES.includes(parsed.params.tf)) state.tf = parsed.params.tf;
@@ -195,6 +240,9 @@
     if (state.route === 'trade') renderTrade();
     else if (state.route === 'portfolio') renderPortfolio();
     else if (state.route === 'wallet') renderWallet();
+    else if (state.route === 'deposit' || state.route === 'withdraw') renderFunding(state.route);
+    else if (state.route === 'kyc') renderKyc();
+    else if (state.route === 'invest') renderInvest();
     else if (state.route === 'account') renderAccount();
     else renderHome();
   }
@@ -202,20 +250,24 @@
   function parseHash() {
     const raw = (location.hash || '#/home').replace(/^#\/?/, '');
     const [path, query = ''] = raw.split('?');
-    const route = ['home', 'trade', 'portfolio', 'wallet', 'account'].includes(path) ? path : 'home';
+    const normalized = ROUTE_ALIASES[path] || path;
+    const route = ROUTES.includes(normalized) ? normalized : 'home';
     const params = Object.fromEntries(new URLSearchParams(query));
     return { route, params };
   }
 
   function syncShell() {
     app.querySelectorAll('[data-nav]').forEach((el) => {
-      el.classList.toggle('active', el.getAttribute('data-nav') === state.route);
+      const nav = el.getAttribute('data-nav');
+      const activeRoute = ['deposit', 'withdraw', 'kyc'].includes(state.route) ? (state.route === 'kyc' ? 'account' : 'wallet') : state.route;
+      el.classList.toggle('active', nav === activeRoute);
     });
   }
 
   function renderTopbar() {
     const wallet = activeWallet();
     const type = TYPE_BY_KEY[state.type] || TYPE_BY_KEY.crypto;
+    const kyc = kycStatusLabel();
     const topbar = $('#topbar');
     if (!topbar) return;
     topbar.innerHTML = `
@@ -231,6 +283,10 @@
           <small>${esc(wallet.currency || (state.mode === 'real' ? 'USDT' : 'USDT_DEMO'))}</small>
           <strong>${money(wallet.available ?? wallet.balance ?? 0)}</strong>
         </div>
+        <a class="status-chip ${kyc.className}" href="#/kyc">
+          <small>KYC</small>
+          <strong>${esc(kyc.label)}</strong>
+        </a>
         <button class="user-chip" type="button" data-user-menu title="Account">
           <span>${esc(userInitials())}</span>
           <em>${esc((state.user && (state.user.email || state.user.username)) || 'Account')}</em>
@@ -246,6 +302,8 @@
         renderPortfolio();
       } else if (state.route === 'wallet') {
         loadWallet(runtime.routeToken, true);
+      } else if (state.route === 'invest') {
+        loadInvest(runtime.routeToken, true);
       }
     });
     $('[data-user-menu]')?.addEventListener('click', () => {
@@ -256,7 +314,11 @@
   function routeTitle() {
     if (state.route === 'trade') return `${state.symbol || 'Market'} Trading`;
     if (state.route === 'portfolio') return 'Portfolio';
-    if (state.route === 'wallet') return 'Funds';
+    if (state.route === 'wallet') return 'Assets';
+    if (state.route === 'deposit') return 'Deposit';
+    if (state.route === 'withdraw') return 'Withdraw';
+    if (state.route === 'kyc') return 'KYC Verification';
+    if (state.route === 'invest') return 'Earn & Contracts';
     if (state.route === 'account') return 'Account';
     return 'Home Dashboard';
   }
@@ -273,7 +335,8 @@
           <p>${esc(state.brand.tagline || 'Professional trading and investment platform')}</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#/trade">Open Trade</a>
-            <a class="btn btn-ghost" href="#/wallet">Funds</a>
+            <a class="btn btn-ghost" href="#/deposit">Deposit</a>
+            <a class="btn btn-ghost" href="#/invest">Earn</a>
           </div>
         </div>
         <div class="hero-balance">
@@ -288,6 +351,23 @@
         ${metricCard('Balance', money(wallet.balance ?? 0), wallet.currency || '')}
         ${metricCard('Holds', money(wallet.holds ?? 0), 'Locked margin')}
         ${metricCard('Mode', state.mode === 'real' ? 'Real' : 'Demo', 'Internal execution')}
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Workspace</span>
+            <h2>Quick actions</h2>
+          </div>
+        </div>
+        <div class="quick-grid">
+          ${quickAction('Deposit', 'Start a real funding request', '#/deposit', 'D')}
+          ${quickAction('Withdraw', 'Request manual admin payout', '#/withdraw', 'W')}
+          ${quickAction('KYC', 'Verify account documents', '#/kyc', 'K')}
+          ${quickAction('Contracts', 'Plans, levels, and invest contracts', '#/invest', 'C')}
+          ${quickAction('Admin', 'Review users, KYC, deposits, withdrawals', '/admin/', 'A')}
+          ${quickAction('Legacy', 'Fallback copy of the original interface', '/legacy-app.php#/home', 'L')}
+        </div>
       </section>
 
       <section class="panel">
@@ -320,6 +400,14 @@
     setTimer(() => loadTradingAccount(token, false, true), ACCOUNT_POLL_MS);
   }
 
+  function quickAction(title, sub, href, icon) {
+    return `<a class="quick-action" href="${escAttr(href)}">
+      <span>${esc(icon)}</span>
+      <strong>${esc(title)}</strong>
+      <small>${esc(sub)}</small>
+    </a>`;
+  }
+
   function metricCard(label, value, sub) {
     return `<article class="metric-card">
       <small>${esc(label)}</small>
@@ -342,7 +430,7 @@
   function renderTrade() {
     const type = TYPE_BY_KEY[state.type] || TYPE_BY_KEY.crypto;
     const market = state.market || type.market;
-    const rows = filteredMarkets(state.type);
+    const rows = filteredMarkets(state.marketTab || state.type);
     $('#view').innerHTML = `
       <section class="trade-hero panel">
         <div>
@@ -389,7 +477,7 @@
             <button class="icon-btn" type="button" data-refresh-markets title="Refresh markets">R</button>
           </div>
           <div class="type-tabs">
-            ${TYPES.map((item) => `<button class="${item.key === state.type ? 'active' : ''}" data-type-tab="${item.key}" type="button">${esc(item.label)}</button>`).join('')}
+            ${MARKET_TABS.map((item) => `<button class="${item.key === (state.marketTab || state.type) ? 'active' : ''}" data-type-tab="${item.key}" type="button">${esc(item.label)}</button>`).join('')}
           </div>
           <label class="search-box">
             <span>Search</span>
@@ -518,13 +606,20 @@
   function bindTradeEvents() {
     $('#view').querySelectorAll('[data-type-tab]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const type = btn.dataset.typeTab;
-        const def = TYPE_BY_KEY[type] || TYPE_BY_KEY.crypto;
-        state.type = type;
-        state.market = def.market;
-        state.symbol = firstMarketSymbol(type) || def.symbol;
+        const type = btn.dataset.typeTab || 'crypto';
+        state.marketTab = type;
         state.search = '';
-        goTrade();
+        if (TYPE_BY_KEY[type]) {
+          const def = TYPE_BY_KEY[type] || TYPE_BY_KEY.crypto;
+          state.type = type;
+          state.market = def.market;
+          state.symbol = firstMarketSymbol(type) || def.symbol;
+          goTrade();
+        } else {
+          safeStorage('vp_market_tab', state.marketTab, true);
+          updateWatchlist();
+          hydrateVisibleQuotes(runtime.routeToken);
+        }
       });
     });
     $('[data-market-search]')?.addEventListener('input', (event) => {
@@ -586,16 +681,28 @@
 
   async function hydrateVisibleQuotes(token) {
     if (runtime.pending.visibleQuotes) return;
-    const visible = filteredMarkets(state.type).slice(0, 8);
-    const symbols = visible.map((m) => m.symbol).filter(Boolean);
-    if (!symbols.length) return;
+    const visible = filteredMarkets(state.marketTab || state.type).slice(0, 10);
+    const groups = visible.reduce((acc, m) => {
+      const type = TYPE_BY_KEY[m.type] ? m.type : state.type;
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(m.symbol);
+      return acc;
+    }, {});
+    const groupEntries = Object.entries(groups).filter(([, symbols]) => symbols.length);
+    if (!groupEntries.length) return;
     runtime.pending.visibleQuotes = true;
     try {
-      const data = await api(`/quotes.php?visible=1&type=${encodeURIComponent(state.type)}&symbols=${encodeURIComponent(symbols.join(','))}&purpose=watchlist`, { timeout: state.type === 'crypto' ? 5000 : 6500 });
-      if (!isToken(token) || !data || data.ok === false) return;
-      const map = quoteMap(data.items || []);
-      Object.assign(state.visibleQuotes, map);
-      mergeQuotesIntoMarkets(state.type, map);
+      const responses = await Promise.all(groupEntries.map(([type, symbols]) => (
+        api(`/quotes.php?visible=1&type=${encodeURIComponent(type)}&symbols=${encodeURIComponent(symbols.join(','))}&purpose=watchlist`, { timeout: type === 'crypto' ? 5000 : 6500 })
+          .then((data) => ({ type, data }))
+      )));
+      if (!isToken(token)) return;
+      responses.forEach(({ type, data }) => {
+        if (!data || data.ok === false) return;
+        const map = quoteMap(data.items || [], type);
+        Object.assign(state.visibleQuotes, map);
+        mergeQuotesIntoMarkets(type, map);
+      });
       updateWatchlist();
     } catch (err) {
       if (!isAbort(err)) markWatchlistStale();
@@ -701,9 +808,21 @@
     if (runtime.pending.wallet && !immediate) return;
     runtime.pending.wallet = true;
     try {
-      const wallet = await api('/wallet/summary.php', { timeout: immediate ? 9000 : 6500 });
-      if (!isToken(token) || !wallet || wallet.ok === false) return;
-      state.wallet = wallet;
+      const [wallet, deposits, withdrawals, ledger, kyc, level] = await Promise.all([
+        api('/wallet/summary.php', { timeout: immediate ? 9000 : 6500 }),
+        api('/deposits/list.php', { timeout: immediate ? 9000 : 6500 }),
+        api('/withdrawals/list.php', { timeout: immediate ? 9000 : 6500 }),
+        api('/wallet/ledger.php?per=25', { timeout: immediate ? 9000 : 6500 }),
+        api('/kyc/status.php', { timeout: immediate ? 9000 : 6500 }),
+        api('/user/level.php', { timeout: immediate ? 9000 : 6500 })
+      ]);
+      if (!isToken(token)) return;
+      if (wallet && wallet.ok !== false) state.wallet = wallet;
+      if (deposits && deposits.ok !== false) state.finance.deposits = deposits.items || [];
+      if (withdrawals && withdrawals.ok !== false) state.finance.withdrawals = withdrawals.items || [];
+      if (ledger && ledger.ok !== false) state.finance.ledger = ledger.items || [];
+      if (kyc && kyc.ok !== false) state.kyc = kyc.kyc || null;
+      if (level && level.ok !== false) state.level = level;
       renderTopbar();
       if (state.route === 'wallet') renderWalletBody();
     } catch (err) {
@@ -810,38 +929,254 @@
     $('#view').innerHTML = `
       <section class="panel page-head">
         <div>
-          <span class="eyebrow">Funds</span>
-          <h1>Wallet</h1>
-          <p>Real deposits and withdrawals are manually reviewed by the admin desk.</p>
+          <span class="eyebrow">Assets</span>
+          <h1>Funds desk</h1>
+          <p>Wallets, manual deposits, withdrawals, ledger records, and account level status.</p>
         </div>
-        <button class="btn btn-primary" type="button" data-refresh-wallet>Refresh</button>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#/deposit">Deposit</a>
+          <a class="btn btn-ghost" href="#/withdraw">Withdraw</a>
+          <button class="btn btn-ghost" type="button" data-refresh-wallet>Refresh</button>
+        </div>
       </section>
       <div data-wallet-body>${emptyState('Loading wallet...')}</div>`;
     $('[data-refresh-wallet]')?.addEventListener('click', () => loadWallet(token, true));
     loadWallet(token, true);
-    setTimer(() => loadWallet(token, false), ACCOUNT_POLL_MS);
+    setTimer(() => loadWallet(token, false), FINANCE_POLL_MS);
   }
 
   function renderWalletBody() {
     const wallet = state.wallet || {};
     const node = $('[data-wallet-body]');
     if (!node) return;
+    const kyc = kycStatusLabel();
+    const level = (state.level && state.level.current) || null;
+    const next = (state.level && state.level.next) || null;
     node.innerHTML = `
       <section class="wallet-grid">
         ${walletCard('Demo wallet', wallet.demo || {})}
         ${walletCard('Real wallet', wallet.real || {})}
       </section>
-      <section class="panel funds-actions">
+      <section class="funds-grid">
+        <article class="panel action-card">
+          <span class="eyebrow">Verification</span>
+          <h2>${esc(kyc.label)}</h2>
+          <p>${esc(kyc.text)}</p>
+          <a class="btn btn-primary" href="#/kyc">KYC Verification</a>
+        </article>
+        <article class="panel action-card">
+          <span class="eyebrow">Customer level</span>
+          <h2>${esc(levelName(level))}</h2>
+          <p>${next ? `Next: ${esc(levelName(next))} at ${money(next.min_deposit_total || 0)} confirmed deposits.` : 'All available level benefits are active for this account.'}</p>
+          <a class="btn btn-ghost" href="#/invest">View levels & contracts</a>
+        </article>
+      </section>
+      <section class="panel">
+        <div class="section-head">
+          <div><span class="eyebrow">Funding</span><h2>Manual requests</h2></div>
+          <div class="hero-actions tight">
+            <a class="btn btn-primary btn-sm" href="#/deposit">New deposit</a>
+            <a class="btn btn-ghost btn-sm" href="#/withdraw">New withdrawal</a>
+          </div>
+        </div>
+        <div class="request-columns">
+          <div>${requestList('Deposits', state.finance.deposits, 'deposit')}</div>
+          <div>${requestList('Withdrawals', state.finance.withdrawals, 'withdraw')}</div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="section-head"><div><span class="eyebrow">Ledger</span><h2>Latest transactions</h2></div></div>
+        <div class="table-shell">${ledgerTable(state.finance.ledger)}</div>
+      </section>`;
+  }
+
+  function requestList(title, items, kind) {
+    if (!items || !items.length) return `<div class="request-card"><h3>${esc(title)}</h3>${emptyState(`No ${title.toLowerCase()} yet.`)}</div>`;
+    return `<div class="request-card">
+      <h3>${esc(title)}</h3>
+      ${items.slice(0, 6).map((item) => `
+        <article class="request-row">
+          <div><strong>${money(item.amount || 0)} ${esc(item.currency || 'USDT')}</strong><small>${esc(item.method_code || item.method || item.provider || kind)}</small></div>
+          <span class="status-badge ${statusClass(item.status)}">${esc(item.status || 'pending')}</span>
+        </article>`).join('')}
+    </div>`;
+  }
+
+  function ledgerTable(items) {
+    if (!items || !items.length) return emptyState('No ledger entries yet.');
+    return `<table class="data-table">
+      <thead><tr><th>Type</th><th>Currency</th><th>Amount</th><th>Reference</th><th>Date</th></tr></thead>
+      <tbody>${items.slice(0, 25).map((x) => `
+        <tr>
+          <td>${esc(x.type || '')}</td>
+          <td>${esc(x.currency || '')}</td>
+          <td class="${Number(x.amount || 0) >= 0 ? 'pos' : 'neg'}">${money(x.amount || 0)}</td>
+          <td>${esc([x.ref_type, x.ref_id].filter(Boolean).join(' #'))}</td>
+          <td>${dateText(x.created_at)}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+  }
+
+  function renderFunding(kind) {
+    const token = runtime.routeToken;
+    state.funding.kind = kind;
+    state.funding.result = null;
+    $('#view').innerHTML = `
+      <section class="panel page-head">
         <div>
-          <h2>Manual funding desk</h2>
-          <p>Deposits, withdrawals, and KYC review remain handled by admin for this stable release.</p>
+          <span class="eyebrow">Manual ${esc(kind)}</span>
+          <h1>${kind === 'deposit' ? 'Deposit funds' : 'Withdraw funds'}</h1>
+          <p>${kind === 'deposit' ? 'Create a funding request, follow the payment instructions, then upload proof when required.' : 'Submit a payout request for admin review. KYC and available real balance are required.'}</p>
         </div>
         <div class="hero-actions">
-          <a class="btn btn-primary" href="/app.php#/account">KYC</a>
-          <a class="btn btn-ghost" href="/legacy-app.php#/deposit">Legacy deposit</a>
-          <a class="btn btn-ghost" href="/legacy-app.php#/withdraw">Legacy withdraw</a>
+          <a class="btn btn-ghost" href="#/wallet">Back to assets</a>
+          <a class="btn btn-ghost" href="#/kyc">KYC</a>
+        </div>
+      </section>
+      <section class="funding-layout">
+        <div class="panel funding-methods">
+          <div class="section-head compact"><div><h2>Payment methods</h2><p>Real account only</p></div></div>
+          <div data-method-list>${emptyState('Loading methods...')}</div>
+        </div>
+        <div class="panel funding-form-panel">
+          <div class="section-head compact"><div><h2>${kind === 'deposit' ? 'Deposit request' : 'Withdrawal request'}</h2><p>Reviewed by admin desk</p></div></div>
+          <div data-funding-form>${emptyState('Loading form...')}</div>
         </div>
       </section>`;
+    loadFunding(token, kind);
+  }
+
+  async function loadFunding(token, kind) {
+    if (runtime.pending.funding) return;
+    runtime.pending.funding = true;
+    try {
+      const [methods, wallet, kyc] = await Promise.all([
+        api(`/payment_methods/list.php?kind=${encodeURIComponent(kind)}&currency=USDT&scope=real&lang=en`, { timeout: 9000 }),
+        api('/wallet/summary.php', { timeout: 7000 }),
+        api('/kyc/status.php', { timeout: 7000 })
+      ]);
+      if (!isToken(token)) return;
+      if (methods && methods.ok !== false) {
+        state.paymentMethods[kind] = methods.items || [];
+        state.paymentCategories[kind] = methods.categories || [];
+        if (!state.funding.method || !state.paymentMethods[kind].some((m) => m.code === state.funding.method)) {
+          state.funding.method = (state.paymentMethods[kind][0] && state.paymentMethods[kind][0].code) || '';
+        }
+      }
+      if (wallet && wallet.ok !== false) state.wallet = wallet;
+      if (kyc && kyc.ok !== false) state.kyc = kyc.kyc || null;
+      renderFundingBody(kind);
+      renderTopbar();
+    } catch (err) {
+      if (!isAbort(err)) {
+        $('[data-method-list]').innerHTML = emptyState(err.message || 'Payment methods unavailable');
+        $('[data-funding-form]').innerHTML = emptyState('Funding form unavailable');
+      }
+    } finally {
+      runtime.pending.funding = false;
+    }
+  }
+
+  function renderFundingBody(kind) {
+    const methods = state.paymentMethods[kind] || [];
+    const selected = methods.find((m) => m.code === state.funding.method) || methods[0] || null;
+    const list = $('[data-method-list]');
+    const form = $('[data-funding-form]');
+    if (list) {
+      list.innerHTML = methods.length ? `<div class="method-list">${methods.map((m) => methodCard(m, selected)).join('')}</div>` : emptyState('No active payment methods for USDT.');
+      list.querySelectorAll('[data-method-code]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.funding.method = btn.dataset.methodCode || '';
+          renderFundingBody(kind);
+        });
+      });
+    }
+    if (form) {
+      form.innerHTML = selected ? fundingForm(kind, selected) : emptyState('No method selected.');
+      bindFundingForm(kind, selected);
+    }
+  }
+
+  function methodCard(m, selected) {
+    const active = selected && selected.code === m.code ? ' active' : '';
+    return `<button class="method-card${active}" type="button" data-method-code="${escAttr(m.code)}">
+      <span class="asset-badge">${esc(assetInitial(m.provider || m.code))}</span>
+      <strong>${esc(m.title || m.code)}</strong>
+      <small>${esc(m.description || m.provider || '')}</small>
+      <em>${money(m.min_amount || 0)} min${m.max_amount > 0 ? ` / ${money(m.max_amount)} max` : ''}</em>
+    </button>`;
+  }
+
+  function fundingForm(kind, method) {
+    const kyc = kycStatusLabel();
+    const real = (state.wallet && state.wallet.real) || {};
+    const fields = normalizePaymentFields(method.fields, kind);
+    const result = state.funding.result;
+    return `<form class="funding-form" data-funding-submit>
+      <div class="funding-status-grid">
+        <div><small>KYC</small><strong class="${kyc.className}">${esc(kyc.label)}</strong></div>
+        <div><small>Available</small><strong>${money(real.available || 0)} ${esc(real.currency || 'USDT')}</strong></div>
+        <div><small>Method</small><strong>${esc(method.title || method.code)}</strong></div>
+      </div>
+      ${method.instructions ? `<div class="instructions-box">${esc(method.instructions)}</div>` : ''}
+      ${method.payment_address ? `<div class="copy-box"><span>${esc(method.payment_address)}</span><button class="btn btn-ghost btn-sm" type="button" data-copy="${escAttr(method.payment_address)}">Copy</button></div>` : ''}
+      ${method.payment_qr_url ? `<img class="payment-qr" src="${escAttr(method.payment_qr_url)}" alt="Payment QR" />` : ''}
+      <label class="field"><span>Amount (${esc(method.currency || 'USDT')})</span><input inputmode="decimal" name="amount" value="${escAttr(String(state.funding.amount || method.min_amount || 100))}" /></label>
+      <div class="form-grid">
+        ${fields.map(paymentFieldControl).join('')}
+      </div>
+      ${kind === 'deposit' ? `<label class="field"><span>Proof file after creating request</span><input type="file" name="proof" accept="image/*,.pdf" /></label>` : ''}
+      <button class="btn btn-primary" type="submit">${kind === 'deposit' ? 'Create deposit request' : 'Request withdrawal'}</button>
+      <div class="ticket-status" data-funding-status>${result ? esc(result) : ''}</div>
+    </form>`;
+  }
+
+  function bindFundingForm(kind, method) {
+    const form = $('[data-funding-submit]');
+    if (!form || !method) return;
+    form.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(btn.dataset.copy || ''); showToast('Copied'); } catch (e) {}
+      });
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = $('[data-funding-status]');
+      if (status) status.textContent = 'Submitting...';
+      const amount = parseNumber(form.elements.amount?.value);
+      const details = collectFormDetails(form);
+      const payload = kind === 'deposit'
+        ? { provider: method.provider || 'manual', method: method.code, currency: method.currency || 'USDT', amount, details }
+        : { method: method.code, currency: method.currency || 'USDT', amount, details, destination: details.destination || details.wallet_address || details.bank_account || details.address || '' };
+      try {
+        const data = await api(`/${kind === 'deposit' ? 'deposits' : 'withdrawals'}/create.php`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          timeout: 12000,
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey(kind) }
+        });
+        if (!data || data.ok === false) throw new Error((data && data.error) || 'Request failed');
+        const item = kind === 'deposit' ? data.deposit : data.withdrawal;
+        if (kind === 'deposit' && item && item.id && form.elements.proof?.files?.[0]) {
+          await uploadDepositProof(item.id, form.elements.proof.files[0]);
+        }
+        state.funding.result = `${kind === 'deposit' ? 'Deposit' : 'Withdrawal'} request submitted for admin review.`;
+        showToast(state.funding.result);
+        await loadWallet(runtime.routeToken, true);
+        renderFundingBody(kind);
+      } catch (err) {
+        if (status) status.textContent = err.message || 'Request failed';
+        showToast(err.message || 'Request failed', 'danger');
+      }
+    });
+  }
+
+  async function uploadDepositProof(depositId, file) {
+    const fd = new FormData();
+    fd.append('deposit_id', String(depositId));
+    fd.append('proof', file);
+    const data = await api('/deposits/upload_proof.php', { method: 'POST', body: fd, timeout: 12000 });
+    if (!data || data.ok === false) throw new Error((data && data.error) || 'Proof upload failed');
   }
 
   function walletCard(title, wallet) {
@@ -856,8 +1191,241 @@
     </article>`;
   }
 
+  function renderKyc() {
+    const token = runtime.routeToken;
+    $('#view').innerHTML = `
+      <section class="panel page-head">
+        <div>
+          <span class="eyebrow">Account security</span>
+          <h1>KYC verification</h1>
+          <p>Submit your identity documents for admin review. Required for real deposits, withdrawals, and contracts.</p>
+        </div>
+        <div class="hero-actions">
+          <a class="btn btn-ghost" href="#/wallet">Assets</a>
+          <a class="btn btn-ghost" href="/admin/kyc.php">Admin review</a>
+        </div>
+      </section>
+      <section class="kyc-layout">
+        <div class="panel kyc-status-panel" data-kyc-status>${emptyState('Loading KYC status...')}</div>
+        <div class="panel kyc-form-panel">
+          <div class="section-head compact"><div><h2>Verification form</h2><p>JPG, PNG, WEBP up to 6MB</p></div></div>
+          <form class="kyc-form" data-kyc-form>
+            <div class="form-grid">
+              <label class="field"><span>Full name</span><input name="full_name" required /></label>
+              <label class="field"><span>Country</span><input name="country" required /></label>
+              <label class="field"><span>Document type</span><select name="doc_type"><option value="passport">Passport</option><option value="id_card">National ID</option><option value="driver_license">Driver license</option></select></label>
+              <label class="field"><span>Document number</span><input name="doc_number" required /></label>
+              <label class="field"><span>Front document</span><input name="front" type="file" accept="image/*" required /></label>
+              <label class="field"><span>Back document</span><input name="back" type="file" accept="image/*" /></label>
+              <label class="field"><span>Selfie</span><input name="selfie" type="file" accept="image/*" required /></label>
+            </div>
+            <button class="btn btn-primary" type="submit">Submit KYC</button>
+            <div class="ticket-status" data-kyc-submit-status></div>
+          </form>
+        </div>
+      </section>`;
+    bindKycForm(token);
+    loadKyc(token);
+  }
+
+  async function loadKyc(token) {
+    if (runtime.pending.kyc) return;
+    runtime.pending.kyc = true;
+    try {
+      const [kyc, level] = await Promise.all([
+        api('/kyc/status.php', { timeout: 8000 }),
+        api('/user/level.php', { timeout: 8000 })
+      ]);
+      if (!isToken(token)) return;
+      if (kyc && kyc.ok !== false) state.kyc = kyc.kyc || null;
+      if (level && level.ok !== false) state.level = level;
+      renderKycStatus();
+      renderTopbar();
+    } catch (err) {
+      if (!isAbort(err)) $('[data-kyc-status]').innerHTML = emptyState(err.message || 'KYC status unavailable');
+    } finally {
+      runtime.pending.kyc = false;
+    }
+  }
+
+  function renderKycStatus() {
+    const node = $('[data-kyc-status]');
+    if (!node) return;
+    const kyc = state.kyc || {};
+    const label = kycStatusLabel();
+    const level = (state.level && state.level.current) || null;
+    node.innerHTML = `
+      <div class="section-head compact"><div><h2>Status</h2><p>Admin controlled verification</p></div><span class="status-badge ${label.className}">${esc(label.label)}</span></div>
+      <div class="kyc-summary">
+        <div><small>Full name</small><strong>${esc(kyc.full_name || 'Not submitted')}</strong></div>
+        <div><small>Country</small><strong>${esc(kyc.country || '--')}</strong></div>
+        <div><small>Document</small><strong>${esc(kyc.doc_type || '--')}</strong></div>
+        <div><small>Customer level</small><strong>${esc(levelName(level))}</strong></div>
+      </div>
+      ${kyc.admin_note ? `<div class="instructions-box">${esc(kyc.admin_note)}</div>` : ''}
+      <p class="muted-note">${esc(label.text)}</p>`;
+  }
+
+  function bindKycForm(token) {
+    const form = $('[data-kyc-form]');
+    if (!form) return;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = $('[data-kyc-submit-status]');
+      if (status) status.textContent = 'Uploading documents...';
+      try {
+        const fd = new FormData(form);
+        const data = await api('/kyc/submit.php', { method: 'POST', body: fd, timeout: 20000 });
+        if (!data || data.ok === false) throw new Error((data && data.error) || 'KYC submit failed');
+        showToast('KYC submitted for review');
+        if (status) status.textContent = 'Submitted for admin review.';
+        form.reset();
+        await loadKyc(token);
+      } catch (err) {
+        if (status) status.textContent = err.message || 'KYC submit failed';
+        showToast(err.message || 'KYC submit failed', 'danger');
+      }
+    });
+  }
+
+  function renderInvest() {
+    const token = runtime.routeToken;
+    $('#view').innerHTML = `
+      <section class="panel page-head">
+        <div>
+          <span class="eyebrow">Earn</span>
+          <h1>Plans, contracts, and levels</h1>
+          <p>Internal investment products and perpetual contracts. Funding and approval remain inside VertexPluse.</p>
+        </div>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#/deposit">Deposit</a>
+          <a class="btn btn-ghost" href="/admin/invest_plans.php">Admin plans</a>
+        </div>
+      </section>
+      <div data-invest-body>${emptyState('Loading earn products...')}</div>`;
+    loadInvest(token, true);
+    setTimer(() => loadInvest(token, false), FINANCE_POLL_MS);
+  }
+
+  async function loadInvest(token, immediate = false) {
+    if (runtime.pending.invest && !immediate) return;
+    runtime.pending.invest = true;
+    try {
+      const [plans, contracts, mine, wallet, level, kyc] = await Promise.all([
+        api('/invest/plans.php?kind=plan&lang=en', { timeout: immediate ? 9000 : 7000 }),
+        api('/invest/contracts.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
+        api('/invest/my.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
+        api('/wallet/summary.php', { timeout: immediate ? 9000 : 7000 }),
+        api('/user/level.php?lang=en', { timeout: immediate ? 9000 : 7000 }),
+        api('/kyc/status.php', { timeout: immediate ? 9000 : 7000 })
+      ]);
+      if (!isToken(token)) return;
+      if (plans && plans.ok !== false) state.invest.plans = plans.items || [];
+      if (contracts && contracts.ok !== false) state.invest.contracts = contracts.items || [];
+      if (mine && mine.ok !== false) state.invest.mine = mine.items || [];
+      if (wallet && wallet.ok !== false) state.wallet = wallet;
+      if (level && level.ok !== false) state.level = level;
+      if (kyc && kyc.ok !== false) state.kyc = kyc.kyc || null;
+      renderInvestBody();
+      renderTopbar();
+    } catch (err) {
+      if (!isAbort(err)) $('[data-invest-body]').innerHTML = emptyState(err.message || 'Earn products unavailable');
+    } finally {
+      runtime.pending.invest = false;
+    }
+  }
+
+  function renderInvestBody() {
+    const node = $('[data-invest-body]');
+    if (!node) return;
+    const level = (state.level && state.level.current) || null;
+    const next = (state.level && state.level.next) || null;
+    const real = (state.wallet && state.wallet.real) || {};
+    node.innerHTML = `
+      <section class="metric-grid">
+        ${metricCard('Current level', levelName(level), 'Customer tier')}
+        ${metricCard('Next level', levelName(next), next ? `${money(next.min_deposit_total || 0)} deposits` : 'Maximum tier')}
+        ${metricCard('Real available', money(real.available || 0), real.currency || 'USDT')}
+        ${metricCard('Active contracts', String(state.invest.mine.filter((x) => x.status === 'active').length), 'Running')}
+      </section>
+      <section class="panel">
+        <div class="section-head"><div><span class="eyebrow">Products</span><h2>Investment plans</h2></div></div>
+        <div class="invest-grid">${productCards(state.invest.plans, 'plan')}</div>
+      </section>
+      <section class="panel">
+        <div class="section-head"><div><span class="eyebrow">Contracts</span><h2>Perpetual and term contracts</h2></div></div>
+        <div class="invest-grid">${productCards(state.invest.contracts, 'contract')}</div>
+      </section>
+      <section class="panel">
+        <div class="section-head"><div><span class="eyebrow">My earn</span><h2>Active investments</h2></div></div>
+        <div class="table-shell">${investmentsTable(state.invest.mine)}</div>
+      </section>`;
+    bindInvestButtons();
+  }
+
+  function productCards(items, fallbackKind) {
+    if (!items || !items.length) return emptyState(`No ${fallbackKind} products configured yet.`);
+    return items.map((p) => `<article class="invest-card ${p.eligible ? '' : 'is-locked'}">
+      <div class="invest-card-head">
+        <span class="eyebrow">${esc(p.badge || p.product_kind || fallbackKind)}</span>
+        <span class="status-badge ${p.eligible ? 'is-live' : 'is-stale'}">${p.eligible ? 'Eligible' : 'Level locked'}</span>
+      </div>
+      <h3>${esc(p.name || p.id)}</h3>
+      <p>${esc(p.desc || p.headline || 'VertexPluse managed product')}</p>
+      <div class="invest-stats">
+        <div><small>ROI</small><strong>${compact(p.roi_percent || 0)}%</strong></div>
+        <div><small>Term</small><strong>${p.is_perpetual ? 'Perpetual' : `${Number(p.term_days || 0)}d`}</strong></div>
+        <div><small>Minimum</small><strong>${money(p.min_amount || 0)}</strong></div>
+      </div>
+      ${p.required_level ? `<small class="muted-note">Requires ${esc(levelName(p.required_level))}</small>` : ''}
+      <form class="invest-subscribe" data-invest-form="${escAttr(String(p.id))}">
+        <input name="amount" inputmode="decimal" value="${escAttr(String(p.min_amount || 100))}" />
+        <button class="btn btn-primary btn-sm" type="submit" ${p.eligible ? '' : 'disabled'}>Subscribe</button>
+      </form>
+    </article>`).join('');
+  }
+
+  function bindInvestButtons() {
+    $('#view').querySelectorAll('[data-invest-form]').forEach((form) => {
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const planId = form.dataset.investForm || '';
+        const amount = parseNumber(form.elements.amount?.value);
+        try {
+          const data = await api('/invest/subscribe.php', {
+            method: 'POST',
+            body: JSON.stringify({ plan_id: planId, amount }),
+            timeout: 12000,
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey('invest') }
+          });
+          if (!data || data.ok === false) throw new Error((data && data.error) || 'Subscribe failed');
+          showToast('Subscription created');
+          await loadInvest(runtime.routeToken, true);
+        } catch (err) {
+          showToast(err.message || 'Subscribe failed', 'danger');
+        }
+      });
+    });
+  }
+
+  function investmentsTable(items) {
+    if (!items || !items.length) return emptyState('No active investments yet.');
+    return `<table class="data-table">
+      <thead><tr><th>Product</th><th>Amount</th><th>Expected</th><th>Status</th><th>Schedule</th></tr></thead>
+      <tbody>${items.map((x) => `<tr>
+        <td><strong>${esc(x.plan_name || x.plan_id)}</strong><small>${esc(x.product_kind || '')}${x.is_perpetual ? ' perpetual' : ''}</small></td>
+        <td>${money(x.amount || 0)}</td>
+        <td>${money(x.expected_return || 0)}</td>
+        <td><span class="status-badge ${statusClass(x.status)}">${esc(x.status || 'active')}</span></td>
+        <td>${esc(x.payout_schedule || 'end')}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  }
+
   function renderAccount() {
     const user = state.user || {};
+    const kyc = kycStatusLabel();
+    const level = (state.level && state.level.current) || null;
     $('#view').innerHTML = `
       <section class="account-layout">
         <div class="panel account-card">
@@ -867,11 +1435,15 @@
           <dl class="account-list">
             <div><dt>Account number</dt><dd>${esc(String(user.id || user.account_number || '900000000'))}</dd></div>
             <div><dt>Mode</dt><dd>${esc(state.mode)}</dd></div>
+            <div><dt>KYC</dt><dd>${esc(kyc.label)}</dd></div>
+            <div><dt>Level</dt><dd>${esc(levelName(level))}</dd></div>
             <div><dt>Support</dt><dd>${esc(window.__SUPPORT_EMAIL || state.brand.support_email || 'support@vertexpluse.com')}</dd></div>
           </dl>
           <div class="account-actions">
             <a class="btn btn-primary" href="#/wallet">Funds</a>
-            <a class="btn btn-ghost" href="/legacy-app.php#/kyc">KYC</a>
+            <a class="btn btn-ghost" href="#/kyc">KYC</a>
+            <a class="btn btn-ghost" href="#/invest">Earn</a>
+            <a class="btn btn-ghost" href="/admin/">Admin</a>
             <a class="btn btn-ghost" href="/legacy-app.php#/support">Support</a>
             <a class="btn btn-danger" href="/logout.php">Log out</a>
           </div>
@@ -879,8 +1451,12 @@
         <div class="panel account-menu">
           <h2>Workspace</h2>
           ${navItems().map((item) => `<a href="#/${item.route}"><span>${esc(item.icon)}</span><strong>${esc(item.label)}</strong><em>Open ${esc(item.label.toLowerCase())}</em></a>`).join('')}
+          <a href="#/deposit"><span>D</span><strong>Deposit</strong><em>Manual funding request</em></a>
+          <a href="#/withdraw"><span>W</span><strong>Withdraw</strong><em>Admin reviewed payout</em></a>
+          <a href="#/kyc"><span>K</span><strong>KYC</strong><em>Identity verification</em></a>
         </div>
       </section>`;
+    loadKyc(runtime.routeToken);
   }
 
   function updateHomePositions() {
@@ -947,7 +1523,7 @@
   function updateWatchlist() {
     const list = $('[data-watch-list]');
     if (!list) return;
-    const rows = filteredMarkets(state.type);
+    const rows = filteredMarkets(state.marketTab || state.type);
     list.innerHTML = rows.length ? rows.map(watchRow).join('') : emptyState('No symbols found for this tab yet.');
     list.querySelectorAll('[data-watch-symbol]').forEach((row) => {
       row.addEventListener('click', () => selectSymbol(row.dataset.watchSymbol, row.dataset.watchType, row.dataset.watchMarket));
@@ -1132,7 +1708,10 @@
 
   function selectSymbol(symbol, type, market) {
     state.symbol = cleanSymbol(symbol || state.symbol);
-    if (type && TYPE_BY_KEY[type]) state.type = type;
+    if (type && TYPE_BY_KEY[type]) {
+      state.type = type;
+      state.marketTab = type;
+    }
     state.market = market || defaultMarket(state.type);
     state.search = '';
     goTrade();
@@ -1254,16 +1833,16 @@
     return { time: c.time, value: Number(c.volume || 0), color: c.close >= c.open ? 'rgba(36,210,141,.32)' : 'rgba(255,92,124,.28)' };
   }
 
-  function quoteMap(items) {
+  function quoteMap(items, fallbackType = state.type) {
     const out = {};
     if (Array.isArray(items)) {
       items.forEach((item) => {
-        const q = normalizeQuote(item, state.type);
+        const q = normalizeQuote(item, fallbackType);
         if (q.symbol) out[q.symbol] = q;
       });
     } else if (items && typeof items === 'object') {
       Object.keys(items).forEach((key) => {
-        const q = normalizeQuote(Object.assign({ symbol: key }, items[key] || {}), state.type);
+        const q = normalizeQuote(Object.assign({ symbol: key }, items[key] || {}), fallbackType);
         if (q.symbol) out[q.symbol] = q;
       });
     }
@@ -1306,10 +1885,41 @@
   }
 
   function filteredMarkets(type) {
-    const rows = (state.markets[type] && state.markets[type].length ? state.markets[type] : fallbackMarkets(type));
+    let rows = [];
+    if (type === 'all') {
+      rows = TYPES.flatMap((t) => marketRowsForType(t.key).slice(0, 18));
+    } else if (type === 'favorites') {
+      const favs = favoriteSymbols();
+      rows = TYPES.flatMap((t) => marketRowsForType(t.key)).filter((m) => favs.includes(m.symbol));
+      if (!rows.length) rows = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'XAUUSD', 'AAPL'].map(findMarketBySymbol).filter(Boolean);
+    } else {
+      rows = marketRowsForType(type);
+    }
     const term = state.search.trim().toLowerCase();
     if (!term) return rows.slice(0, 80);
     return rows.filter((m) => `${m.symbol} ${m.name}`.toLowerCase().includes(term)).slice(0, 80);
+  }
+
+  function marketRowsForType(type) {
+    return state.markets[type] && state.markets[type].length ? state.markets[type] : fallbackMarkets(type);
+  }
+
+  function favoriteSymbols() {
+    try {
+      const raw = JSON.parse(localStorage.getItem('vp_favorites') || '[]');
+      return Array.isArray(raw) ? raw.map(cleanSymbol).filter(Boolean) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function findMarketBySymbol(symbol) {
+    const target = cleanSymbol(symbol);
+    for (const t of TYPES) {
+      const row = marketRowsForType(t.key).find((m) => m.symbol === target);
+      if (row) return row;
+    }
+    return null;
   }
 
   function fallbackMarkets(type) {
@@ -1347,7 +1957,8 @@
   }
 
   function firstMarketSymbol(type) {
-    return (state.markets[type] && state.markets[type][0] && state.markets[type][0].symbol) || '';
+    const rows = marketRowsForType(type);
+    return (rows[0] && rows[0].symbol) || '';
   }
 
   function activeMarketRow() {
@@ -1363,12 +1974,100 @@
     return state.mode === 'real' ? (wallet.real || {}) : (wallet.demo || {});
   }
 
+  function kycStatusLabel() {
+    const status = String((state.kyc && state.kyc.status) || 'not_submitted').toLowerCase();
+    if (status === 'approved') return { label: 'Approved', className: 'is-live', text: 'Real deposits, withdrawals, and earn products are enabled.' };
+    if (status === 'pending' || status === 'submitted') return { label: 'Pending', className: 'is-delayed', text: 'Your documents are waiting for admin review.' };
+    if (status === 'rejected') return { label: 'Rejected', className: 'is-unavailable', text: 'Please review the admin note and submit updated documents.' };
+    return { label: 'Required', className: 'is-stale', text: 'Submit KYC documents before using real-money flows.' };
+  }
+
+  function levelName(level) {
+    if (!level) return 'Starter';
+    return String(level.name || level.name_en || level.level_code || level.code || 'Starter');
+  }
+
+  function displayTypeLabel(type) {
+    if (type === 'futures') return 'Perpetual';
+    return (TYPE_BY_KEY[type] && TYPE_BY_KEY[type].label) || type || 'Market';
+  }
+
+  function statusClass(status) {
+    const s = String(status || '').toLowerCase();
+    if (['approved', 'confirmed', 'completed', 'paid', 'active', 'closed'].includes(s)) return 'is-live';
+    if (['pending', 'requested', 'review', 'processing'].includes(s)) return 'is-delayed';
+    if (['rejected', 'failed', 'cancelled', 'canceled'].includes(s)) return 'is-unavailable';
+    return 'is-stale';
+  }
+
+  function normalizePaymentFields(fields, kind) {
+    const rows = Array.isArray(fields) ? fields : [];
+    if (rows.length) {
+      return rows.map((f, i) => ({
+        key: String(f.key || f.name || f.id || `field_${i + 1}`),
+        label: String(f.label || f.title || f.placeholder || f.key || f.name || `Field ${i + 1}`),
+        type: String(f.type || 'text'),
+        required: f.required !== false,
+        placeholder: String(f.placeholder || ''),
+        options: Array.isArray(f.options) ? f.options : []
+      }));
+    }
+    if (kind === 'withdraw') {
+      return [
+        { key: 'destination', label: 'Wallet address / destination', type: 'text', required: true, placeholder: 'USDT address, bank account, or payout details' },
+        { key: 'network', label: 'Network / channel', type: 'text', required: false, placeholder: 'TRC20, ERC20, bank, Vodafone Cash...' }
+      ];
+    }
+    return [
+      { key: 'sender_name', label: 'Sender name', type: 'text', required: false, placeholder: 'Name used for payment' },
+      { key: 'transaction_ref', label: 'Transaction reference', type: 'text', required: false, placeholder: 'Hash, receipt number, or bank reference' }
+    ];
+  }
+
+  function paymentFieldControl(field) {
+    const required = field.required ? ' required' : '';
+    if (field.type === 'select' && field.options.length) {
+      return `<label class="field"><span>${esc(field.label)}</span><select name="${escAttr(field.key)}"${required}>${field.options.map((opt) => {
+        const value = typeof opt === 'object' ? (opt.value ?? opt.key ?? opt.label) : opt;
+        const label = typeof opt === 'object' ? (opt.label ?? opt.value ?? opt.key) : opt;
+        return `<option value="${escAttr(value)}">${esc(label)}</option>`;
+      }).join('')}</select></label>`;
+    }
+    const inputType = ['email', 'tel', 'number'].includes(field.type) ? field.type : 'text';
+    return `<label class="field"><span>${esc(field.label)}</span><input name="${escAttr(field.key)}" type="${inputType}" placeholder="${escAttr(field.placeholder || '')}"${required} /></label>`;
+  }
+
+  function collectFormDetails(form) {
+    const details = {};
+    Array.from(form.elements || []).forEach((el) => {
+      if (!el.name || el.name === 'amount' || el.type === 'file') return;
+      details[el.name] = String(el.value || '').trim();
+    });
+    return details;
+  }
+
+  function idemKey(scope) {
+    const rand = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return `vp-lite-${scope}-${rand}`;
+  }
+
+  function dateText(ts) {
+    const n = Number(ts || 0);
+    if (!(n > 0)) return '--';
+    try {
+      return new Date(n * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return '--';
+    }
+  }
+
   function defaultMarket(type) {
     return type === 'futures' ? 'perp' : 'spot';
   }
 
   function rememberSelection() {
     safeStorage('vp_market_type', state.type, true);
+    safeStorage('vp_market_tab', state.marketTab || state.type, true);
     safeStorage('vp_symbol', state.symbol, true);
     safeStorage('vp_market', state.market || defaultMarket(state.type), true);
     safeStorage('vp_tf', state.tf, true);

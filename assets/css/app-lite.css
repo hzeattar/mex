@@ -274,7 +274,8 @@ button {
 
 .mode-switch,
 .balance-chip,
-.user-chip {
+.user-chip,
+.status-chip {
   border: 1px solid var(--line);
   background: var(--panel-2);
   color: var(--text);
@@ -305,6 +306,34 @@ button {
 
 .balance-chip strong {
   font-size: 14px;
+}
+
+.status-chip {
+  padding: 7px 12px;
+  display: grid;
+  gap: 2px;
+}
+
+.status-chip small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.status-chip strong {
+  font-size: 13px;
+}
+
+.status-chip.is-live strong {
+  color: var(--green);
+}
+
+.status-chip.is-delayed strong {
+  color: var(--amber);
+}
+
+.status-chip.is-stale strong,
+.status-chip.is-unavailable strong {
+  color: var(--red);
 }
 
 .user-chip {
@@ -447,6 +476,46 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding: 16px;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.quick-action {
+  min-height: 116px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(93, 124, 255, 0.17), transparent 60%),
+    rgba(7, 17, 38, 0.78);
+}
+
+.quick-action span {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  background: var(--panel-3);
+  font-weight: 900;
+}
+
+.quick-action strong,
+.quick-action small {
+  display: block;
+}
+
+.quick-action small {
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .market-tile {
@@ -753,6 +822,25 @@ button {
   border-color: rgba(255, 92, 124, 0.3);
 }
 
+.status-badge.is-live {
+  background: rgba(36, 210, 141, 0.1);
+  color: var(--green);
+  border-color: rgba(36, 210, 141, 0.3);
+}
+
+.status-badge.is-delayed {
+  background: rgba(255, 191, 71, 0.12);
+  color: var(--amber);
+  border-color: rgba(255, 191, 71, 0.32);
+}
+
+.status-badge.is-stale,
+.status-badge.is-unavailable {
+  background: rgba(255, 92, 124, 0.1);
+  color: var(--red);
+  border-color: rgba(255, 92, 124, 0.3);
+}
+
 .tf-row {
   display: flex;
   gap: 8px;
@@ -1037,6 +1125,40 @@ button {
   gap: 16px;
 }
 
+.funds-grid,
+.kyc-layout,
+.funding-layout {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: 16px;
+}
+
+.action-card,
+.kyc-status-panel,
+.kyc-form-panel,
+.funding-methods,
+.funding-form-panel {
+  padding: 20px;
+}
+
+.action-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.action-card h2,
+.request-card h3,
+.invest-card h3 {
+  margin: 0;
+}
+
+.action-card p,
+.muted-note {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .wallet-card {
   padding: 20px;
 }
@@ -1085,6 +1207,220 @@ button {
   justify-content: space-between;
   gap: 18px;
   align-items: center;
+}
+
+.hero-actions.tight {
+  margin-top: 0;
+}
+
+.request-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.request-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.request-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: rgba(7, 17, 38, 0.72);
+}
+
+.request-row small,
+.kyc-summary small,
+.funding-status-grid small,
+.invest-stats small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.funding-methods,
+.funding-form-panel,
+.kyc-status-panel,
+.kyc-form-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.method-list,
+.funding-form,
+.kyc-form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.method-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(7, 17, 38, 0.72);
+  color: var(--text);
+  padding: 12px;
+}
+
+.method-card.active {
+  border-color: rgba(93, 124, 255, .72);
+  background: rgba(93, 124, 255, .18);
+}
+
+.method-card .asset-badge {
+  grid-row: span 2;
+}
+
+.method-card small {
+  color: var(--muted);
+}
+
+.method-card em {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-style: normal;
+  font-size: 12px;
+}
+
+.funding-status-grid,
+.kyc-summary,
+.invest-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.funding-status-grid div,
+.kyc-summary div,
+.invest-stats div {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(7, 17, 38, 0.72);
+  padding: 12px;
+  min-width: 0;
+}
+
+.funding-status-grid strong,
+.kyc-summary strong,
+.invest-stats strong {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.instructions-box,
+.copy-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(7, 17, 38, 0.72);
+  color: var(--muted);
+  padding: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.copy-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.copy-box span {
+  overflow-wrap: anywhere;
+}
+
+.payment-qr {
+  max-width: 170px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: white;
+  padding: 8px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kyc-form input[type="file"],
+.funding-form input[type="file"] {
+  padding-top: 11px;
+}
+
+.invest-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.invest-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(36, 183, 255, 0.08), transparent 60%),
+    rgba(7, 17, 38, 0.78);
+  padding: 16px;
+}
+
+.invest-card.is-locked {
+  opacity: .72;
+}
+
+.invest-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.invest-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.invest-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.invest-subscribe {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.invest-subscribe input {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: #071126;
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  outline: none;
+}
+
+.invest-subscribe button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
 }
 
 .account-card,
@@ -1180,6 +1516,11 @@ button {
     grid-template-columns: 280px minmax(0, 1fr);
   }
 
+  .quick-grid,
+  .invest-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .ticket-panel {
     grid-column: 1 / -1;
     position: static;
@@ -1234,7 +1575,13 @@ button {
 
   .metric-grid,
   .home-market-grid,
+  .quick-grid,
   .wallet-grid,
+  .funds-grid,
+  .request-columns,
+  .funding-layout,
+  .kyc-layout,
+  .invest-grid,
   .trade-balance-strip,
   .account-layout,
   .trade-layout {
@@ -1275,7 +1622,11 @@ button {
   }
 
   .field-grid,
-  .quote-buttons {
+  .form-grid,
+  .quote-buttons,
+  .funding-status-grid,
+  .kyc-summary,
+  .invest-stats {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1285,7 +1636,7 @@ button {
     right: 10px;
     bottom: 10px;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 6px;
     padding: 8px;
     background: rgba(3, 9, 22, 0.94);
@@ -1327,6 +1678,7 @@ button {
 
   .mode-switch,
   .balance-chip,
+  .status-chip,
   .user-chip {
     flex: 1;
   }
@@ -1337,6 +1689,19 @@ button {
 
   .field-grid {
     grid-template-columns: 1fr;
+  }
+
+  .form-grid,
+  .funding-status-grid,
+  .kyc-summary,
+  .invest-stats,
+  .invest-subscribe,
+  .request-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .status-chip {
+    display: none;
   }
 
   .data-table {
