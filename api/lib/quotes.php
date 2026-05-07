@@ -415,7 +415,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
 
     $chartBudget = $singleSymbolOnly
       ? max(0, min(2, (int)($opts['chart_budget'] ?? 1)))
-      : ($allowDirectBatch ? max(0, min(5, (int)($opts['chart_budget'] ?? 0))) : 0);
+      : ($allowDirectBatch ? max(0, min(10, (int)($opts['chart_budget'] ?? 0))) : 0);
     if ($chartBudget > 0) {
       foreach ($yahooBySym as $sym => $ticker) {
         if ($chartBudget <= 0) break;

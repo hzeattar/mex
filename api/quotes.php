@@ -62,7 +62,7 @@ if ($isNonCrypto) {
 }
 $visibleNonCrypto = $visible && $isNonCrypto;
 $focusNonCrypto = $isNonCrypto && (($purpose === 'focus') || $direct || $strictLive);
-$visibleChartBudget = $visibleNonCrypto ? max(0, min(5, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_LIMIT_NONCRYPTO', '4'))) : 0;
+$visibleChartBudget = $visibleNonCrypto ? max(0, min(10, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_LIMIT_NONCRYPTO', '8'))) : 0;
 $payload = qa_quote_payload($typeAlias, $list, [
   'strict_live_noncrypto' => $strictLive,
   'allow_live' => $allowLive,

@@ -586,7 +586,7 @@
 
   async function hydrateVisibleQuotes(token) {
     if (runtime.pending.visibleQuotes) return;
-    const visible = filteredMarkets(state.type).slice(0, 12);
+    const visible = filteredMarkets(state.type).slice(0, 8);
     const symbols = visible.map((m) => m.symbol).filter(Boolean);
     if (!symbols.length) return;
     runtime.pending.visibleQuotes = true;
