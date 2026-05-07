@@ -25,6 +25,8 @@
   let runId = 0;
   let activeBusy = false;
   let marketsBusy = false;
+  let marketHydrateBusy = false;
+  let marketHydrateKey = '';
   let portfolioBusy = false;
   let candlesBusy = false;
   let marketItems = [];
@@ -169,6 +171,8 @@
     mounted = false;
     activeBusy = false;
     marketsBusy = false;
+    marketHydrateBusy = false;
+    marketHydrateKey = '';
     portfolioBusy = false;
     candlesBusy = false;
     try{ if(resizeObserver) resizeObserver.disconnect(); }catch(e){}
@@ -458,8 +462,7 @@
     marketsBusy = true;
     try{
       const cache = force ? '&_=' + Date.now() : '';
-      const liveList = state.type !== 'crypto' ? '&force_live=1' : '';
-      const data = await api(`/markets.php?type=${encodeURIComponent(state.type)}&lite=1&with_quotes=1${liveList}${cache}`, { timeoutMs:10000 });
+      const data = await api(`/markets.php?type=${encodeURIComponent(state.type)}&lite=1&with_quotes=1${cache}`, { timeoutMs:6500 });
       let rows = Array.isArray(data.items) ? data.items : (Array.isArray(data.markets) ? data.markets : []);
       if(!rows.length && data.groups && typeof data.groups === 'object'){
         rows = Object.values(data.groups).flatMap(v => Array.isArray(v) ? v : (Array.isArray(v?.items) ? v.items : []));
@@ -476,11 +479,53 @@
       }
       renderMarketList();
       updateHeader();
+      if(state.type !== 'crypto') hydrateMarketQuotes(force).catch(() => {});
     }catch(err){
       const list = $('[data-market-list]');
       if(list) list.innerHTML = `<div class="vp2-error">Markets unavailable: ${esc(err.message || err)}</div>`;
     }finally{
       marketsBusy = false;
+    }
+  }
+
+  async function hydrateMarketQuotes(force){
+    if(marketHydrateBusy || state.type === 'crypto') return;
+    const symbols = [];
+    if(state.symbol) symbols.push(state.symbol);
+    marketItems.forEach(item => {
+      const sym = cleanSymbol(item.symbol);
+      if(sym && !symbols.includes(sym)) symbols.push(sym);
+    });
+    const wanted = symbols.slice(0, 6);
+    if(!wanted.length) return;
+    const key = `${state.type}|${wanted.join(',')}`;
+    if(!force && marketHydrateKey === key) return;
+    marketHydrateKey = key;
+    marketHydrateBusy = true;
+    try{
+      for(let i = 0; i < wanted.length; i += 3){
+        const chunk = wanted.slice(i, i + 3);
+        const data = await api(`/quotes.php?purpose=focus&fresh=1&direct=1&symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`, { timeoutMs:6500 });
+        const items = Array.isArray(data.items) ? data.items : [];
+        if(!items.length) continue;
+        const bySymbol = new Map(items.map(q => [cleanSymbol(q.symbol), q]));
+        marketItems = marketItems.map(row => {
+          const q = bySymbol.get(cleanSymbol(row.symbol));
+          if(!q || !(Number(q.price || 0) > 0)) return row;
+          return Object.assign({}, row, {
+            price: Number(q.price || 0),
+            change_pct: Number(q.change_pct ?? row.change_pct ?? 0),
+            updated_at: Number(q.updated_at || row.updated_at || 0),
+            source: q.source || row.source || '',
+            timing_class: q.timing_class || row.timing_class || 'live',
+            is_stale: q.timing_class === 'stale'
+          });
+        });
+        renderMarketList();
+        updateHeader();
+      }
+    }finally{
+      marketHydrateBusy = false;
     }
   }
 
@@ -836,6 +881,8 @@
       lastCandle = null;
       activeBusy = false;
       marketsBusy = false;
+      marketHydrateBusy = false;
+      marketHydrateKey = '';
       portfolioBusy = false;
       candlesBusy = false;
       clearTimers();
