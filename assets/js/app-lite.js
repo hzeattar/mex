@@ -25,6 +25,58 @@
   const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h'];
   const ROUTES = ['home', 'trade', 'portfolio', 'wallet', 'deposit', 'withdraw', 'kyc', 'invest', 'account'];
   const ROUTE_ALIASES = { assets: 'wallet', funds: 'wallet', earn: 'invest', contracts: 'invest', levels: 'invest' };
+  const UI_ICONS = {
+    home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9.5Z"/><path d="M9 21v-6h6v6"/></svg>',
+    trade: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V8"/><path d="M12 19V4"/><path d="M19 19v-9"/><path d="M3 19h18"/><path d="M7 8H3"/><path d="M14 4h-4"/><path d="M21 10h-4"/></svg>',
+    portfolio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4z"/><path d="M8 7V5h8v2"/><path d="M4 12h16"/><path d="M10 12v2h4v-2"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19v14H5.5A2.5 2.5 0 0 1 3 16.5v-9Z"/><path d="M16 12h4v4h-4a2 2 0 1 1 0-4Z"/><path d="M6 9h10"/></svg>',
+    earn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M7 7h7.5a3.5 3.5 0 0 1 0 7H9.5a3.5 3.5 0 0 0 0 7H17"/><path d="M5 11l-3 3 3 3"/><path d="m19 7 3 3-3 3"/></svg>',
+    account: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+    deposit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></svg>',
+    withdraw: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M4 5h16"/></svg>',
+    kyc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/><path d="m16 17 1 1 3-3"/></svg>',
+    support: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18v-6a7 7 0 0 1 14 0v6"/><path d="M5 13H3v4h2"/><path d="M19 13h2v4h-2"/><path d="M14 20h2a3 3 0 0 0 3-3"/></svg>',
+    legacy: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"/><path d="M9 9h6v6H9z"/><path d="M3 9h2"/><path d="M3 15h2"/><path d="M19 9h2"/><path d="M19 15h2"/></svg>'
+  };
+  const SYMBOL_VISUALS = {
+    BTCUSDT: { short: 'BTC', family: 'crypto' },
+    ETHUSDT: { short: 'ETH', family: 'crypto' },
+    SOLUSDT: { short: 'SOL', family: 'crypto' },
+    BNBUSDT: { short: 'BNB', family: 'crypto' },
+    DOGEUSDT: { short: 'DOGE', family: 'crypto' },
+    USDCUSDT: { short: 'USDC', family: 'crypto' },
+    EURUSD: { short: 'EUR', family: 'forex' },
+    GBPUSD: { short: 'GBP', family: 'forex' },
+    USDJPY: { short: 'JPY', family: 'forex' },
+    AUDUSD: { short: 'AUD', family: 'forex' },
+    XAUUSD: { short: 'XAU', family: 'metal' },
+    XAGUSD: { short: 'XAG', family: 'metal' },
+    USOIL: { short: 'OIL', family: 'energy' },
+    UKOIL: { short: 'OIL', family: 'energy' },
+    NGAS: { short: 'GAS', family: 'energy' },
+    AAPL: { short: 'AAPL', family: 'equity' },
+    MSFT: { short: 'MSFT', family: 'equity' },
+    TSLA: { short: 'TSLA', family: 'equity' },
+    NVDA: { short: 'NVDA', family: 'equity' },
+    SPX500: { short: 'SPX', family: 'index' },
+    NAS100: { short: 'NAS', family: 'index' },
+    ES_F: { short: 'ES', family: 'future' },
+    NQ_F: { short: 'NQ', family: 'future' },
+    YM_F: { short: 'YM', family: 'future' },
+    ZN_F: { short: 'ZN', family: 'future' },
+    ZB_F: { short: 'ZB', family: 'future' },
+    '2222': { short: '2222', family: 'arab' },
+    '1120': { short: '1120', family: 'arab' },
+    '2010': { short: '2010', family: 'arab' }
+  };
+  const TYPE_VISUALS = {
+    crypto: { short: 'CR', family: 'crypto' },
+    forex: { short: 'FX', family: 'forex' },
+    stocks: { short: 'EQ', family: 'equity' },
+    commodities: { short: 'CMD', family: 'metal' },
+    futures: { short: 'FUT', family: 'future' },
+    arab: { short: 'AR', family: 'arab' }
+  };
 
   const state = {
     route: 'home',
@@ -104,6 +156,7 @@
 
   const app = document.getElementById('app');
   document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('error', handleMarketLogoError, true);
 
   function freshPending() {
     return {
@@ -119,6 +172,14 @@
       signals: false,
       funding: false
     };
+  }
+
+  function handleMarketLogoError(event) {
+    const target = event.target;
+    if (!target || !target.matches || !target.matches('.market-logo img')) return;
+    const parent = target.parentNode;
+    target.remove();
+    if (parent && parent.classList) parent.classList.add('fallback');
   }
 
   async function init() {
@@ -190,7 +251,6 @@
           <nav class="rail-nav" aria-label="Primary">
             ${navItems().map(navButton).join('')}
           </nav>
-          <a class="rail-legacy" href="/admin/" title="Admin desk">Admin</a>
         </aside>
         <div class="workspace">
           <header class="topbar" id="topbar"></header>
@@ -209,18 +269,18 @@
 
   function navItems() {
     return [
-      { route: 'home', label: 'Home', icon: 'H' },
-      { route: 'trade', label: 'Trade', icon: 'T' },
-      { route: 'portfolio', label: 'Portfolio', icon: 'P' },
-      { route: 'wallet', label: 'Assets', icon: 'F' },
-      { route: 'invest', label: 'Earn', icon: 'E' },
-      { route: 'account', label: 'Account', icon: 'A' }
+      { route: 'home', label: 'Home', icon: 'home' },
+      { route: 'trade', label: 'Trade', icon: 'trade' },
+      { route: 'portfolio', label: 'Portfolio', icon: 'portfolio' },
+      { route: 'wallet', label: 'Assets', icon: 'wallet' },
+      { route: 'invest', label: 'Earn', icon: 'earn' },
+      { route: 'account', label: 'Account', icon: 'account' }
     ];
   }
 
   function navButton(item) {
     return `<a class="nav-pill" data-nav="${item.route}" href="#/${item.route}" title="${esc(item.label)}">
-      <span>${esc(item.icon)}</span><em>${esc(item.label)}</em>
+      <span>${uiIcon(item.icon)}</span><em>${esc(item.label)}</em>
     </a>`;
   }
 
@@ -343,10 +403,23 @@
             <a class="btn btn-ghost" href="#/invest">Earn</a>
           </div>
         </div>
-        <div class="hero-balance">
-          <small>${state.mode.toUpperCase()} BALANCE</small>
-          <strong>${money(wallet.available ?? wallet.balance ?? 0)}</strong>
-          <span>${esc(wallet.currency || '')}</span>
+        <div class="hero-visual">
+          <div class="hero-balance">
+            <small>${state.mode.toUpperCase()} BALANCE</small>
+            <strong>${money(wallet.available ?? wallet.balance ?? 0)}</strong>
+            <span>${esc(wallet.currency || '')}</span>
+          </div>
+          <div class="hero-tape">
+            ${featured.slice(0, 3).map((m) => {
+              const quote = mergedQuote(m);
+              const q = quoteState(quote);
+              return `<button type="button" data-symbol="${escAttr(m.symbol)}" data-type="${escAttr(m.type || state.type)}" data-market="${escAttr(m.market || defaultMarket(m.type))}">
+                ${marketLogo(m, q.className)}
+                <span><strong>${esc(m.symbol)}</strong><small class="${q.changeClass}">${pct(quote.change_pct)}</small></span>
+                <em>${quote.price > 0 ? price(quote.price, m.type) : '--'}</em>
+              </button>`;
+            }).join('')}
+          </div>
         </div>
       </section>
 
@@ -365,12 +438,12 @@
           </div>
         </div>
         <div class="quick-grid">
-          ${quickAction('Deposit', 'Start a real funding request', '#/deposit', 'D')}
-          ${quickAction('Withdraw', 'Request manual admin payout', '#/withdraw', 'W')}
-          ${quickAction('KYC', 'Verify account documents', '#/kyc', 'K')}
-          ${quickAction('Earn', 'Copy signals and level contracts', '#/invest', 'E')}
-          ${quickAction('Admin', 'Review users, KYC, deposits, withdrawals', '/admin/', 'A')}
-          ${quickAction('Legacy', 'Fallback copy of the original interface', '/legacy-app.php#/home', 'L')}
+          ${quickAction('Deposit', 'Start a real funding request', '#/deposit', 'deposit')}
+          ${quickAction('Withdraw', 'Request a manual payout review', '#/withdraw', 'withdraw')}
+          ${quickAction('KYC', 'Verify account documents', '#/kyc', 'kyc')}
+          ${quickAction('Earn', 'Copy signals and level contracts', '#/invest', 'earn')}
+          ${quickAction('Support', 'Help desk and account guidance', '#/account', 'support')}
+          ${quickAction('Legacy', 'Fallback copy of the original interface', '/legacy-app.php#/home', 'legacy')}
         </div>
       </section>
 
@@ -406,7 +479,7 @@
 
   function quickAction(title, sub, href, icon) {
     return `<a class="quick-action" href="${escAttr(href)}">
-      <span>${esc(icon)}</span>
+      <span class="quick-icon">${uiIcon(icon)}</span>
       <strong>${esc(title)}</strong>
       <small>${esc(sub)}</small>
     </a>`;
@@ -424,8 +497,12 @@
     const quote = mergedQuote(m);
     const q = quoteState(quote);
     return `<button class="market-tile" data-symbol="${escAttr(m.symbol)}" data-type="${escAttr(m.type || state.type)}" data-market="${escAttr(m.market || defaultMarket(m.type))}" type="button">
-      <span class="asset-badge">${esc(assetInitial(m.symbol))}</span>
+      <span class="market-tile-top">
+        ${marketLogo(m, q.className)}
+        <span class="quality-pill ${q.className}">${esc(q.label)}</span>
+      </span>
       <em>${esc(m.symbol)}</em>
+      <span class="market-tile-name">${esc(m.name || displayTypeLabel(m.type))}</span>
       <strong>${quote.price > 0 ? price(quote.price, m.type) : '--'}</strong>
       <small class="${q.changeClass}">${pct(quote.change_pct)}</small>
     </button>`;
@@ -1137,7 +1214,7 @@
   function methodCard(m, selected) {
     const active = selected && selected.code === m.code ? ' active' : '';
     return `<button class="method-card${active}" type="button" data-method-code="${escAttr(m.code)}">
-      <span class="asset-badge">${esc(assetInitial(m.provider || m.code))}</span>
+      ${marketLogo({ symbol: m.provider || m.code, type: 'crypto' })}
       <strong>${esc(m.title || m.code)}</strong>
       <small>${esc(m.description || m.provider || '')}</small>
       <em>${money(m.min_amount || 0)} min${m.max_amount > 0 ? ` / ${money(m.max_amount)} max` : ''}</em>
@@ -1239,7 +1316,6 @@
         </div>
         <div class="hero-actions">
           <a class="btn btn-ghost" href="#/wallet">Assets</a>
-          <a class="btn btn-ghost" href="/admin/kyc.php">Admin review</a>
         </div>
       </section>
       <section class="kyc-layout">
@@ -1336,8 +1412,7 @@
         </div>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#/deposit">Deposit</a>
-          <a class="btn btn-ghost" href="/admin/signals.php">Admin signals</a>
-          <a class="btn btn-ghost" href="/admin/contracts.php">Admin contracts</a>
+          <a class="btn btn-ghost" href="#/trade">Open Trade</a>
         </div>
       </section>
       <div data-invest-body>${emptyState('Loading copy desk...')}</div>`;
@@ -1385,6 +1460,7 @@
     const activeCopies = state.invest.copies.filter((x) => ['active', 'armed', 'copied'].includes(String(x.status || '').toLowerCase())).length;
     const activeContracts = contractMine.filter((x) => ['active', 'running'].includes(String(x.status || '').toLowerCase())).length;
     node.innerHTML = `
+      ${levelStrip()}
       <section class="metric-grid">
         ${metricCard('Current level', levelName(level), 'Customer tier')}
         ${metricCard('Next level', levelName(next), next ? `${money(next.min_deposit_total || 0)} deposits` : 'Maximum tier')}
@@ -1451,7 +1527,7 @@
     const subscribers = Number(sig.subscribers || sig.followers || 0);
     return `<article class="copy-card ${compactMode ? 'is-compact' : ''}" data-signal-card="${escAttr(String(sig.id || ''))}" data-signal-symbol="${escAttr(cleanSymbol(sig.symbol || ''))}">
       <div class="copy-card-head">
-        <span class="asset-badge ${q.className}">${esc(assetInitial(sig.symbol))}</span>
+        ${marketLogo({ symbol: sig.symbol, type: sig.type || state.type, icon_url: sig.icon_url || null }, q.className)}
         <div>
           <h3>${esc(cleanSymbol(sig.symbol || state.symbol))}</h3>
           <small>${esc(sig.bot_name || sig.type || 'Copy signal')} ${sig.timeframe ? `- ${esc(sig.timeframe)}` : ''}</small>
@@ -1668,6 +1744,13 @@
     document.querySelectorAll('.lite-modal').forEach((modal) => modal.remove());
   }
 
+  function levelStrip() {
+    const levels = state.level && Array.isArray(state.level.levels) ? state.level.levels : [];
+    if (!levels.length) return '';
+    const current = (state.level && state.level.current) || {};
+    const currentCode = String(current.level_code || current.code || '');
+    return `<section class="panel level-strip-panel"><div class="section-head compact"><div><h2>Customer levels</h2><p>Unlock copy desk, contracts, higher limits, and private support.</p></div></div><div class="level-strip">${levels.map((lvl) => `<div class="level-chip-card ${String(lvl.level_code || lvl.code || '') === currentCode ? 'is-active' : ''}"><strong>${esc(levelName(lvl))}</strong><small>${money(lvl.min_deposit_total || 0)} deposits</small></div>`).join('')}</div></section>`;
+  }
   function productCards(items, fallbackKind) {
     if (!items || !items.length) return emptyState(`No ${fallbackKind} products configured yet.`);
     return items.map((p) => `<article class="invest-card ${p.eligible ? '' : 'is-locked'}">
@@ -1748,17 +1831,16 @@
             <a class="btn btn-primary" href="#/wallet">Funds</a>
             <a class="btn btn-ghost" href="#/kyc">KYC</a>
             <a class="btn btn-ghost" href="#/invest">Earn</a>
-            <a class="btn btn-ghost" href="/admin/">Admin</a>
             <a class="btn btn-ghost" href="/legacy-app.php#/support">Support</a>
             <a class="btn btn-danger" href="/logout.php">Log out</a>
           </div>
         </div>
         <div class="panel account-menu">
           <h2>Workspace</h2>
-          ${navItems().map((item) => `<a href="#/${item.route}"><span>${esc(item.icon)}</span><strong>${esc(item.label)}</strong><em>Open ${esc(item.label.toLowerCase())}</em></a>`).join('')}
-          <a href="#/deposit"><span>D</span><strong>Deposit</strong><em>Manual funding request</em></a>
-          <a href="#/withdraw"><span>W</span><strong>Withdraw</strong><em>Admin reviewed payout</em></a>
-          <a href="#/kyc"><span>K</span><strong>KYC</strong><em>Identity verification</em></a>
+          ${navItems().map((item) => `<a href="#/${item.route}"><span>${uiIcon(item.icon)}</span><strong>${esc(item.label)}</strong><em>Open ${esc(item.label.toLowerCase())}</em></a>`).join('')}
+          <a href="#/deposit"><span>${uiIcon('deposit')}</span><strong>Deposit</strong><em>Manual funding request</em></a>
+          <a href="#/withdraw"><span>${uiIcon('withdraw')}</span><strong>Withdraw</strong><em>Reviewed payout</em></a>
+          <a href="#/kyc"><span>${uiIcon('kyc')}</span><strong>KYC</strong><em>Identity verification</em></a>
         </div>
       </section>`;
     loadKyc(runtime.routeToken);
@@ -1840,7 +1922,7 @@
     const q = quoteState(quote);
     const active = m.symbol === state.symbol ? ' active' : '';
     return `<button class="watch-row${active}" type="button" data-watch-symbol="${escAttr(m.symbol)}" data-watch-type="${escAttr(m.type || state.type)}" data-watch-market="${escAttr(m.market || defaultMarket(m.type))}">
-      <span class="asset-badge ${q.className}">${esc(assetInitial(m.symbol))}</span>
+      ${marketLogo(m, q.className)}
       <span class="watch-name"><strong>${esc(m.symbol)}</strong><small>${esc(m.name || m.symbol)}</small></span>
       <span class="watch-price"><strong>${quote.price > 0 ? price(quote.price, m.type) : '--'}</strong><small class="${q.changeClass}">${pct(quote.change_pct)}</small></span>
     </button>`;
@@ -2427,6 +2509,20 @@
     return (parts[0]?.[0] || 'V').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
   }
 
+  function uiIcon(name) {
+    return UI_ICONS[name] || UI_ICONS.home || esc(String(name || '').slice(0, 1).toUpperCase());
+  }
+
+  function marketLogo(item, extraClass = '') {
+    const symbol = cleanSymbol(item && item.symbol || item || 'V');
+    const iconUrl = item && item.icon_url ? String(item.icon_url) : '';
+    const visual = SYMBOL_VISUALS[symbol] || TYPE_VISUALS[(item && item.type) || state.type] || { short: assetInitial(symbol), family: 'default' };
+    const classes = ['market-logo', `family-${visual.family || 'default'}`, extraClass].filter(Boolean).join(' ');
+    if (iconUrl && /^https?:\/\//i.test(iconUrl)) {
+      return `<span class="${escAttr(classes)}"><img src="${escAttr(iconUrl)}" alt="${escAttr(symbol)}" loading="lazy" decoding="async"><em>${esc(visual.short || assetInitial(symbol))}</em></span>`;
+    }
+    return `<span class="${escAttr(classes)} fallback"><em>${esc(visual.short || assetInitial(symbol))}</em></span>`;
+  }
   function assetInitial(symbol) {
     return String(symbol || 'V').replace(/[^A-Z0-9]/gi, '').slice(0, 2).toUpperCase() || 'V';
   }

@@ -1941,3 +1941,188 @@ button {
     min-width: 620px;
   }
 }
+
+.nav-pill svg,
+.quick-icon svg,
+.account-menu svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hero-visual {
+  min-width: min(430px, 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.hero-tape {
+  display: grid;
+  gap: 9px;
+}
+
+.hero-tape button {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(93, 124, 255, .13), rgba(36, 210, 141, .06)), rgba(7, 17, 38, .82);
+  color: var(--text);
+  min-height: 58px;
+  padding: 9px 11px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+
+.hero-tape strong,
+.hero-tape small,
+.hero-tape em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-tape em {
+  font-style: normal;
+  font-weight: 900;
+}
+
+.quick-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: radial-gradient(circle at 35% 25%, rgba(255,255,255,.25), transparent 32%), linear-gradient(135deg, rgba(93,124,255,.86), rgba(36,210,141,.58));
+  color: white;
+  box-shadow: 0 14px 30px rgba(20, 60, 150, .24);
+}
+
+.market-tile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.market-tile-name {
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: white;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(135deg, #3767ff, #26d19a);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 12px 28px rgba(2, 8, 20, .26);
+  flex: 0 0 auto;
+}
+
+.market-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.market-logo em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: -.03em;
+}
+
+.market-logo:not(.fallback) em { display: none; }
+.market-logo.family-crypto { background: linear-gradient(135deg, #f7931a, #8b5cf6); }
+.market-logo.family-forex { background: linear-gradient(135deg, #1f8bff, #4dd8ff); }
+.market-logo.family-metal { background: linear-gradient(135deg, #d6a73c, #fff2a8); color: #1a1a1a; }
+.market-logo.family-energy { background: linear-gradient(135deg, #0f766e, #84cc16); }
+.market-logo.family-equity { background: linear-gradient(135deg, #2563eb, #06b6d4); }
+.market-logo.family-index { background: linear-gradient(135deg, #7c3aed, #ec4899); }
+.market-logo.family-future { background: linear-gradient(135deg, #334155, #60a5fa); }
+.market-logo.family-arab { background: linear-gradient(135deg, #047857, #f59e0b); }
+.market-logo.is-delayed { box-shadow: 0 0 0 2px rgba(255,191,71,.18), 0 12px 28px rgba(2,8,20,.26); }
+.market-logo.is-unavailable,
+.market-logo.is-stale { filter: saturate(.68); opacity: .85; }
+
+.copy-card {
+  background:
+    radial-gradient(circle at 90% 0%, rgba(36,210,141,.16), transparent 34%),
+    radial-gradient(circle at 0% 0%, rgba(93,124,255,.18), transparent 30%),
+    rgba(7, 17, 38, .86);
+}
+
+.invest-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.invest-card::after {
+  content: "";
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  right: -60px;
+  top: -70px;
+  background: radial-gradient(circle, rgba(93,124,255,.26), transparent 68%);
+  pointer-events: none;
+}
+
+.wallet-card {
+  background:
+    radial-gradient(circle at 86% 10%, rgba(36,210,141,.18), transparent 34%),
+    linear-gradient(135deg, rgba(93,124,255,.11), transparent 42%),
+    rgba(7,17,38,.82);
+}
+
+.action-card {
+  min-height: 190px;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(93,124,255,.18), transparent 36%),
+    rgba(7,17,38,.8);
+}
+
+.level-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.level-chip-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(7,17,38,.74);
+  padding: 12px;
+}
+
+.level-chip-card strong,
+.level-chip-card small {
+  display: block;
+}
+
+.level-chip-card small {
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .hero-visual { min-width: 0; }
+  .level-strip { grid-template-columns: 1fr; }
+}

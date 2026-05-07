@@ -116,29 +116,49 @@ function vp_feature_bootstrap(PDO $pdo, string $driver): void {
 
   $now = time();
   $seed = [
-    ['level1', 'Level 1', 'المستوى 1', 'Уровень 1', 0, 10, "Signals dashboard
-Base contracts
-Leverage up to 1:100"],
-    ['level2', 'Level 2', 'المستوى 2', 'Уровень 2', 10000, 20, "Copy trading access
+    ['starter', 'Starter', 'المبتدئ', 'Starter', 0, 10, "Market dashboard
+Basic signals
+Demo trading workspace", "لوحة الأسواق
+إشارات أساسية
+حساب تجريبي", "Market dashboard
+Basic signals
+Demo trading workspace"],
+    ['silver', 'Silver', 'فضي', 'Silver', 5000, 20, "Copy trading access
 Standard contracts
-Leverage up to 1:200"],
-    ['level3', 'Level 3', 'المستوى 3', 'Уровень 3', 25000, 30, "Premium contracts
-Priority support
-Leverage up to 1:300"],
-    ['level4', 'Level 4', 'المستوى 4', 'Уровень 4', 50000, 40, "Advanced copy desk
+Priority funding queue", "نسخ صفقات
+عقود قياسية
+أولوية تمويل", "Copy trading access
+Standard contracts
+Priority funding queue"],
+    ['gold', 'Gold', 'ذهبي', 'Gold', 25000, 30, "Premium copy desk
 Higher contract caps
-Leverage up to 1:400"],
-    ['vip', 'VIP', 'كبار العملاء', 'VIP', 100000, 50, "Private desk
+Dedicated account guidance", "منصة نسخ بريميوم
+حدود عقود أعلى
+إرشاد حساب مخصص", "Premium copy desk
+Higher contract caps
+Dedicated account guidance"],
+    ['platinum', 'Platinum', 'بلاتيني', 'Platinum', 75000, 40, "Advanced contracts
+Reduced profit share
+Fast KYC and withdrawal review", "عقود متقدمة
+نسبة مشاركة أقل
+مراجعة أسرع", "Advanced contracts
+Reduced profit share
+Fast KYC and withdrawal review"],
+    ['vip', 'VIP', 'كبار العملاء', 'VIP', 150000, 50, "Private desk
 VIP contracts
-Leverage up to 1:500"],
+Custom risk limits", "منصة خاصة
+عقود VIP
+حدود مخاطر مخصصة", "Private desk
+VIP contracts
+Custom risk limits"],
   ];
   $existingLevels = 0;
   try { $existingLevels = (int)($pdo->query("SELECT COUNT(*) FROM customer_levels")->fetchColumn() ?: 0); } catch (Throwable $e) { $existingLevels = 0; }
   if ($existingLevels === 0) {
-    foreach ($seed as [$code,$en,$ar,$ru,$min,$sort,$perks]) {
+    foreach ($seed as [$code,$en,$ar,$ru,$min,$sort,$perksEn,$perksAr,$perksRu]) {
       try {
         $sql = "INSERT INTO customer_levels(level_code,name_en,name_ar,name_ru,perks_en,perks_ar,perks_ru,min_deposit_total,sort_order,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'active',?,?)";
-        $pdo->prepare($sql)->execute([$code,$en,$ar,$ru,$perks,$perks,$perks,$min,$sort,$now,$now]);
+        $pdo->prepare($sql)->execute([$code,$en,$ar,$ru,$perksEn,$perksAr,$perksRu,$min,$sort,$now,$now]);
       } catch (Throwable $e) {}
     }
   }
