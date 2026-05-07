@@ -331,9 +331,9 @@ try {
   $now = time();
 
   $authoritativeQuotes = qa_overlay_market_rows($rows, [
-    // Market lists are bootstrap/read paths. Non-crypto live refresh is handled
-    // by quotes.php focus/cron so a slow provider cannot block the whole list.
-    'with_live' => $withQuotes && ($typeAlias === 'crypto' || $forceLive),
+    // Market lists are bootstrap/read paths. Live refresh is handled by
+    // quotes.php focus/batch/cron so providers cannot block the whole list.
+    'with_live' => false,
     'allow_crypto_seed' => false,
     'allow_noncrypto_seed' => false,
     'allow_stale_display' => $typeAlias !== 'crypto',
