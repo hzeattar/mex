@@ -24,11 +24,11 @@ function qa_source_rank(?string $source): int {
 function qa_quote_max_age(string $assetType, bool $strict = false): int {
   $assetType = vp_normalize_asset_type($assetType);
   if ($assetType === 'crypto') return $strict ? 6 : 12;
-  if ($assetType === 'forex') return $strict ? 300 : 360;
+  if ($assetType === 'forex') return $strict ? 7200 : 14400;
   if ($assetType === 'stocks') return $strict ? 129600 : 172800;
-  if ($assetType === 'arab') return $strict ? 3600 : 7200;
-  if ($assetType === 'commodities') return $strict ? 900 : 1800;
-  if ($assetType === 'futures') return $strict ? 3600 : 7200;
+  if ($assetType === 'arab') return $strict ? 129600 : 172800;
+  if ($assetType === 'commodities') return $strict ? 43200 : 86400;
+  if ($assetType === 'futures') return $strict ? 43200 : 86400;
   return $strict ? 180 : 360;
 }
 
@@ -81,7 +81,7 @@ function qa_quote_timing_class($row, string $assetType): string {
   if (quote_source_is_untrusted($source)) return 'seed';
   if ($source === 'eodhd_intraday' || $source === 'yahoo_chart_live') return 'candle_fallback';
   if ($assetType !== 'crypto' && !quote_source_is_liveish($source, $assetType)) return 'stale';
-  if (in_array($assetType, ['stocks','arab'], true) || !empty($row['delayed'])) {
+  if (($assetType !== 'crypto' && $source === 'yahoo') || in_array($assetType, ['stocks','arab'], true) || !empty($row['delayed'])) {
     return qa_quote_is_usable($row, $assetType, false) ? 'delayed' : 'stale';
   }
   return qa_quote_is_usable($row, $assetType, false) ? 'live' : 'stale';

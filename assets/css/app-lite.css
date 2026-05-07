@@ -528,6 +528,44 @@ button {
   font-size: clamp(26px, 4vw, 42px);
 }
 
+.trade-balance-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mini-balance-card {
+  min-height: 76px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(85, 122, 255, .18), transparent 55%),
+    rgba(13, 28, 58, .78);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  box-shadow: var(--shadow-soft);
+}
+
+.mini-balance-card small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.mini-balance-card strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .trade-layout {
   display: grid;
   grid-template-columns: 310px minmax(0, 1fr) 326px;
@@ -1134,6 +1172,10 @@ button {
 }
 
 @media (max-width: 1260px) {
+  .trade-balance-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .trade-layout {
     grid-template-columns: 280px minmax(0, 1fr);
   }
@@ -1193,6 +1235,7 @@ button {
   .metric-grid,
   .home-market-grid,
   .wallet-grid,
+  .trade-balance-strip,
   .account-layout,
   .trade-layout {
     grid-template-columns: 1fr;

@@ -196,6 +196,44 @@ function vp_build_fallback_commodity_row(array $def, int $idBase = 920000): arra
   ];
 }
 
+function vp_fallback_arab_markets(): array {
+  return [
+    ['symbol'=>'2222', 'name'=>'Saudi Aramco',          'tv_symbol'=>'TADAWUL:2222', 'yahoo_ticker'=>'2222.SR', 'sort_order'=>10, 'seed_price'=>30.0],
+    ['symbol'=>'1120', 'name'=>'Al Rajhi Bank',         'tv_symbol'=>'TADAWUL:1120', 'yahoo_ticker'=>'1120.SR', 'sort_order'=>12, 'seed_price'=>95.0],
+    ['symbol'=>'2010', 'name'=>'SABIC',                 'tv_symbol'=>'TADAWUL:2010', 'yahoo_ticker'=>'2010.SR', 'sort_order'=>14, 'seed_price'=>75.0],
+    ['symbol'=>'7010', 'name'=>'stc',                   'tv_symbol'=>'TADAWUL:7010', 'yahoo_ticker'=>'7010.SR', 'sort_order'=>16, 'seed_price'=>40.0],
+    ['symbol'=>'1211', 'name'=>'Maaden',                'tv_symbol'=>'TADAWUL:1211', 'yahoo_ticker'=>'1211.SR', 'sort_order'=>18, 'seed_price'=>50.0],
+    ['symbol'=>'1150', 'name'=>'Alinma Bank',           'tv_symbol'=>'TADAWUL:1150', 'yahoo_ticker'=>'1150.SR', 'sort_order'=>20, 'seed_price'=>34.0],
+    ['symbol'=>'1180', 'name'=>'Saudi National Bank',   'tv_symbol'=>'TADAWUL:1180', 'yahoo_ticker'=>'1180.SR', 'sort_order'=>22, 'seed_price'=>36.0],
+    ['symbol'=>'2280', 'name'=>'Almarai',               'tv_symbol'=>'TADAWUL:2280', 'yahoo_ticker'=>'2280.SR', 'sort_order'=>24, 'seed_price'=>58.0],
+    ['symbol'=>'4002', 'name'=>'Mouwasat Medical',      'tv_symbol'=>'TADAWUL:4002', 'yahoo_ticker'=>'4002.SR', 'sort_order'=>26, 'seed_price'=>90.0],
+    ['symbol'=>'4300', 'name'=>'Dar Al Arkan',          'tv_symbol'=>'TADAWUL:4300', 'yahoo_ticker'=>'4300.SR', 'sort_order'=>28, 'seed_price'=>15.0],
+  ];
+}
+
+function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
+  static $seq = 0;
+  $seq++;
+  return [
+    'id' => $idBase + $seq,
+    'symbol' => strtoupper((string)($def['symbol'] ?? '')),
+    'name' => (string)($def['name'] ?? ($def['symbol'] ?? 'Arab Market')),
+    'type' => 'arab',
+    'status' => 'active',
+    'sort_order' => (int)($def['sort_order'] ?? ($seq * 2)),
+    'tv_symbol' => (string)($def['tv_symbol'] ?? ''),
+    'seed_price' => (float)($def['seed_price'] ?? 10.0),
+    'meta' => json_encode(array_filter([
+      'exchange' => 'tadawul',
+      'yahoo_ticker' => (string)($def['yahoo_ticker'] ?? ''),
+      'tv_symbol' => (string)($def['tv_symbol'] ?? ''),
+    ]), JSON_UNESCAPED_SLASHES),
+    'q_price' => null,
+    'q_change' => 0,
+    'q_updated' => 0,
+  ];
+}
+
 
 
 $cacheDir = __DIR__ . '/data/cache';
@@ -255,11 +293,13 @@ try {
   if ($typeAlias === 'all') {
     $hasFutures = false;
     $hasCommodities = false;
+    $hasArab = false;
     foreach ($rows as $rowCheck) {
       $rowType = vp_normalize_asset_type((string)($rowCheck['type'] ?? ''));
       if ($rowType === 'futures') $hasFutures = true;
       if ($rowType === 'commodities') $hasCommodities = true;
-      if ($hasFutures && $hasCommodities) break;
+      if ($rowType === 'arab') $hasArab = true;
+      if ($hasFutures && $hasCommodities && $hasArab) break;
     }
     if (!$hasFutures) {
       foreach (vp_fallback_futures_markets() as $def) {
@@ -269,6 +309,11 @@ try {
     if (!$hasCommodities) {
       foreach (vp_fallback_commodities_markets() as $def) {
         $rows[] = vp_build_fallback_commodity_row($def, 930000);
+      }
+    }
+    if (!$hasArab) {
+      foreach (vp_fallback_arab_markets() as $def) {
+        $rows[] = vp_build_fallback_arab_row($def, 950000);
       }
     }
   }
@@ -305,6 +350,11 @@ try {
         'q_change' => 0,
         'q_updated' => 0,
       ];
+    }
+    if (!$rows) {
+      foreach (vp_fallback_arab_markets() as $def) {
+        $rows[] = vp_build_fallback_arab_row($def);
+      }
     }
   }
 

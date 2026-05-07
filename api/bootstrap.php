@@ -118,15 +118,22 @@ function vp_boot_market_groups(PDO $pdo): array {
     ],
     'forex' => [
       ['EURUSD','Euro / US Dollar'], ['GBPUSD','British Pound / US Dollar'], ['USDJPY','US Dollar / Japanese Yen'], ['AUDUSD','Australian Dollar / US Dollar'],
+      ['USDCAD','US Dollar / Canadian Dollar'], ['USDCHF','US Dollar / Swiss Franc'], ['NZDUSD','New Zealand Dollar / US Dollar'], ['EURJPY','Euro / Japanese Yen'],
     ],
     'stocks' => [
       ['AAPL','Apple'], ['MSFT','Microsoft'], ['TSLA','Tesla'], ['NVDA','NVIDIA'],
     ],
     'commodities' => [
       ['XAUUSD','Gold Spot'], ['XAGUSD','Silver Spot'], ['USOIL','WTI Crude Oil'], ['UKOIL','Brent Crude Oil'],
+      ['NGAS','Natural Gas'], ['COPPER','Copper'], ['PLAT','Platinum'], ['PALL','Palladium'],
     ],
     'futures' => [
-      ['ES_F','E-mini S&P 500 Future'], ['NQ_F','E-mini Nasdaq 100 Future'],
+      ['ES_F','E-mini S&P 500 Future'], ['NQ_F','E-mini Nasdaq 100 Future'], ['YM_F','E-mini Dow Future'], ['RTY_F','E-mini Russell 2000 Future'],
+      ['CL_F','WTI Crude Future'], ['GC_F','Gold Future'], ['ZN_F','10Y Treasury Note Future'], ['ZB_F','30Y Treasury Bond Future'],
+    ],
+    'arab' => [
+      ['2222','Saudi Aramco'], ['1120','Al Rajhi Bank'], ['2010','SABIC'], ['7010','stc'],
+      ['1211','Maaden'], ['1150','Alinma Bank'], ['1180','Saudi National Bank'], ['2280','Almarai'],
     ],
   ];
   foreach ($fallback as $type => $items) {

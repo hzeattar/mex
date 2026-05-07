@@ -2,9 +2,9 @@
   'use strict';
 
   const API = '/api';
-  const ACTIVE_QUOTE_MS = 2800;
-  const WATCHLIST_QUOTE_MS = 7000;
-  const ACCOUNT_POLL_MS = 14000;
+  const ACTIVE_QUOTE_MS = 2400;
+  const WATCHLIST_QUOTE_MS = 6000;
+  const ACCOUNT_POLL_MS = 15000;
   const DEFAULT_AMOUNT = 100;
 
   const TYPES = [
@@ -58,11 +58,23 @@
     volumeSeries: null,
     chartResize: null,
     lastCandle: null,
-    chartUnavailable: false
+    chartUnavailable: false,
+    pending: freshPending()
   };
 
   const app = document.getElementById('app');
   document.addEventListener('DOMContentLoaded', init);
+
+  function freshPending() {
+    return {
+      markets: false,
+      visibleQuotes: false,
+      activeQuote: false,
+      candles: false,
+      account: false,
+      wallet: false
+    };
+  }
 
   async function init() {
     renderBoot();
@@ -348,6 +360,25 @@
         </div>
       </section>
 
+      <section class="trade-balance-strip">
+        <div class="mini-balance-card">
+          <small>Trade mode</small>
+          <strong>${esc(state.mode.toUpperCase())}</strong>
+        </div>
+        <div class="mini-balance-card">
+          <small>Available</small>
+          <strong data-trade-available>${money(activeWallet().available ?? 0)} ${esc(activeWallet().currency || '')}</strong>
+        </div>
+        <div class="mini-balance-card">
+          <small>Open PnL</small>
+          <strong data-trade-pnl>${money((state.portfolio && state.portfolio.open_pnl) || 0)}</strong>
+        </div>
+        <div class="mini-balance-card">
+          <small>Quote status</small>
+          <strong data-trade-quality>Checking</strong>
+        </div>
+      </section>
+
       <section class="trade-layout">
         <aside class="panel watch-panel">
           <div class="section-head compact">
@@ -529,6 +560,8 @@
   }
 
   async function loadMarkets(token, hardRefresh = false) {
+    if (runtime.pending.markets && !hardRefresh) return;
+    runtime.pending.markets = true;
     try {
       const cache = state.markets[state.type] || [];
       if (!hardRefresh && cache.length) {
@@ -546,15 +579,19 @@
       hydrateVisibleQuotes(token);
     } catch (err) {
       if (!isAbort(err)) showToast(`Markets unavailable: ${err.message || 'request failed'}`, 'warn');
+    } finally {
+      runtime.pending.markets = false;
     }
   }
 
   async function hydrateVisibleQuotes(token) {
-    const visible = filteredMarkets(state.type).slice(0, 14);
+    if (runtime.pending.visibleQuotes) return;
+    const visible = filteredMarkets(state.type).slice(0, 12);
     const symbols = visible.map((m) => m.symbol).filter(Boolean);
     if (!symbols.length) return;
+    runtime.pending.visibleQuotes = true;
     try {
-      const data = await api(`/quotes.php?visible=1&type=${encodeURIComponent(state.type)}&symbols=${encodeURIComponent(symbols.join(','))}`, { timeout: 6000 });
+      const data = await api(`/quotes.php?visible=1&type=${encodeURIComponent(state.type)}&symbols=${encodeURIComponent(symbols.join(','))}&purpose=watchlist`, { timeout: 9000 });
       if (!isToken(token) || !data || data.ok === false) return;
       const map = quoteMap(data.items || []);
       Object.assign(state.visibleQuotes, map);
@@ -562,12 +599,16 @@
       updateWatchlist();
     } catch (err) {
       if (!isAbort(err)) markWatchlistStale();
+    } finally {
+      runtime.pending.visibleQuotes = false;
     }
   }
 
   async function loadActiveQuote(token, immediate = false) {
+    if (runtime.pending.activeQuote && !immediate) return;
+    runtime.pending.activeQuote = true;
     try {
-      const data = await api(`/quotes.php?symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&purpose=focus`, { timeout: immediate ? 8000 : 5500 });
+      const data = await api(`/quotes.php?symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&purpose=focus`, { timeout: state.type === 'crypto' ? (immediate ? 7000 : 5000) : (immediate ? 10000 : 8500) });
       if (!isToken(token) || !data || data.ok === false) return;
       const item = firstQuote(data.items || data);
       if (!item) return;
@@ -582,16 +623,20 @@
         setText('[data-source-label]', 'Quote temporarily unavailable');
         setClass('[data-source-pill]', 'quality-pill is-unavailable');
       }
+    } finally {
+      runtime.pending.activeQuote = false;
     }
   }
 
   async function loadCandles(token) {
+    if (runtime.pending.candles) return;
+    runtime.pending.candles = true;
     runtime.lastCandle = null;
     runtime.chartUnavailable = false;
     setChartMessage('Loading chart...');
     try {
       const url = `/trade/candles.php?symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&market=${encodeURIComponent(state.market || defaultMarket(state.type))}&tf=${encodeURIComponent(state.tf)}&limit=180`;
-      const data = await api(url, { timeout: 9500 });
+      const data = await api(url, { timeout: state.type === 'crypto' ? 9000 : 11500 });
       if (!isToken(token)) return;
       const source = String((data && data.source) || '');
       const synthetic = !!(data && data.synthetic) || /synthetic/i.test(source);
@@ -614,10 +659,14 @@
         runtime.chartUnavailable = true;
         setChartMessage('Real chart temporarily unavailable. Try another symbol or timeframe.');
       }
+    } finally {
+      runtime.pending.candles = false;
     }
   }
 
   async function loadTradingAccount(token, immediate = false, homeOnly = false) {
+    if (runtime.pending.account && !immediate) return;
+    runtime.pending.account = true;
     try {
       const [portfolio, orders, wallet] = await Promise.all([
         api(`/trade/portfolio.php?mode=${encodeURIComponent(state.mode)}`, { timeout: immediate ? 9000 : 6500 }),
@@ -635,6 +684,7 @@
         updateOrders();
         updateTicketWallet();
         updateTicketMetrics();
+        updateTradeSummary();
       }
       if (state.route === 'portfolio') renderPortfolioBody();
       if (state.route === 'wallet') renderWalletBody();
@@ -642,10 +692,14 @@
       if (!isAbort(err)) {
         state.lastError = err.message || 'Account request failed';
       }
+    } finally {
+      runtime.pending.account = false;
     }
   }
 
   async function loadWallet(token, immediate = false) {
+    if (runtime.pending.wallet && !immediate) return;
+    runtime.pending.wallet = true;
     try {
       const wallet = await api('/wallet/summary.php', { timeout: immediate ? 9000 : 6500 });
       if (!isToken(token) || !wallet || wallet.ok === false) return;
@@ -654,6 +708,8 @@
       if (state.route === 'wallet') renderWalletBody();
     } catch (err) {
       if (!isAbort(err)) state.lastError = err.message || 'Wallet request failed';
+    } finally {
+      runtime.pending.wallet = false;
     }
   }
 
@@ -930,6 +986,19 @@
     setText('[data-ticket-sell]', quote.price > 0 ? price(quote.price, state.type) : '--');
     setText('[data-ticket-buy]', quote.price > 0 ? price(quote.price, state.type) : '--');
     updateTicketMetrics();
+    updateTradeSummary();
+  }
+
+  function updateTradeSummary() {
+    if (state.route !== 'trade') return;
+    const wallet = activeWallet();
+    const pnl = Number((state.portfolio && (state.portfolio.open_pnl ?? state.portfolio.unrealized_pnl)) || 0);
+    const q = quoteState(state.activeQuote || {});
+    setText('[data-trade-available]', `${money(wallet.available ?? 0)} ${wallet.currency || ''}`.trim());
+    setText('[data-trade-pnl]', money(pnl));
+    setText('[data-trade-quality]', q.label);
+    const pnlNode = $('[data-trade-pnl]');
+    if (pnlNode) pnlNode.className = pnl >= 0 ? 'pos' : 'neg';
   }
 
   function renderTicketOnly() {
@@ -966,6 +1035,7 @@
     if (!node) return;
     const wallet = activeWallet();
     node.innerHTML = `<span>You have</span><strong>${money(wallet.available ?? 0)} ${esc(wallet.currency || '')}</strong>`;
+    updateTradeSummary();
   }
 
   function updateTicketMetrics() {
@@ -1081,6 +1151,7 @@
       try { ctrl.abort(); } catch (e) {}
     });
     runtime.controllers.clear();
+    runtime.pending = freshPending();
     destroyChart();
   }
 
@@ -1244,12 +1315,12 @@
   function fallbackMarkets(type) {
     const def = TYPE_BY_KEY[type] || TYPE_BY_KEY.crypto;
     const defaults = {
-      crypto: [['BTCUSDT', 'Bitcoin'], ['ETHUSDT', 'Ethereum'], ['BNBUSDT', 'BNB'], ['SOLUSDT', 'Solana'], ['XRPUSDT', 'XRP'], ['DOGEUSDT', 'Dogecoin']],
-      forex: [['EURUSD', 'Euro / US Dollar'], ['GBPUSD', 'British Pound / US Dollar'], ['USDJPY', 'US Dollar / Yen'], ['AUDUSD', 'Australian Dollar / US Dollar']],
-      stocks: [['AAPL', 'Apple Inc.'], ['MSFT', 'Microsoft'], ['TSLA', 'Tesla'], ['NVDA', 'NVIDIA'], ['AMZN', 'Amazon']],
-      commodities: [['XAUUSD', 'Gold Spot'], ['XAGUSD', 'Silver Spot'], ['USOIL', 'WTI Crude Oil'], ['UKOIL', 'Brent Crude Oil']],
-      futures: [['ES_F', 'E-mini S&P 500 Future'], ['NQ_F', 'E-mini Nasdaq Future'], ['ZN_F', '10Y Treasury Note Future']],
-      arab: [['2222', 'Saudi Aramco'], ['TASI', 'Tadawul All Share']]
+      crypto: [['BTCUSDT', 'Bitcoin'], ['ETHUSDT', 'Ethereum'], ['BNBUSDT', 'BNB'], ['SOLUSDT', 'Solana'], ['XRPUSDT', 'XRP'], ['DOGEUSDT', 'Dogecoin'], ['ADAUSDT', 'Cardano'], ['LINKUSDT', 'Chainlink']],
+      forex: [['EURUSD', 'Euro / US Dollar'], ['GBPUSD', 'British Pound / US Dollar'], ['USDJPY', 'US Dollar / Yen'], ['AUDUSD', 'Australian Dollar / US Dollar'], ['USDCAD', 'US Dollar / Canadian Dollar'], ['USDCHF', 'US Dollar / Swiss Franc'], ['NZDUSD', 'New Zealand Dollar / US Dollar'], ['EURJPY', 'Euro / Yen']],
+      stocks: [['AAPL', 'Apple Inc.'], ['MSFT', 'Microsoft'], ['TSLA', 'Tesla'], ['NVDA', 'NVIDIA'], ['AMZN', 'Amazon'], ['GOOGL', 'Alphabet'], ['META', 'Meta Platforms'], ['NFLX', 'Netflix']],
+      commodities: [['XAUUSD', 'Gold Spot'], ['XAGUSD', 'Silver Spot'], ['USOIL', 'WTI Crude Oil'], ['UKOIL', 'Brent Crude Oil'], ['NGAS', 'Natural Gas'], ['COPPER', 'Copper'], ['PLAT', 'Platinum'], ['PALL', 'Palladium']],
+      futures: [['ES_F', 'E-mini S&P 500 Future'], ['NQ_F', 'E-mini Nasdaq Future'], ['YM_F', 'E-mini Dow Future'], ['RTY_F', 'E-mini Russell Future'], ['CL_F', 'WTI Crude Future'], ['GC_F', 'Gold Future'], ['ZN_F', '10Y Treasury Note Future'], ['ZB_F', '30Y Treasury Bond Future']],
+      arab: [['2222', 'Saudi Aramco'], ['1120', 'Al Rajhi Bank'], ['2010', 'SABIC'], ['7010', 'stc'], ['1211', 'Maaden'], ['1150', 'Alinma Bank'], ['1180', 'Saudi National Bank'], ['2280', 'Almarai']]
     };
     return (defaults[type] || [[def.symbol, def.name]]).map(([symbol, name]) => ({
       symbol,

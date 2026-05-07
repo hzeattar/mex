@@ -35,8 +35,8 @@ if (!$list) {
   }
 }
 
-$mode = $direct ? 'direct' : ($visible ? 'visible' : ($fresh ? 'fresh' : 'standard'));
 $purpose = strtolower(trim((string)($_GET['purpose'] ?? '')));
+$mode = $direct ? 'direct' : ($visible ? 'visible' : ($purpose === 'focus' ? 'focus' : ($fresh ? 'fresh' : 'standard')));
 $cacheKey = json_encode([$typeAlias, $list, $mode], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 $cacheFile = qa_cache_file('quotes_api', $cacheKey);
 $cacheTtl = qa_quotes_cache_ttl($typeAlias, $mode, count($list));
@@ -55,20 +55,23 @@ if (!$fresh) {
 $isNonCrypto = ($typeAlias !== 'crypto');
 $allowLive = true;
 if ($isNonCrypto) {
-  // List/visible reads must be fast and DB-backed. Only the active/focus quote
-  // may go external, and only for a tiny symbol set, so EODHD/Yahoo latency
-  // cannot freeze market boards or side drawers.
+  $visibleLiveLimit = max(4, min(24, (int)env('QUOTES_VISIBLE_LIVE_LIMIT_NONCRYPTO', '14')));
   $isFocusRequest = ($purpose === 'focus') || $direct || $strictLive || ($fresh && count($list) <= 2);
-  $allowLive = $isFocusRequest && count($list) <= 3 && !$visible;
+  $isVisibleBatch = $visible && count($list) <= $visibleLiveLimit;
+  $allowLive = ($isFocusRequest && count($list) <= 3 && !$visible) || $isVisibleBatch;
 }
+$visibleNonCrypto = $visible && $isNonCrypto;
+$focusNonCrypto = $isNonCrypto && (($purpose === 'focus') || $direct || $strictLive);
 $payload = qa_quote_payload($typeAlias, $list, [
   'strict_live_noncrypto' => $strictLive,
   'allow_live' => $allowLive,
   'allow_crypto_seed' => false,
   'allow_noncrypto_seed' => false,
-  'direct_budget' => ($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list))),
-  'direct_yahoo_budget' => ($direct || $fresh) ? max(1, min(count($list), 12)) : min(4, count($list)),
-  'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : min(4, count($list)),
+  'direct_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list)))),
+  'direct_yahoo_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh || $focusNonCrypto) ? max(1, min(count($list), 3)) : min(2, count($list))),
+  'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? 0 : min(1, count($list))),
+  'allow_direct_batch' => $visibleNonCrypto,
+  'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 2 : 4),
 ]);
 $payload['mode'] = $mode;
 

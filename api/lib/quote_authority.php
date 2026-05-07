@@ -58,7 +58,8 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
       $updatedAt = qa_quote_row_ts($chosen);
       $providerUpdatedAt = $updatedAt;
       $source = (string)($chosen['source'] ?? $chosen['provider'] ?? '');
-      $delayed = !empty($chosen['delayed']) || in_array($assetType, ['stocks','arab'], true);
+      $sourceLower = strtolower(trim($source));
+      $delayed = !empty($chosen['delayed']) || in_array($assetType, ['stocks','arab'], true) || ($assetType !== 'crypto' && $sourceLower === 'yahoo');
       $timingClass = qa_quote_timing_class($chosen + ['delayed' => $delayed], $assetType);
     } elseif ($assetType === 'crypto' && !empty($opts['allow_crypto_seed'])) {
       $seed = (float)($seedBySymbol[$sym] ?? 0);
