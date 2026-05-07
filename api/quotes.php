@@ -71,6 +71,7 @@ $payload = qa_quote_payload($typeAlias, $list, [
   'direct_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list)))),
   'direct_yahoo_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh || $focusNonCrypto) ? max(1, min(count($list), 3)) : min(2, count($list))),
   'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? $visibleChartBudget : min(1, count($list))),
+  'chart_budget_ms' => $visibleNonCrypto ? max(800, min(5000, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_MS_NONCRYPTO', '2200'))) : 3000,
   'allow_direct_batch' => $visibleNonCrypto,
   'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 2 : 4),
 ]);

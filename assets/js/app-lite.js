@@ -591,7 +591,7 @@
     if (!symbols.length) return;
     runtime.pending.visibleQuotes = true;
     try {
-      const data = await api(`/quotes.php?visible=1&type=${encodeURIComponent(state.type)}&symbols=${encodeURIComponent(symbols.join(','))}&purpose=watchlist`, { timeout: 9000 });
+      const data = await api(`/quotes.php?visible=1&type=${encodeURIComponent(state.type)}&symbols=${encodeURIComponent(symbols.join(','))}&purpose=watchlist`, { timeout: state.type === 'crypto' ? 5000 : 6500 });
       if (!isToken(token) || !data || data.ok === false) return;
       const map = quoteMap(data.items || []);
       Object.assign(state.visibleQuotes, map);

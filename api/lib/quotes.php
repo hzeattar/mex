@@ -417,8 +417,11 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       ? max(0, min(2, (int)($opts['chart_budget'] ?? 1)))
       : ($allowDirectBatch ? max(0, min(10, (int)($opts['chart_budget'] ?? 0))) : 0);
     if ($chartBudget > 0) {
+      $chartBudgetStarted = microtime(true);
+      $chartBudgetMs = max(0, min(10000, (int)($opts['chart_budget_ms'] ?? 0)));
       foreach ($yahooBySym as $sym => $ticker) {
         if ($chartBudget <= 0) break;
+        if ($chartBudgetMs > 0 && ((microtime(true) - $chartBudgetStarted) * 1000) >= $chartBudgetMs) break;
         if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
         try {
           $row = yahoo_live_quote_or_chart($ticker, '1m');
@@ -435,6 +438,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           }
         } catch (Throwable $e) {}
         $chartBudget--;
+        if ($chartBudgetMs > 0 && ((microtime(true) - $chartBudgetStarted) * 1000) >= $chartBudgetMs) break;
       }
     }
   }
