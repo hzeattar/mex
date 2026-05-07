@@ -46,6 +46,10 @@ if (in_array($lower, $blockedFiles, true)) {
 
 $file = __DIR__ . $path;
 if ($path !== '/' && is_file($file)) {
+  if (str_starts_with($lower, '/assets/') && preg_match('/\.(?:css|js|mjs|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|mp4)$/i', $lower)) {
+    header('Cache-Control: public, max-age=31536000, immutable');
+    header('Vary: Accept-Encoding');
+  }
   return false;
 }
 
