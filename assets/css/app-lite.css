@@ -2989,7 +2989,6 @@ html,
 body,
 #app {
   max-width: 100%;
-  overflow-x: clip;
 }
 
 .table-shell {
@@ -3020,7 +3019,6 @@ body,
 @media (max-width: 900px) {
   .workspace {
     padding: 8px 8px calc(104px + env(safe-area-inset-bottom));
-    overflow-x: clip;
   }
 
   .topbar {
@@ -3137,5 +3135,198 @@ body,
 
   .hero-wallet-card {
     min-height: 92px;
+  }
+}
+
+.mobile-market-panel {
+  display: none;
+}
+
+.home-copy-panel .section-head {
+  border-bottom: 1px solid var(--line);
+}
+
+.home-copy-gate {
+  position: relative;
+  min-height: 260px;
+}
+
+.home-copy-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  padding: 14px 16px 18px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.copy-grid.home-copy-row {
+  display: flex;
+  gap: 14px;
+  padding: 0;
+  min-width: max-content;
+}
+
+.copy-grid.home-copy-row .copy-card {
+  width: min(330px, 82vw);
+  flex: 0 0 auto;
+}
+
+.home-copy-gate.is-locked .home-copy-scroll {
+  filter: blur(5px) saturate(.72);
+  opacity: .46;
+  pointer-events: none;
+  user-select: none;
+}
+
+.home-copy-overlay {
+  position: absolute;
+  inset: 18px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 18px;
+  border: 1px solid rgba(129,160,220,.24);
+  border-radius: var(--radius-lg);
+  background: rgba(5, 11, 24, .76);
+  backdrop-filter: blur(12px);
+  z-index: 3;
+}
+
+.home-copy-overlay span {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #5d7cff, #24d28d);
+}
+
+.home-copy-overlay svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.home-copy-overlay p {
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .mobile-menu-panel,
+  .mobile-menu-panel.is-open {
+    display: none !important;
+  }
+
+  .mobile-market-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 145;
+    display: none;
+    background: rgba(0,0,0,.58);
+    padding: 10px;
+    backdrop-filter: blur(8px);
+  }
+
+  .mobile-market-panel.is-open {
+    display: grid;
+    align-items: end;
+  }
+
+  .mobile-market-sheet {
+    max-height: min(82vh, 720px);
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 20px 20px 0 0;
+    background: #071126;
+    box-shadow: var(--shadow);
+  }
+
+  .mobile-market-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mobile-market-tabs button {
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: rgba(16,31,65,.72);
+    color: var(--muted);
+    font-weight: 900;
+  }
+
+  .mobile-market-tabs button.active {
+    color: white;
+    background: linear-gradient(135deg, rgba(93,124,255,.95), rgba(36,210,141,.48));
+    border-color: rgba(93,124,255,.65);
+  }
+
+  .mobile-market-search {
+    margin: 10px 12px;
+  }
+
+  .mobile-market-list {
+    display: grid;
+    gap: 8px;
+    padding: 0 12px 14px;
+  }
+
+  .mobile-market-row {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px;
+    background: rgba(16,31,65,.58);
+    color: var(--text);
+    text-align: left;
+  }
+
+  .mobile-market-row.active {
+    border-color: rgba(36,210,141,.55);
+    background: rgba(36,210,141,.1);
+  }
+
+  .mobile-market-row span,
+  .mobile-market-row em,
+  .mobile-market-row strong,
+  .mobile-market-row small {
+    min-width: 0;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-market-row em {
+    text-align: right;
+    font-style: normal;
+    font-weight: 900;
+  }
+
+  .mobile-market-row small {
+    color: var(--muted);
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 520px) {
+  .home-copy-scroll {
+    padding: 12px 10px 16px;
+  }
+
+  .copy-grid.home-copy-row .copy-card {
+    width: min(300px, 84vw);
   }
 }

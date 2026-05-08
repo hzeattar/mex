@@ -198,6 +198,7 @@
     quoteCadence: ACTIVE_QUOTE_MS,
     watchCadence: WATCHLIST_QUOTE_MS,
     tradeViewport: computeTradeMobile() ? 'mobile' : 'desktop',
+    marketDrawer: { open: false, tab: state.marketTab || state.type, search: '' },
     resizeTimer: null,
     cleanups: [],
     pending: freshPending()
@@ -312,11 +313,11 @@
           </nav>
         </aside>
         <div class="workspace">
-          <header class="mobile-header"><a class="mobile-brand" href="#/home"><span class="brand-mark brand-svg-mark">${buildBrandLogoSvg(state.brand.name, state.brand.tagline)}</span><strong>${esc(state.brand.name || 'Vertex')}</strong></a><button class="mobile-menu-btn" type="button" data-mobile-menu-toggle aria-label="Open menu" aria-expanded="false">${uiIcon('menu')}<span>Menu</span></button></header>
+          <header class="mobile-header"><a class="mobile-brand" href="#/home"><span class="brand-mark brand-svg-mark">${buildBrandLogoSvg(state.brand.name, state.brand.tagline)}</span><strong>${esc(state.brand.name || 'Vertex')}</strong></a><button class="mobile-menu-btn" type="button" data-mobile-menu-toggle aria-label="Open market selector" aria-expanded="false">${uiIcon('menu')}<span>Markets</span></button></header>
           <header class="topbar" id="topbar"></header>
           <main class="view" id="view"></main>
         </div>
-        <div class="mobile-menu-panel" data-mobile-menu-panel><div class="mobile-menu-sheet"><div class="section-head compact"><div><h2>Menu</h2><p>All workspace pages</p></div><button class="icon-btn" type="button" data-mobile-menu-close>X</button></div><nav class="mobile-menu-grid" aria-label="Mobile full menu">${navItems().map(navButton).join('')}<a class="nav-pill" href="#/deposit"><span>${uiIcon('deposit')}</span><em>Deposit</em></a><a class="nav-pill" href="#/withdraw"><span>${uiIcon('withdraw')}</span><em>Withdraw</em></a><a class="nav-pill" href="#/kyc"><span>${uiIcon('kyc')}</span><em>KYC</em></a></nav></div></div>
+        <div class="mobile-market-panel" data-mobile-market-panel></div>
         <nav class="mobile-nav" aria-label="Mobile primary">
           ${mobileNavItems().map(navButton).join('')}
         </nav>
@@ -328,8 +329,7 @@
       });
     });
     app.querySelector('[data-mobile-menu-toggle]')?.addEventListener('click', () => toggleMobileMenu(true));
-    app.querySelector('[data-mobile-menu-close]')?.addEventListener('click', () => toggleMobileMenu(false));
-    app.querySelector('[data-mobile-menu-panel]')?.addEventListener('click', (event) => { if (event.target && event.target.matches('[data-mobile-menu-panel]')) toggleMobileMenu(false); });
+
   }
 
   function navItems() {
@@ -355,15 +355,70 @@
   }
 
   function toggleMobileMenu(open) {
-    const panel = $('[data-mobile-menu-panel]');
-    if (!panel) return;
-    panel.classList.toggle('is-open', !!open);
+    runtime.marketDrawer.open = !!open;
+    renderMobileMarketPanel();
     document.body.classList.toggle('has-mobile-menu-open', !!open);
     $('[data-mobile-menu-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   function closeMobileMenu() {
     toggleMobileMenu(false);
+  }
+
+  function renderMobileMarketPanel() {
+    const panel = $('[data-mobile-market-panel]');
+    if (!panel) return;
+    panel.classList.toggle('is-open', !!runtime.marketDrawer.open);
+    if (!runtime.marketDrawer.open) {
+      panel.innerHTML = '';
+      return;
+    }
+    const tab = runtime.marketDrawer.tab || state.marketTab || state.type;
+    const rows = filteredMarkets(tab, runtime.marketDrawer.search).slice(0, 80);
+    panel.innerHTML = `<div class="mobile-market-sheet">
+      <div class="section-head compact"><div><h2>Markets</h2><p>Choose market and symbol</p></div><button class="icon-btn" type="button" data-mobile-market-close>X</button></div>
+      <div class="mobile-market-tabs">${MARKET_TABS.map((item) => `<button class="${item.key === tab ? 'active' : ''}" type="button" data-mobile-market-tab="${item.key}">${esc(item.label)}</button>`).join('')}</div>
+      <label class="search-box mobile-market-search"><span>Search</span><input type="search" data-mobile-market-search value="${escAttr(runtime.marketDrawer.search || '')}" placeholder="Search symbols" /></label>
+      <div class="mobile-market-list">${rows.length ? rows.map(mobileMarketRow).join('') : emptyState('No symbols found.')}</div>
+    </div>`;
+    panel.querySelector('[data-mobile-market-close]')?.addEventListener('click', () => toggleMobileMenu(false));
+    panel.onclick = (event) => { if (event.target === panel) toggleMobileMenu(false); };
+    panel.querySelectorAll('[data-mobile-market-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        runtime.marketDrawer.tab = btn.dataset.mobileMarketTab || state.type;
+        runtime.marketDrawer.search = '';
+        renderMobileMarketPanel();
+      });
+    });
+    panel.querySelector('[data-mobile-market-search]')?.addEventListener('input', (event) => {
+      runtime.marketDrawer.search = event.target.value || '';
+      const list = panel.querySelector('.mobile-market-list');
+      if (list) {
+        const filtered = filteredMarkets(runtime.marketDrawer.tab || state.type, runtime.marketDrawer.search).slice(0, 100);
+        list.innerHTML = filtered.length ? filtered.map(mobileMarketRow).join('') : emptyState('No symbols found.');
+        bindMobileMarketRows(list);
+      }
+    });
+    bindMobileMarketRows(panel);
+  }
+
+  function bindMobileMarketRows(root) {
+    root.querySelectorAll('[data-mobile-symbol]').forEach((row) => {
+      row.addEventListener('click', () => {
+        selectSymbol(row.dataset.mobileSymbol, row.dataset.mobileType, row.dataset.mobileMarket);
+        toggleMobileMenu(false);
+      });
+    });
+  }
+
+  function mobileMarketRow(m) {
+    const quote = mergedQuote(m);
+    const q = quoteState(quote);
+    return `<button class="mobile-market-row ${m.symbol === state.symbol ? 'active' : ''}" type="button" data-mobile-symbol="${escAttr(m.symbol)}" data-mobile-type="${escAttr(m.type || state.type)}" data-mobile-market="${escAttr(m.market || defaultMarket(m.type))}">
+      ${marketLogo(m, q.className)}
+      <span><strong>${esc(m.symbol)}</strong><small>${esc(m.name || displayTypeLabel(m.type))}</small></span>
+      <em>${quote.price > 0 ? price(quote.price, m.type) : '--'}<small class="${q.changeClass}">${pct(quote.change_pct)}</small></em>
+    </button>`;
   }
 
   function navButton(item) {
@@ -517,6 +572,18 @@
         </div>
       </section>
 
+
+      <section class="panel home-copy-panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Copy desk</span>
+            <h2>Copy trading</h2>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="#/invest">View all</a>
+        </div>
+        <div data-home-copy>${homeCopyScroller()}</div>
+      </section>
+
       <section class="panel">
         <div class="section-head">
           <div>
@@ -544,7 +611,19 @@
       el.addEventListener('click', () => selectSymbol(el.dataset.symbol, el.dataset.type, el.dataset.market || undefined));
     });
     loadTradingAccount(token, true, true);
+    if (!state.invest.signals.length) loadInvest(token, false);
+    bindGateActions($('#view'));
     setTimer(() => loadTradingAccount(token, false, true), ACCOUNT_POLL_MS);
+  }
+
+  function homeCopyScroller() {
+    const signals = (state.invest && state.invest.signals || []).slice(0, 8);
+    const locked = state.mode !== 'real';
+    if (!signals.length) return `<div class="home-copy-scroll">${emptyState('Copy signals will appear after seed/deploy.')}</div>`;
+    return `<div class="home-copy-gate ${locked ? 'is-locked' : ''}">
+      <div class="home-copy-scroll"><div class="copy-grid home-copy-row">${copySignalCards(signals, 'home')}</div></div>
+      ${locked ? `<div class="home-copy-overlay"><span>${uiIcon('earn')}</span><strong>Real account only</strong><p>Switch to Real and verify KYC to copy live signals.</p><button class="btn btn-primary" type="button" data-switch-real>Switch to Real</button></div>` : ''}
+    </div>`;
   }
 
   function quickAction(title, sub, href, icon) {
@@ -825,7 +904,7 @@
     $('[data-refresh-markets]')?.addEventListener('click', () => loadMarkets(runtime.routeToken, true));
     $('[data-refresh-account]')?.addEventListener('click', () => loadTradingAccount(runtime.routeToken, true));
     $('[data-refresh-signals]')?.addEventListener('click', () => loadTradeSignals(runtime.routeToken, true));
-    if (isMobile) {
+    if (computeTradeMobile()) {
       $('#view').insertAdjacentHTML('beforeend', `<div class="trade-mobile-sticky-bar"><button class="sell-quote" type="button" data-side-short="SELL">Sell ${esc(state.symbol)}</button><button class="buy-quote" type="button" data-side-short="BUY">Buy ${esc(state.symbol)}</button></div>`);
     }
     $('#view').querySelectorAll('[data-side-short]').forEach((btn) => {
@@ -1563,6 +1642,7 @@
       if (level && level.ok !== false) state.level = level;
       if (kyc && kyc.ok !== false) state.kyc = kyc.kyc || null;
       renderInvestBody();
+      updateHomeCopyPanel();
       renderTopbar();
     } catch (err) {
       if (!isAbort(err)) $('[data-invest-body]').innerHTML = emptyState(err.message || 'Earn products unavailable');
@@ -1616,6 +1696,13 @@
         setTradeMode('real', { promptKyc: true });
       });
     });
+  }
+
+  function updateHomeCopyPanel() {
+    const node = $('[data-home-copy]');
+    if (!node) return;
+    node.innerHTML = homeCopyScroller();
+    bindGateActions(node);
   }
 
   function renderInvestBody() {
@@ -2710,7 +2797,7 @@
   }
 
   function clearRuntime() {
-    runtime.timers.forEach((id) => clearInterval(id));
+    runtime.timers.forEach((id) => { clearInterval(id); clearTimeout(id); });
     runtime.timers.clear();
     runtime.cleanups.forEach((fn) => { try { fn(); } catch (e) {} });
     runtime.cleanups = [];
@@ -2897,7 +2984,7 @@
     return { label: 'Live', className: 'is-live', changeClass: changeClass(q.change_pct) };
   }
 
-  function filteredMarkets(type) {
+  function filteredMarkets(type, searchTerm = state.search) {
     let rows = [];
     if (type === 'all') {
       rows = TYPES.flatMap((t) => marketRowsForType(t.key).slice(0, 18));
@@ -2908,7 +2995,7 @@
     } else {
       rows = marketRowsForType(type);
     }
-    const term = state.search.trim().toLowerCase();
+    const term = String(searchTerm || '').trim().toLowerCase();
     if (!term) return rows.slice(0, 80);
     return rows.filter((m) => `${m.symbol} ${m.name}`.toLowerCase().includes(term)).slice(0, 80);
   }
