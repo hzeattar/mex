@@ -38,6 +38,7 @@
     wallet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19v14H5.5A2.5 2.5 0 0 1 3 16.5v-9Z"/><path d="M16 12h4v4h-4a2 2 0 1 1 0-4Z"/><path d="M6 9h10"/></svg>',
     earn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M7 7h7.5a3.5 3.5 0 0 1 0 7H9.5a3.5 3.5 0 0 0 0 7H17"/><path d="M5 11l-3 3 3 3"/><path d="m19 7 3 3-3 3"/></svg>',
     account: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+    menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>',
     deposit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></svg>',
     withdraw: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M4 5h16"/></svg>',
     kyc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/><path d="m16 17 1 1 3-3"/></svg>',
@@ -311,7 +312,7 @@
           </nav>
         </aside>
         <div class="workspace">
-          <header class="mobile-header"><a class="mobile-brand" href="#/home"><span class="brand-mark brand-svg-mark">${buildBrandLogoSvg(state.brand.name, state.brand.tagline)}</span><strong>${esc(state.brand.name || 'Vertex')}</strong></a><button class="mobile-menu-btn" type="button" data-mobile-menu-toggle>${uiIcon('account')}<span>Menu</span></button></header>
+          <header class="mobile-header"><a class="mobile-brand" href="#/home"><span class="brand-mark brand-svg-mark">${buildBrandLogoSvg(state.brand.name, state.brand.tagline)}</span><strong>${esc(state.brand.name || 'Vertex')}</strong></a><button class="mobile-menu-btn" type="button" data-mobile-menu-toggle aria-label="Open menu" aria-expanded="false">${uiIcon('menu')}<span>Menu</span></button></header>
           <header class="topbar" id="topbar"></header>
           <main class="view" id="view"></main>
         </div>
@@ -358,6 +359,7 @@
     if (!panel) return;
     panel.classList.toggle('is-open', !!open);
     document.body.classList.toggle('has-mobile-menu-open', !!open);
+    $('[data-mobile-menu-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   function closeMobileMenu() {
