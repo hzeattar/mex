@@ -1874,7 +1874,7 @@ button {
     right: 10px;
     bottom: 10px;
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 6px;
     padding: 8px;
     background: rgba(3, 9, 22, 0.94);
@@ -2878,5 +2878,110 @@ html {
 
   .home-hero.home-hero-compact {
     padding: 14px;
+  }
+}
+.mobile-header,
+.mobile-menu-panel {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(8, 18, 37, .9);
+    position: sticky;
+    top: 8px;
+    z-index: 50;
+    backdrop-filter: blur(16px);
+  }
+
+  .mobile-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 900;
+  }
+
+  .mobile-brand .brand-mark,
+  .mobile-brand .brand-svg-mark svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mobile-menu-btn {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    font-weight: 900;
+  }
+
+  .mobile-menu-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+
+  .mobile-menu-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 140;
+    background: rgba(0, 0, 0, .56);
+    backdrop-filter: blur(8px);
+    padding: 14px;
+  }
+
+  .mobile-menu-panel.is-open {
+    display: grid;
+    align-items: end;
+  }
+
+  .mobile-menu-sheet {
+    max-height: min(78vh, 680px);
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #071126;
+    box-shadow: var(--shadow);
+  }
+
+  .mobile-menu-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .mobile-menu-grid .nav-pill {
+    min-height: 70px;
+    justify-content: center;
+  }
+
+  .mobile-nav {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+
+  .mobile-nav .nav-pill:nth-child(n+5) {
+    display: none;
+  }
+
+  body.has-mobile-menu-open {
+    overflow: hidden;
   }
 }

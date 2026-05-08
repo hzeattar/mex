@@ -311,18 +311,24 @@
           </nav>
         </aside>
         <div class="workspace">
+          <header class="mobile-header"><a class="mobile-brand" href="#/home"><span class="brand-mark brand-svg-mark">${buildBrandLogoSvg(state.brand.name, state.brand.tagline)}</span><strong>${esc(state.brand.name || 'Vertex')}</strong></a><button class="mobile-menu-btn" type="button" data-mobile-menu-toggle>${uiIcon('account')}<span>Menu</span></button></header>
           <header class="topbar" id="topbar"></header>
           <main class="view" id="view"></main>
         </div>
+        <div class="mobile-menu-panel" data-mobile-menu-panel><div class="mobile-menu-sheet"><div class="section-head compact"><div><h2>Menu</h2><p>All workspace pages</p></div><button class="icon-btn" type="button" data-mobile-menu-close>X</button></div><nav class="mobile-menu-grid" aria-label="Mobile full menu">${navItems().map(navButton).join('')}<a class="nav-pill" href="#/deposit"><span>${uiIcon('deposit')}</span><em>Deposit</em></a><a class="nav-pill" href="#/withdraw"><span>${uiIcon('withdraw')}</span><em>Withdraw</em></a><a class="nav-pill" href="#/kyc"><span>${uiIcon('kyc')}</span><em>KYC</em></a></nav></div></div>
         <nav class="mobile-nav" aria-label="Mobile primary">
-          ${navItems().map(navButton).join('')}
+          ${mobileNavItems().map(navButton).join('')}
         </nav>
       </div>`;
     app.querySelectorAll('[data-nav]').forEach((el) => {
       el.addEventListener('click', () => {
+        closeMobileMenu();
         if (window.innerWidth < 900) window.scrollTo({ top: 0, behavior: 'smooth' });
       });
     });
+    app.querySelector('[data-mobile-menu-toggle]')?.addEventListener('click', () => toggleMobileMenu(true));
+    app.querySelector('[data-mobile-menu-close]')?.addEventListener('click', () => toggleMobileMenu(false));
+    app.querySelector('[data-mobile-menu-panel]')?.addEventListener('click', (event) => { if (event.target && event.target.matches('[data-mobile-menu-panel]')) toggleMobileMenu(false); });
   }
 
   function navItems() {
@@ -336,6 +342,26 @@
       { route: 'support', label: 'Support', icon: 'support' },
       { route: 'account', label: 'Account', icon: 'account' }
     ];
+  }
+
+  function mobileNavItems() {
+    return [
+      { route: 'home', label: 'Home', icon: 'home' },
+      { route: 'trade', label: 'Trade', icon: 'trade' },
+      { route: 'invest', label: 'Earn', icon: 'earn' },
+      { route: 'wallet', label: 'Assets', icon: 'wallet' }
+    ];
+  }
+
+  function toggleMobileMenu(open) {
+    const panel = $('[data-mobile-menu-panel]');
+    if (!panel) return;
+    panel.classList.toggle('is-open', !!open);
+    document.body.classList.toggle('has-mobile-menu-open', !!open);
+  }
+
+  function closeMobileMenu() {
+    toggleMobileMenu(false);
   }
 
   function navButton(item) {
