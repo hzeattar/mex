@@ -2796,3 +2796,87 @@ html {
     height: 150px;
   }
 }
+.home-hero.home-hero-compact {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, .8fr) minmax(360px, 1.2fr);
+  align-items: stretch;
+  padding: 18px;
+  gap: 16px;
+}
+
+.home-hero-copy {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
+.home-hero.home-hero-compact h1 {
+  margin: 4px 0;
+  font-size: clamp(24px, 2.5vw, 34px);
+  line-height: 1.08;
+}
+
+.home-hero.home-hero-compact p {
+  max-width: 520px;
+}
+
+.hero-wallet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hero-wallet-card {
+  min-height: 118px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid rgba(129, 160, 220, .2);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, rgba(93,124,255,.16), rgba(36,210,141,.06)),
+    rgba(3, 9, 22, .54);
+  box-shadow: var(--shadow-soft);
+}
+
+.hero-wallet-card small,
+.hero-wallet-card span,
+.hero-wallet-card em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.hero-wallet-card small {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.hero-wallet-card strong {
+  display: block;
+  font-size: clamp(20px, 2.4vw, 32px);
+  line-height: 1.05;
+}
+
+@media (max-width: 1180px) {
+  .home-hero.home-hero-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-wallet-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-wallet-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero.home-hero-compact {
+    padding: 14px;
+  }
+}

@@ -453,10 +453,10 @@
     const wallet = activeWallet();
     const featured = collectFeaturedMarkets();
     $('#view').innerHTML = `
-      <section class="home-hero panel">
-        <div>
+      <section class="home-hero panel home-hero-compact">
+        <div class="home-hero-copy">
           <span class="eyebrow">${esc(state.brand.name)}</span>
-          <h1>Trading desk</h1>
+          <h1>${state.mode === 'real' ? 'Real trading workspace' : 'Demo trading workspace'}</h1>
           <p>${esc(state.brand.tagline || 'Professional trading and investment platform')}</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#/trade">Open Trade</a>
@@ -464,31 +464,12 @@
             <a class="btn btn-ghost" href="#/invest">Earn</a>
           </div>
         </div>
-        <div class="hero-visual">
-          <div class="hero-balance">
-            <small>${state.mode.toUpperCase()} BALANCE</small>
-            <strong>${money(wallet.available ?? wallet.balance ?? 0)}</strong>
-            <span>${esc(wallet.currency || '')}</span>
-          </div>
-          <div class="hero-tape ${featured.length >= 3 ? 'hero-tape--animated' : ''}">
-            ${featured.slice(0, 6).map((m) => {
-              const quote = mergedQuote(m);
-              const q = quoteState(quote);
-              return `<button type="button" data-symbol="${escAttr(m.symbol)}" data-type="${escAttr(m.type || state.type)}" data-market="${escAttr(m.market || defaultMarket(m.type))}">
-                ${marketLogo(m, q.className)}
-                <span><strong>${esc(m.symbol)}</strong><small class="${q.changeClass}">${pct(quote.change_pct)}</small></span>
-                <em>${quote.price > 0 ? price(quote.price, m.type) : '--'}</em>
-              </button>`;
-            }).join('')}
-          </div>
+        <div class="hero-wallet-grid">
+          ${heroWalletCard('Available', money(wallet.available ?? 0), wallet.currency || '', 'Primary spendable balance')}
+          ${heroWalletCard('Balance', money(wallet.balance ?? 0), wallet.currency || '', 'Total account balance')}
+          ${heroWalletCard('Holds', money(wallet.holds ?? 0), wallet.currency || '', 'Locked margin')}
+          ${heroWalletCard('Mode', state.mode === 'real' ? 'Real' : 'Demo', state.mode.toUpperCase(), 'Active workspace')}
         </div>
-      </section>
-
-      <section class="metric-grid">
-        ${metricCard('Available', money(wallet.available ?? 0), wallet.currency || '')}
-        ${metricCard('Balance', money(wallet.balance ?? 0), wallet.currency || '')}
-        ${metricCard('Holds', money(wallet.holds ?? 0), 'Locked margin')}
-        ${metricCard('Mode', state.mode === 'real' ? 'Real' : 'Demo', 'Internal execution')}
       </section>
 
       <section class="panel">
@@ -544,6 +525,15 @@
       <strong>${esc(title)}</strong>
       <small>${esc(sub)}</small>
     </a>`;
+  }
+
+  function heroWalletCard(label, value, currency, sub) {
+    return `<article class="hero-wallet-card">
+      <small>${esc(label)}</small>
+      <strong>${esc(value)}</strong>
+      <span>${esc(currency || '')}</span>
+      <em>${esc(sub || '')}</em>
+    </article>`;
   }
 
   function metricCard(label, value, sub) {
