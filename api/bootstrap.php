@@ -7,6 +7,7 @@ require_once __DIR__ . '/lib/ledger.php';
 require_once __DIR__ . '/lib/quotes.php';
 require_once __DIR__ . '/lib/settings.php';
 require_once __DIR__ . '/lib/market_resolver.php';
+require_once __DIR__ . '/lib/levels.php';
 
 require_method('GET');
 
@@ -59,6 +60,30 @@ function vp_boot_wallet(int $uid): array {
       'holds' => (float)($demoAvail['holds'] ?? 0),
     ],
   ];
+}
+
+function vp_boot_kyc(PDO $pdo, int $uid): ?array {
+  try {
+    $stmt = $pdo->prepare('SELECT id,status,full_name,country,doc_type,doc_number,admin_note,created_at,updated_at FROM kyc_requests WHERE user_id=? ORDER BY id DESC LIMIT 1');
+    $stmt->execute([$uid]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+  } catch (Throwable $e) {
+    return null;
+  }
+}
+
+function vp_boot_level(PDO $pdo, int $uid): array {
+  try {
+    return vp_resolve_user_level($pdo, $uid, 'en');
+  } catch (Throwable $e) {
+    return [
+      'current' => null,
+      'next' => null,
+      'levels' => [],
+      'confirmed_deposit_total' => 0,
+    ];
+  }
 }
 
 function vp_boot_market_groups(PDO $pdo): array {
@@ -166,6 +191,8 @@ json_response([
     'logo_url' => vp_boot_setting('site.app_logo_url', './assets/img/vertexpluse-logo.svg'),
   ],
   'wallet' => vp_boot_wallet($uid),
+  'kyc' => vp_boot_kyc($pdo, $uid),
+  'level' => vp_boot_level($pdo, $uid),
   'markets' => vp_boot_market_groups($pdo),
   'feature_flags' => feature_all(),
 ]);

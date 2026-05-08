@@ -2,8 +2,12 @@
   'use strict';
 
   const API = '/api';
-  const ACTIVE_QUOTE_MS = 2400;
-  const WATCHLIST_QUOTE_MS = 6000;
+  const ACTIVE_QUOTE_MS = 1500;
+  const WATCHLIST_QUOTE_MS = 4000;
+  const MIN_QUOTE_MS = 1000;
+  const FAST_QUOTE_MS = 1200;
+  const SLOW_QUOTE_MS = 2500;
+  const TRADE_MOBILE_BREAKPOINT = 768;
   const ACCOUNT_POLL_MS = 15000;
   const FINANCE_POLL_MS = 18000;
   const DEFAULT_AMOUNT = 100;
@@ -25,6 +29,8 @@
   const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h'];
   const ROUTES = ['home', 'trade', 'portfolio', 'wallet', 'deposit', 'withdraw', 'kyc', 'invest', 'account'];
   const ROUTE_ALIASES = { assets: 'wallet', funds: 'wallet', earn: 'invest', contracts: 'invest', levels: 'invest' };
+  const MARKET_ICON_PATH = './assets/img/markets/';
+  const UI_ASSET_PATH = './assets/img/ui/';
   const UI_ICONS = {
     home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9.5Z"/><path d="M9 21v-6h6v6"/></svg>',
     trade: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V8"/><path d="M12 19V4"/><path d="M19 19v-9"/><path d="M3 19h18"/><path d="M7 8H3"/><path d="M14 4h-4"/><path d="M21 10h-4"/></svg>',
@@ -39,47 +45,72 @@
     legacy: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"/><path d="M9 9h6v6H9z"/><path d="M3 9h2"/><path d="M3 15h2"/><path d="M19 9h2"/><path d="M19 15h2"/></svg>'
   };
   const SYMBOL_VISUALS = {
-    BTCUSDT: { short: 'BTC', family: 'crypto' },
-    ETHUSDT: { short: 'ETH', family: 'crypto' },
-    SOLUSDT: { short: 'SOL', family: 'crypto' },
-    BNBUSDT: { short: 'BNB', family: 'crypto' },
-    DOGEUSDT: { short: 'DOGE', family: 'crypto' },
-    USDCUSDT: { short: 'USDC', family: 'crypto' },
-    EURUSD: { short: 'EUR', family: 'forex' },
-    GBPUSD: { short: 'GBP', family: 'forex' },
-    USDJPY: { short: 'JPY', family: 'forex' },
-    AUDUSD: { short: 'AUD', family: 'forex' },
-    XAUUSD: { short: 'XAU', family: 'metal' },
-    XAGUSD: { short: 'XAG', family: 'metal' },
-    USOIL: { short: 'OIL', family: 'energy' },
-    UKOIL: { short: 'OIL', family: 'energy' },
-    NGAS: { short: 'GAS', family: 'energy' },
-    AAPL: { short: 'AAPL', family: 'equity' },
-    MSFT: { short: 'MSFT', family: 'equity' },
-    TSLA: { short: 'TSLA', family: 'equity' },
-    NVDA: { short: 'NVDA', family: 'equity' },
-    SPX500: { short: 'SPX', family: 'index' },
-    NAS100: { short: 'NAS', family: 'index' },
-    ES_F: { short: 'ES', family: 'future' },
-    NQ_F: { short: 'NQ', family: 'future' },
-    YM_F: { short: 'YM', family: 'future' },
-    ZN_F: { short: 'ZN', family: 'future' },
-    ZB_F: { short: 'ZB', family: 'future' },
-    '2222': { short: '2222', family: 'arab' },
-    '1120': { short: '1120', family: 'arab' },
-    '2010': { short: '2010', family: 'arab' }
+    BTCUSDT: { short: 'BTC', family: 'crypto', icon: MARKET_ICON_PATH + 'btc.svg' },
+    ETHUSDT: { short: 'ETH', family: 'crypto', icon: MARKET_ICON_PATH + 'eth.svg' },
+    SOLUSDT: { short: 'SOL', family: 'crypto', icon: MARKET_ICON_PATH + 'sol.svg' },
+    BNBUSDT: { short: 'BNB', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    XRPUSDT: { short: 'XRP', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    ADAUSDT: { short: 'ADA', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    AVAXUSDT: { short: 'AVAX', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    DOTUSDT: { short: 'DOT', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    LINKUSDT: { short: 'LINK', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    DOGEUSDT: { short: 'DOGE', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    USDCUSDT: { short: 'USDC', family: 'crypto', icon: MARKET_ICON_PATH + 'usdc.svg' },
+    EURUSD: { short: 'EUR', family: 'forex', icon: MARKET_ICON_PATH + 'forex.svg' },
+    GBPUSD: { short: 'GBP', family: 'forex', icon: MARKET_ICON_PATH + 'forex.svg' },
+    USDJPY: { short: 'JPY', family: 'forex', icon: MARKET_ICON_PATH + 'forex.svg' },
+    AUDUSD: { short: 'AUD', family: 'forex', icon: MARKET_ICON_PATH + 'forex.svg' },
+    XAUUSD: { short: 'XAU', family: 'metal', icon: MARKET_ICON_PATH + 'metal.svg' },
+    XAGUSD: { short: 'XAG', family: 'metal', icon: MARKET_ICON_PATH + 'metal.svg' },
+    USOIL: { short: 'OIL', family: 'energy', icon: MARKET_ICON_PATH + 'oil.svg' },
+    UKOIL: { short: 'OIL', family: 'energy', icon: MARKET_ICON_PATH + 'oil.svg' },
+    NGAS: { short: 'GAS', family: 'energy', icon: MARKET_ICON_PATH + 'oil.svg' },
+    COPPER: { short: 'CU', family: 'metal', icon: MARKET_ICON_PATH + 'metal.svg' },
+    PLAT: { short: 'PT', family: 'metal', icon: MARKET_ICON_PATH + 'metal.svg' },
+    PALL: { short: 'PD', family: 'metal', icon: MARKET_ICON_PATH + 'metal.svg' },
+    AAPL: { short: 'AAPL', family: 'equity', icon: MARKET_ICON_PATH + 'apple.svg' },
+    MSFT: { short: 'MSFT', family: 'equity', icon: MARKET_ICON_PATH + 'microsoft.svg' },
+    TSLA: { short: 'TSLA', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
+    NVDA: { short: 'NVDA', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
+    AMZN: { short: 'AMZN', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
+    GOOGL: { short: 'GOOGL', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
+    SPX500: { short: 'SPX', family: 'index', icon: MARKET_ICON_PATH + 'stock.svg' },
+    NAS100: { short: 'NAS', family: 'index', icon: MARKET_ICON_PATH + 'stock.svg' },
+    ES_F: { short: 'ES', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    NQ_F: { short: 'NQ', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    YM_F: { short: 'YM', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    RTY_F: { short: 'RTY', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    NKD_F: { short: 'NKD', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    CL_F: { short: 'CL', family: 'future', icon: MARKET_ICON_PATH + 'oil.svg' },
+    BZ_F: { short: 'BZ', family: 'future', icon: MARKET_ICON_PATH + 'oil.svg' },
+    GC_F: { short: 'GC', family: 'future', icon: MARKET_ICON_PATH + 'metal.svg' },
+    SI_F: { short: 'SI', family: 'future', icon: MARKET_ICON_PATH + 'metal.svg' },
+    NG_F: { short: 'NG', family: 'future', icon: MARKET_ICON_PATH + 'oil.svg' },
+    ZN_F: { short: 'ZN', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    ZB_F: { short: 'ZB', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    '2222': { short: '2222', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '1120': { short: '1120', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '2010': { short: '2010', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '7010': { short: '7010', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '1211': { short: '1211', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '1150': { short: '1150', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '1180': { short: '1180', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '2280': { short: '2280', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '4002': { short: '4002', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' },
+    '4300': { short: '4300', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' }
   };
   const TYPE_VISUALS = {
-    crypto: { short: 'CR', family: 'crypto' },
-    forex: { short: 'FX', family: 'forex' },
-    stocks: { short: 'EQ', family: 'equity' },
-    commodities: { short: 'CMD', family: 'metal' },
-    futures: { short: 'FUT', family: 'future' },
-    arab: { short: 'AR', family: 'arab' }
+    crypto: { short: 'CR', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    forex: { short: 'FX', family: 'forex', icon: MARKET_ICON_PATH + 'forex.svg' },
+    stocks: { short: 'EQ', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
+    commodities: { short: 'CMD', family: 'metal', icon: MARKET_ICON_PATH + 'metal.svg' },
+    futures: { short: 'FUT', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
+    arab: { short: 'AR', family: 'arab', icon: MARKET_ICON_PATH + 'arab.svg' }
   };
 
   const state = {
     route: 'home',
+    lang: safeStorage('vp_lang', browserLang()),
     booted: false,
     bootstrap: null,
     brand: {
@@ -150,13 +181,24 @@
     volumeSeries: null,
     chartResize: null,
     lastCandle: null,
+    candles: [],
+    maSeries: null,
+    emaSeries: null,
+    chartTools: { crosshair: true, ma: false, ema: false },
+    chartFullscreen: false,
     chartUnavailable: false,
+    quoteCadence: ACTIVE_QUOTE_MS,
+    watchCadence: WATCHLIST_QUOTE_MS,
+    tradeViewport: computeTradeMobile() ? 'mobile' : 'desktop',
+    resizeTimer: null,
+    cleanups: [],
     pending: freshPending()
   };
 
   const app = document.getElementById('app');
   document.addEventListener('DOMContentLoaded', init);
   document.addEventListener('error', handleMarketLogoError, true);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
   function freshPending() {
     return {
@@ -191,6 +233,8 @@
       state.user = data.user || null;
       state.brand = Object.assign({}, state.brand, data.brand || {});
       state.wallet = data.wallet || null;
+      state.kyc = data.kyc || null;
+      state.level = data.level || null;
       state.markets = normalizeBootMarkets(data.markets || {});
       primeSelectionFromMarkets();
       state.booted = true;
@@ -225,7 +269,7 @@
           <div class="setup-actions">
             <button class="btn btn-primary" data-test-api>Test API</button>
             <button class="btn btn-ghost" data-retry>Retry</button>
-            <a class="btn btn-ghost" href="/legacy-app.php#/home">Legacy</a>
+            <a class="btn btn-ghost" href="mailto:support@vertexpluse.com">Support</a>
           </div>
         </section>
       </main>`;
@@ -245,8 +289,8 @@
       <div class="app-shell">
         <aside class="side-rail">
           <a class="brand-lockup" href="#/home" aria-label="${esc(state.brand.name)} home">
-            <span class="brand-mark">V</span>
-            <span class="brand-word">Vertex</span>
+            <span class="brand-mark brand-svg-mark">${buildBrandLogoSvg(state.brand.name, state.brand.tagline)}</span>
+            <span class="brand-word">${esc(state.brand.name || 'Vertex')}</span>
           </a>
           <nav class="rail-nav" aria-label="Primary">
             ${navItems().map(navButton).join('')}
@@ -357,18 +401,7 @@
         </button>
       </div>`;
     $('[data-mode-toggle]')?.addEventListener('click', () => {
-      state.mode = state.mode === 'real' ? 'demo' : 'real';
-      safeStorage('vp_trade_mode', state.mode, true);
-      renderTopbar();
-      if (state.route === 'trade') {
-        loadTradingAccount(runtime.routeToken, true);
-      } else if (state.route === 'portfolio') {
-        renderPortfolio();
-      } else if (state.route === 'wallet') {
-        loadWallet(runtime.routeToken, true);
-      } else if (state.route === 'invest') {
-        loadInvest(runtime.routeToken, true);
-      }
+      setTradeMode(state.mode === 'real' ? 'demo' : 'real', { promptKyc: true });
     });
     $('[data-user-menu]')?.addEventListener('click', () => {
       location.hash = '#/account';
@@ -443,7 +476,6 @@
           ${quickAction('KYC', 'Verify account documents', '#/kyc', 'kyc')}
           ${quickAction('Earn', 'Copy signals and level contracts', '#/invest', 'earn')}
           ${quickAction('Support', 'Help desk and account guidance', '#/account', 'support')}
-          ${quickAction('Legacy', 'Fallback copy of the original interface', '/legacy-app.php#/home', 'legacy')}
         </div>
       </section>
 
@@ -512,6 +544,8 @@
     const type = TYPE_BY_KEY[state.type] || TYPE_BY_KEY.crypto;
     const market = state.market || type.market;
     const rows = filteredMarkets(state.marketTab || state.type);
+    const isMobile = computeTradeMobile();
+    runtime.tradeViewport = isMobile ? 'mobile' : 'desktop';
     $('#view').innerHTML = `
       <section class="trade-hero panel">
         <div>
@@ -548,7 +582,7 @@
         </div>
       </section>
 
-      <section class="trade-layout">
+      <section class="trade-layout ${isMobile ? 'trade-mobile-stack' : 'trade-grid-desktop'}">
         <aside class="panel watch-panel">
           <div class="section-head compact">
             <div>
@@ -584,7 +618,14 @@
             <div class="tf-row">
               ${TIMEFRAMES.map((tf) => `<button class="${tf === state.tf ? 'active' : ''}" data-tf="${tf}" type="button">${tf}</button>`).join('')}
             </div>
-            <div class="chart-wrap">
+            <div class="chart-tools-bar">
+              <button class="${runtime.chartTools.crosshair ? 'active' : ''}" type="button" data-chart-tool="crosshair">Crosshair</button>
+              <button class="${runtime.chartTools.ma ? 'active' : ''}" type="button" data-chart-tool="ma">MA 20</button>
+              <button class="${runtime.chartTools.ema ? 'active' : ''}" type="button" data-chart-tool="ema">EMA 9</button>
+              <button type="button" data-chart-tool="reset">Reset</button>
+              <button type="button" data-chart-tool="fullscreen">Fullscreen</button>
+            </div>
+            <div class="chart-wrap" data-chart-wrap>
               <div id="liteChart" class="chart-canvas"></div>
               <div class="chart-overlay" data-chart-overlay>Loading chart...</div>
             </div>
@@ -736,6 +777,10 @@
     $('[data-refresh-markets]')?.addEventListener('click', () => loadMarkets(runtime.routeToken, true));
     $('[data-refresh-account]')?.addEventListener('click', () => loadTradingAccount(runtime.routeToken, true));
     $('[data-refresh-signals]')?.addEventListener('click', () => loadTradeSignals(runtime.routeToken, true));
+    $('#view').querySelectorAll('[data-chart-tool]').forEach((btn) => {
+      btn.addEventListener('click', () => toggleChartTool(btn.dataset.chartTool, btn));
+    });
+    setupTradeViewportWatcher(runtime.routeToken);
   }
 
   function setupTrade(token, hardRefresh = false) {
@@ -745,8 +790,8 @@
     loadTradingAccount(token, true);
     loadTradeSignals(token, true);
     loadKyc(token);
-    setTimer(() => loadActiveQuote(token, false), ACTIVE_QUOTE_MS);
-    setTimer(() => hydrateVisibleQuotes(token), WATCHLIST_QUOTE_MS);
+    setAdaptiveTimer(() => { if (!document.hidden) return loadActiveQuote(token, false); }, () => runtime.quoteCadence, token);
+    setAdaptiveTimer(() => { if (!document.hidden) return hydrateVisibleQuotes(token); }, () => runtime.watchCadence, token);
     setTimer(() => loadTradingAccount(token, false), ACCOUNT_POLL_MS);
   }
 
@@ -810,8 +855,10 @@
   async function loadActiveQuote(token, immediate = false) {
     if (runtime.pending.activeQuote && !immediate) return;
     runtime.pending.activeQuote = true;
+    const started = performance.now ? performance.now() : Date.now();
     try {
       const data = await api(`/quotes.php?symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&purpose=focus`, { timeout: state.type === 'crypto' ? (immediate ? 7000 : 5000) : (immediate ? 10000 : 8500) });
+      updateQuoteCadence((performance.now ? performance.now() : Date.now()) - started);
       if (!isToken(token) || !data || data.ok === false) return;
       const item = firstQuote(data.items || data);
       if (!item) return;
@@ -869,9 +916,11 @@
         return;
       }
       ensureChart();
+      runtime.candles = candles;
       runtime.candleSeries.setData(candles.map(stripVolume));
       if (runtime.volumeSeries) runtime.volumeSeries.setData(candles.map(volumePoint));
       runtime.lastCandle = Object.assign({}, candles[candles.length - 1]);
+      refreshChartOverlays();
       setChartMessage('');
       updateChartTail(state.activeQuote);
     } catch (err) {
@@ -947,6 +996,7 @@
   }
 
   async function placeOrder(side) {
+    if (state.mode === 'real' && !isKycApproved()) { openKycRequiredDialog('trade'); return; }
     const status = $('[data-ticket-status]');
     if (status) status.textContent = 'Sending order...';
     const limitInput = $('[data-limit-price]');
@@ -1066,7 +1116,10 @@
     const kyc = kycStatusLabel();
     const level = (state.level && state.level.current) || null;
     const next = (state.level && state.level.next) || null;
+    const demoLocked = state.mode !== 'real';
     node.innerHTML = `
+      ${demoLocked ? demoGateBanner('wallet') : buildRealWorkflowNotice('funding')}
+      <div class="${demoLocked ? 'vp-page-preview-lock' : ''}">
       <section class="wallet-grid">
         ${walletCard('Demo wallet', wallet.demo || {})}
         ${walletCard('Real wallet', wallet.real || {})}
@@ -1101,7 +1154,10 @@
       <section class="panel">
         <div class="section-head"><div><span class="eyebrow">Ledger</span><h2>Latest transactions</h2></div></div>
         <div class="table-shell">${ledgerTable(state.finance.ledger)}</div>
-      </section>`;
+      </section>
+      </div>`;
+    bindGateActions(node);
+    if (demoLocked) openDemoGateDialog('wallet');
   }
 
   function requestList(title, items, kind) {
@@ -1147,7 +1203,8 @@
           <a class="btn btn-ghost" href="#/kyc">KYC</a>
         </div>
       </section>
-      <section class="funding-layout">
+      ${state.mode !== 'real' ? demoGateBanner(kind) : buildRealWorkflowNotice(kind)}
+      <section class="funding-layout ${state.mode !== 'real' ? 'vp-page-preview-lock' : ''}">
         <div class="panel funding-methods">
           <div class="section-head compact"><div><h2>Payment methods</h2><p>Real account only</p></div></div>
           <div data-method-list>${emptyState('Loading methods...')}</div>
@@ -1157,6 +1214,8 @@
           <div data-funding-form>${emptyState('Loading form...')}</div>
         </div>
       </section>`;
+    bindGateActions($('#view'));
+    if (state.mode !== 'real') openDemoGateDialog(kind);
     loadFunding(token, kind);
   }
 
@@ -1256,6 +1315,8 @@
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const status = $('[data-funding-status]');
+      if (state.mode !== 'real') { if (status) status.textContent = ''; openDemoGateDialog(kind); return; }
+      if (!isKycApproved()) { if (status) status.textContent = ''; openKycRequiredDialog(kind); return; }
       if (status) status.textContent = 'Submitting...';
       const amount = parseNumber(form.elements.amount?.value);
       const details = collectFormDetails(form);
@@ -1450,6 +1511,53 @@
     }
   }
 
+  function earnAccessGuard() {
+    const kyc = kycStatusLabel();
+    if (state.mode !== 'real') {
+      return {
+        title: 'Real account required',
+        text: 'Copy trading and contracts are available on Real accounts only. Switch to Real to continue.',
+        icon: 'wallet',
+        action: 'Switch to Real',
+        switchReal: true
+      };
+    }
+    if (kyc.label !== 'Approved') {
+      return {
+        title: 'KYC required',
+        text: 'Complete KYC verification before using Real copy trading and contracts.',
+        icon: 'kyc',
+        action: 'Verify KYC',
+        href: '#/kyc'
+      };
+    }
+    return null;
+  }
+
+  function guardedEarnContent(content, guard) {
+    if (!guard) return content;
+    const action = guard.switchReal
+      ? `<button class="btn btn-primary btn-sm" type="button" data-earn-switch-real>${esc(guard.action)}</button>`
+      : `<a class="btn btn-primary btn-sm" href="${escAttr(guard.href || '#/kyc')}" data-earn-guard-link>${esc(guard.action)}</a>`;
+    return `<div class="earn-gate is-locked">
+      <div class="earn-gate-content">${content}</div>
+      <div class="earn-gate-overlay">
+        <span class="guard-icon">${uiIcon(guard.icon || 'kyc')}</span>
+        <strong>${esc(guard.title)}</strong>
+        <p>${esc(guard.text)}</p>
+        ${action}
+      </div>
+    </div>`;
+  }
+
+  function bindEarnGuardActions(root = document) {
+    root.querySelectorAll('[data-earn-switch-real]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        setTradeMode('real', { promptKyc: true });
+      });
+    });
+  }
+
   function renderInvestBody() {
     const node = $('[data-invest-body]');
     if (!node) return;
@@ -1459,7 +1567,10 @@
     const contractMine = state.invest.mine.filter((x) => String(x.product_kind || x.kind || 'contract').toLowerCase() !== 'plan');
     const activeCopies = state.invest.copies.filter((x) => ['active', 'armed', 'copied'].includes(String(x.status || '').toLowerCase())).length;
     const activeContracts = contractMine.filter((x) => ['active', 'running'].includes(String(x.status || '').toLowerCase())).length;
+    const accessGuard = earnAccessGuard();
+    const demoLocked = state.mode !== 'real';
     node.innerHTML = `
+      ${demoLocked ? demoGateBanner('earn') : buildRealWorkflowNotice('earn')}
       ${levelStrip()}
       <section class="metric-grid">
         ${metricCard('Current level', levelName(level), 'Customer tier')}
@@ -1479,7 +1590,7 @@
           <div class="section-head">
             <div><span class="eyebrow">Signal desk</span><h2>Copy trading signals</h2><p>Real-only subscriptions. KYC approval is required before copying.</p></div>
           </div>
-          <div class="copy-grid">${copySignalCards(state.invest.signals, 'earn')}</div>
+          ${guardedEarnContent(`<div class="copy-grid">${copySignalCards(state.invest.signals, 'earn')}</div>`, accessGuard)}
         </section>
         <section class="panel">
           <div class="section-head"><div><span class="eyebrow">My copies</span><h2>Copied and armed trades</h2></div></div>
@@ -1487,7 +1598,7 @@
         </section>` : `
         <section class="panel">
           <div class="section-head"><div><span class="eyebrow">Contracts</span><h2>Perpetual and term contracts</h2></div></div>
-          <div class="invest-grid">${productCards(state.invest.contracts, 'contract')}</div>
+          ${guardedEarnContent(`<div class="invest-grid">${productCards(state.invest.contracts, 'contract')}</div>`, accessGuard)}
         </section>
         <section class="panel">
           <div class="section-head"><div><span class="eyebrow">My contracts</span><h2>Active contracts</h2></div></div>
@@ -1497,6 +1608,9 @@
     bindEarnTabs();
     bindCopyButtons(node);
     bindInvestButtons();
+    bindEarnGuardActions(node);
+    bindGateActions(node);
+    if (demoLocked) openDemoGateDialog('earn');
   }
 
   function bindEarnTabs() {
@@ -1563,7 +1677,9 @@
     if (title) title.textContent = `Signals for ${state.symbol}`;
     const list = panel.querySelector('[data-trade-signals-list]');
     if (!list) return;
-    list.innerHTML = errorMessage ? emptyState(errorMessage) : `<div class="copy-grid compact">${copySignalCards(state.invest.tradeSignals, 'trade')}</div>`;
+    const accessGuard = earnAccessGuard();
+    list.innerHTML = errorMessage ? emptyState(errorMessage) : guardedEarnContent(`<div class="copy-grid compact">${copySignalCards(state.invest.tradeSignals, 'trade')}</div>`, accessGuard);
+    bindEarnGuardActions(list);
     bindCopyButtons(list);
     updateSignalLiveFromQuote();
   }
@@ -1572,7 +1688,10 @@
     root.querySelectorAll('[data-copy-signal]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const sig = findSignal(btn.dataset.copySignal);
-        if (sig) openCopyDialog(sig);
+        if (!sig) return;
+        if (state.mode !== 'real') { openDemoGateDialog('copy'); return; }
+        if (!isKycApproved()) { openKycRequiredDialog('copy'); return; }
+        openCopyDialog(sig);
       });
     });
   }
@@ -1626,11 +1745,8 @@
     const form = document.querySelector('[data-copy-form]');
     form?.addEventListener('submit', (event) => submitCopyForm(event, sig));
     document.querySelector('[data-switch-real]')?.addEventListener('click', () => {
-      state.mode = 'real';
-      safeStorage('vp_trade_mode', 'real', true);
-      renderTopbar();
+      setTradeMode('real', { promptKyc: true });
       closeLiteModal();
-      openCopyDialog(sig);
     });
   }
 
@@ -1731,6 +1847,146 @@
     return n > 0 ? price(n, type || state.type) : '--';
   }
 
+
+  function browserLang() {
+    const lang = String((navigator.language || 'en').slice(0, 2)).toLowerCase();
+    return ['ar', 'ru'].includes(lang) ? lang : 'en';
+  }
+
+  function tr(en, ar, ru) {
+    if (state.lang === 'ar') return ar || en;
+    if (state.lang === 'ru') return ru || en;
+    return en;
+  }
+
+  function setTradeMode(mode, options = {}) {
+    state.mode = mode === 'real' ? 'real' : 'demo';
+    safeStorage('vp_trade_mode', state.mode, true);
+    renderTopbar();
+    if (state.mode === 'real' && options.promptKyc && !isKycApproved()) openKycRequiredDialog('real_mode');
+    if (state.route === 'trade') {
+      renderTradeSignalsPanel();
+      loadTradingAccount(runtime.routeToken, true);
+    } else if (state.route === 'portfolio') {
+      renderPortfolio();
+    } else if (state.route === 'wallet') {
+      loadWallet(runtime.routeToken, true);
+    } else if (state.route === 'invest') {
+      loadInvest(runtime.routeToken, true);
+    } else if (state.route === 'deposit' || state.route === 'withdraw') {
+      renderFunding(state.route);
+    }
+    showToast(state.mode === 'real' ? 'Real mode enabled' : 'Demo mode enabled');
+  }
+
+  function isKycApproved() {
+    return kycStatusLabel().label === 'Approved';
+  }
+
+  function demoGateBanner(context) {
+    const wallet = state.wallet || {};
+    const demo = wallet.demo || {};
+    const real = wallet.real || {};
+    const title = context === 'earn'
+      ? 'Earn is locked in Demo mode'
+      : context === 'withdraw'
+        ? 'Withdrawals require Real mode'
+        : context === 'deposit'
+          ? 'Deposits require Real mode'
+          : 'This area is a locked Demo preview';
+    return `<section class="panel vp-real-only-hero">
+      <div class="vp-real-only-copy">
+        <span class="eyebrow">Real account only</span>
+        <h2>${esc(title)}</h2>
+        <p>Switch to Real mode to unlock funding, copy trading, contracts, and live account actions. Demo remains available for practice trading only.</p>
+        <div class="vp-gate-pills">
+          <span>Mode: ${state.mode.toUpperCase()}</span>
+          <span>Demo available: ${money(demo.available ?? demo.balance ?? 0)}</span>
+          <span>Real available: ${money(real.available ?? real.balance ?? 0)}</span>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" type="button" data-switch-real>Switch to Real</button>
+          <button class="btn btn-ghost" type="button" data-demo-info>Why locked?</button>
+        </div>
+      </div>
+      <div class="vp-real-only-preview">
+        <span>${uiIcon('wallet')}</span>
+        <strong>Protected live workflow</strong>
+        <small>Real mode + approved KYC unlocks sensitive actions.</small>
+      </div>
+    </section>`;
+  }
+
+  function buildRealWorkflowNotice(context) {
+    const kyc = kycStatusLabel();
+    if (state.mode !== 'real' || kyc.label === 'Approved') return '';
+    return `<section class="panel vp-workflow-notice">
+      <span class="guard-icon">${uiIcon('kyc')}</span>
+      <div>
+        <strong>Verification required for live actions</strong>
+        <p>${esc(kyc.text)}</p>
+      </div>
+      <a class="btn btn-primary btn-sm" href="#/kyc">Open KYC</a>
+    </section>`;
+  }
+
+  function openDemoGateDialog(route) {
+    const key = `vp_demo_gate_${route}`;
+    try { if (sessionStorage.getItem(key) === '1') return; sessionStorage.setItem(key, '1'); } catch (e) {}
+    openLiteModal(buildGateDialogBody({
+      tone: 'real',
+      badge: 'Real account only',
+      title: 'This workflow is locked in Demo',
+      text: 'You can preview the page, but deposits, withdrawals, copy trading, and contracts need Real mode.',
+      summary: 'Switch to Real to continue. KYC may still be required for sensitive actions.',
+      action: 'real'
+    }));
+    bindGateActions(document);
+  }
+
+  function buildGateDialogBody(opts = {}) {
+    return `<div class="gate-dialog gate-${escAttr(opts.tone || 'real')}">
+      <div class="modal-head">
+        <div><span class="eyebrow">${esc(opts.badge || '')}</span><h2>${esc(opts.title || '')}</h2></div>
+        <button class="icon-btn" type="button" data-modal-close>X</button>
+      </div>
+      <div class="gate-dialog-body">
+        <span class="guard-icon">${uiIcon(opts.tone === 'kyc' ? 'kyc' : 'wallet')}</span>
+        <p>${esc(opts.text || '')}</p>
+        <div class="instructions-box">${esc(opts.summary || '')}</div>
+      </div>
+      <div class="modal-actions">
+        ${opts.action === 'real' ? '<button class="btn btn-primary" type="button" data-switch-real>Switch to Real</button>' : ''}
+        <a class="btn btn-primary" href="#/kyc" data-modal-close>Open Verification</a>
+        <button class="btn btn-ghost" type="button" data-modal-close>Close</button>
+      </div>
+    </div>`;
+  }
+
+  function openKycRequiredDialog(context = 'real_mode') {
+    openLiteModal(buildGateDialogBody({
+      tone: 'kyc',
+      badge: 'Verification required',
+      title: 'KYC approval is required',
+      text: 'This live-account action stays locked until your identity review is approved.',
+      summary: `Current KYC: ${kycStatusLabel().label}`,
+      action: ''
+    }));
+  }
+
+  function bindGateActions(root = document) {
+    root.querySelectorAll('[data-switch-real]').forEach((btn) => {
+      if (btn.dataset.boundGate === '1') return;
+      btn.dataset.boundGate = '1';
+      btn.addEventListener('click', () => { closeLiteModal(); setTradeMode('real', { promptKyc: true }); });
+    });
+    root.querySelectorAll('[data-demo-info]').forEach((btn) => {
+      if (btn.dataset.boundGate === '1') return;
+      btn.dataset.boundGate = '1';
+      btn.addEventListener('click', () => openDemoGateDialog(state.route || 'demo'));
+    });
+  }
+
   function openLiteModal(html) {
     closeLiteModal();
     const modal = document.createElement('div');
@@ -1749,12 +2005,26 @@
     if (!levels.length) return '';
     const current = (state.level && state.level.current) || {};
     const currentCode = String(current.level_code || current.code || '');
-    return `<section class="panel level-strip-panel"><div class="section-head compact"><div><h2>Customer levels</h2><p>Unlock copy desk, contracts, higher limits, and private support.</p></div></div><div class="level-strip">${levels.map((lvl) => `<div class="level-chip-card ${String(lvl.level_code || lvl.code || '') === currentCode ? 'is-active' : ''}"><strong>${esc(levelName(lvl))}</strong><small>${money(lvl.min_deposit_total || 0)} deposits</small></div>`).join('')}</div></section>`;
+    return `<section class="panel level-strip-panel">
+      <div class="section-head compact">
+        <div><span class="eyebrow">Level desk</span><h2>Customer levels</h2><p>Unlock copy desk, contracts, higher limits, and private support.</p></div>
+        <span class="level-head-icon">${marketLogo({ symbol: 'LEVEL', type: 'futures', icon_url: UI_ASSET_PATH + 'level.svg' })}</span>
+      </div>
+      <div class="level-strip">${levels.map((lvl, index) => {
+        const isActive = String(lvl.level_code || lvl.code || '') === currentCode;
+        return `<div class="level-chip-card ${isActive ? 'is-active' : ''}">
+          <span>Tier ${index + 1}</span>
+          <strong>${esc(levelName(lvl))}</strong>
+          <small>${money(lvl.min_deposit_total || 0)} deposits</small>
+        </div>`;
+      }).join('')}</div>
+    </section>`;
   }
   function productCards(items, fallbackKind) {
     if (!items || !items.length) return emptyState(`No ${fallbackKind} products configured yet.`);
     return items.map((p) => `<article class="invest-card ${p.eligible ? '' : 'is-locked'}">
       <div class="invest-card-head">
+        <span class="product-mark">${marketLogo({ symbol: p.is_perpetual ? 'VIP' : 'CONTRACT', type: 'futures', icon_url: UI_ASSET_PATH + 'contract.svg' }, p.eligible ? 'is-live' : 'is-stale')}</span>
         <span class="eyebrow">${esc(p.badge || p.product_kind || fallbackKind)}</span>
         <span class="status-badge ${p.eligible ? 'is-live' : 'is-stale'}">${p.eligible ? 'Eligible' : 'Level locked'}</span>
       </div>
@@ -1779,6 +2049,8 @@
         event.preventDefault();
         const planId = form.dataset.investForm || '';
         const amount = parseNumber(form.elements.amount?.value);
+        if (state.mode !== 'real') { openDemoGateDialog('contract'); return; }
+        if (!isKycApproved()) { openKycRequiredDialog('contract'); return; }
         try {
           const data = await api('/invest/subscribe.php', {
             method: 'POST',
@@ -1831,7 +2103,7 @@
             <a class="btn btn-primary" href="#/wallet">Funds</a>
             <a class="btn btn-ghost" href="#/kyc">KYC</a>
             <a class="btn btn-ghost" href="#/invest">Earn</a>
-            <a class="btn btn-ghost" href="/legacy-app.php#/support">Support</a>
+            <a class="btn btn-ghost" href="mailto:${escAttr(state.brand.support_email || 'support@vertexpluse.com')}">Support</a>
             <a class="btn btn-danger" href="/logout.php">Log out</a>
           </div>
         </div>
@@ -2015,6 +2287,119 @@
       <div><small>Units</small><strong>${units > 0 ? compact(units) : '--'}</strong></div>`;
   }
 
+
+  function computeTradeMobile() {
+    const width = Number((window.visualViewport && window.visualViewport.width) || window.innerWidth || 0);
+    return width > 0 && width <= TRADE_MOBILE_BREAKPOINT;
+  }
+
+  function setupTradeViewportWatcher(token) {
+    const handler = () => {
+      clearTimeout(runtime.resizeTimer);
+      runtime.resizeTimer = setTimeout(() => {
+        if (!isToken(token) || state.route !== 'trade') return;
+        const next = computeTradeMobile() ? 'mobile' : 'desktop';
+        if (next !== runtime.tradeViewport) applyRoute();
+        else if (runtime.chart) { try { runtime.chart.timeScale().fitContent(); } catch (e) {} }
+      }, 200);
+    };
+    window.addEventListener('resize', handler, { passive: true });
+    try { if (window.visualViewport) window.visualViewport.addEventListener('resize', handler, { passive: true }); } catch (e) {}
+    runtime.cleanups.push(() => {
+      window.removeEventListener('resize', handler);
+      try { if (window.visualViewport) window.visualViewport.removeEventListener('resize', handler); } catch (e) {}
+    });
+  }
+
+  function toggleChartTool(tool, button) {
+    if (tool === 'crosshair') {
+      runtime.chartTools.crosshair = !runtime.chartTools.crosshair;
+      if (runtime.chart) runtime.chart.applyOptions({ crosshair: { mode: runtime.chartTools.crosshair ? 1 : 0 } });
+      button?.classList.toggle('active', runtime.chartTools.crosshair);
+      return;
+    }
+    if (tool === 'ma' || tool === 'ema') {
+      runtime.chartTools[tool] = !runtime.chartTools[tool];
+      button?.classList.toggle('active', runtime.chartTools[tool]);
+      refreshChartOverlays();
+      return;
+    }
+    if (tool === 'reset') {
+      runtime.chartTools.ma = false;
+      runtime.chartTools.ema = false;
+      removeOverlaySeries('ma');
+      removeOverlaySeries('ema');
+      $('#view').querySelectorAll('[data-chart-tool="ma"],[data-chart-tool="ema"]').forEach((btn) => btn.classList.remove('active'));
+      try { runtime.chart?.timeScale().fitContent(); } catch (e) {}
+      return;
+    }
+    if (tool === 'fullscreen') toggleChartFullscreen();
+  }
+
+  function toggleChartFullscreen() {
+    const panel = $('.chart-panel');
+    if (!panel) return;
+    panel.classList.toggle('is-fullscreen-chart');
+    runtime.chartFullscreen = panel.classList.contains('is-fullscreen-chart');
+    setTimeout(() => { try { runtime.chart?.timeScale().fitContent(); } catch (e) {} }, 80);
+  }
+
+  function removeOverlaySeries(name) {
+    const key = name === 'ma' ? 'maSeries' : 'emaSeries';
+    if (runtime.chart && runtime[key]) {
+      try { runtime.chart.removeSeries(runtime[key]); } catch (e) {}
+    }
+    runtime[key] = null;
+  }
+
+  function refreshChartOverlays() {
+    if (!runtime.chart || !runtime.candles.length) return;
+    if (runtime.chartTools.ma) {
+      if (!runtime.maSeries && typeof runtime.chart.addLineSeries === 'function') runtime.maSeries = runtime.chart.addLineSeries({ color: '#36b7ff', lineWidth: 2, priceLineVisible: false });
+      runtime.maSeries?.setData(movingAverage(runtime.candles, 20));
+    } else removeOverlaySeries('ma');
+    if (runtime.chartTools.ema) {
+      if (!runtime.emaSeries && typeof runtime.chart.addLineSeries === 'function') runtime.emaSeries = runtime.chart.addLineSeries({ color: '#ffbf47', lineWidth: 2, priceLineVisible: false });
+      runtime.emaSeries?.setData(exponentialAverage(runtime.candles, 9));
+    } else removeOverlaySeries('ema');
+  }
+
+  function movingAverage(candles, period) {
+    const out = [];
+    for (let i = period - 1; i < candles.length; i += 1) {
+      const slice = candles.slice(i - period + 1, i + 1);
+      const value = slice.reduce((sum, c) => sum + Number(c.close || 0), 0) / period;
+      out.push({ time: candles[i].time, value });
+    }
+    return out;
+  }
+
+  function exponentialAverage(candles, period) {
+    const out = [];
+    const k = 2 / (period + 1);
+    let ema = Number(candles[0]?.close || 0);
+    candles.forEach((c, i) => {
+      const close = Number(c.close || 0);
+      ema = i === 0 ? close : close * k + ema * (1 - k);
+      if (i >= period - 1) out.push({ time: c.time, value: ema });
+    });
+    return out;
+  }
+
+  function updateQuoteCadence(ms) {
+    if (!(ms >= 0)) return;
+    runtime.quoteCadence = ms < 800 ? FAST_QUOTE_MS : (ms > 3000 ? SLOW_QUOTE_MS : ACTIVE_QUOTE_MS);
+    runtime.quoteCadence = Math.max(MIN_QUOTE_MS, Math.min(SLOW_QUOTE_MS, runtime.quoteCadence));
+    runtime.watchCadence = runtime.quoteCadence >= 2000 ? 5000 : WATCHLIST_QUOTE_MS;
+  }
+
+  function handleVisibilityChange() {
+    if (!document.hidden && state.route === 'trade') {
+      loadActiveQuote(runtime.routeToken, true);
+      hydrateVisibleQuotes(runtime.routeToken);
+    }
+  }
+
   function ensureChart() {
     const box = $('#liteChart');
     if (!box || !window.LightweightCharts) {
@@ -2064,6 +2449,9 @@
     runtime.chart = null;
     runtime.candleSeries = null;
     runtime.volumeSeries = null;
+    runtime.maSeries = null;
+    runtime.emaSeries = null;
+    runtime.candles = [];
     runtime.lastCandle = null;
   }
 
@@ -2085,6 +2473,12 @@
     runtime.lastCandle = candle;
     runtime.candleSeries.update(stripVolume(candle));
     if (runtime.volumeSeries) runtime.volumeSeries.update(volumePoint(candle));
+    if (runtime.candles.length) {
+      const index = runtime.candles.findIndex((item) => item.time === candle.time);
+      if (index >= 0) runtime.candles[index] = candle;
+      else runtime.candles.push(candle);
+      refreshChartOverlays();
+    }
   }
 
   function setChartMessage(message) {
@@ -2114,6 +2508,10 @@
   function clearRuntime() {
     runtime.timers.forEach((id) => clearInterval(id));
     runtime.timers.clear();
+    runtime.cleanups.forEach((fn) => { try { fn(); } catch (e) {} });
+    runtime.cleanups = [];
+    clearTimeout(runtime.resizeTimer);
+    runtime.resizeTimer = null;
     runtime.controllers.forEach((ctrl) => {
       try { ctrl.abort(); } catch (e) {}
     });
@@ -2126,6 +2524,20 @@
     const id = setInterval(fn, ms);
     runtime.timers.add(id);
     return id;
+  }
+
+  function setAdaptiveTimer(fn, getMs, token) {
+    const schedule = () => {
+      if (!isToken(token)) return;
+      const delay = Math.max(MIN_QUOTE_MS, Number(getMs()) || ACTIVE_QUOTE_MS);
+      const id = setTimeout(async () => {
+        runtime.timers.delete(id);
+        try { await fn(); } catch (e) {}
+        schedule();
+      }, delay);
+      runtime.timers.add(id);
+    };
+    schedule();
   }
 
   async function api(path, options = {}) {
@@ -2509,19 +2921,34 @@
     return (parts[0]?.[0] || 'V').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
   }
 
+
+  function buildBrandLogoSvg(name, tagline) {
+    const safeName = esc(String(name || 'VertexPluse').slice(0, 18));
+    const initials = safeName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'VP';
+    return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="vpLogoGrad" x1="8" x2="56" y1="8" y2="58"><stop stop-color="#5d7cff"/><stop offset="1" stop-color="#24d28d"/></linearGradient></defs><rect x="6" y="6" width="52" height="52" rx="16" fill="url(#vpLogoGrad)"/><path d="M18 38 28 18l8 18 7-13 5 15" fill="none" stroke="rgba(255,255,255,.94)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><text x="32" y="49" text-anchor="middle" font-size="10" font-weight="900" fill="white">${esc(initials)}</text></svg>`;
+  }
+
   function uiIcon(name) {
     return UI_ICONS[name] || UI_ICONS.home || esc(String(name || '').slice(0, 1).toUpperCase());
   }
 
   function marketLogo(item, extraClass = '') {
     const symbol = cleanSymbol(item && item.symbol || item || 'V');
-    const iconUrl = item && item.icon_url ? String(item.icon_url) : '';
     const visual = SYMBOL_VISUALS[symbol] || TYPE_VISUALS[(item && item.type) || state.type] || { short: assetInitial(symbol), family: 'default' };
+    const iconUrl = safeIconUrl((item && (item.icon_url || item.logo_url)) || visual.icon || '');
     const classes = ['market-logo', `family-${visual.family || 'default'}`, extraClass].filter(Boolean).join(' ');
-    if (iconUrl && /^https?:\/\//i.test(iconUrl)) {
+    if (iconUrl) {
       return `<span class="${escAttr(classes)}"><img src="${escAttr(iconUrl)}" alt="${escAttr(symbol)}" loading="lazy" decoding="async"><em>${esc(visual.short || assetInitial(symbol))}</em></span>`;
     }
     return `<span class="${escAttr(classes)} fallback"><em>${esc(visual.short || assetInitial(symbol))}</em></span>`;
+  }
+  function safeIconUrl(value) {
+    const url = String(value || '').trim();
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    if (/^\/assets\/img\//i.test(url)) return url;
+    if (/^(?:\.\/)?assets\/img\//i.test(url)) return url.startsWith('./') ? url : `./${url}`;
+    return '';
   }
   function assetInitial(symbol) {
     return String(symbol || 'V').replace(/[^A-Z0-9]/gi, '').slice(0, 2).toUpperCase() || 'V';

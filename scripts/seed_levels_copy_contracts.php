@@ -10,12 +10,16 @@ if (PHP_SAPI !== 'cli') {
 }
 
 $pdo = db();
-vp_feature_bootstrap($pdo, db_driver());
 $driver = db_driver();
 if ($driver !== 'mysql') {
   fwrite(STDERR, "This production seed is intended for MySQL/Railway. Current driver: {$driver}\n");
   exit(2);
 }
+
+schema_install($pdo, $driver);
+schema_upgrade($pdo, $driver);
+schema_seed_defaults($pdo, $driver);
+vp_feature_bootstrap($pdo, $driver);
 
 $sql = file_get_contents(__DIR__ . '/../db/seed_levels_copy_contracts_2026_05_07.sql');
 if ($sql === false || trim($sql) === '') {
@@ -25,7 +29,11 @@ if ($sql === false || trim($sql) === '') {
 
 try {
   $pdo->exec($sql);
-  echo json_encode(['ok' => true, 'seed' => 'levels_copy_contracts_2026_05_07'], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+  $counts = [];
+  foreach (['customer_levels', 'invest_plans', 'trading_signals', 'markets'] as $table) {
+    $counts[$table] = (int)$pdo->query("SELECT COUNT(*) FROM {$table}")->fetchColumn();
+  }
+  echo json_encode(['ok' => true, 'seed' => 'levels_copy_contracts_2026_05_07', 'counts' => $counts], JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $e) {
   fwrite(STDERR, $e->getMessage() . PHP_EOL);
   exit(4);
