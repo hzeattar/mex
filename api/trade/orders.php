@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../lib/common.php';
+require_once __DIR__ . '/../lib/trade_mode.php';
 
 require_method('GET');
 $uid = require_auth();
@@ -7,8 +8,7 @@ $pdo = db();
 
 $symbol = strtoupper(trim((string)($_GET['symbol'] ?? '')));
 $side   = strtoupper(trim((string)($_GET['side'] ?? '')));
-$mode   = strtolower(trim((string)($_GET['mode'] ?? 'demo')));
-$mode   = in_array($mode, ['demo','real'], true) ? $mode : 'demo';
+$mode   = trade_mode_for_user($pdo, $uid);
 $limit  = (int)($_GET['limit'] ?? 60);
 $limit  = max(1, min(200, $limit));
 

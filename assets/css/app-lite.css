@@ -2522,3 +2522,277 @@ button {
     display: grid;
   }
 }
+
+html {
+  background-color: var(--bg);
+  color-scheme: dark;
+}
+
+.status-chip.needs-attention {
+  border-color: rgba(255, 191, 71, .55);
+  box-shadow: 0 0 0 1px rgba(255,191,71,.1), 0 0 24px rgba(255,191,71,.12);
+  animation: kycPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes kycPulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+@keyframes priceFlashUp {
+  from { background: rgba(36,210,141,.32); box-shadow: 0 0 0 6px rgba(36,210,141,.08); }
+  to { background: transparent; box-shadow: none; }
+}
+
+@keyframes priceFlashDown {
+  from { background: rgba(255,92,124,.32); box-shadow: 0 0 0 6px rgba(255,92,124,.08); }
+  to { background: transparent; box-shadow: none; }
+}
+
+.price-flash-up,
+.price-flash-down {
+  border-radius: 10px;
+  animation-duration: .55s;
+  animation-timing-function: ease;
+}
+
+.price-flash-up { animation-name: priceFlashUp; }
+.price-flash-down { animation-name: priceFlashDown; }
+
+.hero-tape--animated button {
+  animation: tapeFloat 6s ease-in-out infinite;
+}
+
+.hero-tape--animated button:nth-child(2n) { animation-delay: .6s; }
+.hero-tape--animated button:nth-child(3n) { animation-delay: 1.2s; }
+
+@keyframes tapeFloat {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-4px); }
+}
+
+.notification-chip {
+  width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.notification-chip svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.notification-chip strong {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--red);
+  color: white;
+  font-size: 10px;
+}
+
+.notification-panel {
+  position: fixed;
+  top: 76px;
+  right: 18px;
+  z-index: 130;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - 110px));
+  overflow: auto;
+}
+
+.notification-list,
+.ticket-list {
+  display: grid;
+  gap: 10px;
+}
+
+.notification-item,
+.ticket-row {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(16,31,65,.55);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.notification-item small,
+.ticket-row small,
+.notification-item em,
+.ticket-row em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.news-grid,
+.support-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.news-card {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.news-card img,
+.news-icon {
+  width: 110px;
+  height: 82px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(93,124,255,.25), rgba(36,210,141,.12));
+}
+
+.news-card h2,
+.news-card p {
+  margin: 4px 0;
+}
+
+.news-card p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.support-layout {
+  grid-template-columns: minmax(280px, .42fr) minmax(0, 1fr);
+}
+
+.support-form textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+.ticket-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+
+.ticket-row.has-unread {
+  border-color: rgba(36,210,141,.45);
+}
+
+.ticket-kyc-inline {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255,191,71,.4);
+  border-radius: var(--radius);
+  background: rgba(255,191,71,.09);
+}
+
+.ticket-kyc-inline span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ticket-kyc-inline a {
+  color: var(--amber);
+  font-weight: 900;
+}
+
+.settings-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(16,31,65,.42);
+}
+
+.vp-gate-dialog-visual {
+  min-width: 160px;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(93,124,255,.18), rgba(36,210,141,.08));
+  border: 1px solid rgba(129,160,220,.22);
+}
+
+.vp-gate-dialog-visual span {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #5d7cff, #24d28d);
+}
+
+.vp-gate-dialog-visual svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.gate-dialog-body {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+}
+
+@media (max-width: 768px) {
+  .trade-mobile-sticky-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 80;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(5,11,24,.96);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(16px);
+  }
+
+  .trade-mobile-sticky-bar button {
+    min-height: 46px;
+    border: 0;
+    border-radius: var(--radius);
+    color: white;
+    font-weight: 900;
+  }
+
+  .trade-mobile-sticky-bar .sell-quote { background: linear-gradient(135deg, #ff5c7c, #b92b4a); }
+  .trade-mobile-sticky-bar .buy-quote { background: linear-gradient(135deg, #24d28d, #168d64); }
+
+  .support-layout,
+  .news-card,
+  .gate-dialog-body {
+    grid-template-columns: 1fr;
+  }
+
+  .news-card img,
+  .news-icon {
+    width: 100%;
+    height: 150px;
+  }
+}

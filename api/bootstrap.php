@@ -194,5 +194,6 @@ json_response([
   'kyc' => vp_boot_kyc($pdo, $uid),
   'level' => vp_boot_level($pdo, $uid),
   'markets' => vp_boot_market_groups($pdo),
+  'forced_mode' => in_array(strtolower((string)($row['force_mode'] ?? '')), ['demo','real'], true) ? strtolower((string)$row['force_mode']) : null,
   'feature_flags' => feature_all(),
 ]);

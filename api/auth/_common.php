@@ -87,6 +87,7 @@ function auth_user_payload(array $row): array {
     'locale' => (string)($row['locale'] ?? 'en'),
     'lang' => (string)($row['locale'] ?? 'en'),
     'login_provider' => (string)($row['login_provider'] ?? 'web'),
+    'force_mode' => in_array(strtolower((string)($row['force_mode'] ?? '')), ['demo','real'], true) ? strtolower((string)$row['force_mode']) : null,
     'accounts' => $accounts,
     'live_account' => $accounts['live'],
     'demo_account' => $accounts['demo'],

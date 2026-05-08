@@ -228,6 +228,7 @@ function schema_install(PDO $pdo, string $driver): void {
       locale VARCHAR(8) NOT NULL DEFAULT 'en',
       support_locale VARCHAR(8) NULL DEFAULT NULL,
       max_leverage INT NULL DEFAULT NULL,
+      force_mode VARCHAR(10) NULL DEFAULT NULL,
       created_at INT NOT NULL DEFAULT 0,
       updated_at INT NOT NULL DEFAULT 0,
       UNIQUE KEY uniq_tg_id (tg_id)
@@ -242,6 +243,7 @@ function schema_install(PDO $pdo, string $driver): void {
       locale TEXT NOT NULL DEFAULT 'en',
       support_locale TEXT,
       max_leverage INTEGER,
+      force_mode TEXT,
       created_at INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL DEFAULT 0,
       source TEXT
@@ -2336,6 +2338,7 @@ function schema_upgrade(PDO $pdo, string $driver = 'sqlite') {
     $addColumn('users', 'created_at', 'INTEGER');
     $addColumn('users', 'updated_at', 'INTEGER');
     $addColumn('users', 'max_leverage', 'INTEGER');
+    $addColumn('users', 'force_mode', 'VARCHAR(10)');
     $addColumn('tg_sessions', 'updated_at', 'INTEGER');
 
     // Ensure UNIQUE index on users.tg_id for SQLite

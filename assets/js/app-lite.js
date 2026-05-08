@@ -27,7 +27,7 @@
     ...TYPES.map((item) => ({ key: item.key, label: displayTypeLabel(item.key) }))
   ];
   const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h'];
-  const ROUTES = ['home', 'trade', 'portfolio', 'wallet', 'deposit', 'withdraw', 'kyc', 'invest', 'account'];
+  const ROUTES = ['home', 'trade', 'portfolio', 'wallet', 'deposit', 'withdraw', 'kyc', 'invest', 'news', 'support', 'account'];
   const ROUTE_ALIASES = { assets: 'wallet', funds: 'wallet', earn: 'invest', contracts: 'invest', levels: 'invest' };
   const MARKET_ICON_PATH = './assets/img/markets/';
   const UI_ASSET_PATH = './assets/img/ui/';
@@ -42,19 +42,21 @@
     withdraw: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M4 5h16"/></svg>',
     kyc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/><path d="m16 17 1 1 3-3"/></svg>',
     support: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18v-6a7 7 0 0 1 14 0v6"/><path d="M5 13H3v4h2"/><path d="M19 13h2v4h-2"/><path d="M14 20h2a3 3 0 0 0 3-3"/></svg>',
+    news: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4Z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>',
     legacy: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"/><path d="M9 9h6v6H9z"/><path d="M3 9h2"/><path d="M3 15h2"/><path d="M19 9h2"/><path d="M19 15h2"/></svg>'
   };
   const SYMBOL_VISUALS = {
     BTCUSDT: { short: 'BTC', family: 'crypto', icon: MARKET_ICON_PATH + 'btc.svg' },
     ETHUSDT: { short: 'ETH', family: 'crypto', icon: MARKET_ICON_PATH + 'eth.svg' },
     SOLUSDT: { short: 'SOL', family: 'crypto', icon: MARKET_ICON_PATH + 'sol.svg' },
-    BNBUSDT: { short: 'BNB', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
-    XRPUSDT: { short: 'XRP', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
-    ADAUSDT: { short: 'ADA', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
-    AVAXUSDT: { short: 'AVAX', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
-    DOTUSDT: { short: 'DOT', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
-    LINKUSDT: { short: 'LINK', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
-    DOGEUSDT: { short: 'DOGE', family: 'crypto', icon: MARKET_ICON_PATH + 'crypto.svg' },
+    BNBUSDT: { short: 'BNB', family: 'crypto', icon: MARKET_ICON_PATH + 'bnb.svg' },
+    XRPUSDT: { short: 'XRP', family: 'crypto', icon: MARKET_ICON_PATH + 'xrp.svg' },
+    ADAUSDT: { short: 'ADA', family: 'crypto', icon: MARKET_ICON_PATH + 'ada.svg' },
+    AVAXUSDT: { short: 'AVAX', family: 'crypto', icon: MARKET_ICON_PATH + 'avax.svg' },
+    DOTUSDT: { short: 'DOT', family: 'crypto', icon: MARKET_ICON_PATH + 'dot.svg' },
+    LINKUSDT: { short: 'LINK', family: 'crypto', icon: MARKET_ICON_PATH + 'link.svg' },
+    DOGEUSDT: { short: 'DOGE', family: 'crypto', icon: MARKET_ICON_PATH + 'doge.svg' },
     USDCUSDT: { short: 'USDC', family: 'crypto', icon: MARKET_ICON_PATH + 'usdc.svg' },
     EURUSD: { short: 'EUR', family: 'forex', icon: MARKET_ICON_PATH + 'forex.svg' },
     GBPUSD: { short: 'GBP', family: 'forex', icon: MARKET_ICON_PATH + 'forex.svg' },
@@ -70,10 +72,10 @@
     PALL: { short: 'PD', family: 'metal', icon: MARKET_ICON_PATH + 'metal.svg' },
     AAPL: { short: 'AAPL', family: 'equity', icon: MARKET_ICON_PATH + 'apple.svg' },
     MSFT: { short: 'MSFT', family: 'equity', icon: MARKET_ICON_PATH + 'microsoft.svg' },
-    TSLA: { short: 'TSLA', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
-    NVDA: { short: 'NVDA', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
-    AMZN: { short: 'AMZN', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
-    GOOGL: { short: 'GOOGL', family: 'equity', icon: MARKET_ICON_PATH + 'stock.svg' },
+    TSLA: { short: 'TSLA', family: 'equity', icon: MARKET_ICON_PATH + 'tsla.svg' },
+    NVDA: { short: 'NVDA', family: 'equity', icon: MARKET_ICON_PATH + 'nvda.svg' },
+    AMZN: { short: 'AMZN', family: 'equity', icon: MARKET_ICON_PATH + 'amzn.svg' },
+    GOOGL: { short: 'GOOGL', family: 'equity', icon: MARKET_ICON_PATH + 'googl.svg' },
     SPX500: { short: 'SPX', family: 'index', icon: MARKET_ICON_PATH + 'stock.svg' },
     NAS100: { short: 'NAS', family: 'index', icon: MARKET_ICON_PATH + 'stock.svg' },
     ES_F: { short: 'ES', family: 'future', icon: MARKET_ICON_PATH + 'future.svg' },
@@ -165,6 +167,11 @@
       currency: 'USDT',
       result: null
     },
+    news: { items: [], loaded: false, error: '' },
+    support: { items: [], result: '', error: '' },
+    notifications: { items: [], unread: 0, open: false, loaded: false },
+    prefs: { notifications: safeStorage('vp_notifications_enabled', '1') !== '0' },
+    lastQuotePrice: 0,
     lastError: ''
   };
 
@@ -212,7 +219,10 @@
       kyc: false,
       invest: false,
       signals: false,
-      funding: false
+      funding: false,
+      news: false,
+      support: false,
+      notifications: false
     };
   }
 
@@ -232,6 +242,10 @@
       state.bootstrap = data;
       state.user = data.user || null;
       state.brand = Object.assign({}, state.brand, data.brand || {});
+      if (state.user && ['demo', 'real'].includes(String(state.user.force_mode || '').toLowerCase())) {
+        state.mode = String(state.user.force_mode).toLowerCase();
+        safeStorage('vp_trade_mode', state.mode, true);
+      }
       state.wallet = data.wallet || null;
       state.kyc = data.kyc || null;
       state.level = data.level || null;
@@ -318,6 +332,8 @@
       { route: 'portfolio', label: 'Portfolio', icon: 'portfolio' },
       { route: 'wallet', label: 'Assets', icon: 'wallet' },
       { route: 'invest', label: 'Earn', icon: 'earn' },
+      { route: 'news', label: 'News', icon: 'news' },
+      { route: 'support', label: 'Support', icon: 'support' },
       { route: 'account', label: 'Account', icon: 'account' }
     ];
   }
@@ -351,6 +367,8 @@
     else if (state.route === 'deposit' || state.route === 'withdraw') renderFunding(state.route);
     else if (state.route === 'kyc') renderKyc();
     else if (state.route === 'invest') renderInvest();
+    else if (state.route === 'news') renderNews();
+    else if (state.route === 'support') renderSupport();
     else if (state.route === 'account') renderAccount();
     else renderHome();
   }
@@ -370,6 +388,7 @@
       const activeRoute = ['deposit', 'withdraw', 'kyc'].includes(state.route) ? (state.route === 'kyc' ? 'account' : 'wallet') : state.route;
       el.classList.toggle('active', nav === activeRoute);
     });
+    app.classList.toggle('is-demo-locked', state.mode !== 'real' && ['wallet', 'deposit', 'withdraw', 'invest', 'portfolio'].includes(state.route));
   }
 
   function renderTopbar() {
@@ -391,10 +410,11 @@
           <small>${esc(wallet.currency || (state.mode === 'real' ? 'USDT' : 'USDT_DEMO'))}</small>
           <strong>${money(wallet.available ?? wallet.balance ?? 0)}</strong>
         </div>
-        <a class="status-chip ${kyc.className}" href="#/kyc">
+        <a class="status-chip ${kyc.className} ${state.mode === 'real' && kyc.label !== 'Approved' ? 'needs-attention' : ''}" href="#/kyc">
           <small>KYC</small>
           <strong>${esc(kyc.label)}</strong>
         </a>
+        <button class="notification-chip ${state.notifications.unread > 0 ? 'has-unread' : ''}" type="button" data-notification-toggle title="Notifications">${uiIcon('bell')}<strong>${state.notifications.unread > 0 ? esc(String(state.notifications.unread)) : ''}</strong></button>
         <button class="user-chip" type="button" data-user-menu title="Account">
           <span>${esc(userInitials())}</span>
           <em>${esc((state.user && (state.user.email || state.user.username)) || 'Account')}</em>
@@ -406,6 +426,12 @@
     $('[data-user-menu]')?.addEventListener('click', () => {
       location.hash = '#/account';
     });
+    $('[data-notification-toggle]')?.addEventListener('click', () => {
+      state.notifications.open = !state.notifications.open;
+      renderNotificationPanel();
+      if (state.notifications.open && !state.notifications.loaded) loadNotifications(runtime.routeToken);
+    });
+    renderNotificationPanel();
   }
 
   function routeTitle() {
@@ -416,6 +442,8 @@
     if (state.route === 'withdraw') return 'Withdraw';
     if (state.route === 'kyc') return 'KYC Verification';
     if (state.route === 'invest') return 'Copy & Contracts';
+    if (state.route === 'news') return 'News Center';
+    if (state.route === 'support') return 'Support Desk';
     if (state.route === 'account') return 'Account';
     return 'Home Dashboard';
   }
@@ -442,8 +470,8 @@
             <strong>${money(wallet.available ?? wallet.balance ?? 0)}</strong>
             <span>${esc(wallet.currency || '')}</span>
           </div>
-          <div class="hero-tape">
-            ${featured.slice(0, 3).map((m) => {
+          <div class="hero-tape ${featured.length >= 3 ? 'hero-tape--animated' : ''}">
+            ${featured.slice(0, 6).map((m) => {
               const quote = mergedQuote(m);
               const q = quoteState(quote);
               return `<button type="button" data-symbol="${escAttr(m.symbol)}" data-type="${escAttr(m.type || state.type)}" data-market="${escAttr(m.market || defaultMarket(m.type))}">
@@ -475,7 +503,8 @@
           ${quickAction('Withdraw', 'Request a manual payout review', '#/withdraw', 'withdraw')}
           ${quickAction('KYC', 'Verify account documents', '#/kyc', 'kyc')}
           ${quickAction('Earn', 'Copy signals and level contracts', '#/invest', 'earn')}
-          ${quickAction('Support', 'Help desk and account guidance', '#/account', 'support')}
+          ${quickAction('Support', 'Help desk and account guidance', '#/support', 'support')}
+          ${quickAction('News', 'Platform updates and market notes', '#/news', 'news')}
         </div>
       </section>
 
@@ -693,6 +722,7 @@
         <button class="${state.orderType === 'MARKET' ? 'active' : ''}" data-order-type="MARKET" type="button">Market</button>
         <button class="${state.orderType === 'LIMIT' ? 'active' : ''}" data-order-type="LIMIT" type="button">Limit</button>
       </div>
+      ${state.mode === 'real' && !isKycApproved() ? `<div class="ticket-kyc-inline"><strong>KYC required</strong><span>Real orders stay locked until verification is approved.</span><a href="#/kyc">Open KYC</a></div>` : ''}
       <div class="quote-buttons">
         <button class="sell-quote" type="button" data-side-short="SELL">
           <small>Sell</small>
@@ -777,6 +807,12 @@
     $('[data-refresh-markets]')?.addEventListener('click', () => loadMarkets(runtime.routeToken, true));
     $('[data-refresh-account]')?.addEventListener('click', () => loadTradingAccount(runtime.routeToken, true));
     $('[data-refresh-signals]')?.addEventListener('click', () => loadTradeSignals(runtime.routeToken, true));
+    if (isMobile) {
+      $('#view').insertAdjacentHTML('beforeend', `<div class="trade-mobile-sticky-bar"><button class="sell-quote" type="button" data-side-short="SELL">Sell ${esc(state.symbol)}</button><button class="buy-quote" type="button" data-side-short="BUY">Buy ${esc(state.symbol)}</button></div>`);
+    }
+    $('#view').querySelectorAll('[data-side-short]').forEach((btn) => {
+      btn.addEventListener('click', () => placeOrder(btn.dataset.sideShort));
+    });
     $('#view').querySelectorAll('[data-chart-tool]').forEach((btn) => {
       btn.addEventListener('click', () => toggleChartTool(btn.dataset.chartTool, btn));
     });
@@ -1070,7 +1106,10 @@
     const orders = state.orders.length ? state.orders : (p.orders || []);
     const node = $('[data-portfolio-body]');
     if (!node) return;
+    const demoLocked = state.mode !== 'real';
     node.innerHTML = `
+      ${demoLocked ? demoGateBanner('portfolio') : buildRealWorkflowNotice('portfolio')}
+      <div class="${demoLocked ? 'vp-page-preview-lock' : ''}">
       <section class="metric-grid">
         ${metricCard('Equity', money(p.equity || 0), state.mode)}
         ${metricCard('Unrealized PnL', money(p.unrealized_pnl || 0), 'Floating')}
@@ -1084,7 +1123,10 @@
       <section class="panel">
         <div class="section-head"><h2>Order history</h2></div>
         <div class="table-shell">${ordersTable(orders)}</div>
-      </section>`;
+      </section>
+      </div>`;
+    bindGateActions(node);
+    if (demoLocked) openDemoGateDialog('portfolio');
     bindCloseButtons(node);
   }
 
@@ -1860,6 +1902,14 @@
   }
 
   function setTradeMode(mode, options = {}) {
+    const forced = String((state.user && state.user.force_mode) || '').toLowerCase();
+    if (['demo', 'real'].includes(forced) && mode !== forced) {
+      state.mode = forced;
+      safeStorage('vp_trade_mode', state.mode, true);
+      showToast(`Account mode is locked by admin: ${forced.toUpperCase()}`);
+      renderTopbar();
+      return;
+    }
     state.mode = mode === 'real' ? 'real' : 'demo';
     safeStorage('vp_trade_mode', state.mode, true);
     renderTopbar();
@@ -1887,32 +1937,38 @@
     const wallet = state.wallet || {};
     const demo = wallet.demo || {};
     const real = wallet.real || {};
-    const title = context === 'earn'
-      ? 'Earn is locked in Demo mode'
-      : context === 'withdraw'
-        ? 'Withdrawals require Real mode'
-        : context === 'deposit'
-          ? 'Deposits require Real mode'
-          : 'This area is a locked Demo preview';
+    const level = (state.level && state.level.current) || null;
+    const kyc = kycStatusLabel();
+    const labels = {
+      earn: ['Earn is locked in Demo mode', 'Copy trading and contracts are live-account products.'],
+      withdraw: ['Withdrawals require Real mode', 'Payout requests use verified real balances only.'],
+      deposit: ['Deposits require Real mode', 'Funding requests are reviewed by the admin desk.'],
+      portfolio: ['Real portfolio is hidden in Demo mode', 'Live positions, orders and PnL stay isolated from practice trading.'],
+      wallet: ['Assets, deposits and withdrawals stay locked in Demo', 'Switch to Real to manage funding and protected wallet actions.']
+    };
+    const copy = labels[context] || ['This area is a locked Demo preview', 'Live account workflows are protected from practice balances.'];
     return `<section class="panel vp-real-only-hero">
       <div class="vp-real-only-copy">
-        <span class="eyebrow">Real account only</span>
-        <h2>${esc(title)}</h2>
-        <p>Switch to Real mode to unlock funding, copy trading, contracts, and live account actions. Demo remains available for practice trading only.</p>
+        <span class="eyebrow">Protected live workflow</span>
+        <h2>${esc(copy[0])}</h2>
+        <p>${esc(copy[1])} Demo remains available for market practice, chart testing, and simulated orders.</p>
         <div class="vp-gate-pills">
           <span>Mode: ${state.mode.toUpperCase()}</span>
           <span>Demo available: ${money(demo.available ?? demo.balance ?? 0)}</span>
           <span>Real available: ${money(real.available ?? real.balance ?? 0)}</span>
+          <span>KYC: ${esc(kyc.label)}</span>
+          <span>Level: ${esc(levelName(level))}</span>
         </div>
         <div class="modal-actions">
           <button class="btn btn-primary" type="button" data-switch-real>Switch to Real</button>
+          <a class="btn btn-ghost" href="#/kyc">Verification</a>
           <button class="btn btn-ghost" type="button" data-demo-info>Why locked?</button>
         </div>
       </div>
       <div class="vp-real-only-preview">
-        <span>${uiIcon('wallet')}</span>
-        <strong>Protected live workflow</strong>
-        <small>Real mode + approved KYC unlocks sensitive actions.</small>
+        <span class="vp-gate-visual-icon">${uiIcon('wallet')}</span>
+        <strong>Separated balances</strong>
+        <small>Demo and Real wallets, positions, requests and subscriptions never mix.</small>
       </div>
     </section>`;
   }
@@ -1945,15 +2001,25 @@
   }
 
   function buildGateDialogBody(opts = {}) {
-    return `<div class="gate-dialog gate-${escAttr(opts.tone || 'real')}">
-      <div class="modal-head">
-        <div><span class="eyebrow">${esc(opts.badge || '')}</span><h2>${esc(opts.title || '')}</h2></div>
+    const tone = String(opts.tone || 'real');
+    const visualIcon = opts.visualIcon || uiIcon(tone === 'kyc' ? 'kyc' : 'wallet');
+    const visualLabel = opts.visualLabel || (tone === 'kyc' ? 'Identity protected' : 'Real-only workspace');
+    return `<div class="gate-dialog gate-${escAttr(tone)}">
+      <div class="modal-head gate-dialog-head">
+        <div><span class="eyebrow">${esc(opts.eyebrow || opts.badge || 'Protected access')}</span><h2>${esc(opts.title || '')}</h2></div>
         <button class="icon-btn" type="button" data-modal-close>X</button>
       </div>
       <div class="gate-dialog-body">
-        <span class="guard-icon">${uiIcon(opts.tone === 'kyc' ? 'kyc' : 'wallet')}</span>
-        <p>${esc(opts.text || '')}</p>
-        <div class="instructions-box">${esc(opts.summary || '')}</div>
+        <div class="vp-gate-dialog-visual"><span>${visualIcon}</span><strong>${esc(visualLabel)}</strong></div>
+        <div class="vp-gate-dialog-copy">
+          <p>${esc(opts.text || '')}</p>
+          <div class="vp-gate-pills">
+            <span>Mode: ${state.mode.toUpperCase()}</span>
+            <span>KYC: ${esc(kycStatusLabel().label)}</span>
+            <span>Level: ${esc(levelName((state.level && state.level.current) || null))}</span>
+          </div>
+          <div class="instructions-box">${esc(opts.summary || '')}</div>
+        </div>
       </div>
       <div class="modal-actions">
         ${opts.action === 'real' ? '<button class="btn btn-primary" type="button" data-switch-real>Switch to Real</button>' : ''}
@@ -1964,12 +2030,16 @@
   }
 
   function openKycRequiredDialog(context = 'real_mode') {
+    const labels = { deposit: 'Deposit request', withdraw: 'Withdrawal request', copy: 'Copy trading', contract: 'Contract subscription', trade: 'Real order', real_mode: 'Real mode' };
     openLiteModal(buildGateDialogBody({
       tone: 'kyc',
       badge: 'Verification required',
+      eyebrow: labels[context] || 'Protected live action',
       title: 'KYC approval is required',
-      text: 'This live-account action stays locked until your identity review is approved.',
-      summary: `Current KYC: ${kycStatusLabel().label}`,
+      text: 'This live-account action stays locked until your identity review is approved by the admin desk.',
+      summary: `Current KYC: ${kycStatusLabel().label}. Upload documents from the verification page, then return here once approved.`,
+      visualIcon: uiIcon('kyc'),
+      visualLabel: 'Identity review required',
       action: ''
     }));
   }
@@ -2082,6 +2152,78 @@
     </table>`;
   }
 
+  function renderNews() {
+    const token = runtime.routeToken;
+    $('#view').innerHTML = `<section class="panel page-head"><div><span class="eyebrow">News Center</span><h1>Platform updates</h1><p>Announcements, market notes, and operational updates from the desk.</p></div><button class="btn btn-primary" type="button" data-refresh-news>Refresh</button></section><section class="news-grid" data-news-list>${emptyState('Loading news...')}</section>`;
+    $('[data-refresh-news]')?.addEventListener('click', () => loadNews(token, true));
+    loadNews(token, true);
+  }
+
+  async function loadNews(token, immediate = false) {
+    if (runtime.pending.news && !immediate) return;
+    runtime.pending.news = true;
+    try {
+      const data = await api(`/news/list.php?lang=${encodeURIComponent(state.lang)}&limit=18`, { timeout: 9000 });
+      if (!isToken(token)) return;
+      state.news.items = (data && data.ok !== false) ? (data.items || []) : [];
+      renderNewsList();
+    } catch (err) {
+      if (!isAbort(err)) $('[data-news-list]').innerHTML = emptyState(err.message || 'News unavailable');
+    } finally { runtime.pending.news = false; }
+  }
+
+  function renderNewsList() {
+    const node = $('[data-news-list]');
+    if (!node) return;
+    const items = state.news.items || [];
+    node.innerHTML = items.length ? items.map((item) => `<article class="panel news-card ${item.pinned ? 'is-pinned' : ''}">${item.image_url ? `<img src="${escAttr(item.image_url)}" alt="" loading="lazy">` : `<span class="news-icon">${uiIcon('news')}</span>`}<div><span class="eyebrow">${esc(item.source_label || (item.pinned ? 'Pinned' : 'Update'))}</span><h2>${esc(item.title || 'News')}</h2><p>${esc(item.excerpt || item.body || '')}</p><small>${dateText(item.published_at || item.updated_at || 0)}</small></div>${item.cta_url ? `<a class="btn btn-ghost btn-sm" href="${escAttr(item.cta_url)}">Open</a>` : ''}</article>`).join('') : emptyState('No news yet.');
+  }
+
+  function renderSupport() {
+    const token = runtime.routeToken;
+    $('#view').innerHTML = `<section class="panel page-head"><div><span class="eyebrow">Support Desk</span><h1>Help center</h1><p>Create support tickets and follow account guidance from the client workspace.</p></div><a class="btn btn-ghost" href="mailto:${escAttr(state.brand.support_email || 'support@vertexpluse.com')}">Email support</a></section><section class="support-layout"><form class="panel support-form" data-support-form><h2>New ticket</h2><label class="field"><span>Subject</span><input name="subject" maxlength="190" placeholder="Account question" /></label><label class="field"><span>Priority</span><select name="priority"><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label><label class="field"><span>Message</span><textarea name="message" rows="6" placeholder="How can we help?"></textarea></label><button class="btn btn-primary" type="submit">Create ticket</button><p class="form-status" data-support-status></p></form><div class="panel"><div class="section-head compact"><div><h2>Your tickets</h2><p>Recent conversations</p></div><button class="btn btn-ghost btn-sm" type="button" data-refresh-support>Refresh</button></div><div data-support-list>${emptyState('Loading tickets...')}</div></div></section>`;
+    $('[data-refresh-support]')?.addEventListener('click', () => loadSupport(token, true));
+    bindSupportForm(token);
+    loadSupport(token, true);
+  }
+
+  function bindSupportForm(token) {
+    const form = $('[data-support-form]');
+    if (!form) return;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = $('[data-support-status]');
+      if (status) status.textContent = 'Submitting...';
+      try {
+        const body = { subject: form.elements.subject.value, message: form.elements.message.value, priority: form.elements.priority.value, reason_code: 'app_support', lang: state.lang };
+        const data = await api('/support/create.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), timeout: 9000 });
+        if (!data || data.ok === false) throw new Error(data && data.error || 'Ticket failed');
+        form.reset();
+        if (status) status.textContent = `Ticket #${data.ticket_id} created.`;
+        loadSupport(token, true);
+      } catch (err) { if (status) status.textContent = err.message || 'Support unavailable'; }
+    });
+  }
+
+  async function loadSupport(token, immediate = false) {
+    if (runtime.pending.support && !immediate) return;
+    runtime.pending.support = true;
+    try {
+      const data = await api('/support/list.php?status=all', { timeout: 8000 });
+      if (!isToken(token)) return;
+      state.support.items = (data && data.ok !== false) ? (data.items || []) : [];
+      renderSupportList();
+    } catch (err) { if (!isAbort(err)) $('[data-support-list]').innerHTML = emptyState(err.message || 'Tickets unavailable'); }
+    finally { runtime.pending.support = false; }
+  }
+
+  function renderSupportList() {
+    const node = $('[data-support-list]');
+    if (!node) return;
+    const items = state.support.items || [];
+    node.innerHTML = items.length ? `<div class="ticket-list">${items.map((item) => `<article class="ticket-row ${item.has_unread ? 'has-unread' : ''}"><div><strong>#${esc(item.id)} ${esc(item.subject || item.reason_code || 'Support')}</strong><small>${esc(item.last_message_preview || 'No replies yet')}</small></div><span>${esc(item.status || 'open')}</span><em>${dateText(item.last_message_at || item.updated_at || item.created_at || 0)}</em></article>`).join('')}</div>` : emptyState('No tickets yet.');
+  }
+
   function renderAccount() {
     const user = state.user || {};
     const kyc = kycStatusLabel();
@@ -2103,11 +2245,15 @@
             <a class="btn btn-primary" href="#/wallet">Funds</a>
             <a class="btn btn-ghost" href="#/kyc">KYC</a>
             <a class="btn btn-ghost" href="#/invest">Earn</a>
-            <a class="btn btn-ghost" href="mailto:${escAttr(state.brand.support_email || 'support@vertexpluse.com')}">Support</a>
+            <a class="btn btn-ghost" href="#/support">Support</a>
+            <a class="btn btn-ghost" href="#/news">News</a>
             <a class="btn btn-danger" href="/logout.php">Log out</a>
           </div>
         </div>
         <div class="panel account-menu">
+          <h2>Preferences</h2>
+          <label class="field"><span>Language</span><select data-lang-select><option value="en" ${state.lang === 'en' ? 'selected' : ''}>English</option><option value="ar" ${state.lang === 'ar' ? 'selected' : ''}>العربية</option><option value="ru" ${state.lang === 'ru' ? 'selected' : ''}>Русский</option></select></label>
+          <label class="settings-toggle"><input type="checkbox" data-notification-pref ${state.prefs.notifications ? 'checked' : ''}><span>Enable in-app notifications</span></label>
           <h2>Workspace</h2>
           ${navItems().map((item) => `<a href="#/${item.route}"><span>${uiIcon(item.icon)}</span><strong>${esc(item.label)}</strong><em>Open ${esc(item.label.toLowerCase())}</em></a>`).join('')}
           <a href="#/deposit"><span>${uiIcon('deposit')}</span><strong>Deposit</strong><em>Manual funding request</em></a>
@@ -2115,6 +2261,8 @@
           <a href="#/kyc"><span>${uiIcon('kyc')}</span><strong>KYC</strong><em>Identity verification</em></a>
         </div>
       </section>`;
+    $('[data-lang-select]')?.addEventListener('change', (event) => { state.lang = event.target.value; safeStorage('vp_lang', state.lang, true); applyRoute(); });
+    $('[data-notification-pref]')?.addEventListener('change', (event) => { state.prefs.notifications = !!event.target.checked; safeStorage('vp_notifications_enabled', state.prefs.notifications ? '1' : '0', true); });
     loadKyc(runtime.routeToken);
   }
 
@@ -2211,7 +2359,11 @@
     const activeMarket = activeMarketRow();
     setText('[data-active-symbol]', state.symbol);
     setText('[data-active-name]', activeMarket.name || state.symbol);
+    const oldPrice = Number(state.lastQuotePrice || 0);
+    const nextPrice = Number(quote.price || 0);
     setText('[data-active-price]', quote.price > 0 ? price(quote.price, state.type) : '--');
+    flashPriceNodes(nextPrice, oldPrice);
+    if (nextPrice > 0) state.lastQuotePrice = nextPrice;
     setText('[data-active-change]', pct(quote.change_pct));
     setText('[data-source-pill]', q.label);
     setText('[data-source-label]', quote.source ? `Source: ${quote.source}` : 'Quote authority');
@@ -2235,6 +2387,37 @@
     setText('[data-trade-quality]', q.label);
     const pnlNode = $('[data-trade-pnl]');
     if (pnlNode) pnlNode.className = pnl >= 0 ? 'pos' : 'neg';
+  }
+
+  function flashPriceNodes(nextPrice, oldPrice) {
+    if (!(nextPrice > 0) || !(oldPrice > 0) || nextPrice === oldPrice) return;
+    const className = nextPrice > oldPrice ? 'price-flash-up' : 'price-flash-down';
+    ['[data-active-price]', '[data-ticket-sell]', '[data-ticket-buy]'].forEach((selector) => {
+      const node = $(selector);
+      if (!node) return;
+      node.classList.remove('price-flash-up', 'price-flash-down');
+      void node.offsetWidth;
+      node.classList.add(className);
+      setTimeout(() => node.classList.remove(className), 650);
+    });
+  }
+
+  function renderNotificationPanel() {
+    let panel = $('.notification-panel');
+    if (!state.notifications.open) { if (panel) panel.remove(); return; }
+    if (!panel) { panel = document.createElement('div'); panel.className = 'notification-panel panel'; document.body.appendChild(panel); }
+    const items = state.notifications.items || [];
+    panel.innerHTML = `<div class="section-head compact"><div><h2>Notifications</h2><p>Latest platform alerts</p></div><a class="btn btn-ghost btn-sm" href="#/news">News</a></div><div class="notification-list">${items.length ? items.slice(0, 8).map((item) => `<a href="${escAttr(item.url || item.cta_url || '#/news')}" class="notification-item"><strong>${esc(item.title || 'Platform update')}</strong><small>${esc(item.text || item.excerpt || '')}</small><em>${dateText(item.created_at || item.published_at || 0)}</em></a>`).join('') : emptyState('No notifications yet.')}</div>`;
+  }
+
+  async function loadNotifications(token) {
+    if (runtime.pending.notifications || !state.prefs.notifications) return;
+    runtime.pending.notifications = true;
+    try {
+      const data = await optionalApi(`/notifications/list.php?lang=${encodeURIComponent(state.lang)}&limit=8`, { timeout: 6500 });
+      if (!isToken(token)) return;
+      if (data && data.ok !== false) { state.notifications.items = data.items || []; state.notifications.unread = Number(data.unread || 0); state.notifications.loaded = true; renderTopbar(); }
+    } finally { runtime.pending.notifications = false; }
   }
 
   function renderTicketOnly() {
@@ -2263,6 +2446,9 @@
     });
     panel.querySelectorAll('[data-place]').forEach((btn) => {
       btn.addEventListener('click', () => placeOrder(btn.dataset.place));
+    });
+    panel.querySelectorAll('[data-side-short]').forEach((btn) => {
+      btn.addEventListener('click', () => placeOrder(btn.dataset.sideShort));
     });
   }
 

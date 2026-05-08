@@ -3,6 +3,7 @@ require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
+require_once __DIR__ . '/../lib/trade_mode.php';
 require_once __DIR__ . '/../lib/affiliates.php';
 
 require_method('POST');
@@ -18,7 +19,7 @@ $id = (int)($_GET['id'] ?? ($body['id'] ?? 0));
 if ($id <= 0) json_response(['ok'=>false,'error'=>'Invalid position id'], 422);
 
 // demo/real (affects wallet currency). default demo for safety.
-$mode = strtolower(trim((string)($body['mode'] ?? ($_GET['mode'] ?? 'demo'))));
+$mode = trade_mode_for_user($pdo, $uid, $body);
 
 $stmt = $pdo->prepare('SELECT * FROM positions WHERE id=? AND user_id=?');
 $stmt->execute([$id, $uid]);

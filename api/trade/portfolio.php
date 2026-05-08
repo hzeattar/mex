@@ -3,14 +3,14 @@ require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
+require_once __DIR__ . '/../lib/trade_mode.php';
 
 $uid = require_auth();
 $realCur = strtoupper((string)env('REAL_CURRENCY', 'USDT'));
 $demoCur = strtoupper((string)env('DEMO_CURRENCY', 'USDT_DEMO'));
 $pdo = db();
 
-$mode = isset($_GET['mode']) ? strtolower(trim((string)$_GET['mode'])) : 'demo';
-$mode = ($mode === 'real') ? 'real' : 'demo';
+$mode = trade_mode_for_user($pdo, $uid);
 $realPrefix = '@R@';
 
 // Backward-compatible timestamp column for positions.

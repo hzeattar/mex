@@ -3,6 +3,7 @@ require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
+require_once __DIR__ . '/../lib/trade_mode.php';
 require_once __DIR__ . '/../lib/affiliates.php';
 
 require_method('POST');
@@ -26,7 +27,7 @@ $usdReq = (float)($body['usd'] ?? ($body['usd_amount'] ?? ($body['amount'] ?? 0)
 $limit = (float)($body['price'] ?? 0);
 // Demo/Real mode affects: which wallet currency is used + symbol prefix storage.
 // Portfolio endpoint filters Real positions by @R@ prefix.
-$mode = strtolower((string)($body['mode'] ?? ($_GET['mode'] ?? 'demo')));
+$mode = trade_mode_for_user($pdo, $uid, $body);
 $isReal = ($mode === 'real');
 
 // Allow placing by USD amount (preferred). If qty is missing/0 but USD is provided, we will derive qty from fill.
