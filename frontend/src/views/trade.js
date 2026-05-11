@@ -17,17 +17,14 @@ export function render(params) {
   const symbol = get('symbol');
   const type = get('type');
   const tf = get('tf');
-  const isMobile = window.innerWidth < 768;
-
-  if (isMobile) return renderMobileTrade(symbol, type, tf);
   return renderDesktopTrade(symbol, type, tf);
 }
 
 function renderDesktopTrade(symbol, type, tf) {
   return `
-    <div class="grid grid-cols-[280px_1fr_320px] gap-4 h-[calc(100vh-120px)] animate-fade-in">
+    <div class="flex flex-col lg:grid lg:grid-cols-[280px_1fr_320px] gap-4 lg:h-[calc(100vh-120px)] animate-fade-in">
       <!-- Watchlist -->
-      <aside class="card overflow-hidden flex flex-col">
+      <aside class="card overflow-hidden hidden lg:flex flex-col">
         <div class="p-3 border-b border-line space-y-2">
           <div class="flex gap-1 overflow-x-auto pb-1" id="market-tabs"></div>
           <div class="relative">
@@ -60,8 +57,14 @@ function renderDesktopTrade(symbol, type, tf) {
         </div>
       </div>
 
+      <!-- Mobile Buy/Sell (visible only on mobile) -->
+      <div class="grid grid-cols-2 gap-3 p-4 lg:hidden">
+        <button class="btn bg-red text-white font-bold py-3 rounded-lg" data-side="SELL">Sell ${esc(symbol)}</button>
+        <button class="btn bg-green text-white font-bold py-3 rounded-lg" data-side="BUY">Buy ${esc(symbol)}</button>
+      </div>
+
       <!-- Order Ticket -->
-      <aside class="card overflow-hidden flex flex-col">
+      <aside class="card overflow-hidden hidden lg:flex flex-col">
         <div class="p-3 border-b border-line">
           <h3 class="font-semibold text-sm">Order Ticket</h3>
           <p class="text-[11px] text-muted">${esc(symbol)} - ${esc(type.toUpperCase())}</p>
@@ -161,8 +164,12 @@ async function setupTrade(container) {
   }
 
   // Init chart
-  if (candlesData && candlesData.items) {
-    initChart(container, candlesData.items);
+  try {
+    if (candlesData && candlesData.items) await initChart(container, candlesData.items);
+  } catch (err) {
+    console.error('Chart init failed:', err);
+    const cel = container.querySelector('#chart-container');
+    if (cel) cel.innerHTML = '<p class="text-muted text-sm text-center p-8">Chart temporarily unavailable</p>';
   }
 
   // Connect SSE for live prices
@@ -204,7 +211,7 @@ function renderWatchlist(container, items) {
 async function initChart(container, candles) {
   const el = container.querySelector('#chart-container');
   if (!el) return;
-  const { createChart, CandlestickSeries, HistogramSeries } = await import('lightweight-charts');
+  const { createChart } = await import('lightweight-charts');
   el.innerHTML = '';
   const chart = createChart(el, {
     layout: { background: { color: '#071126' }, textColor: '#8ba1cf' },
@@ -216,13 +223,13 @@ async function initChart(container, candles) {
     height: el.clientHeight,
   });
 
-  const candleSeries = chart.addSeries(CandlestickSeries, {
+  const candleSeries = chart.addCandlestickSeries({
     upColor: '#24d28d', downColor: '#ff5c7c',
     borderUpColor: '#24d28d', borderDownColor: '#ff5c7c',
     wickUpColor: '#24d28d', wickDownColor: '#ff5c7c',
   });
 
-  const volumeSeries = chart.addSeries(HistogramSeries, {
+  const volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: 'volume' },
     priceScaleId: 'vol',
   });
@@ -253,8 +260,9 @@ async function initChart(container, candles) {
 
 function bindTradeEvents(container) {
   delegate(container, '[data-watch]', 'click', (e, el) => {
-    const { navigate } = import('../router.js');
-    navigate('trade', { symbol: el.dataset.watch, type: el.dataset.type || get('type') });
+    import('../router.js').then(({ navigate }) => {
+      navigate('trade', { symbol: el.dataset.watch, type: el.dataset.type || get('type') });
+    });
   });
   delegate(container, '[data-tf]', 'click', (e, el) => {
     set('tf', el.dataset.tf);

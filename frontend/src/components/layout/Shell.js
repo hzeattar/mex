@@ -4,6 +4,7 @@ import { navigate, currentPath } from '../../router.js';
 import { esc } from '../../utils/format.js';
 import { $, $$, delegate } from '../../utils/dom.js';
 import { icons } from '../common/Icons.js';
+import { currentLocale, setLocale } from '../../utils/i18n.js';
 
 const NAV_ITEMS = [
   { route: 'home', label: 'Home', icon: 'home' },
@@ -78,6 +79,11 @@ export function renderShell(app) {
               <div class="text-[10px] text-muted uppercase" id="balance-currency">USDT</div>
               <div class="text-sm font-bold" id="balance-amount">0.00</div>
             </div>
+            <select class="input text-xs w-16 py-1" id="lang-select">
+              <option value="en" ${currentLocale() === 'en' ? 'selected' : ''}>EN</option>
+              <option value="ar" ${currentLocale() === 'ar' ? 'selected' : ''}>????</option>
+              <option value="ru" ${currentLocale() === 'ru' ? 'selected' : ''}>RU</option>
+            </select>
             <button class="relative w-9 h-9 grid place-items-center rounded-lg border border-line hover:border-line-strong" id="notifications-btn">
               ${icons.bell}
               <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red text-[9px] font-bold grid place-items-center hidden" id="notif-badge">0</span>
@@ -145,6 +151,9 @@ function bindShellEvents(app) {
   $$('[id^="mode-toggle"]', app).forEach((btn) => {
     btn.addEventListener('click', toggleMode);
   });
+
+  // Language selector
+  $('#lang-select', app)?.addEventListener('change', (e) => setLocale(e.target.value));
 }
 
 function toggleDrawer(open) {
@@ -154,11 +163,13 @@ function toggleDrawer(open) {
   document.body.classList.toggle('overflow-hidden', open);
 }
 
-async function toggleMode() {
+function toggleMode() {
   const current = get('mode');
   const next = current === 'real' ? 'demo' : 'real';
   set('mode', next);
   localStorage.setItem('vp_mode', next);
+  syncModeUI();
+  window.location.reload();
 }
 
 function syncNavActive() {

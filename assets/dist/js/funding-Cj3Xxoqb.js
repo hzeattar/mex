@@ -1,4 +1,4 @@
-import{g as p,a as r,e as i,m as u,h as m}from"./main-BXbPUX4a.js";function g(s){const a=(s.path||p("route")||"deposit").includes("withdraw")?"withdraw":"deposit",t=a==="deposit";return`
+import{g as p,a as r,e as i,m as u,h as m}from"./main-uNfiIqMk.js";function g(s){const a=(s.path||p("route")||"deposit").includes("withdraw")?"withdraw":"deposit",t=a==="deposit";return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div>

@@ -1,4 +1,4 @@
-import{g as m,i as f,a as u,e as n,m as i,d as g,p as b,f as $}from"./main-BXbPUX4a.js";function w(){return m("mode"),`
+import{g as m,i as f,a as u,e as n,m as i,d as g,p as b,f as $}from"./main-uNfiIqMk.js";function w(){return m("mode"),`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">
