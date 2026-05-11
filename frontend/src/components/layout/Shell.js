@@ -1,17 +1,21 @@
-// App Shell - Sidebar + Workspace + Bottom Nav + Mobile Header
-import { get, subscribe } from '../../state/store.js';
+// Professional Trading Shell - MultiBank-inspired layout
+import { get, set, subscribe } from '../../state/store.js';
 import { navigate, currentPath } from '../../router.js';
-import { esc } from '../../utils/format.js';
+import { esc, money } from '../../utils/format.js';
 import { $, $$, delegate } from '../../utils/dom.js';
 import { icons } from '../common/Icons.js';
 import { currentLocale, setLocale } from '../../utils/i18n.js';
+import { api } from '../../services/api.js';
 
-const NAV_ITEMS = [
+const NAV = [
   { route: 'home', label: 'Home', icon: 'home' },
   { route: 'trade', label: 'Trade', icon: 'trade' },
   { route: 'portfolio', label: 'Portfolio', icon: 'portfolio' },
-  { route: 'wallet', label: 'Assets', icon: 'wallet' },
+  { route: 'wallet', label: 'Funds', icon: 'wallet' },
   { route: 'invest', label: 'Earn', icon: 'earn' },
+];
+
+const NAV_MORE = [
   { route: 'news', label: 'News', icon: 'news' },
   { route: 'support', label: 'Support', icon: 'support' },
   { route: 'account', label: 'Account', icon: 'account' },
@@ -21,175 +25,128 @@ const MOBILE_NAV = [
   { route: 'home', label: 'Home', icon: 'home' },
   { route: 'trade', label: 'Trade', icon: 'trade' },
   { route: 'invest', label: 'Earn', icon: 'earn' },
-  { route: 'wallet', label: 'Assets', icon: 'wallet' },
+  { route: 'wallet', label: 'Funds', icon: 'wallet' },
 ];
 
 export function renderShell(app) {
   const brand = get('brand');
+  const mode = get('mode');
+  const wallet = activeWallet();
 
   app.innerHTML = `
-    <div class="flex min-h-screen">
-      <!-- Desktop Sidebar -->
-      <aside class="hidden lg:flex flex-col w-[240px] border-r border-line bg-panel/60 backdrop-blur-xl fixed inset-y-0 left-0 z-40 overflow-y-auto">
-        <div class="p-5 border-b border-line">
-          <a href="#/home" class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-green grid place-items-center text-white font-black text-sm">V</div>
-            <strong class="text-base tracking-tight">${esc(brand.name)}</strong>
-          </a>
-        </div>
-        <nav class="flex-1 p-3 space-y-1" id="sidebar-nav">
-          ${NAV_ITEMS.map(navItem).join('')}
+    <div class="flex flex-col h-screen overflow-hidden" id="shell">
+      <!-- Desktop Top Navigation Bar -->
+      <header class="hidden lg:flex items-center h-12 px-4 border-b border-line bg-surface shrink-0 z-50">
+        <a href="#/home" class="flex items-center gap-2 mr-6">
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-buy grid place-items-center text-white font-black text-[10px]">V</div>
+          <strong class="text-sm tracking-tight">${esc(brand.name)}</strong>
+        </a>
+        <nav class="flex items-center gap-1" id="desktop-nav">
+          ${NAV.map(n => `<a href="#/${n.route}" class="nav-tab" data-nav="${n.route}"><span class="w-4 h-4">${icons[n.icon]}</span>${n.label}</a>`).join('')}
+          ${NAV_MORE.map(n => `<a href="#/${n.route}" class="nav-tab" data-nav="${n.route}">${n.label}</a>`).join('')}
         </nav>
-        <div class="p-3 border-t border-line">
-          <button class="w-full btn-ghost text-xs" id="mode-toggle-desktop">
-            <span class="w-2 h-2 rounded-full" id="mode-dot-desktop"></span>
-            <span id="mode-label-desktop">${get('mode') === 'real' ? 'Real' : 'Demo'}</span>
+        <div class="flex-1"></div>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-panel border border-line">
+            <span class="text-[10px] text-muted uppercase">${esc(wallet.currency)}</span>
+            <strong class="text-xs font-mono" id="topbar-balance">${money(wallet.available)}</strong>
+          </div>
+          <button class="mode-btn ${mode === 'real' ? 'is-real' : ''}" id="mode-toggle" title="Switch mode">
+            <span class="mode-dot"></span>
+            <span class="mode-label">${mode === 'real' ? 'Real' : 'Demo'}</span>
           </button>
+          <select class="lang-select" id="lang-select">
+            <option value="en" ${currentLocale() === 'en' ? 'selected' : ''}>EN</option>
+            <option value="ar" ${currentLocale() === 'ar' ? 'selected' : ''}>AR</option>
+            <option value="ru" ${currentLocale() === 'ru' ? 'selected' : ''}>RU</option>
+          </select>
+          <button class="icon-btn relative" id="notif-btn" title="Notifications">
+            ${icons.bell}
+            <span class="notif-badge hidden" id="notif-badge">0</span>
+          </button>
+          <a href="#/account" class="icon-btn" title="Account">${icons.account}</a>
         </div>
-      </aside>
+      </header>
 
-      <!-- Main content -->
-      <div class="flex-1 lg:ml-[240px] flex flex-col min-h-screen">
-        <!-- Mobile Header -->
-        <header class="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 border-b border-line bg-panel/90 backdrop-blur-xl">
-          <a href="#/home" class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-green grid place-items-center text-white font-black text-[10px]">V</div>
-            <strong class="text-sm">${esc(brand.name)}</strong>
-          </a>
-          <div class="flex items-center gap-2">
-            <button class="btn-ghost btn-sm" id="mode-toggle-mobile">
-              <span class="w-2 h-2 rounded-full" id="mode-dot-mobile"></span>
-              <span id="mode-label-mobile">${get('mode') === 'real' ? 'Real' : 'Demo'}</span>
-            </button>
-            <button class="w-9 h-9 grid place-items-center rounded-lg border border-line" id="market-drawer-btn" aria-label="Markets">
-              ${icons.menu}
-            </button>
-          </div>
-        </header>
+      <!-- Mobile Header -->
+      <header class="lg:hidden flex items-center justify-between h-12 px-3 border-b border-line bg-surface shrink-0 z-50">
+        <a href="#/home" class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-md bg-gradient-to-br from-accent to-buy grid place-items-center text-white font-black text-[8px]">V</div>
+          <strong class="text-xs">${esc(brand.name)}</strong>
+        </a>
+        <div class="flex items-center gap-2">
+          <button class="mode-btn mode-btn-sm ${mode === 'real' ? 'is-real' : ''}" id="mode-toggle-m">
+            <span class="mode-dot"></span>
+            <span class="mode-label">${mode === 'real' ? 'Real' : 'Demo'}</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="notif-btn-m">${icons.bell}<span class="notif-badge hidden" id="notif-badge-m">0</span></button>
+        </div>
+      </header>
 
-        <!-- Top Bar (Desktop) -->
-        <header class="hidden lg:flex items-center justify-between px-6 h-14 border-b border-line bg-panel/40 backdrop-blur-sm" id="topbar">
-          <div id="topbar-title" class="text-sm text-muted"></div>
-          <div class="flex items-center gap-3">
-            <button class="btn-ghost btn-sm" id="mode-toggle-topbar">
-              <span class="w-2 h-2 rounded-full" id="mode-dot-topbar"></span>
-              <span id="mode-label-topbar">${get('mode') === 'real' ? 'Real' : 'Demo'}</span>
-            </button>
-            <div class="text-right">
-              <div class="text-[10px] text-muted uppercase" id="balance-currency">USDT</div>
-              <div class="text-sm font-bold" id="balance-amount">0.00</div>
-            </div>
-            <select class="input text-xs w-16 py-1" id="lang-select">
-              <option value="en" ${currentLocale() === 'en' ? 'selected' : ''}>EN</option>
-              <option value="ar" ${currentLocale() === 'ar' ? 'selected' : ''}>????</option>
-              <option value="ru" ${currentLocale() === 'ru' ? 'selected' : ''}>RU</option>
-            </select>
-            <button class="relative w-9 h-9 grid place-items-center rounded-lg border border-line hover:border-line-strong" id="notifications-btn">
-              ${icons.bell}
-              <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red text-[9px] font-bold grid place-items-center hidden" id="notif-badge">0</span>
-            </button>
-          </div>
-        </header>
-
-        <!-- View container -->
-        <main class="flex-1 p-4 lg:p-6 pb-24 lg:pb-6" id="view">
-          <div class="flex items-center justify-center min-h-[50vh]">
-            <div class="skeleton w-8 h-8 rounded-full"></div>
-          </div>
-        </main>
-      </div>
+      <!-- Main View -->
+      <main class="flex-1 overflow-auto" id="view">
+        <div class="flex items-center justify-center h-full"><div class="loading-spinner"></div></div>
+      </main>
 
       <!-- Mobile Bottom Nav -->
-      <nav class="lg:hidden fixed bottom-0 inset-x-0 z-50 grid grid-cols-4 bg-panel/95 backdrop-blur-xl border-t border-line" style="padding-bottom: var(--safe-bottom)" id="bottom-nav">
-        ${MOBILE_NAV.map(mobileNavItem).join('')}
+      <nav class="lg:hidden fixed bottom-0 inset-x-0 z-50 flex items-center justify-around h-14 bg-surface/95 backdrop-blur-xl border-t border-line" style="padding-bottom:env(safe-area-inset-bottom)" id="bottom-nav">
+        ${MOBILE_NAV.map(n => `<a href="#/${n.route}" class="mobile-tab" data-nav="${n.route}"><span class="w-5 h-5">${icons[n.icon]}</span><span class="mobile-tab-label">${n.label}</span></a>`).join('')}
       </nav>
 
-      <!-- Market Drawer (mobile) -->
-      <div class="fixed inset-0 z-[200] hidden" id="market-drawer-overlay">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" data-close-drawer></div>
-        <div class="absolute bottom-0 inset-x-0 max-h-[85vh] overflow-auto rounded-t-2xl border border-line bg-panel shadow-card animate-slide-up" id="market-drawer-sheet">
-        </div>
+      <!-- Notification Panel -->
+      <div class="notif-panel hidden" id="notif-panel">
+        <div class="notif-panel-header"><strong>Notifications</strong><button class="icon-btn icon-btn-sm" id="notif-close">${icons.close}</button></div>
+        <div class="notif-panel-body" id="notif-list"><p class="text-muted text-xs text-center py-6">Loading...</p></div>
       </div>
     </div>`;
 
-  bindShellEvents(app);
-  syncNavActive();
-  syncModeUI();
-
-  subscribe('mode', syncModeUI);
-  window.addEventListener('hashchange', syncNavActive);
+  bindShell(app);
+  syncActive();
+  window.addEventListener('hashchange', syncActive);
 }
 
-function navItem(item) {
-  return `<a href="#/${item.route}" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted hover:text-text hover:bg-panel-2 transition-colors" data-nav="${item.route}">
-    <span class="w-5 h-5 shrink-0">${icons[item.icon] || ''}</span>
-    <span>${item.label}</span>
-  </a>`;
-}
-
-function mobileNavItem(item) {
-  return `<a href="#/${item.route}" class="mobile-nav-link flex flex-col items-center justify-center gap-1 py-2 text-muted hover:text-text transition-colors" data-nav="${item.route}">
-    <span class="w-6 h-6">${icons[item.icon] || ''}</span>
-    <span class="text-[10px] font-medium">${item.label}</span>
-  </a>`;
-}
-
-function bindShellEvents(app) {
-  // Navigation active state
-  delegate(app, '[data-nav]', 'click', (e, el) => {
-    e.preventDefault();
-    navigate(el.dataset.nav);
-  });
-
-  // Market drawer
-  const drawerBtn = $('#market-drawer-btn', app);
-  const overlay = $('#market-drawer-overlay', app);
-  if (drawerBtn) drawerBtn.addEventListener('click', () => toggleDrawer(true));
-  delegate(app, '[data-close-drawer]', 'click', () => toggleDrawer(false));
-
-  // Mode toggle
-  $$('[id^="mode-toggle"]', app).forEach((btn) => {
-    btn.addEventListener('click', toggleMode);
-  });
-
-  // Language selector
-  $('#lang-select', app)?.addEventListener('change', (e) => setLocale(e.target.value));
-}
-
-function toggleDrawer(open) {
-  const overlay = $('#market-drawer-overlay');
-  if (!overlay) return;
-  overlay.classList.toggle('hidden', !open);
-  document.body.classList.toggle('overflow-hidden', open);
+function bindShell(app) {
+  delegate(app, '[data-nav]', 'click', (e, el) => { e.preventDefault(); navigate(el.dataset.nav); });
+  $$('#mode-toggle, #mode-toggle-m', app).forEach(b => b?.addEventListener('click', toggleMode));
+  $('#lang-select', app)?.addEventListener('change', e => setLocale(e.target.value));
+  $$('#notif-btn, #notif-btn-m', app).forEach(b => b?.addEventListener('click', toggleNotifications));
+  $('#notif-close', app)?.addEventListener('click', () => $('#notif-panel')?.classList.add('hidden'));
 }
 
 function toggleMode() {
-  const current = get('mode');
-  const next = current === 'real' ? 'demo' : 'real';
-  set('mode', next);
+  const next = get('mode') === 'real' ? 'demo' : 'real';
   localStorage.setItem('vp_mode', next);
-  syncModeUI();
   window.location.reload();
 }
 
-function syncNavActive() {
+function toggleNotifications() {
+  const panel = $('#notif-panel');
+  if (!panel) return;
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !isHidden);
+  if (isHidden) loadNotifications();
+}
+
+async function loadNotifications() {
+  const list = $('#notif-list');
+  if (!list) return;
+  try {
+    const data = await api('/notifications/list.php', { timeout: 6000 });
+    const items = data?.items || [];
+    if (!items.length) { list.innerHTML = '<p class="text-muted text-xs text-center py-6">No notifications</p>'; return; }
+    list.innerHTML = items.slice(0, 20).map(n => `<div class="notif-item ${n.read ? '' : 'unread'}"><p class="text-xs">${esc(n.message || n.title || '--')}</p><span class="text-[10px] text-muted">${esc(n.created_at || '')}</span></div>`).join('');
+  } catch (e) { list.innerHTML = '<p class="text-muted text-xs text-center py-6">Failed to load</p>'; }
+}
+
+function syncActive() {
   const { path } = currentPath();
-  $$('[data-nav]').forEach((el) => {
-    const isActive = el.dataset.nav === path;
-    el.classList.toggle('text-text', isActive);
-    el.classList.toggle('bg-accent-soft', isActive);
-    el.classList.toggle('text-muted', !isActive);
+  $$('[data-nav]').forEach(el => {
+    el.classList.toggle('active', el.dataset.nav === path);
   });
 }
 
-function syncModeUI() {
+function activeWallet() {
+  const w = get('wallet') || {};
   const mode = get('mode');
-  const isReal = mode === 'real';
-  $$('[id^="mode-dot"]').forEach((dot) => {
-    dot.className = `w-2 h-2 rounded-full ${isReal ? 'bg-green' : 'bg-gold'}`;
-  });
-  $$('[id^="mode-label"]').forEach((lbl) => {
-    lbl.textContent = isReal ? 'Real' : 'Demo';
-  });
+  return mode === 'real' ? (w.real || { balance: 0, available: 0, currency: 'USDT' }) : (w.demo || { balance: 10000, available: 10000, currency: 'USDT_DEMO' });
 }
-

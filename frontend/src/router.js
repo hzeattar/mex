@@ -2,6 +2,7 @@
 const routes = new Map();
 let currentRoute = null;
 let beforeHooks = [];
+let routeContainer = null;
 
 export function defineRoute(path, loader) {
   routes.set(path, { loader, module: null });
@@ -23,14 +24,14 @@ export function onBeforeRoute(fn) {
 }
 
 export async function startRouter(container) {
+  routeContainer = container;
   const handler = async () => {
     const { path, params } = currentPath();
     const route = routes.get(path) || routes.get('home');
     if (!route) return;
 
     for (const hook of beforeHooks) {
-      const result = hook(path, params);
-      if (result === false) return;
+      if (hook(path, params) === false) return;
     }
 
     try {
@@ -38,14 +39,17 @@ export async function startRouter(container) {
       if (currentRoute && currentRoute.cleanup) currentRoute.cleanup();
       container.innerHTML = '';
       currentRoute = route.module;
+
+      // Pass _path so views know which route they are
+      const enriched = { ...params, _path: path };
       if (route.module.render) {
-        const html = route.module.render(params);
+        const html = route.module.render(enriched);
         if (typeof html === 'string') container.innerHTML = html;
       }
-      if (route.module.mount) route.module.mount(container, params);
+      if (route.module.mount) route.module.mount(container, enriched);
     } catch (err) {
       console.error('Route error:', err);
-      container.innerHTML = `<div class="p-8 text-center text-red">${err.message}</div>`;
+      container.innerHTML = `<div class="flex items-center justify-center min-h-[40vh]"><div class="text-center"><p class="text-red text-sm">${err.message || 'Page failed to load'}</p><button class="btn-ghost btn-sm mt-3" onclick="location.reload()">Retry</button></div></div>`;
     }
   };
 

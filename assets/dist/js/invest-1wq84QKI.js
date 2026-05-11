@@ -1,4 +1,4 @@
-import{d as b,s as o,g as n,i as l,a as r,f,e as i,m as y}from"./main-uNfiIqMk.js";function S(){const t=n("mode"),e=n("invest.tab")||"copy";return`
+import{d as b,s as o,g as n,i as l,a as r,h as f,e as i,m as y}from"./main-Dfs15V3a.js";function S(){const t=n("mode"),e=n("invest.tab")||"copy";return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">

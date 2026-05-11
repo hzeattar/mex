@@ -1,4 +1,4 @@
-import{g as e,i as a,e as i}from"./main-uNfiIqMk.js";function r(){const s=e("user")||{},c=e("kyc"),n=e("level");return`
+import{g as e,i as a,e as i}from"./main-Dfs15V3a.js";function r(){const s=e("user")||{},c=e("kyc"),n=e("level");return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center gap-4">

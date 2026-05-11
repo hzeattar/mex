@@ -1,4 +1,4 @@
-import{g as r,e as i,m as l,a as c,i as d,p,b as m,n as v}from"./main-uNfiIqMk.js";function $(){const e=r("brand"),t=y(),s=r("mode");return`
+import{g as r,e as i,m as l,a as c,i as d,p,b as m,n as v}from"./main-Dfs15V3a.js";function $(){const e=r("brand"),t=y(),s=r("mode");return`
     <div class="space-y-6 animate-fade-in">
       <!-- Hero -->
       <section class="card bg-gradient-to-br from-panel-2 to-panel relative overflow-hidden">

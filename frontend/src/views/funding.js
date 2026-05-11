@@ -6,7 +6,7 @@ import { api, formApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 
 export function render(params) {
-  const kind = (params.path || get('route') || 'deposit').includes('withdraw') ? 'withdraw' : 'deposit';
+  const kind = (params._path || 'deposit').includes('withdraw') ? 'withdraw' : 'deposit';
   const isDeposit = kind === 'deposit';
   return `
     <div class="space-y-6 animate-fade-in">
@@ -119,3 +119,4 @@ function statusBadge(status) {
   if (['pending','requested','processing','review'].includes(s)) return 'badge-accent';
   return 'badge-red';
 }
+

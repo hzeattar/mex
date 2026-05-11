@@ -1,67 +1,89 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --bg: #060A14;
-    --panel: #071126;
-    --panel-2: #0A1735;
-    --line: rgba(129,160,220,0.16);
-    --accent: #5d7cff;
-    --green: #24d28d;
-    --red: #ff5c7c;
-    --text: #e8f0ff;
-    --muted: rgba(200,220,255,0.58);
-    --radius: 12px;
-    --radius-lg: 18px;
-    --shadow: 0 16px 48px rgba(2,8,20,0.32);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #060A14; --surface: #0b1426; --panel: #111d32; --panel-2: #162847;
+    --line: rgba(129,160,220,0.12); --line-strong: rgba(129,160,220,0.24);
+    --accent: #5d7cff; --buy: #00c087; --sell: #f6465d; --spread: #fcd535;
+    --text: #e8f0ff; --muted: rgba(200,220,255,0.55); --radius: 8px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
   }
-  html { scroll-behavior: smooth; }
-  body {
-    @apply bg-bg text-text antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    min-height: 100dvh;
-    overflow-x: hidden;
-  }
-  * { box-sizing: border-box; }
-  button, a { cursor: pointer; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  html, body { height: 100%; overflow: hidden; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 13px; -webkit-font-smoothing: antialiased; }
+  *, *::before, *::after { box-sizing: border-box; }
+  button, a { cursor: pointer; color: inherit; text-decoration: none; }
+  input, select, textarea { font: inherit; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(129,160,220,0.2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: rgba(129,160,220,0.15); border-radius: 3px; }
 }
 
 @layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius)] px-4 py-2.5 font-semibold text-sm transition-all duration-150;
-  }
-  .btn-primary {
-    @apply btn bg-gradient-to-r from-accent to-green text-white shadow-glow hover:shadow-glow-green hover:scale-[1.02] active:scale-[0.98];
-  }
-  .btn-ghost {
-    @apply btn border border-line bg-transparent text-muted hover:border-line-strong hover:text-text;
-  }
-  .btn-danger {
-    @apply btn bg-red-soft text-red border border-red/30 hover:bg-red/20;
-  }
-  .btn-sm { @apply text-xs px-3 py-1.5; }
-  .card {
-    @apply rounded-lg border border-line bg-panel p-4 shadow-card;
-  }
-  .card-glass {
-    @apply card backdrop-blur-xl bg-panel/80;
-  }
-  .input {
-    @apply w-full rounded-[var(--radius)] border border-line bg-panel-2 px-3 py-2.5 text-sm text-text placeholder:text-muted/60 focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/30 transition-colors;
-  }
-  .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider;
-  }
-  .badge-green { @apply badge bg-green-soft text-green; }
-  .badge-red { @apply badge bg-red-soft text-red; }
-  .badge-accent { @apply badge bg-accent-soft text-accent; }
-  .skeleton {
-    @apply animate-pulse-soft rounded bg-panel-2;
-  }
+  /* Buttons */
+  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius)] px-3 py-2 text-xs font-semibold transition-all duration-150 active:scale-[0.97]; }
+  .btn-primary { @apply btn bg-accent text-white hover:brightness-110; }
+  .btn-buy { @apply btn bg-buy text-white hover:brightness-110 shadow-[0_0_12px_rgba(0,192,135,0.2)]; }
+  .btn-sell { @apply btn bg-sell text-white hover:brightness-110 shadow-[0_0_12px_rgba(246,70,93,0.2)]; }
+  .btn-ghost { @apply btn border border-line bg-transparent text-muted hover:text-text hover:border-line-strong; }
+  .btn-sm { @apply text-[11px] px-2 py-1.5; }
+  .btn-xs { @apply text-[10px] px-1.5 py-1; }
+
+  /* Cards */
+  .card { @apply rounded-lg border border-line bg-panel p-4; }
+
+  /* Inputs */
+  .input { @apply w-full rounded-[var(--radius)] border border-line bg-surface px-3 py-2 text-xs text-text placeholder:text-muted/50 focus:outline-none focus:border-accent/50 transition-colors; }
+
+  /* Navigation */
+  .nav-tab { @apply flex items-center gap-1.5 px-3 h-full text-xs text-muted hover:text-text transition-colors border-b-2 border-transparent; }
+  .nav-tab.active { @apply text-text border-accent; }
+  .nav-tab svg { @apply w-3.5 h-3.5; }
+
+  .mobile-tab { @apply flex flex-col items-center justify-center gap-0.5 flex-1 text-muted transition-colors; }
+  .mobile-tab.active { @apply text-accent; }
+  .mobile-tab svg { @apply w-5 h-5; }
+  .mobile-tab-label { @apply text-[9px] font-medium; }
+
+  /* Mode Button */
+  .mode-btn { @apply flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-line text-xs font-semibold transition-colors; }
+  .mode-btn .mode-dot { @apply w-2 h-2 rounded-full bg-spread; }
+  .mode-btn.is-real .mode-dot { @apply bg-buy; }
+  .mode-btn-sm { @apply px-2 py-1 text-[10px]; }
+
+  /* Icon buttons */
+  .icon-btn { @apply w-8 h-8 grid place-items-center rounded-md border border-line hover:border-line-strong transition-colors; }
+  .icon-btn svg { @apply w-4 h-4; }
+  .icon-btn-sm { @apply w-7 h-7; }
+  .icon-btn-sm svg { @apply w-3.5 h-3.5; }
+
+  /* Language select */
+  .lang-select { @apply bg-surface border border-line rounded-md px-1.5 py-1 text-[10px] text-muted focus:outline-none; }
+
+  /* Notification */
+  .notif-badge { @apply absolute -top-1 -right-1 w-4 h-4 rounded-full bg-sell text-[8px] font-bold grid place-items-center text-white; }
+  .notif-panel { @apply fixed top-12 right-4 w-80 max-h-[70vh] bg-panel border border-line rounded-lg shadow-xl z-[100] overflow-hidden flex flex-col; }
+  .notif-panel-header { @apply flex items-center justify-between px-4 py-3 border-b border-line; }
+  .notif-panel-body { @apply flex-1 overflow-auto; }
+  .notif-item { @apply px-4 py-3 border-b border-line/50 hover:bg-surface/50; }
+  .notif-item.unread { @apply border-l-2 border-l-accent; }
+
+  /* Badge */
+  .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider; }
+  .badge-buy { @apply badge bg-buy/10 text-buy; }
+  .badge-sell { @apply badge bg-sell/10 text-sell; }
+  .badge-accent { @apply badge bg-accent/10 text-accent; }
+
+  /* Loading */
+  .loading-spinner { @apply w-6 h-6 border-2 border-line border-t-accent rounded-full animate-spin; }
+  .skeleton { @apply rounded bg-panel animate-pulse; }
+
+  /* Trade specific */
+  .symbol-row { @apply flex items-center gap-2 px-3 py-2 rounded-md text-xs cursor-pointer transition-colors hover:bg-panel; }
+  .symbol-row.active { @apply bg-accent/10 border-l-2 border-l-accent; }
+  .spread-display { @apply text-[10px] text-spread font-mono font-bold; }
+
+  /* Responsive helpers */
+  .mobile-pad { @apply pb-[calc(56px+var(--safe-b))] lg:pb-0; }
 }

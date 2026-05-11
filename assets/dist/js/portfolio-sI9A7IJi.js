@@ -1,4 +1,4 @@
-import{g as m,i as f,a as u,e as n,m as i,d as g,p as b,f as $}from"./main-uNfiIqMk.js";function w(){return m("mode"),`
+import{g as m,i as f,a as u,e as n,m as i,d as g,p as h,h as $}from"./main-Dfs15V3a.js";function w(){return m("mode"),`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">
@@ -37,8 +37,8 @@ import{g as m,i as f,a as u,e as n,m as i,d as g,p as b,f as $}from"./main-uNfiI
           <p class="text-muted text-sm text-center py-8">Loading orders...</p>
         </div>
       </section>
-    </div>`}function _(t){c(t),t.querySelector("#refresh-portfolio")?.addEventListener("click",()=>c(t))}async function c(t){try{const[e,s]=await Promise.all([u("/trade/portfolio.php",{timeout:8e3}),u("/trade/orders.php",{timeout:8e3})]);e&&v(t,e),s&&P(t,s.items||s.orders||[])}catch(e){t.querySelector("#positions-table").innerHTML=`<p class="text-red text-sm text-center py-4">${n(e.message)}</p>`}}function v(t,e){const s=e.positions||[],r=Number(e.balance||e.equity||0),o=Number(e.open_pnl||e.unrealized_pnl||0),h=Number(e.equity||r+o),p=t.querySelector("#portfolio-metrics");p&&(p.innerHTML=`
-      ${d("Equity",i(h),"Total value")}
+    </div>`}function _(t){c(t),t.querySelector("#refresh-portfolio")?.addEventListener("click",()=>c(t))}async function c(t){try{const[e,s]=await Promise.all([u("/trade/portfolio.php",{timeout:8e3}),u("/trade/orders.php",{timeout:8e3})]);e&&v(t,e),s&&P(t,s.items||s.orders||[])}catch(e){t.querySelector("#positions-table").innerHTML=`<p class="text-red text-sm text-center py-4">${n(e.message)}</p>`}}function v(t,e){const s=e.positions||[],r=Number(e.balance||e.equity||0),o=Number(e.open_pnl||e.unrealized_pnl||0),b=Number(e.equity||r+o),p=t.querySelector("#portfolio-metrics");p&&(p.innerHTML=`
+      ${d("Equity",i(b),"Total value")}
       ${d("Open PnL",i(o),o>=0?"Profit":"Loss",o>=0?"text-green":"text-red")}
       ${d("Positions",String(s.length),"Open trades")}
       ${d("Balance",i(r),m("mode")==="real"?"USDT":"USDT_DEMO")}`);const x=t.querySelector("#pos-count");x&&(x.textContent=`${s.length} open`);const l=t.querySelector("#positions-table");if(l){if(!s.length){l.innerHTML='<p class="text-muted text-sm text-center py-8">No open positions. Start trading to see them here.</p>';return}l.innerHTML=`<table class="w-full text-sm">
@@ -49,7 +49,7 @@ import{g as m,i as f,a as u,e as n,m as i,d as g,p as b,f as $}from"./main-uNfiI
   </table>`,g(l,"[data-close-pos]","click",(T,y)=>L(y.dataset.closePos,t))}}function S(t){const e=Number(t.pnl||t.unrealized_pnl||0);return`<tr class="border-b border-line/50 hover:bg-panel-2/30">
     <td class="py-2.5 px-2 font-semibold">${n(t.symbol)}</td>
     <td class="py-2.5"><span class="badge ${t.side==="BUY"?"badge-green":"badge-red"}">${n(t.side)}</span></td>
-    <td class="py-2.5 text-right font-mono text-xs">${b(t.entry_price||t.open_price,t.type)}</td>
+    <td class="py-2.5 text-right font-mono text-xs">${h(t.entry_price||t.open_price,t.type)}</td>
     <td class="py-2.5 text-right text-xs">${i(t.amount||t.size||0)}</td>
     <td class="py-2.5 text-right font-mono ${e>=0?"text-green":"text-red"}">${i(e)}</td>
     <td class="py-2.5 text-right px-2"><button class="btn-ghost btn-sm text-red" data-close-pos="${t.id||""}">Close</button></td>
@@ -60,7 +60,7 @@ import{g as m,i as f,a as u,e as n,m as i,d as g,p as b,f as $}from"./main-uNfiI
     <tbody>${e.map(o=>`<tr class="border-b border-line/50">
       <td class="py-2 font-semibold">${n(o.symbol)}</td>
       <td class="py-2 text-xs">${n(o.order_type||"LIMIT")} ${n(o.side)}</td>
-      <td class="py-2 text-right font-mono text-xs">${b(o.price||o.limit_price)}</td>
+      <td class="py-2 text-right font-mono text-xs">${h(o.price||o.limit_price)}</td>
       <td class="py-2 text-right">${i(o.amount)}</td>
       <td class="py-2 text-right"><span class="badge badge-accent">${n(o.status||"pending")}</span></td>
     </tr>`).join("")}</tbody>

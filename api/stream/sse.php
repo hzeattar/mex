@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 declare(strict_types=1);
 /**
  * Server-Sent Events endpoint for real-time price streaming.
