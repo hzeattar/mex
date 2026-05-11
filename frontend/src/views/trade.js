@@ -225,28 +225,40 @@ async function setup(container) {
   const tf = get('tf');
   const chartReady = loadChartLib();
 
-  const [mkts, quote, candles, portfolio] = await Promise.all([
-    api(`/markets.php?type=${type}&lite=1&with_quotes=1`, { timeout: 8000 }).catch(() => null),
-    api(`/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus&fresh=1`, { timeout: 5000 }).catch(() => null),
-    api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=120`, { timeout: 8000 }).catch(() => null),
-    api('/trade/portfolio.php', { timeout: 6000 }).catch(() => null),
-  ]);
-
-  if (mkts?.items) renderSymbolList(container, mkts.items);
-  if (quote?.items?.[0]) updatePrice(container, quote.items[0]);
-  if (portfolio?.positions) renderPositions(container, portfolio.positions);
-  updateOrderInfo(container);
   bindEvents(container);
-  startLiveQuotes(container, mkts?.items || []);
+  updateOrderInfo(container);
+  startLiveQuotes(container, []);
 
-  try {
-    await chartReady;
-    if (candles?.items?.length) await initChart(container, candles.items);
-    else $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart data unavailable</p>';
-  } catch (e) {
-    console.error('Chart:', e);
-    $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart unavailable</p>';
-  }
+  api(`/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus&fresh=1`, { timeout: 4500 })
+    .then(quote => { if (quote?.items?.[0]) updatePrice(container, quote.items[0]); })
+    .catch(() => markDisconnected(container));
+
+  api(`/markets.php?type=${type}&lite=1&with_quotes=1`, { timeout: 6500 })
+    .then(mkts => {
+      if (mkts?.items) {
+        renderSymbolList(container, mkts.items);
+        startLiveQuotes(container, mkts.items);
+      }
+    })
+    .catch(() => {
+      const list = $('#symbol-list', container);
+      if (list) list.innerHTML = '<p class="text-muted text-[11px] text-center py-4">Markets unavailable</p>';
+    });
+
+  api('/trade/portfolio.php', { timeout: 5500 })
+    .then(portfolio => { if (portfolio?.positions) renderPositions(container, portfolio.positions); })
+    .catch(() => { const body = $('#positions-body', container); if (body) body.innerHTML = '<p class="text-muted text-[11px] text-center py-3">Positions unavailable</p>'; });
+
+  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=120`, { timeout: 8000 })
+    .then(async candles => {
+      await chartReady;
+      if (candles?.items?.length) await initChart(container, candles.items);
+      else $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart data unavailable</p>';
+    })
+    .catch(e => {
+      console.error('Chart:', e);
+      $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart unavailable</p>';
+    });
 }
 
 function startLiveQuotes(container, marketItems) {
@@ -273,6 +285,13 @@ function startLiveQuotes(container, marketItems) {
   });
 }
 
+function markDisconnected(container) {
+  const dot = $('#conn-dot', container);
+  if (!dot) return;
+  dot.classList.remove('bg-muted', 'bg-buy');
+  dot.classList.add('bg-sell');
+  dot.title = 'Disconnected';
+}
 function updatePrice(container, q) {
   const p = Number(q.price || q.q_price || 0);
   const chg = Number(q.change_pct || q.q_change || 0);
@@ -676,3 +695,4 @@ function marketIcon(symbol, type) {
   if (type === 'arab') return 'arab';
   return 'crypto';
 }
+

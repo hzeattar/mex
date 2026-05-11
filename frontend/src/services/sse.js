@@ -1,5 +1,5 @@
-let pollTimer = null;
-const POLL_MS = 2500;
+﻿let pollTimer = null;
+const POLL_MS = 1500;
 export function connectSSE(symbols, type, onUpdate, onError) {
   disconnect();
   if (!symbols || !symbols.length) return disconnect;
@@ -24,3 +24,4 @@ function startPolling(symbols, type, onUpdate) {
 function stopPolling() { if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } }
 export function disconnect() { stopPolling(); }
 export function isConnected() { return pollTimer !== null; }
+
