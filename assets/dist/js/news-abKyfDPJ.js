@@ -1,0 +1,11 @@
+function n(s){return`
+    <div class="space-y-6 animate-fade-in">
+      <section class="card">
+        <h1 class="text-xl font-bold">News Center</h1>
+        <p class="text-muted text-sm mt-1">This section is loading...</p>
+      </section>
+      <div class="grid gap-4" id="news-content">
+        <div class="skeleton h-32 rounded-lg"></div>
+        <div class="skeleton h-24 rounded-lg"></div>
+      </div>
+    </div>`}function t(s,e){}export{t as mount,n as render};
