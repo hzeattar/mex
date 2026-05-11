@@ -44,7 +44,7 @@ export function render(params) {
       <div class="flex items-center justify-between px-3 lg:px-4 h-10 border-b border-line bg-surface shrink-0">
         <div class="flex items-center gap-2">
           <button class="lg:hidden w-7 h-7 grid place-items-center rounded border border-line text-muted" id="mob-mkt-btn">${icons.menu}</button>
-          <div class="w-6 h-6 rounded-md bg-accent/20 grid place-items-center text-[9px] font-black text-accent">${esc(symbol.slice(0,3))}</div>
+          <img src="./assets/img/markets/${type.replace('commodities','metal')}.svg" class="w-6 h-6 rounded-md" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'" /><div class="w-6 h-6 rounded-md bg-accent/20 grid place-items-center text-[9px] font-black text-accent" style="display:none">${esc(symbol.slice(0,3))}</div>
           <strong class="text-sm" id="sym-name">${esc(symbol)}</strong>
           <span class="text-sm font-mono font-bold" id="live-price">--</span>
           <span class="text-xs" id="live-change">+0.00%</span>
@@ -67,7 +67,7 @@ export function render(params) {
       </div>
 
       <!-- Positions (below chart on desktop) -->
-      <div class="hidden lg:block border-t border-line bg-surface max-h-[180px] overflow-auto" id="positions-section">
+      <div class="border-t border-line bg-surface max-h-[180px] overflow-auto" id="positions-section">
         <div class="flex items-center gap-3 px-3 h-8 border-b border-line">
           <span class="text-[10px] font-semibold text-muted uppercase">Open Positions</span>
           <span class="text-[10px] text-muted" id="pos-count">(0)</span>
@@ -105,6 +105,10 @@ function renderOrderPanel() {
     <div class="text-center"><span class="spread-display" id="spread-val">Spread: --</span></div>
     <label class="block"><span class="text-[10px] text-muted">Amount (USDT)</span><input type="number" class="input mt-1" value="${amt}" id="inp-amount" /></label>
     <label class="block"><span class="text-[10px] text-muted">Leverage: <strong id="lev-val">${lev}x</strong></span><input type="range" min="1" max="100" value="${lev}" class="w-full mt-1 accent-accent" id="inp-lev" /></label>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block"><span class="text-[10px] text-muted">Take Profit</span><input type="number" step="any" class="input mt-1" placeholder="Optional" id="inp-tp" /></label>
+      <label class="block"><span class="text-[10px] text-muted">Stop Loss</span><input type="number" step="any" class="input mt-1" placeholder="Optional" id="inp-sl" /></label>
+    </div>
     <div class="space-y-1 text-[10px] text-muted pt-2 border-t border-line">
       <div class="flex justify-between"><span>Est. Units</span><span id="est-units">--</span></div>
       <div class="flex justify-between"><span>Available</span><span id="avail-bal">--</span></div>
@@ -176,7 +180,7 @@ function renderSymbolList(container, items) {
   list.innerHTML = items.slice(0, 40).map(m => {
     const p = Number(m.price || m.q_price || 0), chg = Number(m.change_pct || m.q_change || 0);
     return `<div class="symbol-row ${m.symbol === active ? 'active' : ''}" data-sym="${escAttr(m.symbol)}" data-stype="${escAttr(m.type||get('type'))}">
-      <div class="w-6 h-6 rounded bg-panel grid place-items-center text-[8px] font-black">${esc(m.symbol.slice(0,3))}</div>
+      <img src="./assets/img/markets/${(m.type||get('type')).replace('commodities','metal')}.svg" class="w-6 h-6 rounded" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'" /><div class="w-6 h-6 rounded bg-panel grid place-items-center text-[8px] font-black" style="display:none">${esc(m.symbol.slice(0,3))}</div>
       <div class="flex-1 min-w-0"><div class="font-semibold text-[11px] truncate">${esc(m.symbol)}</div><div class="text-[9px] text-muted truncate">${esc(m.name||'')}</div></div>
       <div class="text-right shrink-0"><div class="text-[11px] font-mono">${p>0?price(p,m.type):'--'}</div><div class="text-[9px] ${chg>=0?'text-buy':'text-sell'}">${pct(chg)}</div></div>
     </div>`;
@@ -245,9 +249,15 @@ function bindEvents(container) {
 
 async function placeOrder(side, container) {
   const q = get('activeQuote') || {};
-  if (!q.price) return;
+  if (!q.price) { alert('No price available'); return; }
+  const amt = Number(container.querySelector('#inp-amount')?.value || get('amount'));
+  const lev = Number(container.querySelector('#inp-lev')?.value || get('leverage'));
+  const tp = Number(container.querySelector('#inp-tp')?.value || 0);
+  const sl = Number(container.querySelector('#inp-sl')?.value || 0);
+  if (amt <= 0) { alert('Enter a valid amount'); return; }
   try {
-    await api('/trade/place_order.php', { method: 'POST', body: { symbol: get('symbol'), type: get('type'), market: get('market'), side, order_type: get('orderType'), amount: get('amount'), leverage: get('leverage'), price: q.price }, timeout: 10000 });
+    const res = await api('/trade/place_order.php', { method: 'POST', body: { symbol: get('symbol'), asset_type: get('type'), market_type: get('market') || 'spot', side, order_type: get('orderType'), usd: amt, leverage: lev, tp: tp || undefined, sl: sl || undefined, price: q.price }, timeout: 10000 });
+    if (res && res.ok === false) { alert(res.error || 'Order failed'); return; }
     // Refresh positions
     const data = await api('/trade/portfolio.php', {timeout:5000}).catch(()=>null);
     if (data?.positions) renderPositions(container, data.positions);
