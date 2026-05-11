@@ -1,5 +1,4 @@
-// Trade View - Professional MultiBank-inspired layout
-import { get, set } from '../state/store.js';
+﻿import { get, set } from '../state/store.js';
 import { money, pct, price, esc, escAttr } from '../utils/format.js';
 import { $, $$, delegate } from '../utils/dom.js';
 import { api } from '../services/api.js';
@@ -7,7 +6,13 @@ import { connectSSE, disconnect } from '../services/sse.js';
 import { icons } from '../components/common/Icons.js';
 import { navigate } from '../router.js';
 
-let chart = null, candleSeries = null, volumeSeries = null, sseClean = null;
+let chart = null;
+let candleSeries = null;
+let volumeSeries = null;
+let sseClean = null;
+let resizeObserver = null;
+let chartLibPromise = null;
+let lastCandle = null;
 
 const TYPES = [
   { key: 'favorites', label: 'Favorites' },
@@ -18,57 +23,79 @@ const TYPES = [
   { key: 'futures', label: 'Futures' },
   { key: 'arab', label: 'Arab' },
 ];
-const TFS = ['1m','5m','15m','30m','1h','4h','1d'];
+
+const TFS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
+const ICONS = new Set(['ada', 'amzn', 'apple', 'arab', 'avax', 'bnb', 'btc', 'crypto', 'doge', 'dot', 'eth', 'forex', 'future', 'googl', 'link', 'metal', 'microsoft', 'nvda', 'oil', 'sol', 'stock', 'tsla', 'usdc', 'xrp']);
+const ICON_ALIASES = {
+  BTCUSDT: 'btc', BTCUSD: 'btc', ETHUSDT: 'eth', ETHUSD: 'eth', BNBUSDT: 'bnb', SOLUSDT: 'sol',
+  XRPUSDT: 'xrp', ADAUSDT: 'ada', DOGEUSDT: 'doge', DOTUSDT: 'dot', AVAXUSDT: 'avax',
+  LINKUSDT: 'link', USDCUSDT: 'usdc', AAPL: 'apple', APPLE: 'apple', AMZN: 'amzn',
+  GOOGL: 'googl', GOOGLE: 'googl', MSFT: 'microsoft', MICROSOFT: 'microsoft', NVDA: 'nvda',
+  TSLA: 'tsla', XAUUSD: 'metal', XAGUSD: 'metal', GOLD: 'metal', USOIL: 'oil', UKOIL: 'oil',
+};
 
 export function render(params) {
   if (params.symbol) set('symbol', params.symbol.toUpperCase());
   if (params.type) set('type', params.type);
   if (params.tf) set('tf', params.tf);
-  const symbol = get('symbol'), type = get('type'), tf = get('tf');
 
-  return `<div class="flex flex-col lg:flex-row h-full mobile-pad">
-    <!-- Symbol Sidebar (desktop) -->
-    <aside class="hidden lg:flex flex-col w-[240px] border-r border-line bg-surface shrink-0 overflow-hidden">
+  const symbol = get('symbol');
+  const type = get('type');
+  const tf = get('tf');
+
+  return `<div class="trade-terminal flex flex-col lg:flex-row h-full mobile-pad">
+    <aside id="market-drawer" class="hidden lg:flex flex-col w-[250px] border-r border-line bg-surface shrink-0 overflow-hidden">
+      <div class="lg:hidden flex items-center justify-between h-12 px-3 border-b border-line bg-panel">
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-muted">Markets</div>
+          <strong class="text-sm">Select instrument</strong>
+        </div>
+        <button class="icon-btn icon-btn-sm" id="close-mob-drawer" aria-label="Close markets">${icons.close}</button>
+      </div>
       <div class="p-2 border-b border-line">
-        <div class="relative"><input type="search" class="input pl-7" placeholder="Search..." id="sym-search" /><span class="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted">${icons.search}</span></div>
+        <div class="relative">
+          <input type="search" class="input pl-7" placeholder="Search symbol..." id="sym-search" />
+          <span class="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted">${icons.search}</span>
+        </div>
       </div>
       <div class="flex gap-1 p-2 overflow-x-auto border-b border-line" id="type-tabs">
         ${TYPES.map(t => `<button class="btn-xs ${t.key === type ? 'bg-accent/20 text-accent border-accent/40' : 'text-muted border-line'} border rounded-md whitespace-nowrap" data-type-tab="${t.key}">${t.label}</button>`).join('')}
       </div>
-      <div class="flex-1 overflow-auto" id="symbol-list"><div class="p-4"><div class="loading-spinner mx-auto"></div></div></div>
+      <div class="flex-1 overflow-auto p-1" id="symbol-list"><div class="p-4"><div class="loading-spinner mx-auto"></div></div></div>
     </aside>
 
-    <!-- Main Area -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <!-- Symbol Header -->
-      <div class="flex items-center justify-between px-3 lg:px-4 h-10 border-b border-line bg-surface shrink-0">
-        <div class="flex items-center gap-2">
-          <button class="lg:hidden w-7 h-7 grid place-items-center rounded border border-line text-muted" id="mob-mkt-btn">${icons.menu}</button>
-          <img src="./assets/img/markets/${type.replace('commodities','metal')}.svg" class="w-6 h-6 rounded-md" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'" /><div class="w-6 h-6 rounded-md bg-accent/20 grid place-items-center text-[9px] font-black text-accent" style="display:none">${esc(symbol.slice(0,3))}</div>
-          <strong class="text-sm" id="sym-name">${esc(symbol)}</strong>
-          <span class="text-sm font-mono font-bold" id="live-price">--</span>
-          <span class="text-xs" id="live-change">+0.00%</span>
-          <span class="w-2 h-2 rounded-full bg-muted" id="conn-dot" title="Disconnected"></span>
+      <div class="flex items-center justify-between px-2 lg:px-4 h-11 border-b border-line bg-surface shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <button class="lg:hidden w-8 h-8 grid place-items-center rounded border border-line text-muted shrink-0" id="mob-mkt-btn" aria-label="Open markets">${icons.menu}</button>
+          ${marketLogo(symbol, type, 'w-7 h-7 rounded-md shrink-0')}
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <strong class="text-sm truncate" id="sym-name">${esc(symbol)}</strong>
+              <span class="w-2 h-2 rounded-full bg-muted shrink-0" id="conn-dot" title="Connecting"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold" id="live-price">--</span>
+              <span class="text-[10px]" id="live-change">+0.00%</span>
+            </div>
+          </div>
         </div>
-        <div class="flex gap-0.5" id="tf-bar">
-          ${TFS.map(t => `<button class="px-1.5 py-0.5 text-[10px] rounded ${t === tf ? 'bg-accent/20 text-accent' : 'text-muted hover:text-text'}" data-tf="${t}">${t}</button>`).join('')}
+        <div class="flex gap-0.5 overflow-x-auto max-w-[46vw] lg:max-w-none" id="tf-bar">
+          ${TFS.map(t => `<button class="px-1.5 py-1 text-[10px] rounded shrink-0 ${t === tf ? 'bg-accent/20 text-accent' : 'text-muted hover:text-text'}" data-tf="${t}">${t}</button>`).join('')}
         </div>
       </div>
 
-      <!-- Chart -->
-      <div class="flex-1 relative min-h-[200px] bg-bg" id="chart-box">
-        <div class="absolute inset-0 flex items-center justify-center"><div class="loading-spinner"></div></div>
+      <div class="flex-1 relative min-h-[260px] bg-bg" id="chart-box">
+        <div class="absolute inset-0 flex items-center justify-center"><div class="text-center"><div class="loading-spinner mx-auto"></div><p class="text-[10px] text-muted mt-2">Loading live chart...</p></div></div>
       </div>
 
-      <!-- Mobile Buy/Sell -->
-      <div class="lg:hidden flex gap-2 p-2 border-t border-line bg-surface">
-        <button class="btn-sell flex-1 py-2.5" data-side="SELL">SELL</button>
-        <button class="btn-buy flex-1 py-2.5" data-side="BUY">BUY</button>
+      <div class="lg:hidden grid grid-cols-2 gap-2 p-2 border-t border-line bg-surface shrink-0">
+        <button class="btn-sell py-3" data-open-order="SELL">SELL</button>
+        <button class="btn-buy py-3" data-open-order="BUY">BUY</button>
       </div>
 
-      <!-- Positions (below chart on desktop) -->
-      <div class="border-t border-line bg-surface max-h-[180px] overflow-auto" id="positions-section">
-        <div class="flex items-center gap-3 px-3 h-8 border-b border-line">
+      <div class="border-t border-line bg-surface max-h-[185px] lg:max-h-[180px] overflow-auto shrink-0" id="positions-section">
+        <div class="flex items-center gap-3 px-3 h-8 border-b border-line sticky top-0 bg-surface z-10">
           <span class="text-[10px] font-semibold text-muted uppercase">Open Positions</span>
           <span class="text-[10px] text-muted" id="pos-count">(0)</span>
         </div>
@@ -76,190 +103,576 @@ export function render(params) {
       </div>
     </div>
 
-    <!-- Order Panel (desktop) -->
-    <aside class="hidden lg:flex flex-col w-[280px] border-l border-line bg-surface shrink-0 overflow-auto">
+    <aside class="hidden lg:flex flex-col w-[300px] border-l border-line bg-surface shrink-0 overflow-auto">
       <div class="p-3 border-b border-line">
-        <div class="text-xs font-semibold">Order</div>
+        <div class="text-xs font-semibold">Order Ticket</div>
         <div class="text-[10px] text-muted">${esc(symbol)} - ${esc(type.toUpperCase())}</div>
       </div>
       <div class="p-3 space-y-3" id="order-body">
         ${renderOrderPanel()}
       </div>
     </aside>
+
+    ${renderMobileOrderSheet(symbol, type)}
   </div>`;
 }
 
 function renderOrderPanel() {
-  const ot = get('orderType'), amt = get('amount'), lev = get('leverage');
+  const ot = get('orderType') || 'MARKET';
+  const amt = Number(get('amount') || 100);
+  const lev = Number(get('leverage') || 10);
+  const market = get('market') || 'spot';
   const q = get('activeQuote') || {};
   const p = Number(q.price || 0);
-  return `
-    <div class="flex rounded overflow-hidden border border-line">
-      <button class="flex-1 py-1.5 text-[11px] font-semibold ${ot==='MARKET'?'bg-accent/15 text-accent':'text-muted'}" data-otype="MARKET">Market</button>
-      <button class="flex-1 py-1.5 text-[11px] font-semibold ${ot==='LIMIT'?'bg-accent/15 text-accent':'text-muted'}" data-otype="LIMIT">Limit</button>
+
+  return `<div class="space-y-3" data-order-form>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block">
+        <span class="text-[10px] text-muted">Trading type</span>
+        <select class="input mt-1" data-market-type>
+          <option value="spot" ${market === 'spot' ? 'selected' : ''}>Spot</option>
+          <option value="perp" ${market === 'perp' ? 'selected' : ''}>Perpetual / Futures</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-[10px] text-muted">Order type</span>
+        <select class="input mt-1" data-order-type>
+          <option value="MARKET" ${ot === 'MARKET' ? 'selected' : ''}>Market</option>
+          <option value="LIMIT" ${ot === 'LIMIT' ? 'selected' : ''}>Limit</option>
+        </select>
+      </label>
     </div>
     <div class="grid grid-cols-2 gap-2">
-      <button class="btn-sell py-3 text-sm font-bold" data-side="SELL"><small class="block text-[9px] opacity-70">Sell</small><span id="sell-price">${p>0?price(p,get('type')):'--'}</span></button>
-      <button class="btn-buy py-3 text-sm font-bold" data-side="BUY"><small class="block text-[9px] opacity-70">Buy</small><span id="buy-price">${p>0?price(p,get('type')):'--'}</span></button>
+      <button class="btn-sell py-3 text-sm font-bold" data-side="SELL"><small class="block text-[9px] opacity-70">Sell</small><span data-sell-price>${p > 0 ? price(p, get('type')) : '--'}</span></button>
+      <button class="btn-buy py-3 text-sm font-bold" data-side="BUY"><small class="block text-[9px] opacity-70">Buy</small><span data-buy-price>${p > 0 ? price(p * 1.0001, get('type')) : '--'}</span></button>
     </div>
-    <div class="text-center"><span class="spread-display" id="spread-val">Spread: --</span></div>
-    <label class="block"><span class="text-[10px] text-muted">Amount (USDT)</span><input type="number" class="input mt-1" value="${amt}" id="inp-amount" /></label>
-    <label class="block"><span class="text-[10px] text-muted">Leverage: <strong id="lev-val">${lev}x</strong></span><input type="range" min="1" max="100" value="${lev}" class="w-full mt-1 accent-accent" id="inp-lev" /></label>
+    <div class="text-center"><span class="spread-display" data-spread-val>Spread: --</span></div>
+    <label class="block">
+      <span class="text-[10px] text-muted">Margin / Amount (USDT)</span>
+      <input type="number" min="1" step="any" class="input mt-1" value="${escAttr(String(amt))}" data-amount />
+    </label>
+    <label class="block">
+      <span class="text-[10px] text-muted">Leverage: <strong data-lev-val>${lev}x</strong></span>
+      <input type="range" min="1" max="100" value="${escAttr(String(lev))}" class="w-full mt-1 accent-accent" data-leverage />
+    </label>
     <div class="grid grid-cols-2 gap-2">
-      <label class="block"><span class="text-[10px] text-muted">Take Profit</span><input type="number" step="any" class="input mt-1" placeholder="Optional" id="inp-tp" /></label>
-      <label class="block"><span class="text-[10px] text-muted">Stop Loss</span><input type="number" step="any" class="input mt-1" placeholder="Optional" id="inp-sl" /></label>
+      <label class="block">
+        <span class="text-[10px] text-muted">Take Profit</span>
+        <input type="number" step="any" class="input mt-1" placeholder="Optional" data-tp />
+      </label>
+      <label class="block">
+        <span class="text-[10px] text-muted">Stop Loss</span>
+        <input type="number" step="any" class="input mt-1" placeholder="Optional" data-sl />
+      </label>
     </div>
     <div class="space-y-1 text-[10px] text-muted pt-2 border-t border-line">
-      <div class="flex justify-between"><span>Est. Units</span><span id="est-units">--</span></div>
-      <div class="flex justify-between"><span>Available</span><span id="avail-bal">--</span></div>
-    </div>`;
+      <div class="flex justify-between"><span>Est. Units</span><span data-est-units>--</span></div>
+      <div class="flex justify-between"><span>Est. Notional</span><span data-est-notional>--</span></div>
+      <div class="flex justify-between"><span>Available</span><span data-avail-bal>--</span></div>
+    </div>
+  </div>`;
 }
 
-export function mount(container) { setup(container); }
+function renderMobileOrderSheet(symbol, type) {
+  return `<div class="fixed inset-0 z-[230] hidden lg:hidden" id="mobile-order-sheet">
+    <div class="absolute inset-0 bg-black/65" data-close-order-sheet></div>
+    <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-auto rounded-t-2xl border border-line bg-surface shadow-2xl">
+      <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-panel px-4 py-3">
+        <div class="flex items-center gap-2 min-w-0">
+          ${marketLogo(symbol, type, 'w-8 h-8 rounded-lg shrink-0')}
+          <div class="min-w-0">
+            <div class="text-[10px] uppercase tracking-wider text-muted" id="mobile-order-side-label">Order</div>
+            <strong class="text-sm truncate">${esc(symbol)}</strong>
+          </div>
+        </div>
+        <button class="icon-btn icon-btn-sm" data-close-order-sheet aria-label="Close order">${icons.close}</button>
+      </div>
+      <div class="p-4">
+        ${renderOrderPanel()}
+        <button class="btn-primary w-full mt-4 py-3" id="mobile-submit-order" data-submit-order="BUY">Review & Place Order</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+export function mount(container) {
+  setup(container);
+}
+
 export function cleanup() {
-  if (chart) { chart.remove(); chart = null; candleSeries = null; volumeSeries = null; }
-  if (sseClean) { sseClean(); sseClean = null; }
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+  if (chart) {
+    chart.remove();
+    chart = null;
+    candleSeries = null;
+    volumeSeries = null;
+    lastCandle = null;
+  }
+  if (sseClean) {
+    sseClean();
+    sseClean = null;
+  }
   disconnect();
+  document.body.classList.remove('trade-modal-open');
 }
 
 async function setup(container) {
-  const symbol = get('symbol'), type = get('type'), tf = get('tf');
+  const symbol = get('symbol');
+  const type = get('type');
+  const tf = get('tf');
+  const chartReady = loadChartLib();
 
   const [mkts, quote, candles, portfolio] = await Promise.all([
-    api(`/markets.php?type=${type}&lite=1&with_quotes=1`, {timeout:8000}).catch(()=>null),
-    api(`/quotes.php?symbol=${symbol}&type=${type}&purpose=focus`, {timeout:5000}).catch(()=>null),
-    api(`/trade/candles.php?symbol=${symbol}&type=${type}&tf=${tf}&limit=200`, {timeout:10000}).catch(()=>null),
-    api('/trade/portfolio.php', {timeout:6000}).catch(()=>null),
+    api(`/markets.php?type=${type}&lite=1&with_quotes=1`, { timeout: 8000 }).catch(() => null),
+    api(`/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus&fresh=1`, { timeout: 5000 }).catch(() => null),
+    api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=120`, { timeout: 8000 }).catch(() => null),
+    api('/trade/portfolio.php', { timeout: 6000 }).catch(() => null),
   ]);
 
-  if (quote?.items?.[0]) updatePrice(container, quote.items[0]);
   if (mkts?.items) renderSymbolList(container, mkts.items);
+  if (quote?.items?.[0]) updatePrice(container, quote.items[0]);
   if (portfolio?.positions) renderPositions(container, portfolio.positions);
   updateOrderInfo(container);
-
-  try { if (candles?.items?.length) await initChart(container, candles.items); }
-  catch(e) { console.error('Chart:', e); $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart unavailable</p>'; }
-
-  // Live price stream
-  sseClean = connectSSE([symbol], type, (items) => {
-    const q = items.find(i => i.symbol === symbol);
-    if (q) updatePrice(container, q);
-    $('#conn-dot', container)?.classList.replace('bg-muted', 'bg-buy');
-  });
-
   bindEvents(container);
+  startLiveQuotes(container, mkts?.items || []);
+
+  try {
+    await chartReady;
+    if (candles?.items?.length) await initChart(container, candles.items);
+    else $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart data unavailable</p>';
+  } catch (e) {
+    console.error('Chart:', e);
+    $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart unavailable</p>';
+  }
+}
+
+function startLiveQuotes(container, marketItems) {
+  if (sseClean) {
+    sseClean();
+    sseClean = null;
+  }
+
+  const type = get('type');
+  const active = get('symbol');
+  const max = type === 'crypto' ? 40 : 18;
+  const symbols = [...new Set([active, ...marketItems.slice(0, max).map(m => String(m.symbol || '').toUpperCase()).filter(Boolean)])];
+
+  sseClean = connectSSE(symbols, type, (items) => {
+    updateSymbolListPrices(container, items);
+    const q = items.find(i => String(i.symbol || '').toUpperCase() === active);
+    if (q) updatePrice(container, q);
+    const dot = $('#conn-dot', container);
+    if (dot) {
+      dot.classList.remove('bg-muted', 'bg-sell');
+      dot.classList.add('bg-buy');
+      dot.title = 'Live';
+    }
+  });
 }
 
 function updatePrice(container, q) {
-  const p = Number(q.price || 0), chg = Number(q.change_pct || 0);
+  const p = Number(q.price || q.q_price || 0);
+  const chg = Number(q.change_pct || q.q_change || 0);
   const t = get('type');
-  set('activeQuote', q);
-  const lp = $('#live-price', container), lc = $('#live-change', container);
-  if (lp) lp.textContent = p > 0 ? price(p, t) : '--';
-  if (lc) { lc.textContent = pct(chg); lc.className = `text-xs ${chg >= 0 ? 'text-buy' : 'text-sell'}`; }
-  $('#sell-price', container) && ($('#sell-price', container).textContent = price(p, t));
-  $('#buy-price', container) && ($('#buy-price', container).textContent = price(p * 1.0001, t));
+  set('activeQuote', { ...q, price: p, change_pct: chg });
+
+  const livePrice = $('#live-price', container);
+  const liveChange = $('#live-change', container);
+  if (livePrice) livePrice.textContent = p > 0 ? price(p, t) : '--';
+  if (liveChange) {
+    liveChange.textContent = pct(chg);
+    liveChange.className = `text-[10px] ${chg >= 0 ? 'text-buy' : 'text-sell'}`;
+  }
+
+  $$('[data-sell-price]', container).forEach(el => { el.textContent = p > 0 ? price(p, t) : '--'; });
+  $$('[data-buy-price]', container).forEach(el => { el.textContent = p > 0 ? price(p * 1.0001, t) : '--'; });
+  $$('[data-spread-val]', container).forEach(el => { el.textContent = p > 0 ? `Spread: ${price(p * 0.0001, t)}` : 'Spread: --'; });
   updateOrderInfo(container);
+  updateLiveCandle(p);
 }
 
 function updateOrderInfo(container) {
-  const q = get('activeQuote') || {}, p = Number(q.price || 0);
-  const amt = Number($('#inp-amount', container)?.value || get('amount'));
-  const lev = Number($('#inp-lev', container)?.value || get('leverage'));
+  const q = get('activeQuote') || {};
+  const p = Number(q.price || 0);
   const w = get('wallet') || {};
   const wallet = get('mode') === 'real' ? (w.real || {}) : (w.demo || {});
-  const units = p > 0 ? ((amt * lev) / p) : 0;
-  const el = $('#est-units', container); if (el) el.textContent = units > 0 ? units.toFixed(4) : '--';
-  const ab = $('#avail-bal', container); if (ab) ab.textContent = `${money(wallet.available || 0)} ${wallet.currency || ''}`;
+
+  $$('[data-order-form]', container).forEach(form => {
+    const amt = Number($('[data-amount]', form)?.value || get('amount') || 0);
+    const lev = Number($('[data-leverage]', form)?.value || get('leverage') || 1);
+    const marketType = $('[data-market-type]', form)?.value || get('market') || 'spot';
+    const effectiveLev = marketType === 'perp' ? lev : 1;
+    const units = p > 0 ? ((amt * effectiveLev) / p) : 0;
+    const notional = amt * effectiveLev;
+    const levLabel = $('[data-lev-val]', form);
+    if (levLabel) levLabel.textContent = `${lev}x`;
+    const unitsEl = $('[data-est-units]', form);
+    if (unitsEl) unitsEl.textContent = units > 0 ? units.toFixed(units >= 10 ? 3 : 6) : '--';
+    const notionalEl = $('[data-est-notional]', form);
+    if (notionalEl) notionalEl.textContent = amt > 0 ? `${money(notional)} USDT` : '--';
+    const balanceEl = $('[data-avail-bal]', form);
+    if (balanceEl) balanceEl.textContent = `${money(wallet.available || 0)} ${wallet.currency || ''}`;
+  });
 }
 
 function renderSymbolList(container, items) {
   const list = $('#symbol-list', container);
   if (!list) return;
+
   const active = get('symbol');
-  list.innerHTML = items.slice(0, 40).map(m => {
-    const p = Number(m.price || m.q_price || 0), chg = Number(m.change_pct || m.q_change || 0);
-    return `<div class="symbol-row ${m.symbol === active ? 'active' : ''}" data-sym="${escAttr(m.symbol)}" data-stype="${escAttr(m.type||get('type'))}">
-      <img src="./assets/img/markets/${(m.type||get('type')).replace('commodities','metal')}.svg" class="w-6 h-6 rounded" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'" /><div class="w-6 h-6 rounded bg-panel grid place-items-center text-[8px] font-black" style="display:none">${esc(m.symbol.slice(0,3))}</div>
-      <div class="flex-1 min-w-0"><div class="font-semibold text-[11px] truncate">${esc(m.symbol)}</div><div class="text-[9px] text-muted truncate">${esc(m.name||'')}</div></div>
-      <div class="text-right shrink-0"><div class="text-[11px] font-mono">${p>0?price(p,m.type):'--'}</div><div class="text-[9px] ${chg>=0?'text-buy':'text-sell'}">${pct(chg)}</div></div>
+  list.innerHTML = items.slice(0, 60).map(m => {
+    const symbol = String(m.symbol || '').toUpperCase();
+    const type = m.type || get('type');
+    const p = Number(m.price || m.q_price || 0);
+    const chg = Number(m.change_pct || m.q_change || 0);
+    return `<div class="symbol-row ${symbol === active ? 'active' : ''}" data-sym="${escAttr(symbol)}" data-stype="${escAttr(type)}">
+      ${marketLogo(symbol, type, 'w-7 h-7 rounded-md shrink-0')}
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-[11px] truncate">${esc(symbol)}</div>
+        <div class="text-[9px] text-muted truncate">${esc(m.name || type)}</div>
+      </div>
+      <div class="text-right shrink-0">
+        <div class="text-[11px] font-mono" data-price-cell>${p > 0 ? price(p, type) : '--'}</div>
+        <div class="text-[9px] ${chg >= 0 ? 'text-buy' : 'text-sell'}" data-change-cell>${pct(chg)}</div>
+      </div>
     </div>`;
   }).join('');
 }
 
+function updateSymbolListPrices(container, items) {
+  if (!items?.length) return;
+  items.forEach(q => {
+    const symbol = String(q.symbol || '').toUpperCase();
+    if (!symbol) return;
+    const row = $$('.symbol-row', container).find(el => el.dataset.sym === symbol);
+    if (!row) return;
+    const type = row.dataset.stype || get('type');
+    const p = Number(q.price || q.q_price || 0);
+    const chg = Number(q.change_pct || q.q_change || 0);
+    const priceCell = $('[data-price-cell]', row);
+    const changeCell = $('[data-change-cell]', row);
+    if (priceCell && p > 0) priceCell.textContent = price(p, type);
+    if (changeCell) {
+      changeCell.textContent = pct(chg);
+      changeCell.className = `text-[9px] ${chg >= 0 ? 'text-buy' : 'text-sell'}`;
+    }
+  });
+}
+
 function renderPositions(container, positions) {
-  const body = $('#positions-body', container), cnt = $('#pos-count', container);
-  if (cnt) cnt.textContent = `(${positions.length})`;
+  const body = $('#positions-body', container);
+  const count = $('#pos-count', container);
+  if (count) count.textContent = `(${positions.length})`;
   if (!body) return;
-  if (!positions.length) { body.innerHTML = '<p class="text-muted text-[11px] text-center py-3">No open positions</p>'; return; }
-  body.innerHTML = `<table class="w-full text-[11px]"><thead class="text-[9px] text-muted uppercase"><tr><th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-right py-1">Entry</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1"></th></tr></thead><tbody>${positions.slice(0,10).map(p => {
-    const pnl = Number(p.pnl||p.unrealized_pnl||0);
-    return `<tr class="border-t border-line/50 hover:bg-panel/50"><td class="px-3 py-1.5 font-semibold">${esc(p.symbol)}</td><td><span class="badge-${p.side==='BUY'?'buy':'sell'}">${p.side}</span></td><td class="text-right font-mono">${price(p.entry_price||p.open_price)}</td><td class="text-right font-mono ${pnl>=0?'text-buy':'text-sell'}">${money(pnl)}</td><td class="text-right px-3"><button class="btn-xs btn-ghost text-sell" data-close="${p.id}">Close</button></td></tr>`;
-  }).join('')}</tbody></table>`;
+
+  if (!positions.length) {
+    body.innerHTML = '<p class="text-muted text-[11px] text-center py-3">No open positions</p>';
+    return;
+  }
+
+  body.innerHTML = `<div class="overflow-x-auto"><table class="min-w-[620px] lg:min-w-0 w-full text-[11px]">
+    <thead class="text-[9px] text-muted uppercase"><tr>
+      <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Lev</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1"></th>
+    </tr></thead>
+    <tbody>${positions.slice(0, 12).map(pos => {
+      const pnl = Number(pos.pnl || pos.unrealized_pnl || 0);
+      const cleanSymbol = String(pos.symbol || '').replace('@R@', '');
+      return `<tr class="border-t border-line/50 hover:bg-panel/50">
+        <td class="px-3 py-1.5 font-semibold">${esc(cleanSymbol)}</td>
+        <td><span class="badge-${pos.side === 'BUY' ? 'buy' : 'sell'}">${esc(pos.side)}</span></td>
+        <td class="text-muted">${esc(pos.market_type || 'spot')}</td>
+        <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, pos.asset_type || get('type'))}</td>
+        <td class="text-right font-mono">${esc(String(pos.leverage || 1))}x</td>
+        <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
+        <td class="text-right px-3"><button class="btn-xs btn-ghost text-sell" data-close="${escAttr(pos.id)}">Close</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
 }
 
 async function initChart(container, candles) {
   const el = $('#chart-box', container);
   if (!el) return;
-  const { createChart } = await import('lightweight-charts');
+
+  const { createChart } = await loadChartLib();
   el.innerHTML = '';
+
   chart = createChart(el, {
     layout: { background: { color: '#060A14' }, textColor: '#8ba1cf', fontSize: 11 },
     grid: { vertLines: { color: 'rgba(129,160,220,0.04)' }, horzLines: { color: 'rgba(129,160,220,0.04)' } },
     crosshair: { mode: 0, vertLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff' }, horzLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff' } },
-    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)' },
+    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: 4 },
     rightPriceScale: { borderColor: 'rgba(129,160,220,0.08)' },
-    width: el.clientWidth, height: el.clientHeight,
+    width: Math.max(320, el.clientWidth),
+    height: Math.max(260, el.clientHeight),
   });
-  candleSeries = chart.addCandlestickSeries({ upColor: '#00c087', downColor: '#f6465d', borderUpColor: '#00c087', borderDownColor: '#f6465d', wickUpColor: '#00c087', wickDownColor: '#f6465d' });
-  volumeSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
-  const data = candles.map(c => ({ time: Number(c.time||c.t), open: Number(c.open||c.o), high: Number(c.high||c.h), low: Number(c.low||c.l), close: Number(c.close||c.c) })).filter(c => c.time > 0 && c.open > 0);
-  candleSeries.setData(data);
-  volumeSeries.setData(data.map(c => ({ time: c.time, value: Number(candles.find(x=>(x.time||x.t)==c.time)?.volume||candles.find(x=>(x.time||x.t)==c.time)?.v||0), color: c.close >= c.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' })));
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#00c087',
+    downColor: '#f6465d',
+    borderUpColor: '#00c087',
+    borderDownColor: '#f6465d',
+    wickUpColor: '#00c087',
+    wickDownColor: '#f6465d',
+  });
+  volumeSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+
+  const data = candles
+    .map(c => ({
+      time: Number(c.time || c.t),
+      open: Number(c.open || c.o),
+      high: Number(c.high || c.h),
+      low: Number(c.low || c.l),
+      close: Number(c.close || c.c),
+      volume: Number(c.volume || c.v || 0),
+    }))
+    .filter(c => c.time > 0 && c.open > 0)
+    .sort((a, b) => a.time - b.time);
+
+  candleSeries.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
+  volumeSeries.setData(data.map(c => ({ time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' })));
+  lastCandle = data.length ? { ...data[data.length - 1] } : null;
   chart.timeScale().fitContent();
-  new ResizeObserver(() => chart?.applyOptions({ width: el.clientWidth, height: el.clientHeight })).observe(el);
+
+  resizeObserver = new ResizeObserver(() => {
+    if (!chart || !el) return;
+    chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) });
+  });
+  resizeObserver.observe(el);
 }
 
 function bindEvents(container) {
-  var mobBtn = container.querySelector('#mob-mkt-btn');
-  if (mobBtn) mobBtn.addEventListener('click', function() {
-    var aside = container.querySelector('aside');
-    if (!aside) return;
-    if (aside.classList.contains('hidden')) { aside.classList.remove('hidden'); aside.style.cssText = 'position:fixed;inset:0;z-index:200;width:100%;background:#0b1426;display:flex;flex-direction:column;'; }
-    else { aside.classList.add('hidden'); aside.style.cssText = ''; }
+  $('#mob-mkt-btn', container)?.addEventListener('click', () => openMarketDrawer(container));
+  $('#close-mob-drawer', container)?.addEventListener('click', () => closeMarketDrawer(container));
+
+  delegate(container, '[data-sym]', 'click', (e, el) => {
+    closeMarketDrawer(container);
+    localStorage.setItem('vp_symbol', el.dataset.sym);
+    localStorage.setItem('vp_type', el.dataset.stype || get('type'));
+    navigate('trade', { symbol: el.dataset.sym, type: el.dataset.stype || get('type'), tf: get('tf') });
   });
-  delegate(container, '[data-sym]', 'click', (e, el) => { navigate('trade', { symbol: el.dataset.sym, type: el.dataset.stype || get('type') }); });
-  delegate(container, '[data-tf]', 'click', (e, el) => { set('tf', el.dataset.tf); localStorage.setItem('vp_tf', el.dataset.tf); navigate('trade', { symbol: get('symbol'), type: get('type'), tf: el.dataset.tf }); });
+
+  delegate(container, '[data-tf]', 'click', (e, el) => {
+    set('tf', el.dataset.tf);
+    localStorage.setItem('vp_tf', el.dataset.tf);
+    navigate('trade', { symbol: get('symbol'), type: get('type'), tf: el.dataset.tf });
+  });
+
   delegate(container, '[data-type-tab]', 'click', async (e, el) => {
-    set('type', el.dataset.typeTab); localStorage.setItem('vp_type', el.dataset.typeTab);
-    const data = await api(`/markets.php?type=${el.dataset.typeTab}&lite=1&with_quotes=1`, {timeout:6000}).catch(()=>null);
-    if (data?.items) renderSymbolList(container, data.items);
-    $$('[data-type-tab]', container).forEach(b => b.classList.toggle('bg-accent/20', b===el));
-    $$('[data-type-tab]', container).forEach(b => b.classList.toggle('text-accent', b===el));
+    set('type', el.dataset.typeTab);
+    localStorage.setItem('vp_type', el.dataset.typeTab);
+    const data = await api(`/markets.php?type=${encodeURIComponent(el.dataset.typeTab)}&lite=1&with_quotes=1`, { timeout: 6000 }).catch(() => null);
+    if (data?.items) {
+      renderSymbolList(container, data.items);
+      startLiveQuotes(container, data.items);
+    }
+    $$('[data-type-tab]', container).forEach(btn => {
+      const active = btn === el;
+      btn.classList.toggle('bg-accent/20', active);
+      btn.classList.toggle('text-accent', active);
+      btn.classList.toggle('border-accent/40', active);
+    });
   });
-  delegate(container, '[data-side]', 'click', (e, el) => placeOrder(el.dataset.side, container));
-  delegate(container, '[data-otype]', 'click', (e, el) => { set('orderType', el.dataset.otype); $$('[data-otype]', container).forEach(b => { b.classList.toggle('bg-accent/15', b===el); b.classList.toggle('text-accent', b===el); }); });
-  delegate(container, '[data-close]', 'click', async (e, el) => { await api('/trade/close_position.php', { method:'POST', body:{position_id:el.dataset.close}, timeout:8000 }).catch(()=>null); setup(container); });
-  $('#inp-lev', container)?.addEventListener('input', e => { const v = e.target.value; set('leverage', Number(v)); $('#lev-val', container).textContent = v + 'x'; updateOrderInfo(container); });
-  $('#inp-amount', container)?.addEventListener('input', e => { set('amount', Number(e.target.value)); updateOrderInfo(container); });
-  $('#sym-search', container)?.addEventListener('input', e => { const term = e.target.value.toLowerCase(); $$('.symbol-row', container).forEach(r => r.style.display = r.dataset.sym.toLowerCase().includes(term)?'':'none'); });
+
+  delegate(container, '[data-open-order]', 'click', (e, el) => openOrderSheet(container, el.dataset.openOrder));
+  delegate(container, '[data-close-order-sheet]', 'click', () => closeOrderSheet(container));
+  delegate(container, '[data-submit-order]', 'click', (e, el) => placeOrder(el.dataset.submitOrder, container, $('#mobile-order-sheet [data-order-form]', container)));
+  delegate(container, '[data-side]', 'click', (e, el) => {
+    const sheet = el.closest('#mobile-order-sheet');
+    const form = el.closest('[data-order-form]');
+    if (sheet) {
+      setMobileSubmitSide(container, el.dataset.side);
+      return;
+    }
+    placeOrder(el.dataset.side, container, form);
+  });
+
+  delegate(container, '[data-order-type]', 'change', (e, el) => set('orderType', el.value));
+  delegate(container, '[data-market-type]', 'change', (e, el) => {
+    set('market', el.value);
+    localStorage.setItem('vp_market', el.value);
+    updateOrderInfo(container);
+  });
+  delegate(container, '[data-leverage]', 'input', (e, el) => {
+    set('leverage', Number(el.value));
+    syncOrderField(container, 'leverage', el.value);
+    updateOrderInfo(container);
+  });
+  delegate(container, '[data-amount]', 'input', (e, el) => {
+    set('amount', Number(el.value));
+    syncOrderField(container, 'amount', el.value);
+    updateOrderInfo(container);
+  });
+  delegate(container, '[data-close]', 'click', async (e, el) => {
+    await api('/trade/close_position.php', { method: 'POST', body: { position_id: el.dataset.close }, timeout: 8000 }).catch(() => null);
+    const data = await api('/trade/portfolio.php', { timeout: 5000 }).catch(() => null);
+    if (data?.positions) renderPositions(container, data.positions);
+  });
+
+  $('#sym-search', container)?.addEventListener('input', e => {
+    const term = e.target.value.toLowerCase();
+    $$('.symbol-row', container).forEach(row => {
+      row.style.display = row.dataset.sym.toLowerCase().includes(term) ? '' : 'none';
+    });
+  });
 }
 
-async function placeOrder(side, container) {
+async function placeOrder(side, container, formRoot) {
   const q = get('activeQuote') || {};
-  if (!q.price) { alert('No price available'); return; }
-  const amt = Number(container.querySelector('#inp-amount')?.value || get('amount'));
-  const lev = Number(container.querySelector('#inp-lev')?.value || get('leverage'));
-  const tp = Number(container.querySelector('#inp-tp')?.value || 0);
-  const sl = Number(container.querySelector('#inp-sl')?.value || 0);
-  if (amt <= 0) { alert('Enter a valid amount'); return; }
+  const currentPrice = Number(q.price || 0);
+  if (!currentPrice) {
+    alert('No live price available yet. Please wait for the quote to load.');
+    return;
+  }
+
+  const root = formRoot || $('[data-order-form]', container) || container;
+  const amount = Number($('[data-amount]', root)?.value || get('amount') || 0);
+  const leverage = Number($('[data-leverage]', root)?.value || get('leverage') || 1);
+  const tp = Number($('[data-tp]', root)?.value || 0);
+  const sl = Number($('[data-sl]', root)?.value || 0);
+  const marketType = $('[data-market-type]', root)?.value || get('market') || 'spot';
+  const orderType = $('[data-order-type]', root)?.value || get('orderType') || 'MARKET';
+
+  if (amount <= 0) {
+    alert('Enter a valid amount first.');
+    return;
+  }
+
+  if (side === 'BUY' && sl > 0 && sl >= currentPrice) {
+    alert('For BUY orders, Stop Loss should be below the current price.');
+    return;
+  }
+  if (side === 'SELL' && sl > 0 && sl <= currentPrice) {
+    alert('For SELL orders, Stop Loss should be above the current price.');
+    return;
+  }
+
   try {
-    const res = await api('/trade/place_order.php', { method: 'POST', body: { symbol: get('symbol'), asset_type: get('type'), market_type: get('market') || 'spot', side, order_type: get('orderType'), usd: amt, leverage: lev, tp: tp || undefined, sl: sl || undefined, price: q.price }, timeout: 10000 });
-    if (res && res.ok === false) { alert(res.error || 'Order failed'); return; }
-    // Refresh positions
-    const data = await api('/trade/portfolio.php', {timeout:5000}).catch(()=>null);
+    const res = await api('/trade/place_order.php', {
+      method: 'POST',
+      body: {
+        symbol: get('symbol'),
+        asset_type: get('type'),
+        market_type: marketType,
+        side,
+        order_type: orderType,
+        usd: amount,
+        leverage,
+        tp: tp || undefined,
+        sl: sl || undefined,
+        price: currentPrice,
+        mode: get('mode'),
+      },
+      timeout: 10000,
+    });
+    if (res && res.ok === false) {
+      alert(res.error || 'Order failed');
+      return;
+    }
+    closeOrderSheet(container);
+    const data = await api('/trade/portfolio.php', { timeout: 5000 }).catch(() => null);
     if (data?.positions) renderPositions(container, data.positions);
-  } catch(e) { console.error('Order failed:', e); }
+  } catch (e) {
+    console.error('Order failed:', e);
+    alert(e.message || 'Order failed');
+  }
+}
+
+function openMarketDrawer(container) {
+  const drawer = $('#market-drawer', container);
+  if (!drawer) return;
+  drawer.classList.add('mobile-market-open');
+  drawer.classList.remove('hidden');
+  document.body.classList.add('trade-modal-open');
+}
+
+function closeMarketDrawer(container) {
+  const drawer = $('#market-drawer', container);
+  if (!drawer) return;
+  drawer.classList.remove('mobile-market-open');
+  if (window.innerWidth < 1024) drawer.classList.add('hidden');
+  document.body.classList.remove('trade-modal-open');
+}
+
+function openOrderSheet(container, side) {
+  const sheet = $('#mobile-order-sheet', container);
+  if (!sheet) return;
+  setMobileSubmitSide(container, side);
+  sheet.classList.remove('hidden');
+  document.body.classList.add('trade-modal-open');
+  updateOrderInfo(container);
+}
+
+function closeOrderSheet(container) {
+  const sheet = $('#mobile-order-sheet', container);
+  if (sheet) sheet.classList.add('hidden');
+  document.body.classList.remove('trade-modal-open');
+}
+
+function setMobileSubmitSide(container, side) {
+  const btn = $('#mobile-submit-order', container);
+  const label = $('#mobile-order-side-label', container);
+  if (btn) {
+    btn.dataset.submitOrder = side;
+    btn.textContent = `Review & ${side === 'BUY' ? 'Buy' : 'Sell'}`;
+    btn.className = `${side === 'BUY' ? 'btn-buy' : 'btn-sell'} w-full mt-4 py-3`;
+  }
+  if (label) label.textContent = `${side} order`;
+}
+
+function syncOrderField(container, field, value) {
+  $$(`[data-${field}]`, container).forEach(input => {
+    if (String(input.value) !== String(value)) input.value = value;
+  });
+}
+
+function updateLiveCandle(priceValue) {
+  if (!candleSeries || !lastCandle || !(priceValue > 0)) return;
+  const bucket = currentBucketTime();
+  if (bucket <= lastCandle.time) {
+    lastCandle.close = priceValue;
+    lastCandle.high = Math.max(lastCandle.high, priceValue);
+    lastCandle.low = Math.min(lastCandle.low, priceValue);
+  } else {
+    lastCandle = { time: bucket, open: lastCandle.close, high: Math.max(lastCandle.close, priceValue), low: Math.min(lastCandle.close, priceValue), close: priceValue, volume: 0 };
+  }
+  candleSeries.update({ time: lastCandle.time, open: lastCandle.open, high: lastCandle.high, low: lastCandle.low, close: lastCandle.close });
+}
+
+function currentBucketTime() {
+  const seconds = tfSeconds(get('tf'));
+  const now = Math.floor(Date.now() / 1000);
+  return Math.floor(now / seconds) * seconds;
+}
+
+function tfSeconds(tf) {
+  return ({ '1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400 })[tf] || 60;
+}
+
+function loadChartLib() {
+  if (!chartLibPromise) chartLibPromise = import('lightweight-charts');
+  return chartLibPromise;
+}
+
+function marketLogo(symbol, type, className) {
+  const key = marketIcon(symbol, type);
+  return `<img src="./assets/img/markets/${key}.svg" class="${className}" alt="${escAttr(symbol)}" loading="lazy" />`;
+}
+
+function marketIcon(symbol, type) {
+  const upper = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const direct = ICON_ALIASES[upper];
+  if (direct && ICONS.has(direct)) return direct;
+  const base = upper.replace(/USDT$|USD$|EUR$|GBP$|SAR$/g, '').toLowerCase();
+  if (ICONS.has(base)) return base;
+  if (type === 'commodities') return upper.includes('OIL') ? 'oil' : 'metal';
+  if (type === 'stocks') return 'stock';
+  if (type === 'futures') return 'future';
+  if (type === 'forex') return 'forex';
+  if (type === 'arab') return 'arab';
+  return 'crypto';
 }

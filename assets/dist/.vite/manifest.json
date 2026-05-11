@@ -1,12 +1,12 @@
 {
   "node_modules/lightweight-charts/dist/lightweight-charts.production.mjs": {
-    "file": "js/chart-Bk8T08OE.js",
+    "file": "js/chart-DbDccfIU.js",
     "name": "chart",
     "src": "node_modules/lightweight-charts/dist/lightweight-charts.production.mjs",
     "isDynamicEntry": true
   },
   "src/main.js": {
-    "file": "js/main-C96G9szY.js",
+    "file": "js/main-43dhkjcl.js",
     "name": "main",
     "src": "src/main.js",
     "isEntry": true,
@@ -25,7 +25,7 @@
     ]
   },
   "src/views/account.js": {
-    "file": "js/account-CeiY6TkQ.js",
+    "file": "js/account-DKwk2XBw.js",
     "name": "account",
     "src": "src/views/account.js",
     "isDynamicEntry": true,
@@ -34,7 +34,7 @@
     ]
   },
   "src/views/funding.js": {
-    "file": "js/funding-Ym58KL9K.js",
+    "file": "js/funding-ChltHqdU.js",
     "name": "funding",
     "src": "src/views/funding.js",
     "isDynamicEntry": true,
@@ -43,7 +43,7 @@
     ]
   },
   "src/views/home.js": {
-    "file": "js/home-BcAyuDtZ.js",
+    "file": "js/home-eB6dtm2J.js",
     "name": "home",
     "src": "src/views/home.js",
     "isDynamicEntry": true,
@@ -52,7 +52,7 @@
     ]
   },
   "src/views/invest.js": {
-    "file": "js/invest-CU4Bmbog.js",
+    "file": "js/invest-Da4AhjUb.js",
     "name": "invest",
     "src": "src/views/invest.js",
     "isDynamicEntry": true,
@@ -61,7 +61,7 @@
     ]
   },
   "src/views/kyc.js": {
-    "file": "js/kyc-DUIbWUOw.js",
+    "file": "js/kyc-CShzHI1x.js",
     "name": "kyc",
     "src": "src/views/kyc.js",
     "isDynamicEntry": true,
@@ -70,7 +70,7 @@
     ]
   },
   "src/views/news.js": {
-    "file": "js/news-B-RDKT4w.js",
+    "file": "js/news-C1DnH56K.js",
     "name": "news",
     "src": "src/views/news.js",
     "isDynamicEntry": true,
@@ -79,7 +79,7 @@
     ]
   },
   "src/views/portfolio.js": {
-    "file": "js/portfolio-CCvENQBm.js",
+    "file": "js/portfolio-BrpZ89Mq.js",
     "name": "portfolio",
     "src": "src/views/portfolio.js",
     "isDynamicEntry": true,
@@ -88,7 +88,7 @@
     ]
   },
   "src/views/support.js": {
-    "file": "js/support-DWyiknHH.js",
+    "file": "js/support-QbftvH0a.js",
     "name": "support",
     "src": "src/views/support.js",
     "isDynamicEntry": true,
@@ -97,7 +97,7 @@
     ]
   },
   "src/views/trade.js": {
-    "file": "js/trade-Cpg9a94Q.js",
+    "file": "js/trade-Co7Y43EA.js",
     "name": "trade",
     "src": "src/views/trade.js",
     "isDynamicEntry": true,
@@ -109,7 +109,7 @@
     ]
   },
   "src/views/wallet.js": {
-    "file": "js/wallet-CNkK7j79.js",
+    "file": "js/wallet-1aUAaanW.js",
     "name": "wallet",
     "src": "src/views/wallet.js",
     "isDynamicEntry": true,
@@ -118,7 +118,7 @@
     ]
   },
   "style.css": {
-    "file": "css/style-CkTSqa4O.css",
+    "file": "css/style-IYU3lxA9.css",
     "src": "style.css"
   }
 }

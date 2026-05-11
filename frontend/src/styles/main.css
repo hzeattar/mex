@@ -83,7 +83,11 @@
   .symbol-row { @apply flex items-center gap-2 px-3 py-2 rounded-md text-xs cursor-pointer transition-colors hover:bg-panel; }
   .symbol-row.active { @apply bg-accent/10 border-l-2 border-l-accent; }
   .spread-display { @apply text-[10px] text-spread font-mono font-bold; }
+  .mobile-market-open { @apply fixed inset-0 z-[220] w-full bg-surface flex flex-col; }
+  .trade-modal-open { @apply overflow-hidden; }
 
   /* Responsive helpers */
   .mobile-pad { @apply pb-[calc(56px+var(--safe-b))] lg:pb-0; }
 }
+
+
