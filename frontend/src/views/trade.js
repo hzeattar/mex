@@ -13,6 +13,7 @@ let sseClean = null;
 let resizeObserver = null;
 let chartLibPromise = null;
 let lastCandle = null;
+let tradeRunId = 0;
 
 const TYPES = [
   { key: 'favorites', label: 'Favorites' },
@@ -200,6 +201,7 @@ export function mount(container) {
 }
 
 export function cleanup() {
+  tradeRunId += 1;
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
@@ -223,45 +225,76 @@ async function setup(container) {
   const symbol = get('symbol');
   const type = get('type');
   const tf = get('tf');
+  const runId = ++tradeRunId;
+  set('activeQuote', null);
   const chartReady = loadChartLib();
 
   bindEvents(container);
   updateOrderInfo(container);
-  startLiveQuotes(container, []);
+  startLiveQuotes(container, [], runId);
 
   api(`/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus&fresh=1`, { timeout: 4500 })
-    .then(quote => { if (quote?.items?.[0]) updatePrice(container, quote.items[0]); })
-    .catch(() => markDisconnected(container));
+    .then(quote => {
+      if (!isCurrentRun(runId, symbol, type)) return;
+      if (quote?.items?.[0]) updatePrice(container, quote.items[0], runId);
+    })
+    .catch(() => { if (isCurrentRun(runId, symbol, type)) markDisconnected(container); });
 
   api(`/markets.php?type=${type}&lite=1&with_quotes=1`, { timeout: 6500 })
     .then(mkts => {
+      if (!isCurrentRun(runId, symbol, type)) return;
       if (mkts?.items) {
         renderSymbolList(container, mkts.items);
-        startLiveQuotes(container, mkts.items);
+        startLiveQuotes(container, mkts.items, runId);
       }
     })
     .catch(() => {
+      if (!isCurrentRun(runId, symbol, type)) return;
       const list = $('#symbol-list', container);
       if (list) list.innerHTML = '<p class="text-muted text-[11px] text-center py-4">Markets unavailable</p>';
     });
 
   api('/trade/portfolio.php', { timeout: 5500 })
-    .then(portfolio => { if (portfolio?.positions) renderPositions(container, portfolio.positions); })
-    .catch(() => { const body = $('#positions-body', container); if (body) body.innerHTML = '<p class="text-muted text-[11px] text-center py-3">Positions unavailable</p>'; });
+    .then(portfolio => {
+      if (!isCurrentRun(runId, symbol, type)) return;
+      if (portfolio?.positions) renderPositions(container, portfolio.positions);
+    })
+    .catch(() => {
+      if (!isCurrentRun(runId, symbol, type)) return;
+      const body = $('#positions-body', container);
+      if (body) body.innerHTML = '<p class="text-muted text-[11px] text-center py-3">Positions unavailable</p>';
+    });
 
-  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=120`, { timeout: 8000 })
+  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=360`, { timeout: 10000 })
     .then(async candles => {
       await chartReady;
-      if (candles?.items?.length) await initChart(container, candles.items);
+      if (!isCurrentRun(runId, symbol, type)) return;
+      if (candles?.items?.length) await initChart(container, candles.items, runId);
       else $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart data unavailable</p>';
     })
     .catch(e => {
+      if (!isCurrentRun(runId, symbol, type)) return;
       console.error('Chart:', e);
       $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart unavailable</p>';
     });
 }
 
-function startLiveQuotes(container, marketItems) {
+function isCurrentRun(runId, symbol = get('symbol'), type = get('type')) {
+  if (runId !== tradeRunId) return false;
+  if (symbol && String(symbol).toUpperCase() !== String(get('symbol') || '').toUpperCase()) return false;
+  if (type && normalizeType(type) !== normalizeType(get('type'))) return false;
+  return true;
+}
+
+function normalizeType(type) {
+  const value = String(type || '').toLowerCase();
+  if (value === 'commodity') return 'commodities';
+  if (value === 'stock') return 'stocks';
+  if (value === 'future') return 'futures';
+  return value;
+}
+
+function startLiveQuotes(container, marketItems, runId = tradeRunId) {
   if (sseClean) {
     sseClean();
     sseClean = null;
@@ -273,9 +306,10 @@ function startLiveQuotes(container, marketItems) {
   const symbols = [...new Set([active, ...marketItems.slice(0, max).map(m => String(m.symbol || '').toUpperCase()).filter(Boolean)])];
 
   sseClean = connectSSE(symbols, type, (items) => {
+    if (!isCurrentRun(runId, active, type)) return;
     updateSymbolListPrices(container, items);
     const q = items.find(i => String(i.symbol || '').toUpperCase() === active);
-    if (q) updatePrice(container, q);
+    if (q) updatePrice(container, q, runId);
     const dot = $('#conn-dot', container);
     if (dot) {
       dot.classList.remove('bg-muted', 'bg-sell');
@@ -292,7 +326,8 @@ function markDisconnected(container) {
   dot.classList.add('bg-sell');
   dot.title = 'Disconnected';
 }
-function updatePrice(container, q) {
+function updatePrice(container, q, runId = tradeRunId) {
+  if (!isCurrentRun(runId, String(q?.symbol || get('symbol')).toUpperCase(), q?.type || get('type'))) return;
   const p = Number(q.price || q.q_price || 0);
   const chg = Number(q.change_pct || q.q_change || 0);
   const t = get('type');
@@ -310,7 +345,7 @@ function updatePrice(container, q) {
   $$('[data-buy-price]', container).forEach(el => { el.textContent = p > 0 ? price(p * 1.0001, t) : '--'; });
   $$('[data-spread-val]', container).forEach(el => { el.textContent = p > 0 ? `Spread: ${price(p * 0.0001, t)}` : 'Spread: --'; });
   updateOrderInfo(container);
-  updateLiveCandle(p);
+  updateLiveCandle(p, runId);
 }
 
 function updateOrderInfo(container) {
@@ -412,11 +447,13 @@ function renderPositions(container, positions) {
   </table></div>`;
 }
 
-async function initChart(container, candles) {
+async function initChart(container, candles, runId = tradeRunId) {
+  if (!isCurrentRun(runId)) return;
   const el = $('#chart-box', container);
   if (!el) return;
 
   const { createChart } = await loadChartLib();
+  if (!isCurrentRun(runId)) return;
   el.innerHTML = '';
 
   chart = createChart(el, {
@@ -649,8 +686,8 @@ function syncOrderField(container, field, value) {
   });
 }
 
-function updateLiveCandle(priceValue) {
-  if (!candleSeries || !lastCandle || !(priceValue > 0)) return;
+function updateLiveCandle(priceValue, runId = tradeRunId) {
+  if (!isCurrentRun(runId) || !candleSeries || !lastCandle || !(priceValue > 0)) return;
   const bucket = currentBucketTime();
   if (bucket <= lastCandle.time) {
     lastCandle.close = priceValue;

@@ -1,27 +1,55 @@
-﻿let pollTimer = null;
+let pollTimer = null;
+let pollController = null;
+let pollSeq = 0;
 const POLL_MS = 1500;
+
 export function connectSSE(symbols, type, onUpdate, onError) {
   disconnect();
   if (!symbols || !symbols.length) return disconnect;
-  startPolling(symbols, type, onUpdate);
+  const seq = ++pollSeq;
+  startPolling(symbols, type, onUpdate, onError, seq);
   return disconnect;
 }
-function startPolling(symbols, type, onUpdate) {
+
+function startPolling(symbols, type, onUpdate, onError, seq) {
   stopPolling();
+  const list = [...new Set(symbols.map(s => String(s || '').toUpperCase()).filter(Boolean))];
   const poll = async () => {
+    if (seq !== pollSeq) return;
+    pollController = new AbortController();
     try {
-      const url = '/api/quotes.php?symbols=' + encodeURIComponent(symbols.join(',')) + '&type=' + encodeURIComponent(type) + '&visible=1&fresh=1';
-      const res = await fetch(url, { credentials: 'same-origin' });
+      const url = '/api/quotes.php?symbols=' + encodeURIComponent(list.join(',')) + '&type=' + encodeURIComponent(type) + '&visible=1&fresh=1&_=' + Date.now();
+      const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: pollController.signal });
+      if (seq !== pollSeq) return;
       if (res.ok) {
         const data = await res.json();
-        if (data && data.items && onUpdate) onUpdate(data.items);
+        if (seq === pollSeq && data && data.items && onUpdate) onUpdate(data.items);
       }
-    } catch (e) {}
-    pollTimer = setTimeout(poll, POLL_MS);
+    } catch (e) {
+      if (e.name !== 'AbortError' && onError) onError(e);
+    } finally {
+      if (seq === pollSeq) pollTimer = setTimeout(poll, POLL_MS);
+    }
   };
   poll();
 }
-function stopPolling() { if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } }
-export function disconnect() { stopPolling(); }
-export function isConnected() { return pollTimer !== null; }
 
+function stopPolling() {
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+  if (pollController) {
+    pollController.abort();
+    pollController = null;
+  }
+}
+
+export function disconnect() {
+  pollSeq += 1;
+  stopPolling();
+}
+
+export function isConnected() {
+  return pollTimer !== null;
+}
