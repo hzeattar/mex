@@ -85,9 +85,11 @@ export function mount(container) {
 
 async function loadHomeData(container) {
   try {
-    const [markets, portfolio] = await Promise.all([
+    const [markets, portfolio, signals, copies] = await Promise.all([
       api('/markets.php?type=crypto&lite=1&with_quotes=1', { timeout: 7000 }),
       api('/trade/portfolio.php', { timeout: 7000 }),
+      api('/signals.php?bot=1&home=1&lang=en', { timeout: 7000 }).catch(() => null),
+      api('/trading_bot/my.php?lang=en', { timeout: 7000 }).catch(() => null),
     ]);
     if (markets && markets.items) {
       renderMarkets(container, markets.items.slice(0, 8));
@@ -95,7 +97,31 @@ async function loadHomeData(container) {
     if (portfolio && portfolio.positions) {
       renderPositions(container, portfolio.positions.slice(0, 5));
     }
+    // Render copy signals
+    if (signals && signals.items && signals.items.length) {
+      renderCopySignals(container, signals.items);
+    }
   } catch (e) { /* silent */ }
+}
+
+function renderCopySignals(container, items) {
+  const section = container.querySelector('#home-copy-section');
+  if (!section) return;
+  section.innerHTML = `<div class="flex gap-3 overflow-x-auto pb-2 snap-x">${items.slice(0, 6).map(sig => {
+    const dir = (sig.direction || 'BUY').toUpperCase();
+    return `<div class="shrink-0 w-[260px] p-3 rounded-lg border border-line bg-surface snap-start">
+      <div class="flex items-center justify-between mb-2">
+        <strong class="text-xs">${esc(sig.market_symbol || sig.symbol || '--')}</strong>
+        <span class="badge-${dir === 'BUY' ? 'buy' : 'sell'}">${dir}</span>
+      </div>
+      <div class="text-[10px] text-muted mb-1">${esc(sig.bot_name_en || sig.timeframe || '')}</div>
+      <div class="grid grid-cols-3 gap-1 text-[10px]">
+        <div><span class="text-muted">Entry</span><div class="font-mono">${sig.entry_price || '--'}</div></div>
+        <div><span class="text-muted">TP</span><div class="font-mono text-buy">${sig.take_profit_1 || '--'}</div></div>
+        <div><span class="text-muted">SL</span><div class="font-mono text-sell">${sig.stop_loss || '--'}</div></div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function renderMarkets(container, items) {

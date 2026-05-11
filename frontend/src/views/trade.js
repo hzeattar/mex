@@ -43,6 +43,7 @@ export function render(params) {
       <!-- Symbol Header -->
       <div class="flex items-center justify-between px-3 lg:px-4 h-10 border-b border-line bg-surface shrink-0">
         <div class="flex items-center gap-2">
+          <button class="lg:hidden w-7 h-7 grid place-items-center rounded border border-line text-muted" id="mob-mkt-btn">${icons.menu}</button>
           <div class="w-6 h-6 rounded-md bg-accent/20 grid place-items-center text-[9px] font-black text-accent">${esc(symbol.slice(0,3))}</div>
           <strong class="text-sm" id="sym-name">${esc(symbol)}</strong>
           <span class="text-sm font-mono font-bold" id="live-price">--</span>
@@ -218,6 +219,13 @@ async function initChart(container, candles) {
 }
 
 function bindEvents(container) {
+  var mobBtn = container.querySelector('#mob-mkt-btn');
+  if (mobBtn) mobBtn.addEventListener('click', function() {
+    var aside = container.querySelector('aside');
+    if (!aside) return;
+    if (aside.classList.contains('hidden')) { aside.classList.remove('hidden'); aside.style.cssText = 'position:fixed;inset:0;z-index:200;width:100%;background:#0b1426;display:flex;flex-direction:column;'; }
+    else { aside.classList.add('hidden'); aside.style.cssText = ''; }
+  });
   delegate(container, '[data-sym]', 'click', (e, el) => { navigate('trade', { symbol: el.dataset.sym, type: el.dataset.stype || get('type') }); });
   delegate(container, '[data-tf]', 'click', (e, el) => { set('tf', el.dataset.tf); localStorage.setItem('vp_tf', el.dataset.tf); navigate('trade', { symbol: get('symbol'), type: get('type'), tf: el.dataset.tf }); });
   delegate(container, '[data-type-tab]', 'click', async (e, el) => {
