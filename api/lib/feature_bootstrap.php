@@ -114,6 +114,12 @@ function vp_feature_bootstrap(PDO $pdo, string $driver): void {
     }
   }
 
+  if (schema_table_exists($pdo, 'markets', $driver)) {
+    if (!schema_column_exists($pdo, 'markets', 'source', $driver)) {
+      schema_add_column($pdo, 'markets', "source VARCHAR(32) NULL", "source TEXT", $driver);
+    }
+  }
+
   $now = time();
   $seed = [
     ['starter', 'Starter', 'المبتدئ', 'Starter', 0, 10, "Market dashboard
