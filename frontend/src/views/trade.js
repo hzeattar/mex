@@ -233,7 +233,7 @@ async function setup(container) {
   updateOrderInfo(container);
   startLiveQuotes(container, [], runId);
 
-  api(`/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus&fresh=1`, { timeout: 4500 })
+  api(`/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus`, { timeout: 4500 })
     .then(quote => {
       if (!isCurrentRun(runId, symbol, type)) return;
       if (quote?.items?.[0]) updatePrice(container, quote.items[0], runId);
@@ -265,7 +265,7 @@ async function setup(container) {
       if (body) body.innerHTML = '<p class="text-muted text-[11px] text-center py-3">Positions unavailable</p>';
     });
 
-  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=360`, { timeout: 10000 })
+  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=220`, { timeout: 10000 })
     .then(async candles => {
       await chartReady;
       if (!isCurrentRun(runId, symbol, type)) return;
@@ -302,7 +302,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId) {
 
   const type = get('type');
   const active = get('symbol');
-  const max = type === 'crypto' ? 40 : 18;
+  const max = type === 'crypto' ? 24 : 12;
   const symbols = [...new Set([active, ...marketItems.slice(0, max).map(m => String(m.symbol || '').toUpperCase()).filter(Boolean)])];
 
   sseClean = connectSSE(symbols, type, (items) => {

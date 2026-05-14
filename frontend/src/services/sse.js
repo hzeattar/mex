@@ -1,7 +1,7 @@
 let pollTimer = null;
 let pollController = null;
 let pollSeq = 0;
-const POLL_MS = 1500;
+const POLL_MS = 3000;
 
 export function connectSSE(symbols, type, onUpdate, onError) {
   disconnect();
@@ -13,12 +13,12 @@ export function connectSSE(symbols, type, onUpdate, onError) {
 
 function startPolling(symbols, type, onUpdate, onError, seq) {
   stopPolling();
-  const list = [...new Set(symbols.map(s => String(s || '').toUpperCase()).filter(Boolean))];
+  const list = [...new Set(symbols.map(s => String(s || '').toUpperCase()).filter(Boolean))].slice(0, 24);
   const poll = async () => {
     if (seq !== pollSeq) return;
     pollController = new AbortController();
     try {
-      const url = '/api/quotes.php?symbols=' + encodeURIComponent(list.join(',')) + '&type=' + encodeURIComponent(type) + '&visible=1&fresh=1&_=' + Date.now();
+      const url = '/api/quotes.php?symbols=' + encodeURIComponent(list.join(',')) + '&type=' + encodeURIComponent(type) + '&visible=1&purpose=watchlist&_=' + Date.now();
       const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: pollController.signal });
       if (seq !== pollSeq) return;
       if (res.ok) {

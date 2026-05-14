@@ -74,6 +74,10 @@
   .badge-buy { @apply badge bg-buy/10 text-buy; }
   .badge-sell { @apply badge bg-sell/10 text-sell; }
   .badge-accent { @apply badge bg-accent/10 text-accent; }
+  .badge-green { @apply badge bg-buy/10 text-buy; }
+  .badge-red { @apply badge bg-sell/10 text-sell; }
+  .badge-gold { @apply badge bg-spread/10 text-spread; }
+  .card-glass { @apply rounded-lg border border-line-strong bg-panel/90 shadow-2xl backdrop-blur; }
 
   /* Loading */
   .loading-spinner { @apply w-6 h-6 border-2 border-line border-t-accent rounded-full animate-spin; }
@@ -85,6 +89,204 @@
   .spread-display { @apply text-[10px] text-spread font-mono font-bold; }
   .mobile-market-open { @apply fixed inset-0 z-[220] w-full bg-surface flex flex-col; }
   .trade-modal-open { @apply overflow-hidden; }
+
+  /* Rich dashboard and market visuals */
+  .home-market-card {
+    @apply relative flex items-center gap-3 overflow-hidden rounded-lg border border-line bg-panel-2/50 p-3 text-left transition-colors hover:border-accent/40;
+  }
+  .home-market-card::after {
+    content: '';
+    @apply pointer-events-none absolute -right-8 -top-8 h-20 w-20 rounded-full bg-accent/10 blur-2xl;
+  }
+  .home-market-icon,
+  .market-logo {
+    @apply relative grid place-items-center shrink-0 overflow-hidden rounded-xl border border-line bg-surface;
+  }
+  .home-market-icon { @apply h-10 w-10; }
+  .market-logo { @apply h-10 w-10; }
+  .home-market-icon img,
+  .market-logo img {
+    @apply h-full w-full object-cover;
+  }
+  .home-market-icon b,
+  .market-logo b {
+    @apply absolute inset-0 hidden place-items-center bg-accent/20 text-[10px] font-black text-text;
+  }
+  .home-market-icon img[src=''],
+  .market-logo img[src=''] { @apply hidden; }
+
+  /* Earn desk */
+  .feature-hero {
+    @apply relative overflow-hidden rounded-lg border border-line bg-gradient-to-br from-panel-2 to-panel p-5 lg:p-6;
+  }
+  .feature-hero::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    width: 50%;
+    background: linear-gradient(135deg, rgba(93,124,255,.18), rgba(0,192,135,.08), transparent);
+    opacity: .8;
+  }
+  .feature-hero__stats {
+    @apply relative z-10 mt-5 grid gap-3 sm:grid-cols-3;
+  }
+  .hero-stat,
+  .level-pill {
+    @apply rounded-lg border border-line bg-surface/70 p-3;
+  }
+  .hero-stat span,
+  .level-pill span {
+    @apply block text-[10px] uppercase tracking-wider text-muted;
+  }
+  .hero-stat strong,
+  .level-pill strong {
+    @apply mt-1 block text-lg font-black;
+  }
+  .hero-stat small,
+  .level-pill small {
+    @apply mt-1 block text-[11px] text-muted;
+  }
+  .level-strip {
+    @apply grid gap-3 sm:grid-cols-2 xl:grid-cols-5;
+  }
+  .segmented {
+    @apply grid grid-cols-2 gap-2 rounded-lg border border-line bg-surface p-1;
+  }
+  .segmented button {
+    @apply rounded-md px-3 py-2 text-xs font-bold text-muted transition-colors hover:text-text;
+  }
+  .segmented button.active {
+    @apply bg-accent text-white shadow-[0_8px_24px_rgba(93,124,255,.22)];
+  }
+  .desk-panel {
+    @apply rounded-lg border border-line bg-panel overflow-hidden;
+  }
+  .panel-head {
+    @apply flex items-center justify-between gap-3 border-b border-line bg-panel-2/40 p-4;
+  }
+  .panel-head h2 {
+    @apply mt-1 text-base font-black;
+  }
+  .panel-head p {
+    @apply mt-1 text-xs text-muted;
+  }
+  .copy-grid,
+  .contract-grid {
+    @apply grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+  .history-grid {
+    @apply grid gap-3 p-4 md:grid-cols-2;
+  }
+  .copy-card,
+  .contract-card,
+  .history-card {
+    @apply relative overflow-hidden rounded-lg border border-line bg-surface p-4 transition-colors hover:border-accent/40;
+  }
+  .copy-card::before,
+  .contract-card::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent;
+  }
+  .contract-card.locked {
+    @apply opacity-70;
+  }
+  .copy-card__top {
+    @apply flex items-start justify-between gap-3;
+  }
+  .copy-card__top h3,
+  .contract-card h3,
+  .history-card h3 {
+    @apply text-sm font-black;
+  }
+  .copy-card__top p,
+  .history-card p {
+    @apply mt-0.5 truncate text-[11px] text-muted;
+  }
+  .copy-card__quote {
+    @apply mt-3 flex items-center gap-2 rounded-lg border border-line bg-panel-2/45 px-3 py-2;
+  }
+  .copy-card__quote strong {
+    @apply ml-auto font-mono text-sm font-black;
+  }
+  .signal-metrics {
+    @apply grid grid-cols-2 gap-2 sm:grid-cols-4;
+  }
+  .mini-metric {
+    @apply rounded-md border border-line bg-panel-2/35 p-2;
+  }
+  .mini-metric span {
+    @apply block text-[10px] text-muted;
+  }
+  .mini-metric strong {
+    @apply mt-1 block truncate text-xs font-black;
+  }
+  .copy-brief {
+    @apply mt-3 min-h-[34px] text-xs leading-5 text-muted;
+  }
+  .copy-card__chips {
+    @apply mt-3 flex flex-wrap gap-2;
+  }
+  .copy-card__chips span {
+    @apply rounded-full border border-line bg-panel-2/45 px-2 py-1 text-[10px] font-bold text-muted;
+  }
+  .status-chip {
+    @apply inline-flex items-center rounded-full border border-line bg-panel-2 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-muted;
+  }
+  .status-chip-live {
+    @apply border-buy/25 bg-buy/10 text-buy;
+  }
+  .status-chip-locked {
+    @apply border-sell/25 bg-sell/10 text-sell;
+  }
+  .empty-state {
+    @apply m-4 rounded-lg border border-dashed border-line p-8 text-center text-sm text-muted;
+  }
+
+  /* Real/KYC gates and dialogs */
+  .gate-wrap {
+    @apply relative min-h-[260px];
+  }
+  .gate-blur {
+    @apply pointer-events-none select-none opacity-35;
+    filter: blur(5px) saturate(.75);
+  }
+  .gate-overlay {
+    @apply absolute inset-0 z-10 grid place-items-center p-4;
+  }
+  .gate-card {
+    @apply card-glass flex max-w-sm flex-col items-center p-6 text-center;
+  }
+  .gate-card strong {
+    @apply mt-3 text-base font-black;
+  }
+  .gate-card p {
+    @apply my-3 text-sm text-muted;
+  }
+  .gate-icon {
+    @apply grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-accent to-buy text-white;
+  }
+  .gate-icon svg {
+    @apply h-5 w-5;
+  }
+  .dialog-backdrop {
+    @apply fixed inset-0 z-[300] grid place-items-center bg-black/60 p-4 backdrop-blur-sm;
+  }
+  .dialog-card {
+    @apply relative w-full max-w-md rounded-lg border border-line-strong bg-panel p-5 shadow-2xl;
+  }
+  .dialog-close {
+    @apply absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-md border border-line text-muted hover:text-text;
+  }
+  .dialog-close svg {
+    @apply h-4 w-4;
+  }
+  .dialog-note {
+    @apply rounded-md border border-line bg-surface p-3 text-xs text-muted;
+  }
+  .dialog-error {
+    @apply rounded-md border border-sell/30 bg-sell/10 p-3 text-xs font-semibold text-sell;
+  }
 
   /* Responsive helpers */
   .mobile-pad { @apply pb-[calc(56px+var(--safe-b))] lg:pb-0; }

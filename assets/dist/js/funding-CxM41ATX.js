@@ -1,4 +1,4 @@
-import{a as c,e as i,m as p,j as u}from"./main-_2Sd1mKl.js";function h(s){const a=(s._path||"deposit").includes("withdraw")?"withdraw":"deposit",t=a==="deposit";return`
+import{a as c,e as i,m as p,j as u}from"./main-BotwwwQy.js";function h(s){const a=(s._path||"deposit").includes("withdraw")?"withdraw":"deposit",t=a==="deposit";return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div>

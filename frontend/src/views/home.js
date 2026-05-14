@@ -1,12 +1,13 @@
 // Home View
 import { get } from '../state/store.js';
-import { money, pct, price, esc } from '../utils/format.js';
+import { money, pct, price, esc, escAttr } from '../utils/format.js';
 import { navigate } from '../router.js';
 import { api } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
+import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
 
 export function render() {
-  const brand = get('brand');
+  const brand = get('brand') || {};
   const wallet = activeWallet();
   const mode = get('mode');
 
@@ -85,11 +86,10 @@ export function mount(container) {
 
 async function loadHomeData(container) {
   try {
-    const [markets, portfolio, signals, copies] = await Promise.all([
+    const [markets, portfolio, signals] = await Promise.all([
       api('/markets.php?type=crypto&lite=1&with_quotes=1', { timeout: 7000 }),
       api('/trade/portfolio.php', { timeout: 7000 }),
       api('/signals.php?bot=1&home=1&lang=en', { timeout: 7000 }).catch(() => null),
-      api('/trading_bot/my.php?lang=en', { timeout: 7000 }).catch(() => null),
     ]);
     if (markets && markets.items) {
       renderMarkets(container, markets.items.slice(0, 8));
@@ -109,17 +109,29 @@ function renderCopySignals(container, items) {
   if (!section) return;
   section.innerHTML = `<div class="flex gap-3 overflow-x-auto pb-2 snap-x">${items.slice(0, 6).map(sig => {
     const dir = (sig.direction || 'BUY').toUpperCase();
-    return `<div class="shrink-0 w-[260px] p-3 rounded-lg border border-line bg-surface snap-start">
+    const symbol = sig.symbol || sig.market_symbol || '--';
+    return `<div class="shrink-0 w-[280px] copy-card snap-start">
       <div class="flex items-center justify-between mb-2">
-        <strong class="text-xs">${esc(sig.market_symbol || sig.symbol || '--')}</strong>
+        <div class="flex items-center gap-2 min-w-0">
+          ${marketLogo({ symbol, type: sig.type || sig.market_type }, 'market-logo')}
+          <div class="min-w-0">
+            <strong class="text-xs truncate block">${esc(symbol)}</strong>
+            <span class="text-[10px] text-muted truncate block">${esc(sig.bot_name || sig.bot_name_en || sig.timeframe || 'Copy signal')}</span>
+          </div>
+        </div>
         <span class="badge-${dir === 'BUY' ? 'buy' : 'sell'}">${dir}</span>
       </div>
-      <div class="text-[10px] text-muted mb-1">${esc(sig.bot_name_en || sig.timeframe || '')}</div>
-      <div class="grid grid-cols-3 gap-1 text-[10px]">
-        <div><span class="text-muted">Entry</span><div class="font-mono">${sig.entry_price || '--'}</div></div>
-        <div><span class="text-muted">TP</span><div class="font-mono text-buy">${sig.take_profit_1 || '--'}</div></div>
-        <div><span class="text-muted">SL</span><div class="font-mono text-sell">${sig.stop_loss || '--'}</div></div>
+      <div class="copy-card__quote py-2">
+        <span class="status-chip ${Number(sig.live_price || 0) > 0 ? 'status-chip-live' : 'status-chip-locked'}">${Number(sig.live_price || 0) > 0 ? 'LIVE' : 'READY'}</span>
+        <strong>${Number(sig.live_price || 0) > 0 ? '$' + money(sig.live_price, sig.type === 'forex' ? 5 : 2) : '--'}</strong>
+        <span class="${Number(sig.live_change_pct || 0) >= 0 ? 'text-buy' : 'text-sell'}">${pct(sig.live_change_pct || 0)}</span>
       </div>
+      <div class="grid grid-cols-3 gap-1 text-[10px] mt-2">
+        <div><span class="text-muted">Entry</span><div class="font-mono">${sig.entry || sig.entry_price || '--'}</div></div>
+        <div><span class="text-muted">TP</span><div class="font-mono text-buy">${sig.tp1 || sig.take_profit_1 || '--'}</div></div>
+        <div><span class="text-muted">SL</span><div class="font-mono text-sell">${sig.sl || sig.stop_loss || '--'}</div></div>
+      </div>
+      <a href="#/invest" class="btn-primary btn-sm w-full mt-3">Open copy desk</a>
     </div>`;
   }).join('')}</div>`;
 }
@@ -128,8 +140,8 @@ function renderMarkets(container, items) {
   const grid = container.querySelector('#home-markets');
   if (!grid) return;
   grid.innerHTML = items.map((m) => `
-    <button class="flex items-center gap-3 p-3 rounded-lg border border-line hover:border-accent/40 bg-panel-2/50 text-left transition-colors" data-symbol="${esc(m.symbol)}" data-type="${esc(m.type || 'crypto')}">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent/30 to-green/20 grid place-items-center text-[11px] font-black">${esc((m.symbol || '').slice(0, 3))}</div>
+    <button class="home-market-card" data-symbol="${escAttr(m.symbol)}" data-type="${escAttr(m.type || 'crypto')}">
+      ${marketLogo(m, 'home-market-icon')}
       <div class="flex-1 min-w-0">
         <div class="font-semibold text-sm truncate">${esc(m.symbol)}</div>
         <div class="text-[11px] text-muted truncate">${esc(m.name || m.symbol)}</div>
@@ -143,6 +155,14 @@ function renderMarkets(container, items) {
   grid.querySelectorAll('[data-symbol]').forEach((btn) => {
     btn.addEventListener('click', () => navigate('trade', { symbol: btn.dataset.symbol, type: btn.dataset.type }));
   });
+}
+
+function marketLogo(market, className) {
+  const symbol = market.symbol || '--';
+  return `<span class="${className}">
+    <img src="${escAttr(marketIconPath(market, market.type || 'crypto'))}" alt="${escAttr(symbol)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';" />
+    <b>${esc(marketInitial(symbol))}</b>
+  </span>`;
 }
 
 function renderPositions(container, positions) {
