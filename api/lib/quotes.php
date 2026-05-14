@@ -110,6 +110,42 @@ function quote_source_is_untrusted(?string $source): bool {
   ], true);
 }
 
+function quote_frankfurter_enabled(): bool {
+  return (string)env('FRANKFURTER_ENABLED', '1') !== '0';
+}
+
+function quote_frankfurter_row(string $symbol, string $assetType = 'forex', int $now = 0): ?array {
+  if (!quote_frankfurter_enabled()) return null;
+  $symbol = strtoupper(trim($symbol));
+  $assetType = vp_normalize_asset_type($assetType);
+  if (vp_provider_asset_type($assetType) !== 'forex' || !preg_match('/^[A-Z]{6}$/', $symbol)) return null;
+  $base = substr($symbol, 0, 3);
+  $quote = substr($symbol, 3, 3);
+  $majors = ['EUR','USD','GBP','CHF','JPY','CAD','AUD','NZD'];
+  if (!in_array($base, $majors, true) || !in_array($quote, $majors, true)) return null;
+
+  try {
+    $rate = function_exists('fx_rate_frankfurter_cached')
+      ? fx_rate_frankfurter_cached($base, $quote, (int)env('FRANKFURTER_PRICE_TTL', '3600'))
+      : fx_rate_frankfurter($base, $quote);
+    if (!($rate > 0)) return null;
+    $changePct = 0.0;
+    try {
+      if (function_exists('fx_change_pct_frankfurter')) $changePct = fx_change_pct_frankfurter($base, $quote);
+    } catch (Throwable $e) { $changePct = 0.0; }
+    return [
+      'symbol' => $symbol,
+      'type' => $assetType,
+      'price' => (float)$rate,
+      'change_pct' => (float)$changePct,
+      'updated_at' => $now > 0 ? $now : time(),
+      'source' => 'frankfurter',
+    ];
+  } catch (Throwable $e) {
+    return null;
+  }
+}
+
 function quote_live_provider_max_age(string $assetType): int {
   $providerType = vp_provider_asset_type($assetType);
   if ($providerType === 'forex') return max(45, min(300, (int)env('FOREX_LIVE_PROVIDER_MAX_AGE', '75')));
@@ -317,6 +353,13 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   $massiveFallbackEnabled = ((int)env('ENABLE_MASSIVE_FALLBACK', '0') === 1) && $preferredProvider === 'massive';
   foreach ($symbols as $sym) {
     $meta = is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [];
+    if ($providerType === 'forex') {
+      $frankfurterRow = quote_frankfurter_row($sym, $assetType, $now);
+      if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) {
+        $out[$sym] = $frankfurterRow;
+        continue;
+      }
+    }
     $spotMetal = vp_is_spot_metal_symbol($sym, $assetType);
     $preferEodhd = quote_provider_prefers_eodhd($assetType, $meta, $sym);
     $preferYahoo = quote_provider_prefers_yahoo($assetType, $meta, $sym);
@@ -597,6 +640,13 @@ function quote_price_fresh(string $symbol, string $assetType): float {
 
   $preferredProvider = strtolower((string)env('PRICE_PROVIDER', 'eodhd'));
   $massiveFallbackEnabled = ((int)env('ENABLE_MASSIVE_FALLBACK', '0') === 1);
+  if ($providerType === 'forex') {
+    $frankfurterRow = quote_frankfurter_row($symbol, $assetType, $now);
+    if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) {
+      quote_upsert($symbol, $assetType, (float)$frankfurterRow['price'], (float)$frankfurterRow['change_pct'], (int)$frankfurterRow['updated_at'], ['source'=>'frankfurter','as_of'=>(int)$frankfurterRow['updated_at'],'ingested_at'=>$now]);
+      return (float)$frankfurterRow['price'];
+    }
+  }
   if (quote_provider_prefers_eodhd($assetType, $meta, $symbol)) {
     try {
       $eSym = eodhd_symbol_for_market($symbol, $assetType, $meta);
@@ -1187,6 +1237,19 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
       } else {
         $used = false;
 
+        if ($providerType === 'forex') {
+          $frankfurterRow = quote_frankfurter_row($sym, $type, $now);
+          if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) {
+            $price = (float)$frankfurterRow['price'];
+            $chgPct = (float)$frankfurterRow['change_pct'];
+            $used = true;
+            $external++;
+            $sourceName = 'frankfurter';
+            $sourceTs = (int)$frankfurterRow['updated_at'];
+            $hadAuthoritativeUpdate = true;
+          }
+        }
+
         if (isset($eodhdKeyBySym[$sym])) {
           $ek = $eodhdKeyBySym[$sym];
           if (isset($eodhdBulk[$ek]) && is_array($eodhdBulk[$ek])) {
@@ -1290,7 +1353,7 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
       if ($sourceName !== '') $extras['source'] = $sourceName;
       if (!isset($extras['source_priority']) && $sourceName !== '') {
         $extras['source_priority'] = match(strtolower($sourceName)) {
-          'binance' => 100, 'eodhd','eodhd_rest' => 88, 'massive','polygon' => 90, 'yahoo' => 72, 'provider_live' => 92, 'eodhd_intraday','yahoo_chart_live' => 36, default => 40,
+          'binance' => 100, 'eodhd','eodhd_rest' => 88, 'massive','polygon' => 90, 'yahoo' => 72, 'provider_live' => 92, 'frankfurter','stooq' => 20, 'eodhd_intraday','yahoo_chart_live' => 36, default => 40,
         };
       }
       $persistTs = ($type === 'crypto') ? $now : ($sourceTs > 0 ? $sourceTs : $now);
@@ -1326,6 +1389,11 @@ function quote_fetch_external(string $symbol, string $type, array $meta = []): ?
   try {
     if ($providerType === 'crypto') return binance_price($symbol);
   } catch (Throwable $e) { /* ignore */ }
+
+  if ($providerType === 'forex') {
+    $frankfurterRow = quote_frankfurter_row($symbol, $type, time());
+    if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) return (float)$frankfurterRow['price'];
+  }
 
   if (quote_provider_prefers_eodhd($type, $meta, $symbol)) {
     try {

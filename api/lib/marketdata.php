@@ -872,6 +872,75 @@ function fx_rate_frankfurter(string $from, string $to): float {
   return (float)$rate;
 }
 
+function fx_rate_frankfurter_cached(string $from, string $to, int $ttl = 3600): float {
+  $from = strtoupper($from); $to = strtoupper($to);
+  $ttl = max(300, min(86400, (int)$ttl));
+  if (!preg_match('/^[A-Z]{3}$/', $from) || !preg_match('/^[A-Z]{3}$/', $to)) {
+    throw new RuntimeException('Invalid FX pair');
+  }
+  if ($from === $to) return 1.0;
+
+  $dir = __DIR__ . '/../data/cache';
+  if (!is_dir($dir)) { @mkdir($dir, 0777, true); }
+  $file = $dir . '/fx_frankfurter_' . $from . '_' . $to . '.json';
+
+  $now = time();
+  if (is_file($file)) {
+    $age = $now - (int)@filemtime($file);
+    if ($age >= 0 && $age <= $ttl) {
+      $raw = @file_get_contents($file);
+      $d = json_decode((string)$raw, true);
+      if (is_array($d) && (float)($d['rate'] ?? 0) > 0) return (float)$d['rate'];
+    }
+  }
+
+  $rate = fx_rate_frankfurter($from, $to);
+  if ($rate > 0) {
+    @file_put_contents($file, json_encode(['rate'=>(float)$rate, 'ts'=>$now], JSON_UNESCAPED_SLASHES), LOCK_EX);
+  }
+  return (float)$rate;
+}
+
+function fx_change_pct_frankfurter(string $from, string $to): float {
+  $from = strtoupper($from); $to = strtoupper($to);
+  if (!preg_match('/^[A-Z]{3}$/', $from) || !preg_match('/^[A-Z]{3}$/', $to)) {
+    throw new RuntimeException('Invalid FX pair');
+  }
+  if ($from === $to) return 0.0;
+
+  $dir = __DIR__ . '/../data/cache';
+  if (!is_dir($dir)) { @mkdir($dir, 0777, true); }
+  $file = $dir . '/fx_frankfurter_chg_' . $from . '_' . $to . '.json';
+  $now = time();
+  if (is_file($file)) {
+    $age = $now - (int)@filemtime($file);
+    if ($age >= 0 && $age <= 3600) {
+      $raw = @file_get_contents($file);
+      $d = json_decode((string)$raw, true);
+      if (is_array($d) && isset($d['change_pct']) && is_numeric($d['change_pct'])) return (float)$d['change_pct'];
+    }
+  }
+
+  $latest = fx_rate_frankfurter_cached($from, $to, 3600);
+  if (!($latest > 0)) return 0.0;
+
+  $end = gmdate('Y-m-d');
+  $start = gmdate('Y-m-d', time() - 7 * 86400);
+  $url = "https://api.frankfurter.app/" . urlencode($start) . ".." . urlencode($end) . "?from=" . urlencode($from) . "&to=" . urlencode($to);
+  $d = http_get_json($url);
+  $rates = is_array($d['rates'] ?? null) ? $d['rates'] : [];
+  ksort($rates);
+  $prev = 0.0;
+  foreach ($rates as $dayRates) {
+    if (!is_array($dayRates)) continue;
+    $r = (float)($dayRates[$to] ?? 0);
+    if ($r > 0 && abs($r - $latest) > 0.0) $prev = $r;
+  }
+  $change = ($prev > 0) ? (($latest - $prev) / $prev) * 100.0 : 0.0;
+  @file_put_contents($file, json_encode(['change_pct'=>(float)$change, 'ts'=>$now], JSON_UNESCAPED_SLASHES), LOCK_EX);
+  return (float)$change;
+}
+
 /**
  * Free stock/ETF last price via Stooq CSV.
  * Ticker examples: aapl.us, msft.us, uso.us, eurusd (for some FX)

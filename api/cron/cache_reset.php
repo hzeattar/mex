@@ -13,6 +13,8 @@ function cron_input_token_cr(): string {
       if (str_starts_with($arg, 'token=')) return trim(substr($arg, 6));
       if (str_starts_with($arg, '--token=')) return trim(substr($arg, 8));
     }
+    $envTok = trim((string)(getenv('CRON_KEY') ?: ''));
+    if ($envTok !== '') return $envTok;
   }
   return '';
 }

@@ -21,6 +21,8 @@ function cron_input_token_mi(): string {
       if (str_starts_with($arg, '--key=')) return trim(substr($arg, 6));
       return $arg;
     }
+    $envTok = trim((string)(getenv('CRON_KEY') ?: ''));
+    if ($envTok !== '') return $envTok;
   }
   return '';
 }

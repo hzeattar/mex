@@ -18,8 +18,6 @@ require_once __DIR__ . '/../lib/quote_authority.php';
 require_once __DIR__ . '/../lib/marketdata.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
 
-$uid = require_auth();
-
 $symbol = strtoupper(trim((string)($_GET['symbol'] ?? '')));
 $typeRaw   = strtolower(trim((string)($_GET['type'] ?? 'crypto'))); // crypto|forex|stocks|commodities|arab|futures
 $type = vp_normalize_asset_type($typeRaw);
@@ -30,6 +28,11 @@ $end    = (int)($_GET['end'] ?? 0); // unix seconds (optional) for pagination
 
 if ($symbol === '') json_response(['ok'=>false,'error'=>'Missing symbol'], 422);
 $limit = max(10, min(500, $limit));
+$uid = session_user_id();
+if ($uid <= 0 && $limit > 100) {
+  json_response(['ok'=>false,'error'=>'login_required','message'=>'Guest access limited to 100 candles','guest_limit'=>100], 401);
+}
+if ($uid <= 0) $limit = min($limit, 100);
 
 $pdo = db();
 $st = $pdo->prepare("SELECT meta, type FROM markets WHERE symbol=? LIMIT 1");
