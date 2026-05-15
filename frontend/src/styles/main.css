@@ -86,13 +86,14 @@
   /* Trade specific */
   .symbol-row { @apply flex items-center gap-2 px-3 py-2 rounded-md text-xs cursor-pointer transition-colors hover:bg-panel; }
   .symbol-row.active { @apply bg-accent/10 border-l-2 border-l-accent; }
+  .status-dot { @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full; }
   .spread-display { @apply text-[10px] text-spread font-mono font-bold; }
   .mobile-market-open { @apply fixed inset-0 z-[220] w-full bg-surface flex flex-col; }
   .trade-modal-open { @apply overflow-hidden; }
 
   /* Rich dashboard and market visuals */
   .home-market-card {
-    @apply relative flex items-center gap-3 overflow-hidden rounded-lg border border-line bg-panel-2/50 p-3 text-left transition-colors hover:border-accent/40;
+    @apply relative min-h-[104px] flex items-center gap-3 overflow-hidden rounded-lg border border-line bg-panel-2/50 p-3 text-left transition-colors hover:border-accent/40;
   }
   .home-market-card::after {
     content: '';
@@ -238,6 +239,36 @@
   }
   .status-chip-locked {
     @apply border-sell/25 bg-sell/10 text-sell;
+  }
+  .status-chip-delayed {
+    @apply border-spread/25 bg-spread/10 text-spread;
+  }
+  .mini-spark {
+    @apply mt-2 flex h-8 items-end gap-0.5 opacity-70;
+  }
+  .mini-spark i {
+    @apply block w-1 rounded-t-sm bg-accent/45;
+  }
+  .mini-spark i:nth-child(3n) {
+    @apply bg-buy/55;
+  }
+  .mini-spark i:nth-child(4n) {
+    @apply bg-sell/45;
+  }
+  .position-card {
+    @apply rounded-lg border border-line bg-panel-2/45 p-3;
+  }
+  .position-metrics {
+    @apply grid grid-cols-4 gap-2;
+  }
+  .position-metrics span {
+    @apply min-w-0 rounded-md border border-line bg-surface/55 p-2;
+  }
+  .position-metrics small {
+    @apply block text-[9px] uppercase tracking-wider text-muted;
+  }
+  .position-metrics strong {
+    @apply mt-1 block truncate font-mono text-[11px] font-black;
   }
   .empty-state {
     @apply m-4 rounded-lg border border-dashed border-line p-8 text-center text-sm text-muted;

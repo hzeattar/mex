@@ -229,11 +229,12 @@ async function setup(container) {
   updateOrderInfo(container);
   startActiveQuote(container, symbol, type, runId);
 
-  api(`/markets.php?type=${type}&lite=1&with_quotes=1`, { timeout: 6500 })
+  api(marketListUrl(type), { timeout: 6500 })
     .then(mkts => {
       if (!isCurrentRun(runId, symbol, type)) return;
       if (mkts?.items) {
         renderSymbolList(container, mkts.items);
+        warmVisibleQuotes(container, mkts.items, runId);
         startLiveQuotes(container, mkts.items, runId);
       }
     })
@@ -402,23 +403,48 @@ function renderSymbolList(container, items) {
   if (!list) return;
 
   const active = get('symbol');
-  list.innerHTML = items.slice(0, 60).map(m => {
+  const visible = items.slice(0, 60);
+  list.innerHTML = visible.map(m => {
     const symbol = String(m.symbol || '').toUpperCase();
     const type = m.type || get('type');
     const p = Number(m.price || m.q_price || 0);
     const chg = Number(m.change_pct || m.q_change || 0);
+    const unavailable = !(p > 0);
     return `<div class="symbol-row ${symbol === active ? 'active' : ''}" data-sym="${escAttr(symbol)}" data-stype="${escAttr(type)}">
       ${marketLogo(symbol, type, 'w-7 h-7 rounded-md shrink-0')}
       <div class="flex-1 min-w-0">
-        <div class="font-semibold text-[11px] truncate">${esc(symbol)}</div>
+        <div class="flex items-center gap-1.5">
+          <div class="font-semibold text-[11px] truncate">${esc(symbol)}</div>
+          <span class="status-dot ${unavailable ? 'bg-sell' : quoteClass(m)}"></span>
+        </div>
         <div class="text-[9px] text-muted truncate">${esc(m.name || type)}</div>
       </div>
       <div class="text-right shrink-0">
         <div class="text-[11px] font-mono" data-price-cell>${p > 0 ? price(p, type) : '--'}</div>
-        <div class="text-[9px] ${chg >= 0 ? 'text-buy' : 'text-sell'}" data-change-cell>${pct(chg)}</div>
+        <div class="text-[9px] ${chg >= 0 ? 'text-buy' : 'text-sell'}" data-change-cell>${unavailable ? 'Unavailable' : pct(chg)}</div>
       </div>
     </div>`;
   }).join('');
+}
+
+async function warmVisibleQuotes(container, items, runId = tradeRunId) {
+  const type = get('type');
+  const missing = items
+    .slice(0, type === 'crypto' ? 18 : 10)
+    .filter((item) => !(Number(item.price || item.q_price || 0) > 0))
+    .map((item) => String(item.symbol || '').toUpperCase())
+    .filter(Boolean);
+  if (!missing.length) return;
+
+  const chunkSize = type === 'crypto' ? 12 : 2;
+  const limit = type === 'crypto' ? 18 : 6;
+  const unique = [...new Set(missing)].slice(0, limit);
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&fresh=1&purpose=warm`, { timeout: 6500 }).catch(() => null);
+    if (!isCurrentRun(runId)) return;
+    if (data?.items?.length) updateSymbolListPrices(container, data.items);
+  }
 }
 
 function updateSymbolListPrices(container, items) {
@@ -454,19 +480,24 @@ function renderPositions(container, positions) {
 
   body.innerHTML = `<div class="overflow-x-auto"><table class="min-w-[620px] lg:min-w-0 w-full text-[11px]">
     <thead class="text-[9px] text-muted uppercase"><tr>
-      <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Lev</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1"></th>
+      <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Mark</th><th class="text-right py-1">Size</th><th class="text-right py-1">Lev</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1"></th>
     </tr></thead>
     <tbody>${positions.slice(0, 12).map(pos => {
       const pnl = Number(pos.pnl || pos.unrealized_pnl || 0);
       const cleanSymbol = String(pos.symbol || '').replace('@R@', '');
+      const posType = pos.asset_type || get('type');
+      const mark = Number(pos.mark_price || pos.current_price || pos.price || 0);
+      const id = pos.position_id || pos.id || '';
       return `<tr class="border-t border-line/50 hover:bg-panel/50">
         <td class="px-3 py-1.5 font-semibold">${esc(cleanSymbol)}</td>
         <td><span class="badge-${pos.side === 'BUY' ? 'buy' : 'sell'}">${esc(pos.side)}</span></td>
         <td class="text-muted">${esc(pos.market_type || 'spot')}</td>
-        <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, pos.asset_type || get('type'))}</td>
+        <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
+        <td class="text-right font-mono">${mark > 0 ? price(mark, posType) : '--'}</td>
+        <td class="text-right font-mono">${money(pos.amount || pos.size || pos.units || 0)}</td>
         <td class="text-right font-mono">${esc(String(pos.leverage || 1))}x</td>
         <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
-        <td class="text-right px-3"><button class="btn-xs btn-ghost text-sell" data-close="${escAttr(pos.id)}">Close</button></td>
+        <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">Close</button>` : ''}</td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
@@ -546,7 +577,7 @@ function bindEvents(container) {
   delegate(container, '[data-type-tab]', 'click', async (e, el) => {
     set('type', el.dataset.typeTab);
     localStorage.setItem('vp_type', el.dataset.typeTab);
-    const data = await api(`/markets.php?type=${encodeURIComponent(el.dataset.typeTab)}&lite=1&with_quotes=1`, { timeout: 6000 }).catch(() => null);
+    const data = await api(marketListUrl(el.dataset.typeTab), { timeout: 6000 }).catch(() => null);
     if (data?.items) {
       const first = data.items.find((item) => item?.symbol);
       if (first?.symbol && normalizeType(el.dataset.typeTab) !== 'favorites') {
@@ -556,6 +587,7 @@ function bindEvents(container) {
         return;
       }
       renderSymbolList(container, data.items);
+      warmVisibleQuotes(container, data.items, tradeRunId);
       startLiveQuotes(container, data.items, tradeRunId);
     }
     $$('[data-type-tab]', container).forEach(btn => {
@@ -744,6 +776,19 @@ function tfSeconds(tf) {
 function loadChartLib() {
   if (!chartLibPromise) chartLibPromise = import('lightweight-charts');
   return chartLibPromise;
+}
+
+function marketListUrl(type) {
+  const resolved = normalizeType(type || 'crypto');
+  const actual = resolved === 'favorites' ? 'crypto' : resolved;
+  return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1`;
+}
+
+function quoteClass(market) {
+  const source = String(market?.source || '').toLowerCase();
+  const timing = String(market?.timing_class || '').toLowerCase();
+  if (timing === 'stale' || market?.is_stale || source.includes('yahoo')) return 'bg-spread';
+  return 'bg-buy';
 }
 
 function marketLogo(symbol, type, className) {

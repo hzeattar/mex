@@ -87,12 +87,12 @@ export function mount(container) {
 async function loadHomeData(container) {
   try {
     const [markets, portfolio, signals] = await Promise.all([
-      api('/markets.php?type=crypto&lite=1&with_quotes=1', { timeout: 7000 }),
+      api('/markets.php?scope=home&supported=1&lite=1&with_quotes=1', { timeout: 7000 }),
       api('/trade/portfolio.php', { timeout: 7000 }),
       api('/signals.php?bot=1&home=1&lang=en', { timeout: 7000 }).catch(() => null),
     ]);
     if (markets && markets.items) {
-      const visible = markets.items.slice(0, 8);
+      const visible = markets.items.slice(0, 12);
       renderMarkets(container, visible);
       hydrateMarketQuotes(container, visible);
     }
@@ -129,10 +129,11 @@ function renderCopySignals(container, items) {
         <span class="${Number(sig.live_change_pct || 0) >= 0 ? 'text-buy' : 'text-sell'}">${pct(sig.live_change_pct || 0)}</span>
       </div>
       <div class="grid grid-cols-3 gap-1 text-[10px] mt-2">
-        <div><span class="text-muted">Entry</span><div class="font-mono">${sig.entry || sig.entry_price || '--'}</div></div>
-        <div><span class="text-muted">TP</span><div class="font-mono text-buy">${sig.tp1 || sig.take_profit_1 || '--'}</div></div>
-        <div><span class="text-muted">SL</span><div class="font-mono text-sell">${sig.sl || sig.stop_loss || '--'}</div></div>
+        <div><span class="text-muted">Entry</span><div class="font-mono">${signalLevel(sig.entry || sig.entry_price, sig.type)}</div></div>
+        <div><span class="text-muted">TP</span><div class="font-mono text-buy">${signalLevel(sig.tp1 || sig.take_profit_1 || sig.take_profit, sig.type)}</div></div>
+        <div><span class="text-muted">SL</span><div class="font-mono text-sell">${signalLevel(sig.sl || sig.stop_loss, sig.type)}</div></div>
       </div>
+      ${signalLevelsMissing(sig) ? `<p class="text-[10px] text-muted mt-2">Awaiting desk levels</p>` : ''}
       <a href="#/invest" class="btn-primary btn-sm w-full mt-3">Open copy desk</a>
     </div>`;
   }).join('')}</div>`;
@@ -145,12 +146,17 @@ function renderMarkets(container, items) {
     <button class="home-market-card" data-symbol="${escAttr(m.symbol)}" data-type="${escAttr(m.type || 'crypto')}">
       ${marketLogo(m, 'home-market-icon')}
       <div class="flex-1 min-w-0">
-        <div class="font-semibold text-sm truncate">${esc(m.symbol)}</div>
+        <div class="flex items-center gap-2">
+          <div class="font-semibold text-sm truncate">${esc(m.symbol)}</div>
+          ${quoteStateChip(m)}
+        </div>
         <div class="text-[11px] text-muted truncate">${esc(m.name || m.symbol)}</div>
+        <div class="mini-spark" aria-hidden="true">${miniSpark(m.symbol)}</div>
       </div>
       <div class="text-right">
-        <div class="text-sm font-mono font-semibold" data-home-price>${price(m.price || m.q_price, m.type)}</div>
+        <div class="text-sm font-mono font-semibold" data-home-price>${formatMarketPrice(m.price || m.q_price, m.type)}</div>
         <div class="text-[11px] ${Number(m.change_pct || m.q_change || 0) >= 0 ? 'text-green' : 'text-red'}" data-home-change>${pct(m.change_pct || m.q_change || 0)}</div>
+        <div class="text-[9px] text-muted uppercase mt-1" data-home-source>${quoteStateText(m)}</div>
       </div>
     </button>
   `).join('');
@@ -169,25 +175,70 @@ async function hydrateMarketQuotes(container, items) {
     groups.get(type).push(symbol);
   });
 
+  const missing = [];
   await Promise.all([...groups.entries()].map(async ([type, symbols]) => {
     const data = await api(`/quotes.php?symbols=${encodeURIComponent(symbols.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist`, { timeout: 6500 }).catch(() => null);
-    if (!data?.items?.length) return;
-    data.items.forEach((q) => {
-      const symbol = String(q.symbol || '').toUpperCase();
-      const card = [...container.querySelectorAll('[data-symbol]')]
-        .find((node) => String(node.dataset.symbol || '').toUpperCase() === symbol);
-      if (!card) return;
-      const p = Number(q.price || q.q_price || 0);
-      const chg = Number(q.change_pct || q.q_change || 0);
-      const priceEl = card.querySelector('[data-home-price]');
-      const changeEl = card.querySelector('[data-home-change]');
-      if (priceEl && p > 0) priceEl.textContent = price(p, type);
-      if (changeEl) {
-        changeEl.textContent = pct(chg);
-        changeEl.className = `text-[11px] ${chg >= 0 ? 'text-green' : 'text-red'}`;
-      }
+    const seen = new Set();
+    if (data?.items?.length) {
+      data.items.forEach((q) => {
+        seen.add(String(q.symbol || '').toUpperCase());
+        applyQuoteToMarketCard(container, q, type);
+      });
+    }
+    symbols.forEach((symbol) => {
+      const card = findMarketCard(container, symbol);
+      const hasPrice = card && card.querySelector('[data-home-price]')?.textContent !== '--';
+      if (!seen.has(symbol) || !hasPrice) missing.push({ symbol, type });
     });
   }));
+  warmMissingHomeQuotes(container, missing);
+}
+
+async function warmMissingHomeQuotes(container, missing) {
+  const byType = new Map();
+  missing.forEach((item) => {
+    if (!item.symbol || !item.type) return;
+    if (!byType.has(item.type)) byType.set(item.type, []);
+    byType.get(item.type).push(item.symbol);
+  });
+  for (const [type, symbols] of byType.entries()) {
+    const chunkSize = type === 'crypto' ? 12 : 2;
+    const limit = type === 'crypto' ? 12 : 4;
+    const unique = [...new Set(symbols)].slice(0, limit);
+    for (let i = 0; i < unique.length; i += chunkSize) {
+      const chunk = unique.slice(i, i + chunkSize);
+      const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&fresh=1&purpose=home`, { timeout: 6500 }).catch(() => null);
+      if (data?.items?.length) data.items.forEach((q) => applyQuoteToMarketCard(container, q, type));
+    }
+  }
+}
+
+function applyQuoteToMarketCard(container, q, fallbackType) {
+  const symbol = String(q.symbol || '').toUpperCase();
+  const card = findMarketCard(container, symbol);
+  if (!card) return;
+  const type = card.dataset.type || q.type || fallbackType;
+  const p = Number(q.price || q.q_price || 0);
+  const chg = Number(q.change_pct || q.q_change || 0);
+  const priceEl = card.querySelector('[data-home-price]');
+  const changeEl = card.querySelector('[data-home-change]');
+  const sourceEl = card.querySelector('[data-home-source]');
+  if (priceEl && p > 0) priceEl.textContent = price(p, type);
+  if (changeEl) {
+    changeEl.textContent = pct(chg);
+    changeEl.className = `text-[11px] ${chg >= 0 ? 'text-green' : 'text-red'}`;
+  }
+  if (sourceEl && p > 0) sourceEl.textContent = quoteStateText(q);
+  const chip = card.querySelector('[data-quote-chip]');
+  if (chip && p > 0) {
+    chip.className = `status-chip ${quoteStateClass(q)}`;
+    chip.textContent = quoteStateText(q);
+  }
+}
+
+function findMarketCard(container, symbol) {
+  return [...container.querySelectorAll('[data-symbol]')]
+    .find((node) => String(node.dataset.symbol || '').toUpperCase() === String(symbol || '').toUpperCase());
 }
 
 function marketLogo(market, className) {
@@ -205,15 +256,39 @@ function renderPositions(container, positions) {
     el.innerHTML = `<p class="text-muted text-sm text-center py-6">No open positions</p>`;
     return;
   }
-  el.innerHTML = `<div class="space-y-2">${positions.map(positionRow).join('')}</div>`;
+  el.innerHTML = `<div class="grid gap-2 lg:grid-cols-2">${positions.map(positionRow).join('')}</div>`;
 }
 
 function positionRow(p) {
   const pnl = Number(p.pnl || p.unrealized_pnl || 0);
-  return `<div class="flex items-center justify-between p-3 rounded-lg bg-panel-2/50 border border-line">
-    <div><strong class="text-sm">${esc(p.symbol)}</strong><span class="text-[11px] text-muted ml-2">${esc(p.side || 'BUY')}</span></div>
-    <div class="text-right"><div class="text-sm font-mono ${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</div></div>
+  const symbol = String(p.symbol || '').replace('@R@', '');
+  const type = p.asset_type || p.type || 'crypto';
+  const mark = Number(p.mark_price || p.current_price || p.price || 0);
+  return `<div class="position-card">
+    <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2 min-w-0">
+        ${marketLogo({ symbol, type }, 'market-logo !h-8 !w-8')}
+        <div class="min-w-0">
+          <strong class="text-sm truncate block">${esc(symbol)}</strong>
+          <span class="text-[10px] text-muted">${esc(p.market_type || p.order_type || 'spot')} • ${esc(p.side || 'BUY')}</span>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="text-sm font-mono ${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</div>
+        <div class="text-[10px] text-muted">PnL</div>
+      </div>
+    </div>
+    <div class="position-metrics mt-3">
+      ${positionMetric('Entry', price(p.entry_price || p.open_price, type))}
+      ${positionMetric('Mark', mark > 0 ? price(mark, type) : '--')}
+      ${positionMetric('Size', money(p.amount || p.size || p.units || 0))}
+      ${positionMetric('Lev', `${p.leverage || 1}x`)}
+    </div>
   </div>`;
+}
+
+function positionMetric(label, value) {
+  return `<span><small>${label}</small><strong>${value}</strong></span>`;
 }
 
 function walletCard(label, value, sub) {
@@ -255,4 +330,47 @@ function activeWallet() {
   const w = get('wallet') || {};
   const mode = get('mode');
   return mode === 'real' ? (w.real || { balance: 0, available: 0, currency: 'USDT' }) : (w.demo || { balance: 10000, available: 10000, currency: 'USDT_DEMO' });
+}
+
+function formatMarketPrice(value, type) {
+  const n = Number(value || 0);
+  return n > 0 ? price(n, type) : '--';
+}
+
+function quoteStateText(m) {
+  const source = String(m.source || m.provider || '').toLowerCase();
+  const timing = String(m.timing_class || '').toLowerCase();
+  if (Number(m.price || m.q_price || 0) <= 0) return 'Unavailable';
+  if (timing === 'stale' || m.is_stale) return 'Stale';
+  if (m.delayed || source.includes('yahoo')) return 'Delayed';
+  if (source.includes('binance') || source.includes('stream') || timing === 'live') return 'Live';
+  return source ? source.replace(/_/g, ' ') : 'Cached';
+}
+
+function quoteStateClass(m) {
+  const text = quoteStateText(m).toLowerCase();
+  if (text === 'live') return 'status-chip-live';
+  if (text === 'unavailable') return 'status-chip-locked';
+  return 'status-chip-delayed';
+}
+
+function quoteStateChip(m) {
+  return `<span data-quote-chip class="status-chip ${quoteStateClass(m)}">${quoteStateText(m)}</span>`;
+}
+
+function miniSpark(symbol) {
+  const seed = String(symbol || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return Array.from({ length: 12 }, (_, i) => {
+    const h = 18 + ((seed + i * 13) % 26);
+    return `<i style="height:${h}px"></i>`;
+  }).join('');
+}
+
+function signalLevel(value, type) {
+  const n = Number(value || 0);
+  return n > 0 ? price(n, type) : '--';
+}
+
+function signalLevelsMissing(sig) {
+  return !(Number(sig.entry || sig.entry_price || 0) > 0) || !(Number(sig.tp1 || sig.take_profit_1 || sig.take_profit || 0) > 0) || !(Number(sig.sl || sig.stop_loss || 0) > 0);
 }

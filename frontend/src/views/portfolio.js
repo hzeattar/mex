@@ -93,7 +93,7 @@ function renderPortfolioData(container, data) {
   }
   table.innerHTML = `<table class="w-full text-sm">
     <thead><tr class="text-[11px] text-muted uppercase border-b border-line">
-      <th class="text-left py-2 px-2">Symbol</th><th class="text-left py-2">Side</th><th class="text-right py-2">Entry</th><th class="text-right py-2">Size</th><th class="text-right py-2">PnL</th><th class="text-right py-2 px-2">Action</th>
+      <th class="text-left py-2 px-2">Symbol</th><th class="text-left py-2">Side</th><th class="text-left py-2">Type</th><th class="text-right py-2">Entry</th><th class="text-right py-2">Mark</th><th class="text-right py-2">Size</th><th class="text-right py-2">Lev</th><th class="text-right py-2">Margin</th><th class="text-right py-2">PnL</th><th class="text-right py-2 px-2">Action</th>
     </tr></thead>
     <tbody>${positions.map(posRow).join('')}</tbody>
   </table>`;
@@ -102,13 +102,21 @@ function renderPortfolioData(container, data) {
 
 function posRow(p) {
   const pnl = Number(p.pnl || p.unrealized_pnl || 0);
+  const type = p.asset_type || p.type || 'crypto';
+  const mark = Number(p.mark_price || p.current_price || p.price || 0);
+  const id = p.position_id || p.id || '';
+  const symbol = String(p.symbol || '').replace('@R@', '');
   return `<tr class="border-b border-line/50 hover:bg-panel-2/30">
-    <td class="py-2.5 px-2 font-semibold">${esc(p.symbol)}</td>
+    <td class="py-2.5 px-2 font-semibold">${esc(symbol)}</td>
     <td class="py-2.5"><span class="badge ${p.side === 'BUY' ? 'badge-green' : 'badge-red'}">${esc(p.side)}</span></td>
-    <td class="py-2.5 text-right font-mono text-xs">${price(p.entry_price || p.open_price, p.type)}</td>
-    <td class="py-2.5 text-right text-xs">${money(p.amount || p.size || 0)}</td>
+    <td class="py-2.5 text-xs text-muted">${esc(p.market_type || p.order_type || 'spot')}</td>
+    <td class="py-2.5 text-right font-mono text-xs">${price(p.entry_price || p.open_price, type)}</td>
+    <td class="py-2.5 text-right font-mono text-xs">${mark > 0 ? price(mark, type) : '--'}</td>
+    <td class="py-2.5 text-right text-xs">${money(p.amount || p.size || p.units || 0)}</td>
+    <td class="py-2.5 text-right font-mono text-xs">${esc(String(p.leverage || 1))}x</td>
+    <td class="py-2.5 text-right text-xs">${money(p.margin || p.initial_margin || p.used_margin || 0)}</td>
     <td class="py-2.5 text-right font-mono ${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</td>
-    <td class="py-2.5 text-right px-2"><button class="btn-ghost btn-sm text-red" data-close-pos="${p.id || ''}">Close</button></td>
+    <td class="py-2.5 text-right px-2">${id ? `<button class="btn-ghost btn-sm text-red" data-close-pos="${escAttr(id)}">Close</button>` : ''}</td>
   </tr>`;
 }
 

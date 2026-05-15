@@ -18,9 +18,141 @@ $grouped = isset($_GET['grouped']);
 $withQuotes = (int)($_GET['with_quotes'] ?? 0) === 1;
 $lite = (int)($_GET['lite'] ?? 0) === 1;
 $forceLive = ((int)($_GET['force_live'] ?? 0) === 1);
+$scope = strtolower((string)($_GET['scope'] ?? ''));
+$supportedOnly = ((int)($_GET['supported'] ?? 0) === 1) || in_array($scope, ['home', 'trade'], true);
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+
+function vp_supported_market_defs(): array {
+  return [
+    ['symbol'=>'BTCUSDT','name'=>'Bitcoin / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:BTCUSDT','sort_order'=>10,'seed_price'=>68000,'icon'=>'btc'],
+    ['symbol'=>'ETHUSDT','name'=>'Ethereum / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:ETHUSDT','sort_order'=>12,'seed_price'=>2400,'icon'=>'eth'],
+    ['symbol'=>'SOLUSDT','name'=>'Solana / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:SOLUSDT','sort_order'=>14,'seed_price'=>170,'icon'=>'sol'],
+    ['symbol'=>'XRPUSDT','name'=>'XRP / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:XRPUSDT','sort_order'=>16,'seed_price'=>1.5,'icon'=>'xrp'],
+    ['symbol'=>'BNBUSDT','name'=>'BNB / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:BNBUSDT','sort_order'=>18,'seed_price'=>600,'icon'=>'bnb'],
+    ['symbol'=>'DOGEUSDT','name'=>'Dogecoin / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:DOGEUSDT','sort_order'=>20,'seed_price'=>0.12,'icon'=>'doge'],
+    ['symbol'=>'ADAUSDT','name'=>'Cardano / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:ADAUSDT','sort_order'=>22,'seed_price'=>0.45,'icon'=>'ada'],
+    ['symbol'=>'AVAXUSDT','name'=>'Avalanche / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:AVAXUSDT','sort_order'=>24,'seed_price'=>25,'icon'=>'avax'],
+    ['symbol'=>'LINKUSDT','name'=>'Chainlink / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:LINKUSDT','sort_order'=>26,'seed_price'=>15,'icon'=>'link'],
+    ['symbol'=>'DOTUSDT','name'=>'Polkadot / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:DOTUSDT','sort_order'=>28,'seed_price'=>5,'icon'=>'dot'],
+
+    ['symbol'=>'EURUSD','name'=>'Euro / US Dollar','type'=>'forex','tv_symbol'=>'FX:EURUSD','sort_order'=>40,'seed_price'=>1.08,'icon'=>'forex'],
+    ['symbol'=>'GBPUSD','name'=>'British Pound / US Dollar','type'=>'forex','tv_symbol'=>'FX:GBPUSD','sort_order'=>42,'seed_price'=>1.27,'icon'=>'forex'],
+    ['symbol'=>'USDJPY','name'=>'US Dollar / Japanese Yen','type'=>'forex','tv_symbol'=>'FX:USDJPY','sort_order'=>44,'seed_price'=>155,'icon'=>'forex'],
+    ['symbol'=>'USDCHF','name'=>'US Dollar / Swiss Franc','type'=>'forex','tv_symbol'=>'FX:USDCHF','sort_order'=>46,'seed_price'=>0.9,'icon'=>'forex'],
+    ['symbol'=>'AUDUSD','name'=>'Australian Dollar / US Dollar','type'=>'forex','tv_symbol'=>'FX:AUDUSD','sort_order'=>48,'seed_price'=>0.66,'icon'=>'forex'],
+    ['symbol'=>'USDCAD','name'=>'US Dollar / Canadian Dollar','type'=>'forex','tv_symbol'=>'FX:USDCAD','sort_order'=>50,'seed_price'=>1.36,'icon'=>'forex'],
+
+    ['symbol'=>'AAPL','name'=>'Apple Inc.','type'=>'stocks','tv_symbol'=>'NASDAQ:AAPL','yahoo_ticker'=>'AAPL','sort_order'=>70,'seed_price'=>190,'icon'=>'apple'],
+    ['symbol'=>'MSFT','name'=>'Microsoft Corp.','type'=>'stocks','tv_symbol'=>'NASDAQ:MSFT','yahoo_ticker'=>'MSFT','sort_order'=>72,'seed_price'=>420,'icon'=>'microsoft'],
+    ['symbol'=>'NVDA','name'=>'NVIDIA Corp.','type'=>'stocks','tv_symbol'=>'NASDAQ:NVDA','yahoo_ticker'=>'NVDA','sort_order'=>74,'seed_price'=>900,'icon'=>'nvda'],
+    ['symbol'=>'TSLA','name'=>'Tesla Inc.','type'=>'stocks','tv_symbol'=>'NASDAQ:TSLA','yahoo_ticker'=>'TSLA','sort_order'=>76,'seed_price'=>180,'icon'=>'tsla'],
+    ['symbol'=>'AMZN','name'=>'Amazon.com Inc.','type'=>'stocks','tv_symbol'=>'NASDAQ:AMZN','yahoo_ticker'=>'AMZN','sort_order'=>78,'seed_price'=>180,'icon'=>'amzn'],
+    ['symbol'=>'GOOGL','name'=>'Alphabet Inc.','type'=>'stocks','tv_symbol'=>'NASDAQ:GOOGL','yahoo_ticker'=>'GOOGL','sort_order'=>80,'seed_price'=>170,'icon'=>'googl'],
+
+    ['symbol'=>'XAUUSD','name'=>'Gold Spot','type'=>'commodities','tv_symbol'=>'OANDA:XAUUSD','yahoo_ticker'=>'GC=F','sort_order'=>100,'seed_price'=>2350,'icon'=>'metal'],
+    ['symbol'=>'XAGUSD','name'=>'Silver Spot','type'=>'commodities','tv_symbol'=>'OANDA:XAGUSD','yahoo_ticker'=>'SI=F','sort_order'=>102,'seed_price'=>28,'icon'=>'metal'],
+    ['symbol'=>'USOIL','name'=>'WTI Crude Oil','type'=>'commodities','tv_symbol'=>'TVC:USOIL','yahoo_ticker'=>'CL=F','sort_order'=>104,'seed_price'=>78,'icon'=>'oil'],
+    ['symbol'=>'UKOIL','name'=>'Brent Crude Oil','type'=>'commodities','tv_symbol'=>'TVC:UKOIL','yahoo_ticker'=>'BZ=F','sort_order'=>106,'seed_price'=>82,'icon'=>'oil'],
+    ['symbol'=>'NGAS','name'=>'Natural Gas','type'=>'commodities','tv_symbol'=>'FX:NGAS','yahoo_ticker'=>'NG=F','sort_order'=>108,'seed_price'=>2.1,'icon'=>'oil'],
+
+    ['symbol'=>'ES_F','name'=>'E-mini S&P 500 Future','type'=>'futures','tv_symbol'=>'CME_MINI:ES1!','yahoo_ticker'=>'ES=F','sort_order'=>130,'seed_price'=>5200,'icon'=>'future'],
+    ['symbol'=>'NQ_F','name'=>'E-mini Nasdaq 100 Future','type'=>'futures','tv_symbol'=>'CME_MINI:NQ1!','yahoo_ticker'=>'NQ=F','sort_order'=>132,'seed_price'=>18500,'icon'=>'future'],
+    ['symbol'=>'YM_F','name'=>'E-mini Dow Future','type'=>'futures','tv_symbol'=>'CBOT_MINI:YM1!','yahoo_ticker'=>'YM=F','sort_order'=>134,'seed_price'=>39000,'icon'=>'future'],
+    ['symbol'=>'RTY_F','name'=>'E-mini Russell 2000 Future','type'=>'futures','tv_symbol'=>'CME_MINI:RTY1!','yahoo_ticker'=>'RTY=F','sort_order'=>136,'seed_price'=>2050,'icon'=>'future'],
+    ['symbol'=>'CL_F','name'=>'WTI Crude Future','type'=>'futures','tv_symbol'=>'NYMEX:CL1!','yahoo_ticker'=>'CL=F','sort_order'=>138,'seed_price'=>78,'icon'=>'oil'],
+    ['symbol'=>'GC_F','name'=>'Gold Future','type'=>'futures','tv_symbol'=>'COMEX:GC1!','yahoo_ticker'=>'GC=F','sort_order'=>140,'seed_price'=>2350,'icon'=>'metal'],
+    ['symbol'=>'ZN_F','name'=>'10Y Treasury Note Future','type'=>'futures','tv_symbol'=>'CBOT:ZN1!','yahoo_ticker'=>'ZN=F','sort_order'=>142,'seed_price'=>110,'icon'=>'future'],
+    ['symbol'=>'ZB_F','name'=>'30Y Treasury Bond Future','type'=>'futures','tv_symbol'=>'CBOT:ZB1!','yahoo_ticker'=>'ZB=F','sort_order'=>144,'seed_price'=>120,'icon'=>'future'],
+
+    ['symbol'=>'2222','name'=>'Saudi Aramco','type'=>'arab','tv_symbol'=>'TADAWUL:2222','yahoo_ticker'=>'2222.SR','sort_order'=>170,'seed_price'=>30,'icon'=>'arab'],
+    ['symbol'=>'1120','name'=>'Al Rajhi Bank','type'=>'arab','tv_symbol'=>'TADAWUL:1120','yahoo_ticker'=>'1120.SR','sort_order'=>172,'seed_price'=>95,'icon'=>'arab'],
+    ['symbol'=>'2010','name'=>'SABIC','type'=>'arab','tv_symbol'=>'TADAWUL:2010','yahoo_ticker'=>'2010.SR','sort_order'=>174,'seed_price'=>75,'icon'=>'arab'],
+    ['symbol'=>'7010','name'=>'stc','type'=>'arab','tv_symbol'=>'TADAWUL:7010','yahoo_ticker'=>'7010.SR','sort_order'=>176,'seed_price'=>40,'icon'=>'arab'],
+    ['symbol'=>'1211','name'=>'Maaden','type'=>'arab','tv_symbol'=>'TADAWUL:1211','yahoo_ticker'=>'1211.SR','sort_order'=>178,'seed_price'=>50,'icon'=>'arab'],
+    ['symbol'=>'1150','name'=>'Alinma Bank','type'=>'arab','tv_symbol'=>'TADAWUL:1150','yahoo_ticker'=>'1150.SR','sort_order'=>180,'seed_price'=>34,'icon'=>'arab'],
+    ['symbol'=>'1180','name'=>'Saudi National Bank','type'=>'arab','tv_symbol'=>'TADAWUL:1180','yahoo_ticker'=>'1180.SR','sort_order'=>182,'seed_price'=>36,'icon'=>'arab'],
+    ['symbol'=>'2280','name'=>'Almarai','type'=>'arab','tv_symbol'=>'TADAWUL:2280','yahoo_ticker'=>'2280.SR','sort_order'=>184,'seed_price'=>58,'icon'=>'arab'],
+  ];
+}
+
+function vp_supported_home_symbols(): array {
+  return ['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','EURUSD','USDCHF','AAPL','MSFT','NVDA','XAUUSD','USOIL','ES_F','ZN_F','2222','1120'];
+}
+
+function vp_supported_market_key(string $type, string $symbol): string {
+  return vp_normalize_asset_type($type) . ':' . strtoupper(trim($symbol));
+}
+
+function vp_supported_defs_for(string $typeAlias, string $scope = ''): array {
+  $defs = vp_supported_market_defs();
+  if ($scope === 'home') {
+    $home = array_flip(vp_supported_home_symbols());
+    $defs = array_values(array_filter($defs, static fn($d) => isset($home[strtoupper((string)$d['symbol'])])));
+  } elseif ($typeAlias !== '' && $typeAlias !== 'all' && $typeAlias !== 'favorites') {
+    $defs = array_values(array_filter($defs, static fn($d) => vp_normalize_asset_type((string)$d['type']) === $typeAlias));
+  }
+  usort($defs, static fn($a, $b) => ((int)($a['sort_order'] ?? 999)) <=> ((int)($b['sort_order'] ?? 999)));
+  return $defs;
+}
+
+function vp_build_supported_market_row(array $def, int $idBase = 970000): array {
+  static $seq = 0;
+  $seq++;
+  $meta = array_filter([
+    'supported' => true,
+    'icon' => (string)($def['icon'] ?? ''),
+    'icon_url' => !empty($def['icon']) ? '/assets/img/markets/' . preg_replace('/[^a-z0-9_-]/i', '', (string)$def['icon']) . '.svg' : '',
+    'yahoo_ticker' => (string)($def['yahoo_ticker'] ?? ''),
+    'tv_symbol' => (string)($def['tv_symbol'] ?? ''),
+  ]);
+  return [
+    'id' => $idBase + $seq,
+    'symbol' => strtoupper((string)($def['symbol'] ?? '')),
+    'name' => (string)($def['name'] ?? ($def['symbol'] ?? 'Market')),
+    'type' => vp_normalize_asset_type((string)($def['type'] ?? 'crypto')),
+    'status' => 'active',
+    'sort_order' => (int)($def['sort_order'] ?? ($seq * 2)),
+    'tv_symbol' => (string)($def['tv_symbol'] ?? ''),
+    'seed_price' => (float)($def['seed_price'] ?? 0),
+    'meta' => json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+    'q_price' => null,
+    'q_change' => 0,
+    'q_updated' => 0,
+    'q_source' => null,
+  ];
+}
+
+function vp_curated_supported_rows(array $rows, string $typeAlias, string $scope): array {
+  $defs = vp_supported_defs_for($typeAlias, $scope);
+  if (!$defs) return $rows;
+
+  $wanted = [];
+  foreach ($defs as $def) {
+    $wanted[vp_supported_market_key((string)$def['type'], (string)$def['symbol'])] = $def;
+  }
+
+  $rowByKey = [];
+  foreach ($rows as $row) {
+    $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
+    $symbol = strtoupper((string)($row['symbol'] ?? ''));
+    $key = vp_supported_market_key($type, $symbol);
+    if (!isset($wanted[$key]) || isset($rowByKey[$key])) continue;
+    $rowByKey[$key] = $row;
+  }
+
+  $out = [];
+  foreach ($defs as $def) {
+    $key = vp_supported_market_key((string)$def['type'], (string)$def['symbol']);
+    $row = $rowByKey[$key] ?? vp_build_supported_market_row($def);
+    $row['sort_order'] = (int)($def['sort_order'] ?? ($row['sort_order'] ?? 0));
+    if (empty($row['tv_symbol']) && !empty($def['tv_symbol'])) $row['tv_symbol'] = (string)$def['tv_symbol'];
+    if (empty($row['seed_price']) && !empty($def['seed_price'])) $row['seed_price'] = (float)$def['seed_price'];
+    $out[] = $row;
+  }
+  return $out;
+}
 
 
 function vp_markets_quote_is_usable(string $assetType, float $price, int $updatedAt, string $source): bool {
@@ -238,7 +370,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v3_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
+$cacheKey = 'markets_v4_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '2') : (int)env('MARKETS_CACHE_TTL', '10');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -323,10 +455,6 @@ try {
     }
   }
 
-  if ($lite && !$grouped && $typeAlias !== 'all' && count($rows) > 18) {
-    $rows = array_slice($rows, 0, 18);
-  }
-
   if ($typeAlias === 'arab' && !$rows) {
     $sigStmtArab = $pdo->prepare("SELECT market_symbol, COALESCE(MAX(entry_price),0) AS seed_price, COALESCE(MAX(bot_name_en), MAX(market_symbol)) AS nm
                                   FROM trading_signals
@@ -355,6 +483,19 @@ try {
       foreach (vp_fallback_arab_markets() as $def) {
         $rows[] = vp_build_fallback_arab_row($def);
       }
+    }
+  }
+
+  if ($supportedOnly) {
+    $rows = vp_curated_supported_rows($rows, $typeAlias, $scope);
+  }
+
+  if ($lite && !$grouped) {
+    $limit = $scope === 'home' ? 16 : 18;
+    if ($typeAlias !== 'all' && $typeAlias !== 'favorites' && count($rows) > $limit) {
+      $rows = array_slice($rows, 0, $limit);
+    } elseif ($scope === 'home' && count($rows) > $limit) {
+      $rows = array_slice($rows, 0, $limit);
     }
   }
 
