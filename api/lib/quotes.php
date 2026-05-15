@@ -290,12 +290,21 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
 
   $symbol = strtoupper($symbol);
   $type = $type !== null ? vp_normalize_asset_type($type) : null;
+  $explicitMarket = $market !== null && trim((string)$market) !== '';
 
   $marketKey = ($type !== null && $type !== '') ? quote_storage_market_key($symbol, $type, $market) : null;
 
   if ($type !== null && $type !== '' && $marketKey !== null && !empty($flags['market'])) {
     $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? AND market=? ORDER BY updated_at DESC, id DESC LIMIT 1");
     $st->execute([$symbol, $type, $marketKey]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    if ($r || $explicitMarket) return $r ?: null;
+
+    // Older imports and early warmers may have stored the row with a blank or
+    // non-normalized market key. For generic quote reads, fall back to the
+    // newest trusted row for that symbol/type instead of showing "--" in lists.
+    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? ORDER BY updated_at DESC, id DESC LIMIT 1");
+    $st->execute([$symbol, $type]);
   } elseif ($type !== null && $type !== '') {
     $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? ORDER BY updated_at DESC, id DESC LIMIT 1");
     $st->execute([$symbol, $type]);
