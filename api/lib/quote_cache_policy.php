@@ -58,6 +58,9 @@ function qa_quotes_cache_ttl(string $assetType, string $mode, int $count): int {
   if ($mode === 'visible') {
     return $assetType === 'crypto' ? 0 : max(0, min(2, (int)env('QUOTES_API_VISIBLE_CACHE_TTL_NONCRYPTO', '0')));
   }
+  if ($mode === 'cache_only') {
+    return $assetType === 'crypto' ? 0 : max(1, min(10, (int)env('QUOTES_API_CACHE_ONLY_TTL_NONCRYPTO', '4')));
+  }
   if ($mode === 'fresh') {
     return $assetType === 'crypto'
       ? max(1, min(3, (int)env('QUOTES_API_FRESH_CACHE_TTL_CRYPTO', '1')))

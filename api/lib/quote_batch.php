@@ -23,6 +23,7 @@ function qa_live_map(array $symbols, string $assetType, array $metaBySymbol = []
       'direct_budget' => $budget,
       'direct_yahoo_budget' => (int)($opts['direct_yahoo_budget'] ?? $budget),
       'chart_budget' => $chartBudget,
+      'chart_budget_ms' => (int)($opts['chart_budget_ms'] ?? 3000),
       'allow_direct_batch' => !empty($opts['allow_direct_batch']),
     ]);
   } catch (Throwable $e) {
