@@ -49,7 +49,9 @@ flush();
 
 $maxRuntime = (int)env('SSE_MAX_RUNTIME', '55');
 $startTime = time();
-$interval = max(1, (int)env('SSE_INTERVAL', '1'));
+$providerType = function_exists('vp_provider_asset_type') ? vp_provider_asset_type($type) : $type;
+$defaultInterval = $providerType === 'crypto' ? 2 : 6;
+$interval = max(1, (int)env('SSE_INTERVAL', (string)$defaultInterval));
 $lastData = '';
 
 while (true) {
@@ -64,8 +66,8 @@ while (true) {
   try {
     $payload = qa_quote_payload($type, $symbols, [
       'allow_live' => true,
-      'allow_crypto_seed' => true,
-      'allow_noncrypto_seed' => true,
+      'allow_crypto_seed' => false,
+      'allow_noncrypto_seed' => false,
     ]);
 
     $data = json_encode($payload['items'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

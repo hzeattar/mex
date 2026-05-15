@@ -1,21 +1,72 @@
 let pollTimer = null;
 let pollController = null;
 let pollSeq = 0;
+let eventSource = null;
 const DEFAULT_POLL_MS = 6500;
 
 export function connectSSE(symbols, type, onUpdate, onError, options = {}) {
   disconnect();
   if (!symbols || !symbols.length) return disconnect;
   const seq = ++pollSeq;
-  startPolling(symbols, type, onUpdate, onError, seq, options);
+  const list = normalizedSymbols(symbols, options.maxSymbols || 18);
+  if (!list.length) return disconnect;
+  if (typeof EventSource === 'function') {
+    startEventSource(list, type, onUpdate, onError, seq, options);
+  } else {
+    startPolling(list, type, onUpdate, onError, seq, options);
+  }
   return disconnect;
+}
+
+function normalizedSymbols(symbols, maxSymbols) {
+  const max = Math.max(1, Number(maxSymbols || 18));
+  return [...new Set((symbols || []).map(s => String(s || '').toUpperCase()).filter(Boolean))].slice(0, max);
+}
+
+function startEventSource(symbols, type, onUpdate, onError, seq, options) {
+  stopEventSource();
+  const url = '/api/stream/sse.php?symbols=' + encodeURIComponent(symbols.join(',')) + '&type=' + encodeURIComponent(type) + '&scope=watchlist';
+  let opened = false;
+  let fallbackTimer = setTimeout(() => {
+    if (seq !== pollSeq || opened) return;
+    stopEventSource();
+    startPolling(symbols, type, onUpdate, onError, seq, options);
+  }, Math.max(3000, Number(options.fallbackAfter || 5000)));
+
+  eventSource = new EventSource(url, { withCredentials: true });
+  eventSource.addEventListener('open', () => {
+    opened = true;
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer);
+      fallbackTimer = null;
+    }
+  });
+  eventSource.addEventListener('message', (event) => {
+    if (seq !== pollSeq) return;
+    try {
+      const items = JSON.parse(event.data || '[]');
+      if (Array.isArray(items) && items.length && onUpdate) onUpdate(items);
+    } catch (e) {
+      if (onError) onError(e);
+    }
+  });
+  eventSource.addEventListener('reconnect', () => {
+    if (seq !== pollSeq) return;
+    stopEventSource();
+    startPolling(symbols, type, onUpdate, onError, seq, options);
+  });
+  eventSource.addEventListener('error', (event) => {
+    if (seq !== pollSeq) return;
+    if (onError) onError(event);
+    stopEventSource();
+    startPolling(symbols, type, onUpdate, onError, seq, options);
+  });
 }
 
 function startPolling(symbols, type, onUpdate, onError, seq, options) {
   stopPolling();
   const interval = Math.max(4000, Number(options.interval || DEFAULT_POLL_MS));
-  const maxSymbols = Math.max(1, Number(options.maxSymbols || 18));
-  const list = [...new Set(symbols.map(s => String(s || '').toUpperCase()).filter(Boolean))].slice(0, maxSymbols);
+  const list = normalizedSymbols(symbols, options.maxSymbols || 18);
   const poll = async () => {
     if (seq !== pollSeq) return;
     pollController = new AbortController();
@@ -47,11 +98,19 @@ function stopPolling() {
   }
 }
 
+function stopEventSource() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+}
+
 export function disconnect() {
   pollSeq += 1;
+  stopEventSource();
   stopPolling();
 }
 
 export function isConnected() {
-  return pollTimer !== null;
+  return eventSource !== null || pollTimer !== null;
 }
