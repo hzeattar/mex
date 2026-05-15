@@ -17,6 +17,33 @@ $visible = ((int)($_GET['visible'] ?? 0) === 1);
 $strictLive = ((int)($_GET['strict_live'] ?? 0) === 1);
 $list = qa_parse_symbols($symbolsRaw);
 
+function quotes_focus_cache_max_age(string $assetType): int {
+  $assetType = vp_normalize_asset_type($assetType);
+  return match ($assetType) {
+    'forex' => max(30, min(900, (int)env('QUOTES_FOCUS_CACHE_SECONDS_FOREX', '180'))),
+    'commodities', 'futures' => max(30, min(900, (int)env('QUOTES_FOCUS_CACHE_SECONDS_MARKET_HOURS', '240'))),
+    'stocks', 'arab' => max(120, min(7200, (int)env('QUOTES_FOCUS_CACHE_SECONDS_DELAYED', '1200'))),
+    default => max(10, min(300, (int)env('QUOTES_FOCUS_CACHE_SECONDS_OTHER', '60'))),
+  };
+}
+
+function quotes_focus_cache_payload_usable(array $payload, string $assetType, int $requestedCount): bool {
+  if (!qa_payload_has_coverage($payload, $assetType, $requestedCount)) return false;
+  $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+  if (!$items) return false;
+  $maxAge = quotes_focus_cache_max_age($assetType);
+  $valid = 0;
+  foreach ($items as $item) {
+    $price = (float)($item['price'] ?? 0);
+    $source = strtolower(trim((string)($item['source'] ?? '')));
+    if (!($price > 0) || quote_source_is_untrusted($source)) continue;
+    $updatedAt = (int)($item['updated_at'] ?? 0);
+    if ($updatedAt <= 0 || (time() - $updatedAt) > $maxAge) continue;
+    $valid++;
+  }
+  return $valid >= min($requestedCount, max(1, (int)ceil($requestedCount * 0.75)));
+}
+
 if (!$list) {
   try {
     $pdo = db();
@@ -54,10 +81,24 @@ if (!$fresh) {
 }
 
 $isNonCrypto = ($typeAlias !== 'crypto');
+$isFocusRequest = $isNonCrypto && ($purpose === 'focus') && !$fresh && !$direct && !$strictLive && count($list) <= 3;
+if ($isFocusRequest) {
+  $quickPayload = qa_quote_payload($typeAlias, $list, [
+    'allow_live' => false,
+    'allow_crypto_seed' => false,
+    'allow_noncrypto_seed' => false,
+    'allow_stale_display' => true,
+  ]);
+  if (quotes_focus_cache_payload_usable($quickPayload, $typeAlias, count($list))) {
+    $quickPayload['mode'] = 'focus_cache';
+    $quickPayload['cache_first'] = true;
+    json_response($quickPayload);
+  }
+}
 $allowLive = true;
 if ($isNonCrypto) {
-  $isFocusRequest = ($purpose === 'focus') || $direct || $strictLive || ($fresh && count($list) <= 2);
-  $allowLive = !$cacheOnly && ($isFocusRequest && count($list) <= 3 && !$visible);
+  $isLiveFocusRequest = ($purpose === 'focus') || $direct || $strictLive || ($fresh && count($list) <= 2);
+  $allowLive = !$cacheOnly && ($isLiveFocusRequest && count($list) <= 3 && !$visible);
 }
 $visibleNonCrypto = $visible && $isNonCrypto;
 $focusNonCrypto = $isNonCrypto && (($purpose === 'focus') || $direct || $strictLive);

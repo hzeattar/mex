@@ -86,10 +86,11 @@ export function mount(container) {
 
 async function loadHomeData(container) {
   try {
+    const mode = get('mode');
     const [markets, portfolio, signals] = await Promise.all([
       api('/markets.php?scope=home&supported=1&lite=1&with_quotes=1', { timeout: 7000 }),
       api('/trade/portfolio.php', { timeout: 7000 }),
-      api('/signals.php?bot=1&home=1&lang=en', { timeout: 7000 }).catch(() => null),
+      mode === 'real' ? api('/signals.php?bot=1&home=1&lang=en', { timeout: 7000 }).catch(() => null) : Promise.resolve(null),
     ]);
     if (markets && markets.items) {
       const visible = markets.items.slice(0, 12);
@@ -101,7 +102,7 @@ async function loadHomeData(container) {
       renderPositions(container, portfolio.positions.slice(0, 5));
     }
     // Render copy signals
-    if (signals && signals.items && signals.items.length) {
+    if (mode === 'real' && signals && signals.items && signals.items.length) {
       renderCopySignals(container, signals.items);
     }
   } catch (e) { /* silent */ }

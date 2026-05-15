@@ -23,7 +23,7 @@ const TYPES = [
   { key: 'crypto', label: 'Crypto' },
   { key: 'forex', label: 'Forex' },
   { key: 'stocks', label: 'Stocks' },
-  { key: 'commodities', label: 'Metals' },
+  { key: 'commodities', label: 'Commodities' },
   { key: 'futures', label: 'Futures' },
   { key: 'arab', label: 'Arab' },
 ];
@@ -73,6 +73,7 @@ export function render(params) {
             <div class="flex items-center gap-2">
               <span class="text-xs font-mono font-bold" id="live-price">--</span>
               <span class="text-[10px]" id="live-change">+0.00%</span>
+              <span class="status-chip status-chip-locked !text-[8px] !px-1.5 !py-0.5" id="quote-state">Loading</span>
             </div>
           </div>
         </div>
@@ -365,6 +366,12 @@ function updatePrice(container, q, runId = tradeRunId) {
   if (liveChange) {
     liveChange.textContent = pct(chg);
     liveChange.className = `text-[10px] ${chg >= 0 ? 'text-buy' : 'text-sell'}`;
+  }
+  const quoteState = $('#quote-state', container);
+  if (quoteState) {
+    const state = quoteStateLabel(q);
+    quoteState.textContent = state;
+    quoteState.className = `status-chip ${quoteStateClass(state)} !text-[8px] !px-1.5 !py-0.5`;
   }
 
   $$('[data-sell-price]', container).forEach(el => { el.textContent = p > 0 ? price(p, t) : '--'; });
@@ -790,6 +797,23 @@ function quoteClass(market) {
   const timing = String(market?.timing_class || '').toLowerCase();
   if (timing === 'stale' || market?.is_stale || source.includes('yahoo')) return 'bg-spread';
   return 'bg-buy';
+}
+
+function quoteStateLabel(q) {
+  const timing = String(q?.timing_class || '').toLowerCase();
+  const source = String(q?.source || '').toLowerCase();
+  if (Number(q?.price || 0) <= 0) return 'Unavailable';
+  if (timing === 'stale' || q?.is_stale) return 'Stale';
+  if (timing === 'delayed' || source.includes('yahoo') || ['stocks', 'arab'].includes(normalizeType(q?.type || get('type')))) return 'Delayed';
+  if (timing === 'candle_fallback') return 'Chart quote';
+  return 'Live';
+}
+
+function quoteStateClass(label) {
+  const value = String(label || '').toLowerCase();
+  if (value === 'live') return 'status-chip-live';
+  if (value === 'unavailable') return 'status-chip-locked';
+  return 'status-chip-delayed';
 }
 
 function marketLogo(symbol, type, className) {

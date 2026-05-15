@@ -1,4 +1,4 @@
-import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,p as I,b as _}from"./main-CRE-6vA0.js";import{m as R,a as q}from"./marketIcon-BqfrwX_4.js";function W(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=F(),o=e.current||{},n=e.next||{},r=i("mode");return`
+import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,p as I,b as _}from"./main-C5j3FsJC.js";import{m as R,a as q}from"./marketIcon-BqfrwX_4.js";function W(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=F(),o=e.current||{},n=e.next||{},r=i("mode");return`
     <div class="space-y-5 animate-fade-in">
       <section class="feature-hero">
         <div class="relative z-10">
@@ -143,7 +143,7 @@ import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,p as I,b as _}fro
     <div class="flex items-center justify-between gap-3">
       <div>
         <h3>${s(t.plan_name||"Contract")}</h3>
-        <p>${s(t.status||"active")} · ${Number(t.is_perpetual||0)?"Perpetual":"Term"}</p>
+        <p>${s(t.status||"active")} &middot; ${Number(t.is_perpetual||0)?"Perpetual":"Term"}</p>
       </div>
       <span class="status-chip status-chip-live">${s(t.product_kind||"contract")}</span>
     </div>

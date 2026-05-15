@@ -247,7 +247,7 @@ function contractHistoryCard(item) {
     <div class="flex items-center justify-between gap-3">
       <div>
         <h3>${esc(item.plan_name || 'Contract')}</h3>
-        <p>${esc(item.status || 'active')} · ${Number(item.is_perpetual || 0) ? 'Perpetual' : 'Term'}</p>
+        <p>${esc(item.status || 'active')} &middot; ${Number(item.is_perpetual || 0) ? 'Perpetual' : 'Term'}</p>
       </div>
       <span class="status-chip status-chip-live">${esc(item.product_kind || 'contract')}</span>
     </div>
