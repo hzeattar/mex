@@ -167,14 +167,19 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
     // because a slow provider missed the current refresh window. Keep the
     // display stable, mark it stale, and let quotes.php remain the stricter
     // live authority for active symbols.
-    if ($allowStaleDisplay && $type !== 'crypto' && is_array($cached)) {
+    if ($allowStaleDisplay && is_array($cached)) {
       $cachedPrice = (float)($cached['price'] ?? 0);
       $cachedSource = (string)($cached['source'] ?? $cached['provider'] ?? '');
-      if ($cachedPrice > 0 && !quote_source_is_untrusted($cachedSource)) {
+      $cachedUpdatedAt = qa_quote_row_ts($cached);
+      $cachedAge = $cachedUpdatedAt > 0 ? max(0, time() - $cachedUpdatedAt) : 999999;
+      $maxStaleAge = $type === 'crypto'
+        ? max(30, min(600, (int)env('MARKET_LIST_CRYPTO_STALE_SECONDS', '180')))
+        : qa_quote_max_age($type, false);
+      if ($cachedPrice > 0 && !quote_source_is_untrusted($cachedSource) && $cachedAge <= $maxStaleAge) {
         $out[$sym] = [
           'price' => $cachedPrice,
           'change_pct' => (float)($cached['change_pct'] ?? 0),
-          'updated_at' => qa_quote_row_ts($cached),
+          'updated_at' => $cachedUpdatedAt,
           'source' => $cachedSource !== '' ? $cachedSource : 'stale_cache',
           'is_stale' => true,
           'timing_class' => 'stale',
