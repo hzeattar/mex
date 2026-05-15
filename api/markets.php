@@ -370,7 +370,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v7_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
+$cacheKey = 'markets_v8_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '2') : (int)env('MARKETS_CACHE_TTL', '10');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -521,17 +521,45 @@ try {
 
   $now = time();
 
-  $authoritativeQuotes = qa_overlay_market_rows($rows, [
-    // Market lists are bootstrap/read paths. Live refresh is handled by
-    // quotes.php focus/batch/cron so providers cannot block the whole list.
-    'with_live' => false,
+  $quoteBaseOpts = [
     'allow_crypto_seed' => false,
     'allow_noncrypto_seed' => false,
     'allow_stale_display' => true,
     'direct_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
     'direct_yahoo_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
     'chart_budget' => in_array($typeAlias, ['arab','futures'], true) ? 12 : 6,
-  ]);
+  ];
+
+  $cryptoRows = [];
+  $otherRows = [];
+  foreach ($rows as $quoteRow) {
+    if (vp_normalize_asset_type((string)($quoteRow['type'] ?? '')) === 'crypto') $cryptoRows[] = $quoteRow;
+    else $otherRows[] = $quoteRow;
+  }
+
+  $authoritativeQuotes = [];
+  if ($otherRows) {
+    // Non-crypto lists must stay fast and cache-first. Warmers/focus quotes
+    // refresh them, while the list endpoint only reads trusted stored prices.
+    $authoritativeQuotes = array_replace(
+      $authoritativeQuotes,
+      qa_overlay_market_rows($otherRows, array_merge($quoteBaseOpts, ['with_live' => false]))
+    );
+  }
+  if ($cryptoRows) {
+    // Binance bulk ticker is cheap and fast enough for the curated crypto
+    // first screen, so keep BTC/ETH/etc. priced on first paint instead of
+    // waiting for a background cache warm.
+    $authoritativeQuotes = array_replace(
+      $authoritativeQuotes,
+      qa_overlay_market_rows($cryptoRows, array_merge($quoteBaseOpts, [
+        'with_live' => $supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true),
+        'direct_budget' => 24,
+        'direct_yahoo_budget' => 0,
+        'chart_budget' => 0,
+      ]))
+    );
+  }
 
   $items = [];
 

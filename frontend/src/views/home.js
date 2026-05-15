@@ -1,6 +1,6 @@
 // Home View
 import { get } from '../state/store.js';
-import { money, pct, price, esc, escAttr } from '../utils/format.js';
+import { money, pct, price, timeAgo, esc, escAttr } from '../utils/format.js';
 import { navigate } from '../router.js';
 import { api } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
@@ -94,7 +94,8 @@ async function loadHomeData(container) {
     if (markets && markets.items) {
       const visible = markets.items.slice(0, 12);
       renderMarkets(container, visible);
-      hydrateMarketQuotes(container, visible);
+      const missingVisible = visible.filter((item) => Number(item.price || item.q_price || 0) <= 0);
+      if (missingVisible.length) hydrateMarketQuotes(container, missingVisible);
     }
     if (portfolio && portfolio.positions) {
       renderPositions(container, portfolio.positions.slice(0, 5));
@@ -283,6 +284,9 @@ function positionRow(p) {
       ${positionMetric('Mark', mark > 0 ? price(mark, type) : '--')}
       ${positionMetric('Size', money(p.qty || p.amount || p.size || p.units || 0))}
       ${positionMetric('Lev', `${p.leverage || 1}x`)}
+      ${positionMetric('Margin', money(p.margin_initial || p.margin || 0))}
+      ${positionMetric('ROE', pct(p.roe_pct || p.roe || 0))}
+      ${positionMetric('Opened', positionAge(p))}
     </div>
   </div>`;
 }
@@ -294,6 +298,15 @@ function positionMetric(label, value) {
 function positionSide(position) {
   const side = String(position.side || 'buy').toUpperCase();
   return side === 'SELL' ? 'SELL' : 'BUY';
+}
+
+function positionAge(position) {
+  const raw = position.created_at || position.opened_at || position.open_time || '';
+  if (!raw) return '--';
+  const ts = typeof raw === 'number'
+    ? raw
+    : (/^\d+$/.test(String(raw)) ? Number(raw) : Math.floor(Date.parse(raw) / 1000));
+  return Number.isFinite(ts) && ts > 0 ? timeAgo(ts) : '--';
 }
 
 function walletCard(label, value, sub) {

@@ -1,4 +1,4 @@
-import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,p as E,b as _}from"./main-CD3d5mYX.js";import{m as I,a as R}from"./marketIcon-BqfrwX_4.js";function z(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=B(),o=e.current||{},n=e.next||{},r=i("mode");return`
+import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,p as E,b as _}from"./main-CoCUWP4H.js";import{m as I,a as R}from"./marketIcon-BqfrwX_4.js";function z(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=B(),o=e.current||{},n=e.next||{},r=i("mode");return`
     <div class="space-y-5 animate-fade-in">
       <section class="feature-hero">
         <div class="relative z-10">

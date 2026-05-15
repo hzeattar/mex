@@ -1,4 +1,4 @@
-import{e as n,g as o,a as l,h as p}from"./main-CD3d5mYX.js";function u(){return`
+import{e as n,g as o,a as l,h as p}from"./main-CoCUWP4H.js";function u(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">

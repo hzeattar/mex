@@ -1,4 +1,4 @@
-import{a as l,e as c,j as o}from"./main-CD3d5mYX.js";function d(){return`
+import{a as l,e as c,j as o}from"./main-CoCUWP4H.js";function d(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div>
