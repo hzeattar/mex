@@ -134,7 +134,7 @@ function renderCopySignals(container, items) {
         <div><span class="text-muted">TP</span><div class="font-mono text-buy">${signalLevel(sig.tp1 || sig.take_profit_1 || sig.take_profit, sig.type)}</div></div>
         <div><span class="text-muted">SL</span><div class="font-mono text-sell">${signalLevel(sig.sl || sig.stop_loss, sig.type)}</div></div>
       </div>
-      ${signalLevelsMissing(sig) ? `<p class="text-[10px] text-muted mt-2">Awaiting desk levels</p>` : ''}
+      ${signalLevelsMissing(sig) ? `<p class="text-[10px] text-muted mt-2">Awaiting desk levels</p>` : signalLevelsSource(sig)}
       <a href="#/invest" class="btn-primary btn-sm w-full mt-3">Open copy desk</a>
     </div>`;
   }).join('')}</div>`;
@@ -391,4 +391,10 @@ function signalLevel(value, type) {
 
 function signalLevelsMissing(sig) {
   return !(Number(sig.entry || sig.entry_price || 0) > 0) || !(Number(sig.tp1 || sig.take_profit_1 || sig.take_profit || 0) > 0) || !(Number(sig.sl || sig.stop_loss || 0) > 0);
+}
+
+function signalLevelsSource(sig) {
+  return sig.levels_source === 'live_derived'
+    ? `<p class="text-[10px] text-spread mt-2">Live-derived desk levels</p>`
+    : '';
 }

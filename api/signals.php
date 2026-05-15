@@ -232,6 +232,35 @@ try {
     }
   }
 
+  $deriveLevels = static function(float $livePrice, string $direction, string $assetType): array {
+    if (!($livePrice > 0)) return ['entry' => null, 'sl' => null, 'tp1' => null, 'tp2' => null];
+    $assetType = strtolower(trim($assetType));
+    $riskPct = match ($assetType) {
+      'forex' => 0.004,
+      'stocks', 'arab' => 0.018,
+      'commodities' => 0.012,
+      'futures' => 0.010,
+      default => 0.025,
+    };
+    $rewardPct = $riskPct * 2.2;
+    $dir = strtoupper(trim($direction));
+    $entry = $livePrice;
+    if ($dir === 'SELL') {
+      return [
+        'entry' => $entry,
+        'sl' => $entry * (1 + $riskPct),
+        'tp1' => $entry * (1 - $rewardPct),
+        'tp2' => $entry * (1 - ($rewardPct * 1.6)),
+      ];
+    }
+    return [
+      'entry' => $entry,
+      'sl' => $entry * (1 - $riskPct),
+      'tp1' => $entry * (1 + $rewardPct),
+      'tp2' => $entry * (1 + ($rewardPct * 1.6)),
+    ];
+  };
+
   $items = [];
   foreach ($rows as $r) {
     $note = $r['note_'.$lang] ?? '';
@@ -242,16 +271,34 @@ try {
     $botBrief = trim((string)($r['bot_brief_'.$lang] ?? ''));
     if ($botBrief === '') $botBrief = trim((string)($r['bot_brief_en'] ?? ''));
     if ($botBrief === '') $botBrief = $note;
+    $sigSymbol = strtoupper((string)($r['market_symbol'] ?? ''));
+    $sigType = $normalizeType((string)($r['market_type'] ?? ''), $sigSymbol);
+    $sigLive = (float)($liveBy[$sigSymbol]['price'] ?? 0);
+    $entry = $r['entry_price'] !== null ? (float)$r['entry_price'] : null;
+    $sl = $r['stop_loss'] !== null ? (float)$r['stop_loss'] : null;
+    $tp1 = $r['take_profit_1'] !== null ? (float)$r['take_profit_1'] : null;
+    $tp2 = $r['take_profit_2'] !== null ? (float)$r['take_profit_2'] : null;
+    $levelsSource = 'admin';
+    if (!(($entry ?? 0) > 0) || !(($sl ?? 0) > 0) || !(($tp1 ?? 0) > 0)) {
+      $derived = $deriveLevels($sigLive, (string)($r['direction'] ?? 'BUY'), $sigType);
+      $entry = ($entry ?? 0) > 0 ? $entry : $derived['entry'];
+      $sl = ($sl ?? 0) > 0 ? $sl : $derived['sl'];
+      $tp1 = ($tp1 ?? 0) > 0 ? $tp1 : $derived['tp1'];
+      $tp2 = ($tp2 ?? 0) > 0 ? $tp2 : $derived['tp2'];
+      $levelsSource = 'live_derived';
+    }
+
     $items[] = [
       'id' => (int)($r['id'] ?? 0),
       'symbol' => (string)($r['market_symbol'] ?? ''),
-      'type' => $normalizeType((string)($r['market_type'] ?? ''), (string)($r['market_symbol'] ?? '')),
+      'type' => $sigType,
       'timeframe' => (string)($r['timeframe'] ?? ''),
       'direction' => (string)($r['direction'] ?? 'BUY'),
-      'entry' => $r['entry_price'] !== null ? (float)$r['entry_price'] : null,
-      'sl' => $r['stop_loss'] !== null ? (float)$r['stop_loss'] : null,
-      'tp1' => $r['take_profit_1'] !== null ? (float)$r['take_profit_1'] : null,
-      'tp2' => $r['take_profit_2'] !== null ? (float)$r['take_profit_2'] : null,
+      'entry' => $entry,
+      'sl' => $sl,
+      'tp1' => $tp1,
+      'tp2' => $tp2,
+      'levels_source' => $levelsSource,
       'confidence' => (int)($r['confidence'] ?? 0),
       'note' => (string)$note,
       'valid_until' => !empty($r['valid_until']) ? (int)$r['valid_until'] : null,
@@ -267,9 +314,9 @@ try {
       'show_on_home' => (int)($r['show_on_home'] ?? 1),
       'recommend_count' => (int)($r['recommend_count'] ?? 0),
       'comments_count' => (int)($r['comments_count'] ?? 0),
-      'live_price' => (float)($liveBy[strtoupper((string)($r['market_symbol'] ?? ''))]['price'] ?? 0),
-      'live_change_pct' => (float)($liveBy[strtoupper((string)($r['market_symbol'] ?? ''))]['change_pct'] ?? 0),
-      'live_source' => (string)($liveBy[strtoupper((string)($r['market_symbol'] ?? ''))]['source'] ?? ''),
+      'live_price' => $sigLive,
+      'live_change_pct' => (float)($liveBy[$sigSymbol]['change_pct'] ?? 0),
+      'live_source' => (string)($liveBy[$sigSymbol]['source'] ?? ''),
       'subscribers' => (int)($r['subscribers'] ?? 0),
     ];
   }

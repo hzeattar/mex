@@ -157,6 +157,7 @@ function signalCard(sig) {
   const quote = live > 0 ? `$${money(live, type === 'forex' ? 5 : 2)}` : '--';
   const change = live > 0 ? pct(sig.live_change_pct || 0) : '0.00%';
   const minAmount = Number(sig.copy_min_amount || 100);
+  const levelChip = sig.levels_source === 'live_derived' ? '<span class="status-chip status-chip-derived">Live derived levels</span>' : '';
   return `<article class="copy-card">
     <div class="copy-card__top">
       <div class="flex items-center gap-3 min-w-0">
@@ -185,6 +186,7 @@ function signalCard(sig) {
       <span>${Number(sig.copy_lock_days || 0)}d lock</span>
       <span>${Number(sig.copy_profit_share_pct || 0)}% share</span>
       <span>${Number(sig.subscribers || 0)} followers</span>
+      ${levelChip}
     </div>
     <button class="btn-primary w-full mt-4" data-copy-signal="${escAttr(sig.id)}">Copy Real</button>
   </article>`;

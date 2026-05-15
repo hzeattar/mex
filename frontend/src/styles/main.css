@@ -243,6 +243,9 @@
   .status-chip-delayed {
     @apply border-spread/25 bg-spread/10 text-spread;
   }
+  .status-chip-derived {
+    @apply border-accent/25 bg-accent/10 text-accent;
+  }
   .mini-spark {
     @apply mt-2 flex h-8 items-end gap-0.5 opacity-70;
   }
