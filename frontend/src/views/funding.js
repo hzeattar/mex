@@ -39,7 +39,7 @@ export function render(params) {
             </label>` : ''}
             <label class="block">
               <span class="text-xs text-muted">Notes</span>
-              <textarea name="notes" class="input mt-1" rows="3" placeholder="Optional notes for admin..."></textarea>
+              <textarea name="notes" class="input mt-1" rows="3" placeholder="Optional notes for the operations desk..."></textarea>
             </label>
             <button type="submit" class="btn-primary w-full">Submit ${isDeposit ? 'Deposit' : 'Withdrawal'} Request</button>
             <p class="text-xs text-center" id="form-status"></p>

@@ -1,19 +1,21 @@
 let pollTimer = null;
 let pollController = null;
 let pollSeq = 0;
-const POLL_MS = 3000;
+const DEFAULT_POLL_MS = 6500;
 
-export function connectSSE(symbols, type, onUpdate, onError) {
+export function connectSSE(symbols, type, onUpdate, onError, options = {}) {
   disconnect();
   if (!symbols || !symbols.length) return disconnect;
   const seq = ++pollSeq;
-  startPolling(symbols, type, onUpdate, onError, seq);
+  startPolling(symbols, type, onUpdate, onError, seq, options);
   return disconnect;
 }
 
-function startPolling(symbols, type, onUpdate, onError, seq) {
+function startPolling(symbols, type, onUpdate, onError, seq, options) {
   stopPolling();
-  const list = [...new Set(symbols.map(s => String(s || '').toUpperCase()).filter(Boolean))].slice(0, 24);
+  const interval = Math.max(4000, Number(options.interval || DEFAULT_POLL_MS));
+  const maxSymbols = Math.max(1, Number(options.maxSymbols || 18));
+  const list = [...new Set(symbols.map(s => String(s || '').toUpperCase()).filter(Boolean))].slice(0, maxSymbols);
   const poll = async () => {
     if (seq !== pollSeq) return;
     pollController = new AbortController();
@@ -28,7 +30,7 @@ function startPolling(symbols, type, onUpdate, onError, seq) {
     } catch (e) {
       if (e.name !== 'AbortError' && onError) onError(e);
     } finally {
-      if (seq === pollSeq) pollTimer = setTimeout(poll, POLL_MS);
+      if (seq === pollSeq) pollTimer = setTimeout(poll, interval);
     }
   };
   poll();

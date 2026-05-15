@@ -1,4 +1,4 @@
-import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,c as E,b as _}from"./main-BotwwwQy.js";import{m as I,a as R}from"./marketIcon-BqfrwX_4.js";function z(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=B(),o=e.current||{},n=e.next||{},r=i("mode");return`
+import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,c as E,b as _}from"./main-KgfuI461.js";import{m as I,a as R}from"./marketIcon-BqfrwX_4.js";function z(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=B(),o=e.current||{},n=e.next||{},r=i("mode");return`
     <div class="space-y-5 animate-fade-in">
       <section class="feature-hero">
         <div class="relative z-10">
@@ -32,7 +32,7 @@ import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,c as E,b as _}fro
           <div class="skeleton h-48 rounded-lg"></div>
         </div>
       </div>
-    </div>`}function W(t){C(t),$(t,"[data-earn-tab]","click",(e,a)=>{u("invest.tab",a.dataset.earnTab),localStorage.setItem("vp_earn_tab",a.dataset.earnTab),x(t)}),$(t,"[data-copy-signal]","click",(e,a)=>V(a.dataset.copySignal,t)),$(t,"[data-contract-subscribe]","click",(e,a)=>Y(a.dataset.contractSubscribe,t)),$(t,"[data-switch-real]","click",()=>{localStorage.setItem("vp_mode","real"),u("mode","real"),location.reload()}),$(t,"[data-open-kyc]","click",()=>{location.hash="#/kyc"})}async function C(t){try{const[e,a,o,n]=await Promise.all([h("/signals.php?bot=1&home=1&lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/contracts.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/trading_bot/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]}))]);u("invest.signals",e.items||[]),u("invest.contracts",a.items||[]),u("invest.copies",o.items||[]),u("invest.mine",{contracts:(n.items||[]).filter(r=>String(r.product_kind||"").toLowerCase()==="contract")}),x(t)}catch{x(t)}}function x(t){const e=t.querySelector("#invest-content");if(!e)return;const a=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",o=w(),n=a==="copy"?A():q();e.innerHTML=o?O(n,o):n}function A(){const t=i("invest.signals")||[],e=i("invest.copies")||[];return`
+    </div>`}function W(t){C(t),$(t,"[data-earn-tab]","click",(e,a)=>{u("invest.tab",a.dataset.earnTab),localStorage.setItem("vp_earn_tab",a.dataset.earnTab),x(t)}),$(t,"[data-copy-signal]","click",(e,a)=>V(a.dataset.copySignal,t)),$(t,"[data-contract-subscribe]","click",(e,a)=>Y(a.dataset.contractSubscribe,t)),$(t,"[data-switch-real]","click",()=>{localStorage.setItem("vp_mode","real"),u("mode","real"),location.reload()}),$(t,"[data-open-kyc]","click",()=>{location.hash="#/kyc"})}async function C(t){try{const[e,a,o,n]=await Promise.all([h("/signals.php?bot=1&home=1&lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/contracts.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/trading_bot/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]}))]);u("invest.signals",e.items||[]),u("invest.contracts",a.items||[]),u("invest.copies",o.items||[]),u("invest.mine",{contracts:(n.items||[]).filter(r=>String(r.product_kind||"").toLowerCase()==="contract")}),x(t)}catch{x(t)}}function x(t){const e=t.querySelector("#invest-content");if(!e)return;const a=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",o=w(),n=a==="copy"?q():A();e.innerHTML=o?O(n,o):n}function q(){const t=i("invest.signals")||[],e=i("invest.copies")||[];return`
     <section class="desk-panel">
       <div class="panel-head">
         <div>
@@ -52,7 +52,7 @@ import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,c as E,b as _}fro
         </div>
       </div>
       ${e.length?`<div class="history-grid">${e.map(P).join("")}</div>`:f("No copied signals yet.")}
-    </section>`}function q(){const t=i("invest.contracts")||[],e=i("invest.mine.contracts")||[];return`
+    </section>`}function A(){const t=i("invest.contracts")||[],e=i("invest.mine.contracts")||[];return`
     <section class="desk-panel">
       <div class="panel-head">
         <div>
@@ -94,7 +94,7 @@ import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,c as E,b as _}fro
       ${c("Take profit",v(t.tp1??t.take_profit_1))}
       ${c("Confidence",`${Number(t.confidence||0)}%`)}
     </div>
-    <p class="copy-brief">${s(t.bot_brief||t.note||"Admin-managed setup with controlled entry, stop, and target.")}</p>
+    <p class="copy-brief">${s(t.bot_brief||t.note||"Desk-managed setup with controlled entry, stop, and target.")}</p>
     <div class="copy-card__chips">
       <span>Min $${l(y)}</span>
       <span>${Number(t.copy_lock_days||0)}d lock</span>
@@ -157,7 +157,7 @@ import{d as $,s as u,g as i,m as l,a as h,e as s,h as L,i as S,c as E,b as _}fro
       <div>
         <span class="badge-green">Copy real</span>
         <h2 class="text-lg font-bold mt-1">${s(a.symbol||a.market_symbol||"Signal")}</h2>
-        <p class="text-xs text-muted">${s(a.bot_brief||a.note||"Admin-managed copy signal.")}</p>
+        <p class="text-xs text-muted">${s(a.bot_brief||a.note||"Desk-managed copy signal.")}</p>
       </div>
       <div class="signal-metrics">
         ${c("Entry",v(a.entry??a.entry_price))}

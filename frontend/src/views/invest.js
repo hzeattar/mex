@@ -179,7 +179,7 @@ function signalCard(sig) {
       ${metric('Take profit', priceValue(sig.tp1 ?? sig.take_profit_1))}
       ${metric('Confidence', `${Number(sig.confidence || 0)}%`)}
     </div>
-    <p class="copy-brief">${esc(sig.bot_brief || sig.note || 'Admin-managed setup with controlled entry, stop, and target.')}</p>
+    <p class="copy-brief">${esc(sig.bot_brief || sig.note || 'Desk-managed setup with controlled entry, stop, and target.')}</p>
     <div class="copy-card__chips">
       <span>Min $${money(minAmount)}</span>
       <span>${Number(sig.copy_lock_days || 0)}d lock</span>
@@ -272,7 +272,7 @@ function openCopyDialog(id, container) {
       <div>
         <span class="badge-green">Copy real</span>
         <h2 class="text-lg font-bold mt-1">${esc(sig.symbol || sig.market_symbol || 'Signal')}</h2>
-        <p class="text-xs text-muted">${esc(sig.bot_brief || sig.note || 'Admin-managed copy signal.')}</p>
+        <p class="text-xs text-muted">${esc(sig.bot_brief || sig.note || 'Desk-managed copy signal.')}</p>
       </div>
       <div class="signal-metrics">
         ${metric('Entry', priceValue(sig.entry ?? sig.entry_price))}

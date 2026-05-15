@@ -10,7 +10,7 @@
     "isDynamicEntry": true
   },
   "src/main.js": {
-    "file": "js/main-BotwwwQy.js",
+    "file": "js/main-KgfuI461.js",
     "name": "main",
     "src": "src/main.js",
     "isEntry": true,
@@ -29,7 +29,7 @@
     ]
   },
   "src/views/account.js": {
-    "file": "js/account-GkwxvDSV.js",
+    "file": "js/account-CVRb2aCj.js",
     "name": "account",
     "src": "src/views/account.js",
     "isDynamicEntry": true,
@@ -38,7 +38,7 @@
     ]
   },
   "src/views/funding.js": {
-    "file": "js/funding-CxM41ATX.js",
+    "file": "js/funding-QQzHEEPZ.js",
     "name": "funding",
     "src": "src/views/funding.js",
     "isDynamicEntry": true,
@@ -47,7 +47,7 @@
     ]
   },
   "src/views/home.js": {
-    "file": "js/home-DxpNPcYd.js",
+    "file": "js/home-DyYKILJt.js",
     "name": "home",
     "src": "src/views/home.js",
     "isDynamicEntry": true,
@@ -57,7 +57,7 @@
     ]
   },
   "src/views/invest.js": {
-    "file": "js/invest-ispuiaNv.js",
+    "file": "js/invest-Di1W2Lck.js",
     "name": "invest",
     "src": "src/views/invest.js",
     "isDynamicEntry": true,
@@ -67,7 +67,7 @@
     ]
   },
   "src/views/kyc.js": {
-    "file": "js/kyc-C10C-236.js",
+    "file": "js/kyc-3V-qpAPY.js",
     "name": "kyc",
     "src": "src/views/kyc.js",
     "isDynamicEntry": true,
@@ -76,7 +76,7 @@
     ]
   },
   "src/views/news.js": {
-    "file": "js/news-DKS8WtU9.js",
+    "file": "js/news-DvI7yQwO.js",
     "name": "news",
     "src": "src/views/news.js",
     "isDynamicEntry": true,
@@ -85,7 +85,7 @@
     ]
   },
   "src/views/portfolio.js": {
-    "file": "js/portfolio-BijUzGBU.js",
+    "file": "js/portfolio-BR4zLO46.js",
     "name": "portfolio",
     "src": "src/views/portfolio.js",
     "isDynamicEntry": true,
@@ -94,7 +94,7 @@
     ]
   },
   "src/views/support.js": {
-    "file": "js/support-BIocJtov.js",
+    "file": "js/support-CwjszDLI.js",
     "name": "support",
     "src": "src/views/support.js",
     "isDynamicEntry": true,
@@ -103,19 +103,20 @@
     ]
   },
   "src/views/trade.js": {
-    "file": "js/trade-B_mxUY-2.js",
+    "file": "js/trade-Clv19KhY.js",
     "name": "trade",
     "src": "src/views/trade.js",
     "isDynamicEntry": true,
     "imports": [
-      "src/main.js"
+      "src/main.js",
+      "_marketIcon-BqfrwX_4.js"
     ],
     "dynamicImports": [
       "node_modules/lightweight-charts/dist/lightweight-charts.production.mjs"
     ]
   },
   "src/views/wallet.js": {
-    "file": "js/wallet-2tn2kQc6.js",
+    "file": "js/wallet-Wg9MDzJi.js",
     "name": "wallet",
     "src": "src/views/wallet.js",
     "isDynamicEntry": true,
@@ -124,7 +125,7 @@
     ]
   },
   "style.css": {
-    "file": "css/style-iB8b5p6O.css",
+    "file": "css/style-CfLqBywv.css",
     "src": "style.css"
   }
 }

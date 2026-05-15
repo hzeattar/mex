@@ -5,6 +5,11 @@ const activeControllers = new Set();
 export async function api(path, options = {}) {
   const controller = new AbortController();
   activeControllers.add(controller);
+  const onAbort = () => controller.abort();
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener('abort', onAbort, { once: true });
+  }
   const timeout = setTimeout(() => controller.abort(), options.timeout || 8000);
 
   try {
@@ -28,6 +33,7 @@ export async function api(path, options = {}) {
     }
     throw err;
   } finally {
+    if (options.signal) options.signal.removeEventListener('abort', onAbort);
     activeControllers.delete(controller);
   }
 }

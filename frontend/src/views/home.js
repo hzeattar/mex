@@ -92,7 +92,9 @@ async function loadHomeData(container) {
       api('/signals.php?bot=1&home=1&lang=en', { timeout: 7000 }).catch(() => null),
     ]);
     if (markets && markets.items) {
-      renderMarkets(container, markets.items.slice(0, 8));
+      const visible = markets.items.slice(0, 8);
+      renderMarkets(container, visible);
+      hydrateMarketQuotes(container, visible);
     }
     if (portfolio && portfolio.positions) {
       renderPositions(container, portfolio.positions.slice(0, 5));
@@ -147,14 +149,45 @@ function renderMarkets(container, items) {
         <div class="text-[11px] text-muted truncate">${esc(m.name || m.symbol)}</div>
       </div>
       <div class="text-right">
-        <div class="text-sm font-mono font-semibold">${price(m.price || m.q_price, m.type)}</div>
-        <div class="text-[11px] ${Number(m.change_pct || m.q_change || 0) >= 0 ? 'text-green' : 'text-red'}">${pct(m.change_pct || m.q_change || 0)}</div>
+        <div class="text-sm font-mono font-semibold" data-home-price>${price(m.price || m.q_price, m.type)}</div>
+        <div class="text-[11px] ${Number(m.change_pct || m.q_change || 0) >= 0 ? 'text-green' : 'text-red'}" data-home-change>${pct(m.change_pct || m.q_change || 0)}</div>
       </div>
     </button>
   `).join('');
   grid.querySelectorAll('[data-symbol]').forEach((btn) => {
     btn.addEventListener('click', () => navigate('trade', { symbol: btn.dataset.symbol, type: btn.dataset.type }));
   });
+}
+
+async function hydrateMarketQuotes(container, items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const symbol = String(item.symbol || '').toUpperCase();
+    const type = item.type || 'crypto';
+    if (!symbol) return;
+    if (!groups.has(type)) groups.set(type, []);
+    groups.get(type).push(symbol);
+  });
+
+  await Promise.all([...groups.entries()].map(async ([type, symbols]) => {
+    const data = await api(`/quotes.php?symbols=${encodeURIComponent(symbols.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist`, { timeout: 6500 }).catch(() => null);
+    if (!data?.items?.length) return;
+    data.items.forEach((q) => {
+      const symbol = String(q.symbol || '').toUpperCase();
+      const card = [...container.querySelectorAll('[data-symbol]')]
+        .find((node) => String(node.dataset.symbol || '').toUpperCase() === symbol);
+      if (!card) return;
+      const p = Number(q.price || q.q_price || 0);
+      const chg = Number(q.change_pct || q.q_change || 0);
+      const priceEl = card.querySelector('[data-home-price]');
+      const changeEl = card.querySelector('[data-home-change]');
+      if (priceEl && p > 0) priceEl.textContent = price(p, type);
+      if (changeEl) {
+        changeEl.textContent = pct(chg);
+        changeEl.className = `text-[11px] ${chg >= 0 ? 'text-green' : 'text-red'}`;
+      }
+    });
+  }));
 }
 
 function marketLogo(market, className) {

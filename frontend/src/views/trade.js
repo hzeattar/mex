@@ -5,11 +5,14 @@ import { api } from '../services/api.js';
 import { connectSSE, disconnect } from '../services/sse.js';
 import { icons } from '../components/common/Icons.js';
 import { navigate } from '../router.js';
+import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
 
 let chart = null;
 let candleSeries = null;
 let volumeSeries = null;
 let sseClean = null;
+let activeQuoteTimer = null;
+let activeQuoteController = null;
 let resizeObserver = null;
 let chartLibPromise = null;
 let lastCandle = null;
@@ -26,14 +29,6 @@ const TYPES = [
 ];
 
 const TFS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
-const ICONS = new Set(['ada', 'amzn', 'apple', 'arab', 'avax', 'bnb', 'btc', 'crypto', 'doge', 'dot', 'eth', 'forex', 'future', 'googl', 'link', 'metal', 'microsoft', 'nvda', 'oil', 'sol', 'stock', 'tsla', 'usdc', 'xrp']);
-const ICON_ALIASES = {
-  BTCUSDT: 'btc', BTCUSD: 'btc', ETHUSDT: 'eth', ETHUSD: 'eth', BNBUSDT: 'bnb', SOLUSDT: 'sol',
-  XRPUSDT: 'xrp', ADAUSDT: 'ada', DOGEUSDT: 'doge', DOTUSDT: 'dot', AVAXUSDT: 'avax',
-  LINKUSDT: 'link', USDCUSDT: 'usdc', AAPL: 'apple', APPLE: 'apple', AMZN: 'amzn',
-  GOOGL: 'googl', GOOGLE: 'googl', MSFT: 'microsoft', MICROSOFT: 'microsoft', NVDA: 'nvda',
-  TSLA: 'tsla', XAUUSD: 'metal', XAGUSD: 'metal', GOLD: 'metal', USOIL: 'oil', UKOIL: 'oil',
-};
 
 export function render(params) {
   if (params.symbol) set('symbol', params.symbol.toUpperCase());
@@ -217,6 +212,7 @@ export function cleanup() {
     sseClean();
     sseClean = null;
   }
+  stopActiveQuote();
   disconnect();
   document.body.classList.remove('trade-modal-open');
 }
@@ -231,14 +227,7 @@ async function setup(container) {
 
   bindEvents(container);
   updateOrderInfo(container);
-  startLiveQuotes(container, [], runId);
-
-  api(`/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus`, { timeout: 4500 })
-    .then(quote => {
-      if (!isCurrentRun(runId, symbol, type)) return;
-      if (quote?.items?.[0]) updatePrice(container, quote.items[0], runId);
-    })
-    .catch(() => { if (isCurrentRun(runId, symbol, type)) markDisconnected(container); });
+  startActiveQuote(container, symbol, type, runId);
 
   api(`/markets.php?type=${type}&lite=1&with_quotes=1`, { timeout: 6500 })
     .then(mkts => {
@@ -303,20 +292,55 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId) {
   const type = get('type');
   const active = get('symbol');
   const max = type === 'crypto' ? 24 : 12;
-  const symbols = [...new Set([active, ...marketItems.slice(0, max).map(m => String(m.symbol || '').toUpperCase()).filter(Boolean)])];
+  const symbols = [...new Set(marketItems
+    .slice(0, max)
+    .map(m => String(m.symbol || '').toUpperCase())
+    .filter(Boolean)
+    .filter(symbol => symbol !== String(active || '').toUpperCase()))];
+
+  if (!symbols.length) return;
 
   sseClean = connectSSE(symbols, type, (items) => {
     if (!isCurrentRun(runId, active, type)) return;
     updateSymbolListPrices(container, items);
-    const q = items.find(i => String(i.symbol || '').toUpperCase() === active);
-    if (q) updatePrice(container, q, runId);
     const dot = $('#conn-dot', container);
     if (dot) {
       dot.classList.remove('bg-muted', 'bg-sell');
       dot.classList.add('bg-buy');
       dot.title = 'Live';
     }
-  });
+  }, null, { interval: type === 'crypto' ? 5200 : 7200, maxSymbols: max });
+}
+
+function startActiveQuote(container, symbol, type, runId = tradeRunId) {
+  stopActiveQuote();
+  const interval = type === 'crypto' ? 2200 : 3000;
+  const poll = async () => {
+    if (!isCurrentRun(runId, symbol, type)) return;
+    activeQuoteController = new AbortController();
+    try {
+      const url = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus`;
+      const data = await api(url, { timeout: 4500, signal: activeQuoteController.signal });
+      if (!isCurrentRun(runId, symbol, type)) return;
+      if (data?.items?.[0]) updatePrice(container, data.items[0], runId);
+    } catch (_e) {
+      if (isCurrentRun(runId, symbol, type)) markDisconnected(container);
+    } finally {
+      if (isCurrentRun(runId, symbol, type)) activeQuoteTimer = setTimeout(poll, interval);
+    }
+  };
+  poll();
+}
+
+function stopActiveQuote() {
+  if (activeQuoteTimer) {
+    clearTimeout(activeQuoteTimer);
+    activeQuoteTimer = null;
+  }
+  if (activeQuoteController) {
+    activeQuoteController.abort();
+    activeQuoteController = null;
+  }
 }
 
 function markDisconnected(container) {
@@ -332,6 +356,7 @@ function updatePrice(container, q, runId = tradeRunId) {
   const chg = Number(q.change_pct || q.q_change || 0);
   const t = get('type');
   set('activeQuote', { ...q, price: p, change_pct: chg });
+  updateSymbolListPrices(container, [{ ...q, price: p, change_pct: chg }]);
 
   const livePrice = $('#live-price', container);
   const liveChange = $('#live-change', container);
@@ -523,8 +548,15 @@ function bindEvents(container) {
     localStorage.setItem('vp_type', el.dataset.typeTab);
     const data = await api(`/markets.php?type=${encodeURIComponent(el.dataset.typeTab)}&lite=1&with_quotes=1`, { timeout: 6000 }).catch(() => null);
     if (data?.items) {
+      const first = data.items.find((item) => item?.symbol);
+      if (first?.symbol && normalizeType(el.dataset.typeTab) !== 'favorites') {
+        const nextSymbol = String(first.symbol).toUpperCase();
+        localStorage.setItem('vp_symbol', nextSymbol);
+        navigate('trade', { symbol: nextSymbol, type: el.dataset.typeTab, tf: get('tf') });
+        return;
+      }
       renderSymbolList(container, data.items);
-      startLiveQuotes(container, data.items);
+      startLiveQuotes(container, data.items, tradeRunId);
     }
     $$('[data-type-tab]', container).forEach(btn => {
       const active = btn === el;
@@ -715,21 +747,9 @@ function loadChartLib() {
 }
 
 function marketLogo(symbol, type, className) {
-  const key = marketIcon(symbol, type);
-  return `<img src="./assets/img/markets/${key}.svg" class="${className}" alt="${escAttr(symbol)}" loading="lazy" />`;
-}
-
-function marketIcon(symbol, type) {
-  const upper = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const direct = ICON_ALIASES[upper];
-  if (direct && ICONS.has(direct)) return direct;
-  const base = upper.replace(/USDT$|USD$|EUR$|GBP$|SAR$/g, '').toLowerCase();
-  if (ICONS.has(base)) return base;
-  if (type === 'commodities') return upper.includes('OIL') ? 'oil' : 'metal';
-  if (type === 'stocks') return 'stock';
-  if (type === 'futures') return 'future';
-  if (type === 'forex') return 'forex';
-  if (type === 'arab') return 'arab';
-  return 'crypto';
+  return `<span class="${className} grid place-items-center overflow-hidden border border-line bg-surface">
+    <img src="${escAttr(marketIconPath({ symbol, type }, type))}" class="h-full w-full object-cover" alt="${escAttr(symbol)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';" />
+    <b class="hidden h-full w-full place-items-center bg-accent/20 text-[9px] font-black">${esc(marketInitial(symbol))}</b>
+  </span>`;
 }
 

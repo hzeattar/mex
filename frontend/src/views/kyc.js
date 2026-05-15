@@ -12,7 +12,7 @@ export function render() {
         <div>
           <span class="badge-accent">Security</span>
           <h1 class="text-xl font-bold mt-1">KYC Verification</h1>
-          <p class="text-muted text-sm">Submit identity documents for admin review. Required for real trading.</p>
+          <p class="text-muted text-sm">Submit identity documents for compliance review. Required for real trading.</p>
         </div>
       </section>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -57,7 +57,7 @@ async function loadKycStatus(container) {
         <div class="flex justify-between"><span class="text-muted text-xs">Name</span><span class="text-sm">${esc(kyc.full_name || '--')}</span></div>
         <div class="flex justify-between"><span class="text-muted text-xs">Country</span><span class="text-sm">${esc(kyc.country || '--')}</span></div>
         <div class="flex justify-between"><span class="text-muted text-xs">Document</span><span class="text-sm">${esc(kyc.doc_type || '--')}</span></div>
-        ${kyc.admin_note ? `<div class="pt-2 border-t border-line/50"><span class="text-muted text-xs">Admin Note</span><p class="text-sm mt-1">${esc(kyc.admin_note)}</p></div>` : ''}
+        ${kyc.admin_note ? `<div class="pt-2 border-t border-line/50"><span class="text-muted text-xs">Review Note</span><p class="text-sm mt-1">${esc(kyc.admin_note)}</p></div>` : ''}
       </div>`;
   } catch (e) { /* silent */ }
 }
