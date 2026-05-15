@@ -370,7 +370,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v4_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
+$cacheKey = 'markets_v5_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '2') : (int)env('MARKETS_CACHE_TTL', '10');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -388,7 +388,7 @@ if ($cacheTtl > 0 && is_file($cacheFile)) {
 try {
   $pdo = db();
   $quoteFlags = function_exists('quote_cols_flags') ? quote_cols_flags() : [];
-  $quoteMarketJoin = !empty($quoteFlags['market']) ? " AND q.market='spot'" : '';
+  $quoteMarketJoin = !empty($quoteFlags['market']) ? " AND (q.market IS NULL OR q.market='' OR q.market='spot')" : '';
 
   $sql = "SELECT
             m.id, m.symbol, m.name, m.type, m.status, m.sort_order,
@@ -577,6 +577,15 @@ try {
       'market_cap' => $metaCap,
       'icon_url' => $iconUrl !== '' ? $iconUrl : null,
     ];
+  }
+
+  if ($supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
+    $pricedItems = array_values(array_filter($items, static function(array $it): bool {
+      $price = (float)($it['price'] ?? 0);
+      $source = strtolower(trim((string)($it['source'] ?? '')));
+      return $price > 0 && $source !== '' && $source !== 'unavailable';
+    }));
+    if ($pricedItems) $items = $pricedItems;
   }
 
   if ($grouped) {
