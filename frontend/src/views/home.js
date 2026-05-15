@@ -207,7 +207,7 @@ async function warmMissingHomeQuotes(container, missing) {
     const unique = [...new Set(symbols)].slice(0, limit);
     for (let i = 0; i < unique.length; i += chunkSize) {
       const chunk = unique.slice(i, i + chunkSize);
-      const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&fresh=1&purpose=home`, { timeout: 6500 }).catch(() => null);
+      const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&cache_only=1&purpose=watchlist`, { timeout: 3500 }).catch(() => null);
       if (data?.items?.length) data.items.forEach((q) => applyQuoteToMarketCard(container, q, type));
     }
   }
@@ -270,7 +270,7 @@ function positionRow(p) {
         ${marketLogo({ symbol, type }, 'market-logo !h-8 !w-8')}
         <div class="min-w-0">
           <strong class="text-sm truncate block">${esc(symbol)}</strong>
-          <span class="text-[10px] text-muted">${esc(p.market_type || p.order_type || 'spot')} • ${esc(p.side || 'BUY')}</span>
+          <span class="text-[10px] text-muted">${esc(p.market_type || p.order_type || 'spot')} / ${esc(positionSide(p))}</span>
         </div>
       </div>
       <div class="text-right">
@@ -281,7 +281,7 @@ function positionRow(p) {
     <div class="position-metrics mt-3">
       ${positionMetric('Entry', price(p.entry_price || p.open_price, type))}
       ${positionMetric('Mark', mark > 0 ? price(mark, type) : '--')}
-      ${positionMetric('Size', money(p.amount || p.size || p.units || 0))}
+      ${positionMetric('Size', money(p.qty || p.amount || p.size || p.units || 0))}
       ${positionMetric('Lev', `${p.leverage || 1}x`)}
     </div>
   </div>`;
@@ -289,6 +289,11 @@ function positionRow(p) {
 
 function positionMetric(label, value) {
   return `<span><small>${label}</small><strong>${value}</strong></span>`;
+}
+
+function positionSide(position) {
+  const side = String(position.side || 'buy').toUpperCase();
+  return side === 'SELL' ? 'SELL' : 'BUY';
 }
 
 function walletCard(label, value, sub) {

@@ -441,7 +441,7 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId) {
   const unique = [...new Set(missing)].slice(0, limit);
   for (let i = 0; i < unique.length; i += chunkSize) {
     const chunk = unique.slice(i, i + chunkSize);
-    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&fresh=1&purpose=warm`, { timeout: 6500 }).catch(() => null);
+    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&cache_only=1&purpose=watchlist`, { timeout: 3500 }).catch(() => null);
     if (!isCurrentRun(runId)) return;
     if (data?.items?.length) updateSymbolListPrices(container, data.items);
   }
@@ -488,13 +488,14 @@ function renderPositions(container, positions) {
       const posType = pos.asset_type || get('type');
       const mark = Number(pos.mark_price || pos.current_price || pos.price || 0);
       const id = pos.position_id || pos.id || '';
+      const side = String(pos.side || 'buy').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
       return `<tr class="border-t border-line/50 hover:bg-panel/50">
         <td class="px-3 py-1.5 font-semibold">${esc(cleanSymbol)}</td>
-        <td><span class="badge-${pos.side === 'BUY' ? 'buy' : 'sell'}">${esc(pos.side)}</span></td>
+        <td><span class="badge-${side === 'BUY' ? 'buy' : 'sell'}">${esc(side)}</span></td>
         <td class="text-muted">${esc(pos.market_type || 'spot')}</td>
         <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
         <td class="text-right font-mono">${mark > 0 ? price(mark, posType) : '--'}</td>
-        <td class="text-right font-mono">${money(pos.amount || pos.size || pos.units || 0)}</td>
+        <td class="text-right font-mono">${money(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
         <td class="text-right font-mono">${esc(String(pos.leverage || 1))}x</td>
         <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
         <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">Close</button>` : ''}</td>
