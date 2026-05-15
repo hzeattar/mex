@@ -174,7 +174,7 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
       $cachedAge = $cachedUpdatedAt > 0 ? max(0, time() - $cachedUpdatedAt) : 999999;
       $maxStaleAge = $type === 'crypto'
         ? max(30, min(600, (int)env('MARKET_LIST_CRYPTO_STALE_SECONDS', '180')))
-        : qa_quote_max_age($type, false);
+        : qa_market_list_stale_seconds($type);
       if ($cachedPrice > 0 && !quote_source_is_untrusted($cachedSource) && $cachedAge <= $maxStaleAge) {
         $out[$sym] = [
           'price' => $cachedPrice,
@@ -211,4 +211,14 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
     ];
   }
   return $out;
+}
+
+function qa_market_list_stale_seconds(string $assetType): int {
+  $assetType = vp_normalize_asset_type($assetType);
+  return match ($assetType) {
+    'forex' => max(900, min(43200, (int)env('MARKET_LIST_FOREX_STALE_SECONDS', '21600'))),
+    'commodities', 'futures' => max(900, min(21600, (int)env('MARKET_LIST_MARKET_HOURS_STALE_SECONDS', '7200'))),
+    'stocks', 'arab' => max(1800, min(86400, (int)env('MARKET_LIST_DELAYED_STALE_SECONDS', '21600'))),
+    default => qa_quote_max_age($assetType, false),
+  };
 }

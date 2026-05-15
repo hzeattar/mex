@@ -370,7 +370,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v8_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
+$cacheKey = 'markets_v9_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '2') : (int)env('MARKETS_CACHE_TTL', '10');
 $cacheTtl = max(0, min(300, $cacheTtl));
