@@ -1,7 +1,7 @@
 // Portfolio View - Open positions, orders, PnL
-import { get, set } from '../state/store.js';
-import { money, pct, price, esc, escAttr } from '../utils/format.js';
-import { $, delegate } from '../utils/dom.js';
+import { get } from '../state/store.js';
+import { money, price, esc, escAttr } from '../utils/format.js';
+import { delegate } from '../utils/dom.js';
 import { api, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 
@@ -91,24 +91,36 @@ function renderPortfolioData(container, data) {
     table.innerHTML = `<p class="text-muted text-sm text-center py-8">No open positions. Start trading to see them here.</p>`;
     return;
   }
-  table.innerHTML = `<table class="w-full text-sm">
-    <thead><tr class="text-[11px] text-muted uppercase border-b border-line">
-      <th class="text-left py-2 px-2">Symbol</th><th class="text-left py-2">Side</th><th class="text-left py-2">Type</th><th class="text-right py-2">Entry</th><th class="text-right py-2">Mark</th><th class="text-right py-2">Size</th><th class="text-right py-2">Lev</th><th class="text-right py-2">Margin</th><th class="text-right py-2">PnL</th><th class="text-right py-2 px-2">Action</th>
-    </tr></thead>
-    <tbody>${positions.map(posRow).join('')}</tbody>
-  </table>`;
+  table.innerHTML = `
+    <div class="portfolio-mobile-list md:hidden">
+      ${positions.map(posCard).join('')}
+    </div>
+    <div class="hidden md:block overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-[11px] text-muted uppercase border-b border-line">
+          <th class="text-left py-2 px-2">Symbol</th><th class="text-left py-2">Side</th><th class="text-left py-2">Type</th><th class="text-right py-2">Entry</th><th class="text-right py-2">Mark</th><th class="text-right py-2">Size</th><th class="text-right py-2">Lev</th><th class="text-right py-2">Margin</th><th class="text-right py-2">PnL</th><th class="text-right py-2 px-2">Action</th>
+        </tr></thead>
+        <tbody>${positions.map(posRow).join('')}</tbody>
+      </table>
+    </div>`;
   delegate(table, '[data-close-pos]', 'click', (e, el) => closePosition(el.dataset.closePos, container));
 }
 
-function posRow(p) {
+function posData(p) {
   const pnl = Number(p.pnl || p.unrealized_pnl || 0);
   const type = p.asset_type || p.type || 'crypto';
   const mark = Number(p.mark_price || p.current_price || p.price || 0);
   const id = p.position_id || p.id || '';
   const symbol = String(p.symbol || '').replace('@R@', '');
+  const side = String(p.side || 'buy').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+  return { pnl, type, mark, id, symbol, side };
+}
+
+function posRow(p) {
+  const { pnl, type, mark, id, symbol, side } = posData(p);
   return `<tr class="border-b border-line/50 hover:bg-panel-2/30">
     <td class="py-2.5 px-2 font-semibold">${esc(symbol)}</td>
-    <td class="py-2.5"><span class="badge ${p.side === 'BUY' ? 'badge-green' : 'badge-red'}">${esc(p.side)}</span></td>
+    <td class="py-2.5"><span class="badge ${side === 'BUY' ? 'badge-green' : 'badge-red'}">${esc(side)}</span></td>
     <td class="py-2.5 text-xs text-muted">${esc(p.market_type || p.order_type || 'spot')}</td>
     <td class="py-2.5 text-right font-mono text-xs">${price(p.entry_price || p.open_price, type)}</td>
     <td class="py-2.5 text-right font-mono text-xs">${mark > 0 ? price(mark, type) : '--'}</td>
@@ -120,6 +132,34 @@ function posRow(p) {
   </tr>`;
 }
 
+function posCard(p) {
+  const { pnl, type, mark, id, symbol, side } = posData(p);
+  return `<article class="portfolio-position-card">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <strong>${esc(symbol)}</strong>
+          <span class="badge ${side === 'BUY' ? 'badge-green' : 'badge-red'}">${esc(side)}</span>
+        </div>
+        <small>${esc(p.market_type || p.order_type || 'spot')} - ${esc(p.created_at || p.opened_at || '')}</small>
+      </div>
+      <div class="text-right">
+        <span class="text-[10px] text-muted">Open PnL</span>
+        <b class="${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</b>
+      </div>
+    </div>
+    <div class="portfolio-position-metrics">
+      ${mobileMetric('Entry', price(p.entry_price || p.open_price, type))}
+      ${mobileMetric('Mark', mark > 0 ? price(mark, type) : '--')}
+      ${mobileMetric('Size', money(p.amount || p.size || p.units || 0))}
+      ${mobileMetric('Lev', `${esc(String(p.leverage || 1))}x`)}
+      ${mobileMetric('Margin', money(p.margin || p.initial_margin || p.used_margin || 0))}
+      ${mobileMetric('Mode', esc(p.mode || get('mode') || 'demo'))}
+    </div>
+    ${id ? `<button class="btn-ghost btn-sm text-red w-full" data-close-pos="${escAttr(id)}">Close position</button>` : ''}
+  </article>`;
+}
+
 function renderOrders(container, orders) {
   const el = container.querySelector('#orders-table');
   const count = container.querySelector('#orders-count');
@@ -129,18 +169,46 @@ function renderOrders(container, orders) {
     el.innerHTML = `<p class="text-muted text-sm text-center py-8">No pending orders.</p>`;
     return;
   }
-  el.innerHTML = `<table class="w-full text-sm">
-    <thead><tr class="text-[11px] text-muted uppercase border-b border-line">
-      <th class="text-left py-2">Symbol</th><th class="text-left py-2">Type</th><th class="text-right py-2">Price</th><th class="text-right py-2">Amount</th><th class="text-right py-2">Status</th>
-    </tr></thead>
-    <tbody>${orders.map((o) => `<tr class="border-b border-line/50">
-      <td class="py-2 font-semibold">${esc(o.symbol)}</td>
-      <td class="py-2 text-xs">${esc(o.order_type || 'LIMIT')} ${esc(o.side)}</td>
-      <td class="py-2 text-right font-mono text-xs">${price(o.price || o.limit_price)}</td>
-      <td class="py-2 text-right">${money(o.amount)}</td>
-      <td class="py-2 text-right"><span class="badge badge-accent">${esc(o.status || 'pending')}</span></td>
-    </tr>`).join('')}</tbody>
-  </table>`;
+  el.innerHTML = `
+    <div class="portfolio-mobile-list md:hidden">
+      ${orders.map(orderCard).join('')}
+    </div>
+    <div class="hidden md:block overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-[11px] text-muted uppercase border-b border-line">
+          <th class="text-left py-2">Symbol</th><th class="text-left py-2">Type</th><th class="text-right py-2">Price</th><th class="text-right py-2">Amount</th><th class="text-right py-2">Status</th>
+        </tr></thead>
+        <tbody>${orders.map((o) => `<tr class="border-b border-line/50">
+          <td class="py-2 font-semibold">${esc(o.symbol)}</td>
+          <td class="py-2 text-xs">${esc(o.order_type || 'LIMIT')} ${esc(o.side)}</td>
+          <td class="py-2 text-right font-mono text-xs">${price(o.price || o.limit_price)}</td>
+          <td class="py-2 text-right">${money(o.amount)}</td>
+          <td class="py-2 text-right"><span class="badge badge-accent">${esc(o.status || 'pending')}</span></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+function orderCard(o) {
+  return `<article class="order-mobile-card">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <strong>${esc(o.symbol || '--')}</strong>
+        <small>${esc(o.order_type || 'LIMIT')} ${esc(o.side || '')}</small>
+      </div>
+      <span class="badge badge-accent">${esc(o.status || 'pending')}</span>
+    </div>
+    <div class="portfolio-position-metrics">
+      ${mobileMetric('Price', price(o.price || o.limit_price))}
+      ${mobileMetric('Amount', money(o.amount))}
+      ${mobileMetric('Created', esc(o.created_at || '--'))}
+      ${mobileMetric('Mode', esc(o.mode || get('mode') || 'demo'))}
+    </div>
+  </article>`;
+}
+
+function mobileMetric(label, value) {
+  return `<span><small>${esc(label)}</small><strong>${value}</strong></span>`;
 }
 
 async function closePosition(id, container) {

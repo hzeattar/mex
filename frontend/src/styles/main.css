@@ -26,6 +26,7 @@
   .btn-primary { @apply btn bg-accent text-white hover:brightness-110; }
   .btn-buy { @apply btn bg-buy text-white hover:brightness-110 shadow-[0_0_12px_rgba(0,192,135,0.2)]; }
   .btn-sell { @apply btn bg-sell text-white hover:brightness-110 shadow-[0_0_12px_rgba(246,70,93,0.2)]; }
+  .btn-danger { @apply btn bg-sell/10 text-sell border border-sell/25 hover:bg-sell/15; }
   .btn-ghost { @apply btn border border-line bg-transparent text-muted hover:text-text hover:border-line-strong; }
   .btn-sm { @apply text-[11px] px-2 py-1.5; }
   .btn-xs { @apply text-[10px] px-1.5 py-1; }
@@ -320,6 +321,412 @@
   }
   .dialog-error {
     @apply rounded-md border border-sell/30 bg-sell/10 p-3 text-xs font-semibold text-sell;
+  }
+
+  /* Account, wallet, funding and mobile trade polish */
+  .panel-headline {
+    @apply mb-4;
+  }
+  .panel-headline h2 {
+    @apply mt-1 text-base font-black;
+  }
+  .field-label {
+    @apply text-[10px] font-semibold uppercase tracking-wider text-muted;
+  }
+  .account-hero,
+  .funding-hero,
+  .wallet-hero {
+    @apply relative overflow-hidden rounded-lg border border-line bg-gradient-to-br from-panel-2 to-panel p-4 lg:p-5;
+  }
+  .account-hero::after,
+  .funding-hero::after,
+  .wallet-hero::after {
+    content: '';
+    @apply pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-gradient-to-br from-accent/15 via-buy/5 to-transparent;
+  }
+  .account-hero,
+  .funding-hero,
+  .wallet-hero {
+    @apply flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between;
+  }
+  .funding-hero h1,
+  .wallet-hero h1 {
+    @apply relative z-10 mt-2 text-2xl font-black lg:text-3xl;
+  }
+  .funding-hero p,
+  .wallet-hero p {
+    @apply relative z-10 mt-2 max-w-2xl text-sm text-muted;
+  }
+  .account-hero-main {
+    @apply relative z-10 flex min-w-0 items-center gap-4;
+  }
+  .account-avatar {
+    @apply grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-accent to-buy text-2xl font-black text-white shadow-[0_16px_40px_rgba(93,124,255,.24)];
+  }
+  .account-meta-grid {
+    @apply mt-3 grid gap-2 sm:grid-cols-3;
+  }
+  .account-mini-meta {
+    @apply min-w-0 rounded-md border border-line bg-surface/65 p-2;
+  }
+  .account-mini-meta span {
+    @apply block text-[9px] uppercase tracking-wider text-muted;
+  }
+  .account-mini-meta strong {
+    @apply mt-1 block truncate text-xs font-black;
+  }
+  .account-mini-meta button {
+    @apply mt-1 text-[9px] font-bold text-accent;
+  }
+  .account-hero-side {
+    @apply relative z-10 min-w-[240px] rounded-lg border border-line bg-surface/75 p-4;
+  }
+  .account-hero-side strong {
+    @apply mt-1 block text-2xl font-black;
+  }
+  .account-hero-side small {
+    @apply mt-2 block text-xs text-muted;
+  }
+  .level-progress {
+    @apply mt-3 h-2 overflow-hidden rounded-full bg-panel-2;
+  }
+  .level-progress span {
+    @apply block h-full rounded-full bg-gradient-to-r from-accent to-buy;
+  }
+  .level-pill.is-current {
+    @apply border-accent/45 bg-accent/10;
+  }
+  .level-badge {
+    @apply inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-accent;
+  }
+  .level-badge--silver {
+    @apply border-slate-300/25 bg-slate-300/10 text-slate-200;
+  }
+  .level-badge--gold {
+    @apply border-spread/30 bg-spread/10 text-spread;
+  }
+  .level-badge--platinum {
+    @apply border-cyan-300/30 bg-cyan-300/10 text-cyan-200;
+  }
+  .level-badge--vip {
+    @apply border-fuchsia-300/30 bg-fuchsia-300/10 text-fuchsia-200;
+  }
+  .account-grid,
+  .funding-layout {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+  .info-list {
+    @apply space-y-2;
+  }
+  .info-row {
+    @apply grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-line/35 py-2 text-sm;
+  }
+  .info-row span {
+    @apply text-muted;
+  }
+  .info-row strong {
+    @apply min-w-0 truncate text-right font-semibold;
+  }
+  .security-grid {
+    @apply grid gap-3 sm:grid-cols-2;
+  }
+  .security-card {
+    @apply flex items-center gap-3 rounded-lg border border-line bg-surface/65 p-3;
+  }
+  .security-card strong,
+  .security-card span {
+    @apply block;
+  }
+  .security-card span {
+    @apply mt-0.5 text-xs text-muted;
+  }
+  .security-icon {
+    @apply grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-panel-2 text-accent;
+  }
+  .security-icon svg {
+    @apply h-4 w-4;
+  }
+  .security-card.is-ok .security-icon {
+    @apply border-buy/25 bg-buy/10 text-buy;
+  }
+  .security-card.is-warn .security-icon {
+    @apply border-spread/25 bg-spread/10 text-spread;
+  }
+  .account-action-grid,
+  .wallet-control-grid {
+    @apply grid gap-3 sm:grid-cols-2 xl:grid-cols-3;
+  }
+  .account-action-card,
+  .wallet-control-card {
+    @apply rounded-lg border border-line bg-surface/65 p-3 transition-colors hover:border-accent/45 hover:bg-panel-2/45;
+  }
+  .account-action-card span,
+  .wallet-control-card span {
+    @apply grid h-9 w-9 place-items-center rounded-md bg-accent/10 text-accent;
+  }
+  .account-action-card svg,
+  .wallet-control-card svg {
+    @apply h-4 w-4;
+  }
+  .account-action-card strong,
+  .wallet-control-card strong {
+    @apply mt-3 block font-black;
+  }
+  .account-action-card small,
+  .wallet-control-card small {
+    @apply mt-1 block text-xs leading-5 text-muted;
+  }
+  .account-session-card {
+    @apply flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between;
+  }
+  .funding-balance-card {
+    @apply relative z-10 min-w-[220px] rounded-lg border border-line bg-surface/75 p-4;
+  }
+  .funding-balance-card span,
+  .funding-balance-card small {
+    @apply block text-xs text-muted;
+  }
+  .funding-balance-card strong {
+    @apply mt-1 block text-3xl font-black;
+  }
+  .funding-steps {
+    @apply grid gap-3 md:grid-cols-3;
+  }
+  .funding-step {
+    @apply rounded-lg border border-line bg-panel p-3;
+  }
+  .funding-step span {
+    @apply grid h-8 w-8 place-items-center rounded-full bg-accent/15 text-xs font-black text-accent;
+  }
+  .funding-step strong {
+    @apply mt-3 block font-black;
+  }
+  .funding-step small {
+    @apply mt-1 block text-xs leading-5 text-muted;
+  }
+  .method-grid {
+    @apply grid gap-2 sm:grid-cols-2;
+  }
+  .method-card {
+    @apply min-h-[92px] rounded-lg border border-line bg-surface p-3 text-left transition-colors hover:border-accent/40;
+  }
+  .method-card.active {
+    @apply border-accent/60 bg-accent/10;
+  }
+  .method-card .method-icon,
+  .method-details-head > span,
+  .history-kind {
+    @apply grid h-9 w-9 place-items-center overflow-hidden rounded-md bg-panel-2 text-accent;
+  }
+  .method-card svg,
+  .method-details-head svg,
+  .history-kind svg {
+    @apply h-4 w-4;
+  }
+  .method-card img,
+  .method-details-head img {
+    @apply h-full w-full object-cover;
+  }
+  .method-card strong {
+    @apply mt-2 block text-sm font-black;
+  }
+  .method-card small,
+  .method-card em {
+    @apply mt-1 block truncate text-[11px] not-italic text-muted;
+  }
+  .method-details {
+    @apply rounded-lg border border-line bg-surface/65 p-3;
+  }
+  .method-details-head {
+    @apply flex items-center gap-3;
+  }
+  .method-details-head strong,
+  .method-details-head small {
+    @apply block;
+  }
+  .method-details-head small {
+    @apply mt-1 text-xs text-muted;
+  }
+  .method-detail-grid {
+    @apply mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4;
+  }
+  .method-detail-grid span {
+    @apply rounded-md border border-line bg-panel-2/45 p-2;
+  }
+  .method-detail-grid small {
+    @apply block text-[9px] uppercase tracking-wider text-muted;
+  }
+  .method-detail-grid strong {
+    @apply mt-1 block text-xs font-black;
+  }
+  .copy-address {
+    @apply mt-3 flex items-center gap-2 rounded-md border border-line bg-panel-2/45 p-2;
+  }
+  .copy-address span {
+    @apply min-w-0 flex-1 truncate font-mono text-xs;
+  }
+  .copy-address button {
+    @apply rounded-md bg-accent px-2 py-1 text-[10px] font-black text-white;
+  }
+  .method-instructions {
+    @apply mt-3 rounded-md border border-line bg-panel/55 p-3 text-xs leading-5 text-muted;
+  }
+  .funding-history-list {
+    @apply space-y-3;
+  }
+  .funding-history-card,
+  .ledger-card,
+  .order-mobile-card,
+  .portfolio-position-card {
+    @apply rounded-lg border border-line bg-surface/65 p-3;
+  }
+  .funding-history-card {
+    @apply space-y-3;
+  }
+  .funding-history-main {
+    @apply flex items-center gap-3;
+  }
+  .funding-history-main strong,
+  .funding-history-main small {
+    @apply block;
+  }
+  .funding-history-main small {
+    @apply mt-0.5 text-xs text-muted;
+  }
+  .history-kind.is-deposit {
+    @apply bg-buy/10 text-buy;
+  }
+  .history-kind.is-withdraw {
+    @apply bg-sell/10 text-sell;
+  }
+  .status-flow {
+    @apply flex gap-1;
+  }
+  .status-flow i {
+    @apply h-1.5 flex-1 rounded-full bg-line;
+  }
+  .status-flow i.done {
+    @apply bg-buy;
+  }
+  .wallet-hero {
+    @apply items-start;
+  }
+  .wallet-actions {
+    @apply relative z-10 flex flex-wrap gap-2;
+  }
+  .wallet-balance-grid {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+  .wallet-balance-card {
+    @apply relative overflow-hidden rounded-lg border border-line bg-panel p-4;
+  }
+  .wallet-balance-card::after {
+    content: '';
+    @apply pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-accent/10 blur-2xl;
+  }
+  .wallet-balance-card.is-real::after {
+    @apply bg-buy/10;
+  }
+  .wallet-balance-head {
+    @apply relative z-10 flex items-start justify-between gap-3;
+  }
+  .wallet-balance-head span,
+  .wallet-balance-head small {
+    @apply block text-xs text-muted;
+  }
+  .wallet-balance-head strong {
+    @apply mt-2 block text-3xl font-black lg:text-4xl;
+  }
+  .wallet-icon {
+    @apply grid h-12 w-12 place-items-center rounded-lg border border-line bg-surface text-accent;
+  }
+  .wallet-icon svg {
+    @apply h-5 w-5;
+  }
+  .wallet-balance-metrics {
+    @apply relative z-10 mt-4 grid gap-2 sm:grid-cols-3;
+  }
+  .wallet-balance-metrics span,
+  .portfolio-position-metrics span,
+  .trade-position-metrics span {
+    @apply rounded-md border border-line bg-surface/65 p-2;
+  }
+  .wallet-balance-metrics small,
+  .portfolio-position-metrics small,
+  .trade-position-metrics small {
+    @apply block text-[9px] uppercase tracking-wider text-muted;
+  }
+  .wallet-balance-metrics strong,
+  .portfolio-position-metrics strong,
+  .trade-position-metrics strong {
+    @apply mt-1 block truncate font-mono text-xs font-black;
+  }
+  .ledger-mobile-list,
+  .portfolio-mobile-list,
+  .trade-position-cards {
+    @apply space-y-3;
+  }
+  .ledger-card {
+    @apply flex items-center justify-between gap-3;
+  }
+  .ledger-card strong,
+  .ledger-card small,
+  .ledger-card b,
+  .ledger-card span {
+    @apply block;
+  }
+  .ledger-card small,
+  .ledger-card span {
+    @apply mt-1 text-xs text-muted;
+  }
+  .portfolio-position-card,
+  .order-mobile-card,
+  .trade-position-card {
+    @apply space-y-3;
+  }
+  .portfolio-position-card small,
+  .order-mobile-card small,
+  .trade-position-card small {
+    @apply mt-1 block text-xs text-muted;
+  }
+  .portfolio-position-metrics,
+  .trade-position-metrics {
+    @apply grid grid-cols-2 gap-2;
+  }
+  .order-ticket-panel {
+    @apply rounded-lg border border-line bg-panel/35 p-2;
+  }
+  .trade-price-button {
+    @apply py-3 text-sm font-black;
+  }
+  .trade-price-button small,
+  .trade-price-button span {
+    @apply block;
+  }
+  .trade-price-button small {
+    @apply text-[9px] uppercase tracking-wider opacity-70;
+  }
+  .order-summary-box {
+    @apply grid grid-cols-3 gap-2 rounded-lg border border-line bg-panel-2/45 p-2;
+  }
+  .order-summary-box span {
+    @apply min-w-0 text-center;
+  }
+  .order-summary-box small,
+  .order-summary-box strong {
+    @apply block;
+  }
+  .order-summary-box small {
+    @apply text-[9px] uppercase tracking-wider text-muted;
+  }
+  .order-summary-box strong {
+    @apply mt-1 truncate font-mono text-[11px] font-black;
+  }
+  .order-ticket-note {
+    @apply rounded-md border border-line bg-surface/65 p-2 text-[10px] leading-4 text-muted;
+  }
+  .order-action-sticky {
+    @apply sticky bottom-0 mt-4 border-t border-line bg-surface/95 py-3 backdrop-blur;
   }
 
   /* Responsive helpers */

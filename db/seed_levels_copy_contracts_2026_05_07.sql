@@ -96,4 +96,71 @@ WHERE t.id IS NULL;
 
 DROP TEMPORARY TABLE vp_seed_trading_signals;
 
+UPDATE customer_levels
+SET name_ar=name_en,
+    name_ru=name_en,
+    perks_ar=perks_en,
+    perks_ru=perks_en
+WHERE level_code IN ('starter','silver','gold','platinum','vip');
+
+UPDATE invest_plans
+SET name_ar=name_en,
+    name_ru=name_en,
+    desc_ar=desc_en,
+    desc_ru=desc_en,
+    details_ar=details_en,
+    details_ru=details_en,
+    features_ar=features_en,
+    features_ru=features_en,
+    badge_ar=badge_en,
+    badge_ru=badge_en,
+    headline_ar=headline_en,
+    headline_ru=headline_en
+WHERE id IN ('vp_contract_starter_30','vp_contract_silver_45','vp_contract_gold_90','vp_contract_vip_private');
+
+UPDATE trading_signals
+SET note_ar=note_en,
+    note_ru=note_en,
+    bot_name_ar=bot_name_en,
+    bot_name_ru=bot_name_en,
+    bot_brief_ar=bot_brief_en,
+    bot_brief_ru=bot_brief_en
+WHERE source='desk'
+  AND market_symbol IN ('BTCUSDT','ETHUSDT','XAUUSD','EURUSD','AAPL','USOIL','ZN_F','2222','ES_F');
+
+CREATE TEMPORARY TABLE vp_seed_announcements AS
+SELECT slug,title_en,title_ar,title_ru,body_en,body_ar,body_ru,image_url,cta_url,source_label,status,pinned,published_at,created_at,updated_at
+FROM announcements WHERE 1=0;
+
+INSERT INTO vp_seed_announcements(slug,title_en,title_ar,title_ru,body_en,body_ar,body_ru,image_url,cta_url,source_label,status,pinned,published_at,created_at,updated_at) VALUES
+('vertexpluse-mobile-desk-ready','Mobile trading desk upgraded','Mobile trading desk upgraded','Mobile trading desk upgraded','The new mobile trading workspace now includes cleaner order controls, compact position cards, and faster focus pricing for supported markets.','The new mobile trading workspace now includes cleaner order controls, compact position cards, and faster focus pricing for supported markets.','The new mobile trading workspace now includes cleaner order controls, compact position cards, and faster focus pricing for supported markets.','/assets/img/news/news-market-pulse.svg','#/trade','Trading Desk','published',1,UNIX_TIMESTAMP()-900,UNIX_TIMESTAMP(),UNIX_TIMESTAMP()),
+('copy-desk-real-only','Copy desk is ready for verified Real accounts','Copy desk is ready for verified Real accounts','Copy desk is ready for verified Real accounts','Approved clients can review curated copy signals across crypto, FX, stocks, commodities, futures, and Arab markets. Demo accounts keep the desk visible with a Real account gate.','Approved clients can review curated copy signals across crypto, FX, stocks, commodities, futures, and Arab markets. Demo accounts keep the desk visible with a Real account gate.','Approved clients can review curated copy signals across crypto, FX, stocks, commodities, futures, and Arab markets. Demo accounts keep the desk visible with a Real account gate.','/assets/img/news/news-copy-history.svg','#/invest','Copy Desk','published',1,UNIX_TIMESTAMP()-1800,UNIX_TIMESTAMP(),UNIX_TIMESTAMP()),
+('level-contracts-live','Level contracts connected to account tiers','Level contracts connected to account tiers','Level contracts connected to account tiers','Starter, Silver, Gold, Platinum, and VIP levels now unlock managed contract products with clear minimums, terms, and eligibility badges.','Starter, Silver, Gold, Platinum, and VIP levels now unlock managed contract products with clear minimums, terms, and eligibility badges.','Starter, Silver, Gold, Platinum, and VIP levels now unlock managed contract products with clear minimums, terms, and eligibility badges.','/assets/img/news/news-center.svg','#/invest','Contracts','published',0,UNIX_TIMESTAMP()-3600,UNIX_TIMESTAMP(),UNIX_TIMESTAMP()),
+('funding-review-desk','Funding review flow has been refreshed','Funding review flow has been refreshed','Funding review flow has been refreshed','Deposits and withdrawals now show clearer payment rails, proof requirements, manual admin review states, and ledger history for each client.','Deposits and withdrawals now show clearer payment rails, proof requirements, manual admin review states, and ledger history for each client.','Deposits and withdrawals now show clearer payment rails, proof requirements, manual admin review states, and ledger history for each client.','/assets/img/news/news-gold-feed.svg','#/wallet','Funding Desk','published',0,UNIX_TIMESTAMP()-5400,UNIX_TIMESTAMP(),UNIX_TIMESTAMP()),
+('market-coverage-pack','Curated market coverage expanded','Curated market coverage expanded','Curated market coverage expanded','The default workspace now highlights supported crypto, forex, stocks, commodities, futures, and Arab symbols with icon metadata and clearer live or delayed status labels.','The default workspace now highlights supported crypto, forex, stocks, commodities, futures, and Arab symbols with icon metadata and clearer live or delayed status labels.','The default workspace now highlights supported crypto, forex, stocks, commodities, futures, and Arab symbols with icon metadata and clearer live or delayed status labels.','/assets/img/news/news-market-pulse.svg','#/home','Market Coverage','published',0,UNIX_TIMESTAMP()-7200,UNIX_TIMESTAMP(),UNIX_TIMESTAMP());
+
+UPDATE announcements a
+JOIN vp_seed_announcements s ON a.slug=s.slug
+SET a.title_en=s.title_en,
+    a.title_ar=s.title_ar,
+    a.title_ru=s.title_ru,
+    a.body_en=s.body_en,
+    a.body_ar=s.body_ar,
+    a.body_ru=s.body_ru,
+    a.image_url=s.image_url,
+    a.cta_url=s.cta_url,
+    a.source_label=s.source_label,
+    a.status=s.status,
+    a.pinned=s.pinned,
+    a.published_at=s.published_at,
+    a.updated_at=UNIX_TIMESTAMP();
+
+INSERT INTO announcements(slug,title_en,title_ar,title_ru,body_en,body_ar,body_ru,image_url,cta_url,source_label,status,pinned,published_at,created_at,updated_at)
+SELECT s.slug,s.title_en,s.title_ar,s.title_ru,s.body_en,s.body_ar,s.body_ru,s.image_url,s.cta_url,s.source_label,s.status,s.pinned,s.published_at,s.created_at,s.updated_at
+FROM vp_seed_announcements s
+LEFT JOIN announcements a ON a.slug=s.slug
+WHERE a.id IS NULL;
+
+DROP TEMPORARY TABLE vp_seed_announcements;
+
 COMMIT;

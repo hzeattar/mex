@@ -5,7 +5,7 @@ require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/feature_bootstrap.php';
 
 function seed_showcase_schema(PDO $pdo, string $driver): array {
-  $tables = ['customer_levels', 'invest_plans', 'trading_signals', 'markets'];
+  $tables = ['customer_levels', 'invest_plans', 'trading_signals', 'markets', 'announcements'];
   $out = [];
   foreach ($tables as $table) {
     try {
@@ -160,8 +160,14 @@ if (!$run['ok']) {
 }
 
 $counts = [];
-foreach (['customer_levels', 'invest_plans', 'trading_signals', 'markets'] as $table) {
-  $counts[$table] = (int)$pdo->query("SELECT COUNT(*) FROM {$table}")->fetchColumn();
+foreach (['customer_levels', 'invest_plans', 'trading_signals', 'markets', 'announcements'] as $table) {
+  try {
+    $counts[$table] = schema_table_exists($pdo, $table, $driver)
+      ? (int)$pdo->query("SELECT COUNT(*) FROM {$table}")->fetchColumn()
+      : 0;
+  } catch (Throwable $e) {
+    $counts[$table] = null;
+  }
 }
 
 json_response([

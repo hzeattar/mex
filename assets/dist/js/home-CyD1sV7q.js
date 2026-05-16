@@ -1,4 +1,4 @@
-import{g as b,e as l,m as v,a as f,i as S,b as $,p as _,n as N,c as h,t as q}from"./main-C5j3FsJC.js";import{m as E,a as A}from"./marketIcon-BqfrwX_4.js";function J(){const e=b("brand")||{},s=z(),a=b("mode");return`
+import{g as b,e as l,m as v,a as f,i as S,b as $,p as _,n as N,c as h,t as q}from"./main-Vy0nb4vq.js";import{m as E,a as A}from"./marketIcon-BqfrwX_4.js";function J(){const e=b("brand")||{},s=z(),a=b("mode");return`
     <div class="space-y-6 animate-fade-in">
       <!-- Hero -->
       <section class="card bg-gradient-to-br from-panel-2 to-panel relative overflow-hidden">

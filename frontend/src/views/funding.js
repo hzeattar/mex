@@ -1,55 +1,82 @@
 // Funding View - Deposit & Withdraw
 import { get } from '../state/store.js';
-import { money, esc } from '../utils/format.js';
-import { $, delegate } from '../utils/dom.js';
+import { money, esc, escAttr } from '../utils/format.js';
 import { api, formApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 
 export function render(params) {
   const kind = (params._path || 'deposit').includes('withdraw') ? 'withdraw' : 'deposit';
   const isDeposit = kind === 'deposit';
+  const wallet = get('wallet') || {};
+  const real = wallet.real || {};
+  const demo = wallet.demo || {};
+  const mode = get('mode') === 'real' ? 'real' : 'demo';
+
   return `
-    <div class="space-y-6 animate-fade-in">
-      <section class="card">
+    <div class="space-y-5 animate-fade-in funding-page">
+      <section class="funding-hero">
         <div>
-          <span class="badge-accent">${isDeposit ? 'Deposit' : 'Withdrawal'}</span>
-          <h1 class="text-xl font-bold mt-1">${isDeposit ? 'Deposit Funds' : 'Withdraw Funds'}</h1>
-          <p class="text-muted text-sm">${isDeposit ? 'Create a funding request. Follow payment instructions and upload proof.' : 'Submit a payout request. KYC and real balance required.'}</p>
+          <span class="${isDeposit ? 'badge-green' : 'badge-accent'}">${isDeposit ? 'Deposit desk' : 'Withdrawal desk'}</span>
+          <h1>${isDeposit ? 'Fund your live account' : 'Request a manual payout'}</h1>
+          <p>${isDeposit ? 'Choose an approved payment rail, follow the instructions, and submit proof for admin review.' : 'Withdrawals are reviewed manually with ledger holds, KYC checks, and admin approval.'}</p>
+        </div>
+        <div class="funding-balance-card">
+          <span>${mode === 'real' ? 'Live available' : 'Demo balance'}</span>
+          <strong>${money(mode === 'real' ? (real.available || 0) : (demo.available || 0))}</strong>
+          <small>${esc(mode === 'real' ? (real.currency || 'USDT') : (demo.currency || 'USDT_DEMO'))}</small>
         </div>
       </section>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Form -->
-        <section class="card">
-          <h2 class="font-semibold mb-4">New ${isDeposit ? 'Deposit' : 'Withdrawal'} Request</h2>
+      <section class="funding-steps">
+        ${stepCard('1', isDeposit ? 'Pick a method' : 'Choose payout rail', isDeposit ? 'Use only active methods shown by admin.' : 'Select where the funds should be sent.')}
+        ${stepCard('2', isDeposit ? 'Send funds' : 'Submit review', isDeposit ? 'Use the exact amount and reference when available.' : 'The amount is held while the desk checks it.')}
+        ${stepCard('3', isDeposit ? 'Upload proof' : 'Admin approval', isDeposit ? 'Receipts help the desk confirm faster.' : 'Approved payouts are recorded in the ledger.')}
+      </section>
+
+      <div class="funding-layout">
+        <section class="card funding-form-card">
+          <div class="panel-headline">
+            <span class="badge-accent">${isDeposit ? 'New deposit' : 'New withdrawal'}</span>
+            <h2>${isDeposit ? 'Create funding request' : 'Create payout request'}</h2>
+          </div>
           <form class="space-y-4" id="funding-form" data-kind="${kind}">
-            <label class="block">
-              <span class="text-xs text-muted">Amount (USDT)</span>
-              <input type="number" name="amount" class="input mt-1" value="100" min="10" step="1" required />
-            </label>
-            <label class="block">
-              <span class="text-xs text-muted">Payment Method</span>
-              <select name="method" class="input mt-1" id="method-select">
-                <option value="">Loading methods...</option>
-              </select>
-            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="block">
+                <span class="field-label">Amount (USDT)</span>
+                <input type="number" name="amount" class="input mt-1" value="${isDeposit ? '100' : '50'}" min="10" step="1" required />
+              </label>
+              <label class="block">
+                <span class="field-label">Payment method</span>
+                <select name="method" class="input mt-1" id="method-select">
+                  <option value="">Loading methods...</option>
+                </select>
+              </label>
+            </div>
+            <div id="method-cards" class="method-grid">
+              ${Array.from({ length: 3 }).map(() => '<div class="skeleton h-20 rounded-lg"></div>').join('')}
+            </div>
+            <div id="method-details" class="method-details">
+              <p class="text-muted text-sm">Select a method to see address, limits, and desk instructions.</p>
+            </div>
             ${isDeposit ? `<label class="block">
-              <span class="text-xs text-muted">Proof (optional)</span>
+              <span class="field-label">Receipt / proof</span>
               <input type="file" name="proof" accept="image/*,.pdf" class="input mt-1 py-1.5" />
             </label>` : ''}
             <label class="block">
-              <span class="text-xs text-muted">Notes</span>
-              <textarea name="notes" class="input mt-1" rows="3" placeholder="Optional notes for the operations desk..."></textarea>
+              <span class="field-label">${isDeposit ? 'Reference / notes' : 'Payout address and notes'}</span>
+              <textarea name="notes" class="input mt-1" rows="3" placeholder="${isDeposit ? 'Transaction hash, sender name, or any desk note...' : 'Wallet address, bank reference, and payout notes...'}"></textarea>
             </label>
-            <button type="submit" class="btn-primary w-full">Submit ${isDeposit ? 'Deposit' : 'Withdrawal'} Request</button>
+            <button type="submit" class="${isDeposit ? 'btn-primary' : 'btn-sell'} w-full py-3">${isDeposit ? 'Submit deposit for review' : 'Submit withdrawal request'}</button>
             <p class="text-xs text-center" id="form-status"></p>
           </form>
         </section>
 
-        <!-- History -->
-        <section class="card">
-          <h2 class="font-semibold mb-4">Recent ${isDeposit ? 'Deposits' : 'Withdrawals'}</h2>
-          <div id="funding-history">
+        <section class="card funding-history-panel">
+          <div class="panel-headline">
+            <span class="badge-green">Ledger trail</span>
+            <h2>Recent ${isDeposit ? 'deposits' : 'withdrawals'}</h2>
+          </div>
+          <div id="funding-history" class="funding-history-list">
             <p class="text-muted text-sm text-center py-8">Loading...</p>
           </div>
         </section>
@@ -62,34 +89,105 @@ export function mount(container, params) {
   loadMethods(container, kind);
   loadHistory(container, kind);
   container.querySelector('#funding-form')?.addEventListener('submit', (e) => handleSubmit(e, container, kind));
+  container.querySelector('#method-select')?.addEventListener('change', () => updateSelectedMethod(container));
 }
 
 async function loadMethods(container, kind) {
   try {
-    const data = await api('/payment_methods/list.php?kind=' + kind, { timeout: 6000 });
+    const data = await api('/payment_methods/list.php?kind=' + kind, { timeout: 7000 });
+    const items = data?.items || [];
     const select = container.querySelector('#method-select');
-    if (!select || !data || !data.items) return;
-    select.innerHTML = (data.items || []).map((m) => `<option value="${esc(m.id || m.code || '')}">${esc(m.name || m.label || 'Method')}</option>`).join('') || '<option value="">No methods available</option>';
-  } catch (e) { /* silent */ }
+    if (select) {
+      select.innerHTML = items.map((m) => `<option value="${escAttr(methodId(m))}">${esc(m.title || m.name || m.code || 'Method')}</option>`).join('') || '<option value="">No methods available</option>';
+    }
+    container.__fundingMethods = items;
+    renderMethodCards(container, items);
+    updateSelectedMethod(container);
+  } catch (_e) {
+    const cards = container.querySelector('#method-cards');
+    if (cards) cards.innerHTML = '<p class="text-muted text-sm">Payment methods are temporarily unavailable.</p>';
+  }
+}
+
+function renderMethodCards(container, items) {
+  const el = container.querySelector('#method-cards');
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state !m-0">No active methods are configured by admin yet.</div>';
+    return;
+  }
+  el.innerHTML = items.slice(0, 8).map((m, idx) => `
+    <button type="button" class="method-card ${idx === 0 ? 'active' : ''}" data-method="${escAttr(methodId(m))}">
+      <span class="method-icon">${methodIcon(m)}</span>
+      <strong>${esc(m.title || m.name || m.code || 'Method')}</strong>
+      <small>${esc([m.provider, m.currency].filter(Boolean).join(' - ') || 'Manual desk')}</small>
+      <em>${money(m.min_amount || 0)}${m.max_amount ? ` - ${money(m.max_amount)}` : '+'}</em>
+    </button>
+  `).join('');
+  el.querySelectorAll('[data-method]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const select = container.querySelector('#method-select');
+      if (select) select.value = btn.dataset.method || '';
+      updateSelectedMethod(container);
+    });
+  });
+}
+
+function updateSelectedMethod(container) {
+  const select = container.querySelector('#method-select');
+  const value = select?.value || '';
+  const items = container.__fundingMethods || [];
+  const selected = items.find(m => methodId(m) === value) || items[0] || null;
+  if (select && selected && !select.value) select.value = methodId(selected);
+  container.querySelectorAll('.method-card').forEach(card => card.classList.toggle('active', card.dataset.method === methodId(selected || {})));
+  const details = container.querySelector('#method-details');
+  if (!details) return;
+  if (!selected) {
+    details.innerHTML = '<p class="text-muted text-sm">No method selected.</p>';
+    return;
+  }
+  details.innerHTML = `
+    <div class="method-details-head">
+      <span>${methodIcon(selected)}</span>
+      <div>
+        <strong>${esc(selected.title || selected.name || selected.code || 'Payment method')}</strong>
+        <small>${esc(selected.description || 'Manual operations desk review')}</small>
+      </div>
+    </div>
+    <div class="method-detail-grid">
+      ${detailPill('Currency', selected.currency || 'USDT')}
+      ${detailPill('Minimum', money(selected.min_amount || 0))}
+      ${detailPill('Maximum', selected.max_amount ? money(selected.max_amount) : 'Desk limit')}
+      ${detailPill('Proof', selected.proof_required ? 'Required' : 'Optional')}
+    </div>
+    ${selected.payment_address ? `<div class="copy-address"><span>${esc(selected.payment_address)}</span><button type="button" data-copy-address="${escAttr(selected.payment_address)}">Copy</button></div>` : ''}
+    ${selected.instructions ? `<p class="method-instructions">${esc(selected.instructions)}</p>` : ''}
+  `;
+  details.querySelector('[data-copy-address]')?.addEventListener('click', async (e) => {
+    try {
+      await navigator.clipboard.writeText(e.currentTarget.dataset.copyAddress || '');
+      e.currentTarget.textContent = 'Copied';
+      setTimeout(() => { e.currentTarget.textContent = 'Copy'; }, 1200);
+    } catch (_e) {}
+  });
 }
 
 async function loadHistory(container, kind) {
   try {
     const endpoint = kind === 'deposit' ? '/deposits/list.php' : '/withdrawals/list.php';
-    const data = await api(endpoint, { timeout: 6000 });
+    const data = await api(endpoint, { timeout: 7000 });
     const el = container.querySelector('#funding-history');
     if (!el || !data) return;
     const items = data.items || [];
-    if (!items.length) { el.innerHTML = `<p class="text-muted text-sm text-center py-4">No ${kind} history.</p>`; return; }
-    el.innerHTML = `<div class="space-y-2">${items.slice(0, 10).map((item) => `
-      <div class="flex items-center justify-between p-3 rounded-lg bg-panel-2/50 border border-line/50">
-        <div>
-          <div class="text-sm font-semibold">${money(item.amount)} ${esc(item.currency || 'USDT')}</div>
-          <div class="text-[11px] text-muted">${esc(item.method_label || item.method || '--')} - ${esc(item.created_at || '')}</div>
-        </div>
-        <span class="badge ${statusBadge(item.status)}">${esc(item.status || 'pending')}</span>
-      </div>`).join('')}</div>`;
-  } catch (e) { /* silent */ }
+    if (!items.length) {
+      el.innerHTML = `<div class="empty-state !m-0">No ${kind} requests yet.</div>`;
+      return;
+    }
+    el.innerHTML = items.slice(0, 12).map((item) => historyCard(item, kind)).join('');
+  } catch (_e) {
+    const el = container.querySelector('#funding-history');
+    if (el) el.innerHTML = '<p class="text-red text-sm text-center py-4">History unavailable.</p>';
+  }
 }
 
 async function handleSubmit(e, container, kind) {
@@ -99,24 +197,82 @@ async function handleSubmit(e, container, kind) {
   const fd = new FormData(form);
   fd.append('kind', kind);
   try {
-    if (status) status.textContent = 'Submitting...';
+    if (status) {
+      status.textContent = 'Submitting request to operations desk...';
+      status.className = 'text-xs text-center text-muted';
+    }
     const endpoint = kind === 'deposit' ? '/deposits/create.php' : '/withdrawals/create.php';
-    const res = await formApi(endpoint, fd, { timeout: 12000 });
+    const res = await formApi(endpoint, fd, { timeout: 14000 });
     if (res && res.ok !== false) {
-      if (status) { status.textContent = 'Request submitted!'; status.className = 'text-xs text-center text-green'; }
+      if (status) {
+        status.textContent = 'Request submitted. Admin review is now pending.';
+        status.className = 'text-xs text-center text-buy';
+      }
       loadHistory(container, kind);
-    } else {
-      if (status) { status.textContent = res?.error || 'Failed'; status.className = 'text-xs text-center text-red'; }
+    } else if (status) {
+      status.textContent = res?.error || 'Request failed';
+      status.className = 'text-xs text-center text-sell';
     }
   } catch (err) {
-    if (status) { status.textContent = err.message; status.className = 'text-xs text-center text-red'; }
+    if (status) {
+      status.textContent = err.message || 'Request failed';
+      status.className = 'text-xs text-center text-sell';
+    }
   }
 }
 
-function statusBadge(status) {
-  const s = (status || '').toLowerCase();
-  if (['approved','confirmed','completed','paid'].includes(s)) return 'badge-green';
-  if (['pending','requested','processing','review'].includes(s)) return 'badge-accent';
-  return 'badge-red';
+function stepCard(num, title, text) {
+  return `<div class="funding-step">
+    <span>${esc(num)}</span>
+    <strong>${esc(title)}</strong>
+    <small>${esc(text)}</small>
+  </div>`;
 }
 
+function methodId(m) {
+  return String(m?.id ?? m?.code ?? '');
+}
+
+function methodIcon(m) {
+  const label = String(m?.method_group || m?.provider || m?.code || 'USDT').toUpperCase();
+  if (String(m?.image_url || '').trim()) return `<img src="${escAttr(m.image_url)}" alt="" />`;
+  if (label.includes('BANK')) return icons.wallet;
+  if (label.includes('TRC') || label.includes('USDT') || label.includes('CRYPTO')) return icons.deposit;
+  return icons.wallet;
+}
+
+function detailPill(label, value) {
+  return `<span><small>${esc(label)}</small><strong>${esc(value)}</strong></span>`;
+}
+
+function historyCard(item, kind) {
+  const status = String(item.status || 'pending').toLowerCase();
+  const method = item.method_label || item.provider || item.method_code || item.method || '--';
+  return `<article class="funding-history-card">
+    <div class="funding-history-main">
+      <span class="history-kind ${kind === 'deposit' ? 'is-deposit' : 'is-withdraw'}">${kind === 'deposit' ? icons.deposit : icons.withdraw}</span>
+      <div>
+        <strong>${money(item.amount)} ${esc(item.currency || 'USDT')}</strong>
+        <small>${esc(method)} - ${esc(item.created_at || '')}</small>
+      </div>
+    </div>
+    <div class="status-flow">
+      <i class="done"></i><i class="${isMidStatus(status) ? 'done' : ''}"></i><i class="${isDoneStatus(status) ? 'done' : ''}"></i>
+    </div>
+    <span class="badge ${statusBadge(status)}">${esc(status)}</span>
+  </article>`;
+}
+
+function isMidStatus(status) {
+  return ['pending','requested','processing','review','approved','confirmed','completed','paid'].includes(status);
+}
+
+function isDoneStatus(status) {
+  return ['approved','confirmed','completed','paid'].includes(status);
+}
+
+function statusBadge(status) {
+  if (isDoneStatus(status)) return 'badge-green';
+  if (isMidStatus(status)) return 'badge-accent';
+  return 'badge-red';
+}

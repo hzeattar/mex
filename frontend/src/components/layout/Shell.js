@@ -80,6 +80,7 @@ export function renderShell(app) {
             <span class="mode-label">${mode === 'real' ? 'Real' : 'Demo'}</span>
           </button>
           <button class="icon-btn icon-btn-sm" id="notif-btn-m">${icons.bell}<span class="notif-badge hidden" id="notif-badge-m">0</span></button>
+          <a href="#/account" class="icon-btn icon-btn-sm" title="Account">${icons.account}</a>
         </div>
       </header>
 

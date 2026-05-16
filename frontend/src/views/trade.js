@@ -91,7 +91,7 @@ export function render(params) {
         <button class="btn-buy py-3" data-open-order="BUY">BUY</button>
       </div>
 
-      <div class="border-t border-line bg-surface max-h-[185px] lg:max-h-[180px] overflow-auto shrink-0" id="positions-section">
+      <div class="border-t border-line bg-surface max-h-[260px] lg:max-h-[180px] overflow-auto shrink-0" id="positions-section">
         <div class="flex items-center gap-3 px-3 h-8 border-b border-line sticky top-0 bg-surface z-10">
           <span class="text-[10px] font-semibold text-muted uppercase">Open Positions</span>
           <span class="text-[10px] text-muted" id="pos-count">(0)</span>
@@ -122,7 +122,7 @@ function renderOrderPanel() {
   const q = get('activeQuote') || {};
   const p = Number(q.price || 0);
 
-  return `<div class="space-y-3" data-order-form>
+  return `<div class="space-y-3 order-ticket-panel" data-order-form>
     <div class="grid grid-cols-2 gap-2">
       <label class="block">
         <span class="text-[10px] text-muted">Trading type</span>
@@ -140,10 +140,15 @@ function renderOrderPanel() {
       </label>
     </div>
     <div class="grid grid-cols-2 gap-2">
-      <button class="btn-sell py-3 text-sm font-bold" data-side="SELL"><small class="block text-[9px] opacity-70">Sell</small><span data-sell-price>${p > 0 ? price(p, get('type')) : '--'}</span></button>
-      <button class="btn-buy py-3 text-sm font-bold" data-side="BUY"><small class="block text-[9px] opacity-70">Buy</small><span data-buy-price>${p > 0 ? price(p * 1.0001, get('type')) : '--'}</span></button>
+      <button class="btn-sell trade-price-button" data-side="SELL"><small>Sell</small><span data-sell-price>${p > 0 ? price(p, get('type')) : '--'}</span></button>
+      <button class="btn-buy trade-price-button" data-side="BUY"><small>Buy</small><span data-buy-price>${p > 0 ? price(p * 1.0001, get('type')) : '--'}</span></button>
     </div>
     <div class="text-center"><span class="spread-display" data-spread-val>Spread: --</span></div>
+    <div class="order-summary-box">
+      <span><small>Available</small><strong data-avail-bal>--</strong></span>
+      <span><small>Est. Units</small><strong data-est-units>--</strong></span>
+      <span><small>Notional</small><strong data-est-notional>--</strong></span>
+    </div>
     <label class="block">
       <span class="text-[10px] text-muted">Margin / Amount (USDT)</span>
       <input type="number" min="1" step="any" class="input mt-1" value="${escAttr(String(amt))}" data-amount />
@@ -162,11 +167,7 @@ function renderOrderPanel() {
         <input type="number" step="any" class="input mt-1" placeholder="Optional" data-sl />
       </label>
     </div>
-    <div class="space-y-1 text-[10px] text-muted pt-2 border-t border-line">
-      <div class="flex justify-between"><span>Est. Units</span><span data-est-units>--</span></div>
-      <div class="flex justify-between"><span>Est. Notional</span><span data-est-notional>--</span></div>
-      <div class="flex justify-between"><span>Available</span><span data-avail-bal>--</span></div>
-    </div>
+    <p class="order-ticket-note">Orders execute internally on VertexPluse at the current platform quote. Use TP/SL to document target risk for review.</p>
   </div>`;
 }
 
@@ -186,7 +187,9 @@ function renderMobileOrderSheet(symbol, type) {
       </div>
       <div class="p-4">
         ${renderOrderPanel()}
-        <button class="btn-primary w-full mt-4 py-3" id="mobile-submit-order" data-submit-order="BUY">Review & Place Order</button>
+        <div class="order-action-sticky">
+          <button class="btn-primary w-full py-3" id="mobile-submit-order" data-submit-order="BUY">Review & Place Order</button>
+        </div>
       </div>
     </div>
   </div>`;
@@ -485,30 +488,61 @@ function renderPositions(container, positions) {
     return;
   }
 
-  body.innerHTML = `<div class="overflow-x-auto"><table class="min-w-[620px] lg:min-w-0 w-full text-[11px]">
-    <thead class="text-[9px] text-muted uppercase"><tr>
-      <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Mark</th><th class="text-right py-1">Size</th><th class="text-right py-1">Lev</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1"></th>
-    </tr></thead>
-    <tbody>${positions.slice(0, 12).map(pos => {
-      const pnl = Number(pos.pnl || pos.unrealized_pnl || 0);
-      const cleanSymbol = String(pos.symbol || '').replace('@R@', '');
-      const posType = pos.asset_type || get('type');
-      const mark = Number(pos.mark_price || pos.current_price || pos.price || 0);
-      const id = pos.position_id || pos.id || '';
-      const side = String(pos.side || 'buy').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
-      return `<tr class="border-t border-line/50 hover:bg-panel/50">
-        <td class="px-3 py-1.5 font-semibold">${esc(cleanSymbol)}</td>
-        <td><span class="badge-${side === 'BUY' ? 'buy' : 'sell'}">${esc(side)}</span></td>
-        <td class="text-muted">${esc(pos.market_type || 'spot')}</td>
-        <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
-        <td class="text-right font-mono">${mark > 0 ? price(mark, posType) : '--'}</td>
-        <td class="text-right font-mono">${money(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
-        <td class="text-right font-mono">${esc(String(pos.leverage || 1))}x</td>
-        <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
-        <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">Close</button>` : ''}</td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table></div>`;
+  body.innerHTML = `
+    <div class="trade-position-cards lg:hidden">
+      ${positions.slice(0, 12).map(tradePositionCard).join('')}
+    </div>
+    <div class="hidden lg:block overflow-x-auto"><table class="min-w-[620px] lg:min-w-0 w-full text-[11px]">
+      <thead class="text-[9px] text-muted uppercase"><tr>
+        <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Mark</th><th class="text-right py-1">Size</th><th class="text-right py-1">Lev</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1"></th>
+      </tr></thead>
+      <tbody>${positions.slice(0, 12).map(tradePositionRow).join('')}</tbody>
+    </table></div>`;
+}
+
+function tradePositionInfo(pos) {
+  const pnl = Number(pos.pnl || pos.unrealized_pnl || 0);
+  const cleanSymbol = String(pos.symbol || '').replace('@R@', '');
+  const posType = pos.asset_type || get('type');
+  const mark = Number(pos.mark_price || pos.current_price || pos.price || 0);
+  const id = pos.position_id || pos.id || '';
+  const side = String(pos.side || 'buy').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+  return { pnl, cleanSymbol, posType, mark, id, side };
+}
+
+function tradePositionRow(pos) {
+  const { pnl, cleanSymbol, posType, mark, id, side } = tradePositionInfo(pos);
+  return `<tr class="border-t border-line/50 hover:bg-panel/50">
+    <td class="px-3 py-1.5 font-semibold">${esc(cleanSymbol)}</td>
+    <td><span class="badge-${side === 'BUY' ? 'buy' : 'sell'}">${esc(side)}</span></td>
+    <td class="text-muted">${esc(pos.market_type || 'spot')}</td>
+    <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
+    <td class="text-right font-mono">${mark > 0 ? price(mark, posType) : '--'}</td>
+    <td class="text-right font-mono">${money(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
+    <td class="text-right font-mono">${esc(String(pos.leverage || 1))}x</td>
+    <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
+    <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">Close</button>` : ''}</td>
+  </tr>`;
+}
+
+function tradePositionCard(pos) {
+  const { pnl, cleanSymbol, posType, mark, id, side } = tradePositionInfo(pos);
+  return `<article class="trade-position-card">
+    <div class="flex items-start justify-between gap-2">
+      <div>
+        <strong>${esc(cleanSymbol)}</strong>
+        <small>${esc(pos.market_type || 'spot')} - ${esc(pos.created_at || pos.opened_at || '')}</small>
+      </div>
+      <span class="badge-${side === 'BUY' ? 'buy' : 'sell'}">${esc(side)}</span>
+    </div>
+    <div class="trade-position-metrics">
+      <span><small>Entry</small><strong>${price(pos.entry_price || pos.open_price, posType)}</strong></span>
+      <span><small>Mark</small><strong>${mark > 0 ? price(mark, posType) : '--'}</strong></span>
+      <span><small>Size</small><strong>${money(pos.qty || pos.amount || pos.size || pos.units || 0)}</strong></span>
+      <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
+    </div>
+    ${id ? `<button class="btn-xs btn-ghost text-sell w-full" data-close="${escAttr(id)}">Close position</button>` : ''}
+  </article>`;
 }
 
 async function initChart(container, candles, runId = tradeRunId) {
@@ -747,7 +781,7 @@ function setMobileSubmitSide(container, side) {
   if (btn) {
     btn.dataset.submitOrder = side;
     btn.textContent = `Review & ${side === 'BUY' ? 'Buy' : 'Sell'}`;
-    btn.className = `${side === 'BUY' ? 'btn-buy' : 'btn-sell'} w-full mt-4 py-3`;
+    btn.className = `${side === 'BUY' ? 'btn-buy' : 'btn-sell'} w-full py-3`;
   }
   if (label) label.textContent = `${side} order`;
 }
