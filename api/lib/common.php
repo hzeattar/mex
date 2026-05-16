@@ -321,10 +321,14 @@ function db(): PDO {
       throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }
     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-    $pdo = new PDO($dsn, $user, $pass, [
+    $pdoOptions = [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
+    ];
+    if (PHP_SAPI !== 'cli' && (string)env('DB_PERSISTENT', '1') !== '0') {
+      $pdoOptions[PDO::ATTR_PERSISTENT] = true;
+    }
+    $pdo = new PDO($dsn, $user, $pass, $pdoOptions);
 
     // Auto-install/upgrade schema (MySQL + SQLite). Idempotent & safe to call often.
     static $bootstrapped = false;
