@@ -146,6 +146,10 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
   }
 
   $liveBySymbol = $withLive ? qa_live_map_grouped($symbolsByType, $metaBySymbol, $opts) : [];
+  $storedByType = [];
+  foreach ($symbolsByType as $type => $symbolsForType) {
+    $storedByType[$type] = qa_quote_rows_by_symbols($symbolsForType, $type);
+  }
   $out = [];
   foreach ($rows as $row) {
     $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
@@ -154,10 +158,8 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
 
     $cached = qa_cached_quote_from_market_row($row, $type);
     if ((float)($cached['price'] ?? 0) <= 0) {
-      try {
-        $stored = quote_get($sym, $type);
-        if (is_array($stored) && (float)($stored['price'] ?? 0) > 0) $cached = $stored;
-      } catch (Throwable $ignoredStoredQuote) {}
+      $stored = is_array($storedByType[$type][$sym] ?? null) ? $storedByType[$type][$sym] : null;
+      if (is_array($stored) && (float)($stored['price'] ?? 0) > 0) $cached = $stored;
     }
     $live = is_array($liveBySymbol[$sym] ?? null) ? $liveBySymbol[$sym] : null;
     $chosen = qa_choose_authoritative_quote($cached, $live, $type, [

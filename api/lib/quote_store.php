@@ -43,6 +43,50 @@ function qa_market_meta_by_symbols(array $symbols): array {
 function qa_quote_rows_by_symbols(array $symbols, ?string $typeAlias = null): array {
   $symbols = array_values(array_unique(array_filter(array_map('strtoupper', $symbols))));
   if (!$symbols) return [];
+
+  try {
+    $pdo = db();
+    $flags = quote_cols_flags();
+    $sel = "symbol,type,price,change_pct";
+    $sel .= $flags['mark_price']        ? ",mark_price"        : ",NULL AS mark_price";
+    $sel .= $flags['index_price']       ? ",index_price"       : ",NULL AS index_price";
+    $sel .= $flags['funding_rate']      ? ",funding_rate"      : ",NULL AS funding_rate";
+    $sel .= $flags['next_funding_time'] ? ",next_funding_time" : ",NULL AS next_funding_time";
+    $sel .= $flags['source']            ? ",source"            : ",'' AS source";
+    $sel .= $flags['market']            ? ",market"            : ",'spot' AS market";
+    $sel .= $flags['provider']          ? ",provider"          : ",NULL AS provider";
+    $sel .= $flags['provider_ts']       ? ",provider_ts"       : ",0 AS provider_ts";
+    $sel .= $flags['received_at']       ? ",received_at"       : ",0 AS received_at";
+    $sel .= $flags['source_strength']   ? ",source_strength"   : ",0 AS source_strength";
+    $sel .= $flags['is_stale']          ? ",is_stale"          : ",0 AS is_stale";
+    $sel .= $flags['as_of']             ? ",as_of"             : ",0 AS as_of";
+    $sel .= $flags['ingested_at']       ? ",ingested_at"       : ",0 AS ingested_at";
+    $sel .= $flags['source_priority']   ? ",source_priority"   : ",0 AS source_priority";
+    $sel .= ",updated_at";
+
+    $placeholders = implode(',', array_fill(0, count($symbols), '?'));
+    $args = $symbols;
+    $typeAlias = $typeAlias !== null ? vp_normalize_asset_type($typeAlias) : null;
+    $sql = "SELECT {$sel} FROM market_quotes WHERE symbol IN ({$placeholders})";
+    if ($typeAlias !== null && $typeAlias !== '' && $typeAlias !== 'all') {
+      $sql .= " AND type=?";
+      $args[] = $typeAlias;
+    }
+    $sql .= " ORDER BY symbol ASC, updated_at DESC, id DESC";
+    $st = $pdo->prepare($sql);
+    $st->execute($args);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    foreach ($rows as $row) {
+      $sym = strtoupper((string)($row['symbol'] ?? ''));
+      if ($sym === '' || isset($out[$sym])) continue;
+      $out[$sym] = $row;
+    }
+    return $out;
+  } catch (Throwable $e) {
+    // Fall back to the single-row path on older DBs or partial imports.
+  }
+
   $rows = [];
   foreach ($symbols as $sym) {
     $row = quote_get($sym, $typeAlias ?: null);

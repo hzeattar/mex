@@ -389,17 +389,35 @@ if ($cacheTtl > 0 && is_file($cacheFile)) {
 try {
   $pdo = db();
   $quoteFlags = function_exists('quote_cols_flags') ? quote_cols_flags() : [];
+  $supportedDefsForQuery = $supportedOnly ? vp_supported_defs_for($typeAlias, $scope) : [];
+  $supportedSymbolsForQuery = array_values(array_unique(array_filter(array_map(
+    static fn($d) => strtoupper(trim((string)($d['symbol'] ?? ''))),
+    $supportedDefsForQuery
+  ))));
   $quoteMarketJoin = !empty($quoteFlags['market']) ? " AND (q.market IS NULL OR q.market='' OR q.market='spot')" : '';
 
-  $sql = "SELECT
-            m.id, m.symbol, m.name, m.type, m.status, m.sort_order,
-            m.tv_symbol, m.seed_price, m.meta,
-            q.price AS q_price, q.change_pct AS q_change, q.updated_at AS q_updated,
-            q.source AS q_source
-          FROM markets m
-          LEFT JOIN market_quotes q ON q.symbol = m.symbol AND q.type = (CASE WHEN m.type='metals' THEN 'commodities' ELSE m.type END){$quoteMarketJoin} AND q.updated_at > 0
-          WHERE m.status='active'";
+  if ($supportedOnly) {
+    $sql = "SELECT
+              m.id, m.symbol, m.name, m.type, m.status, m.sort_order,
+              m.tv_symbol, m.seed_price, m.meta,
+              NULL AS q_price, 0 AS q_change, 0 AS q_updated, NULL AS q_source
+            FROM markets m
+            WHERE m.status='active'";
+  } else {
+    $sql = "SELECT
+              m.id, m.symbol, m.name, m.type, m.status, m.sort_order,
+              m.tv_symbol, m.seed_price, m.meta,
+              q.price AS q_price, q.change_pct AS q_change, q.updated_at AS q_updated,
+              q.source AS q_source
+            FROM markets m
+            LEFT JOIN market_quotes q ON q.symbol = m.symbol AND q.type = (CASE WHEN m.type='metals' THEN 'commodities' ELSE m.type END){$quoteMarketJoin} AND q.updated_at > 0
+            WHERE m.status='active'";
+  }
   $args = [];
+  if ($supportedOnly && $supportedSymbolsForQuery) {
+    $sql .= ' AND m.symbol IN (' . implode(',', array_fill(0, count($supportedSymbolsForQuery), '?')) . ')';
+    $args = array_merge($args, $supportedSymbolsForQuery);
+  }
   if ($typeAlias !== '' && $typeAlias !== 'all') {
     if ($typeAlias === 'commodities') {
       $sql .= " AND m.type IN ('commodities','metals')";
