@@ -64,13 +64,18 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
       $sourceLower = strtolower(trim($source));
       $delayed = !empty($chosen['delayed']) || in_array($assetType, ['stocks','arab'], true) || ($assetType !== 'crypto' && $sourceLower === 'yahoo');
       $timingClass = qa_quote_timing_class($chosen + ['delayed' => $delayed], $assetType);
-    } elseif (!empty($opts['allow_stale_display']) && $assetType !== 'crypto' && is_array($cached)) {
+    } elseif (!empty($opts['allow_stale_display']) && is_array($cached)) {
       $cachedPrice = (float)($cached['price'] ?? 0);
       $cachedSource = (string)($cached['source'] ?? $cached['provider'] ?? '');
-      if ($cachedPrice > 0 && !quote_source_is_untrusted($cachedSource)) {
+      $cachedUpdatedAt = qa_quote_row_ts($cached);
+      $cachedAge = $cachedUpdatedAt > 0 ? max(0, time() - $cachedUpdatedAt) : 999999;
+      $maxStaleAge = $assetType === 'crypto'
+        ? max(30, min(600, (int)env('QUOTES_CACHE_ONLY_CRYPTO_STALE_SECONDS', '300')))
+        : qa_market_list_stale_seconds($assetType);
+      if ($cachedPrice > 0 && !quote_source_is_untrusted($cachedSource) && $cachedAge <= $maxStaleAge) {
         $price = $cachedPrice;
         $change = (float)($cached['change_pct'] ?? 0);
-        $updatedAt = qa_quote_row_ts($cached);
+        $updatedAt = $cachedUpdatedAt;
         $providerUpdatedAt = $updatedAt;
         $receivedAt = isset($cached['received_at']) && is_numeric($cached['received_at']) ? (int)$cached['received_at'] : 0;
         $ingestedAt = isset($cached['ingested_at']) && is_numeric($cached['ingested_at']) ? (int)$cached['ingested_at'] : 0;
