@@ -5,12 +5,16 @@ require_once __DIR__ . '/api/lib/settings.php';
 require_once __DIR__ . '/api/lib/schema.php';
 
 try {
-  $pdo = db();
-  schema_install($pdo, db_driver());
-  schema_upgrade($pdo, db_driver());
-  schema_seed_defaults($pdo, db_driver());
+  $env = strtolower((string)env('APP_ENV', 'local'));
+  $autoMigrate = (string)env('AUTO_MIGRATE', '0') === '1';
+  if ($autoMigrate || !in_array($env, ['production', 'prod'], true)) {
+    $pdo = db();
+    schema_install($pdo, db_driver());
+    schema_upgrade($pdo, db_driver());
+    schema_seed_defaults($pdo, db_driver());
+  }
 } catch (Throwable $e) {
-  // ignore, public pages will use defaults
+  // Public pages should stay reachable even if maintenance tasks fail.
 }
 
 function site_setting(string $key, string $default = ''): string {
