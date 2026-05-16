@@ -102,6 +102,9 @@ if ($isFocusRequest) {
   }
 }
 $allowLive = true;
+if ($cacheOnly) {
+  $allowLive = false;
+}
 if ($isNonCrypto) {
   $isLiveFocusRequest = ($purpose === 'focus') || $direct || $strictLive || ($fresh && count($list) <= 2);
   $allowLive = !$cacheOnly && ($isLiveFocusRequest && count($list) <= 3 && !$visible);

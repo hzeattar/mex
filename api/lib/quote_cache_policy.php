@@ -16,7 +16,7 @@ function qa_cache_file(string $prefix, string $key): string {
 
 function qa_payload_has_coverage($payload, string $assetType, int $requestedCount): bool {
   if (!is_array($payload)) return false;
-  if ($assetType === 'crypto') return true;
+  if ($requestedCount <= 0) return true;
   $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
   if (!$items) return false;
   $valid = 0;
@@ -59,7 +59,9 @@ function qa_quotes_cache_ttl(string $assetType, string $mode, int $count): int {
     return $assetType === 'crypto' ? 0 : max(0, min(2, (int)env('QUOTES_API_VISIBLE_CACHE_TTL_NONCRYPTO', '0')));
   }
   if ($mode === 'cache_only') {
-    return $assetType === 'crypto' ? 0 : max(1, min(10, (int)env('QUOTES_API_CACHE_ONLY_TTL_NONCRYPTO', '4')));
+    return $assetType === 'crypto'
+      ? max(1, min(10, (int)env('QUOTES_API_CACHE_ONLY_TTL_CRYPTO', '4')))
+      : max(1, min(10, (int)env('QUOTES_API_CACHE_ONLY_TTL_NONCRYPTO', '4')));
   }
   if ($mode === 'fresh') {
     return $assetType === 'crypto'
