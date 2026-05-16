@@ -37,8 +37,14 @@ function quotes_focus_cache_payload_usable(array $payload, string $assetType, in
     $price = (float)($item['price'] ?? 0);
     $source = strtolower(trim((string)($item['source'] ?? '')));
     if (!($price > 0) || quote_source_is_untrusted($source)) continue;
-    $updatedAt = (int)($item['updated_at'] ?? 0);
-    if ($updatedAt <= 0 || (time() - $updatedAt) > $maxAge) continue;
+    $cacheAt = 0;
+    foreach (['cache_updated_at', 'received_at', 'ingested_at', 'updated_at'] as $key) {
+      if (!isset($item[$key]) || !is_numeric($item[$key])) continue;
+      $ts = (int)$item[$key];
+      if ($ts > 1000000000000) $ts = (int)floor($ts / 1000);
+      if ($ts > $cacheAt) $cacheAt = $ts;
+    }
+    if ($cacheAt <= 0 || (time() - $cacheAt) > $maxAge) continue;
     $valid++;
   }
   return $valid >= min($requestedCount, max(1, (int)ceil($requestedCount * 0.75)));

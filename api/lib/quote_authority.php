@@ -50,13 +50,16 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
         ]);
 
     $price = 0.0; $change = 0.0; $updatedAt = 0; $source = 'unavailable';
-    $providerUpdatedAt = 0; $timingClass = 'unavailable';
+    $providerUpdatedAt = 0; $receivedAt = 0; $ingestedAt = 0; $cacheUpdatedAt = 0; $timingClass = 'unavailable';
     $delayed = in_array($assetType, ['stocks','arab'], true);
     if ($chosen) {
       $price = (float)($chosen['price'] ?? 0);
       $change = (float)($chosen['change_pct'] ?? 0);
       $updatedAt = qa_quote_row_ts($chosen);
       $providerUpdatedAt = $updatedAt;
+      $receivedAt = isset($chosen['received_at']) && is_numeric($chosen['received_at']) ? (int)$chosen['received_at'] : 0;
+      $ingestedAt = isset($chosen['ingested_at']) && is_numeric($chosen['ingested_at']) ? (int)$chosen['ingested_at'] : 0;
+      $cacheUpdatedAt = max($receivedAt, $ingestedAt);
       $source = (string)($chosen['source'] ?? $chosen['provider'] ?? '');
       $sourceLower = strtolower(trim($source));
       $delayed = !empty($chosen['delayed']) || in_array($assetType, ['stocks','arab'], true) || ($assetType !== 'crypto' && $sourceLower === 'yahoo');
@@ -69,6 +72,9 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
         $change = (float)($cached['change_pct'] ?? 0);
         $updatedAt = qa_quote_row_ts($cached);
         $providerUpdatedAt = $updatedAt;
+        $receivedAt = isset($cached['received_at']) && is_numeric($cached['received_at']) ? (int)$cached['received_at'] : 0;
+        $ingestedAt = isset($cached['ingested_at']) && is_numeric($cached['ingested_at']) ? (int)$cached['ingested_at'] : 0;
+        $cacheUpdatedAt = max($receivedAt, $ingestedAt);
         $source = $cachedSource !== '' ? $cachedSource : 'stale_cache';
         $sourceLower = strtolower(trim($source));
         $delayed = in_array($assetType, ['stocks','arab'], true) || str_starts_with($sourceLower, 'yahoo');
@@ -101,6 +107,9 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
       'change_pct' => $change,
       'updated_at' => $updatedAt,
       'provider_updated_at' => $providerUpdatedAt,
+      'received_at' => $receivedAt,
+      'ingested_at' => $ingestedAt,
+      'cache_updated_at' => $cacheUpdatedAt,
       'source' => $source,
       'delayed' => $delayed,
       'timing_class' => $timingClass,
