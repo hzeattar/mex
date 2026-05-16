@@ -548,13 +548,13 @@ try {
     );
   }
   if ($cryptoRows) {
-    // Binance bulk ticker is cheap and fast enough for the curated crypto
-    // first screen, so keep BTC/ETH/etc. priced on first paint instead of
-    // waiting for a background cache warm.
+    // Keep market lists cache-first. Provider calls belong to the focused
+    // quote endpoint and cron warmers; doing them here can block first paint
+    // and create canceled request storms on slow mobile networks.
     $authoritativeQuotes = array_replace(
       $authoritativeQuotes,
       qa_overlay_market_rows($cryptoRows, array_merge($quoteBaseOpts, [
-        'with_live' => $supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true),
+        'with_live' => $forceLive && !$lite,
         'direct_budget' => 24,
         'direct_yahoo_budget' => 0,
         'chart_budget' => 0,
