@@ -20,10 +20,10 @@ $list = qa_parse_symbols($symbolsRaw);
 function quotes_focus_cache_max_age(string $assetType): int {
   $assetType = vp_normalize_asset_type($assetType);
   return match ($assetType) {
-    'forex' => max(30, min(900, (int)env('QUOTES_FOCUS_CACHE_SECONDS_FOREX', '180'))),
-    'commodities', 'futures' => max(30, min(900, (int)env('QUOTES_FOCUS_CACHE_SECONDS_MARKET_HOURS', '240'))),
-    'stocks', 'arab' => max(120, min(7200, (int)env('QUOTES_FOCUS_CACHE_SECONDS_DELAYED', '1200'))),
-    default => max(10, min(300, (int)env('QUOTES_FOCUS_CACHE_SECONDS_OTHER', '60'))),
+    'forex' => max(900, min(43200, (int)env('QUOTES_FOCUS_CACHE_SECONDS_FOREX', '21600'))),
+    'commodities', 'futures' => max(900, min(43200, (int)env('QUOTES_FOCUS_CACHE_SECONDS_MARKET_HOURS', '21600'))),
+    'stocks', 'arab' => max(1800, min(172800, (int)env('QUOTES_FOCUS_CACHE_SECONDS_DELAYED', '43200'))),
+    default => max(300, min(7200, (int)env('QUOTES_FOCUS_CACHE_SECONDS_OTHER', '1800'))),
   };
 }
 
