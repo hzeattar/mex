@@ -103,7 +103,19 @@ function seed_showcase_run_sql(PDO $pdo, string $sql, bool $diag): array {
   return ['ok' => true, 'ran' => $ran];
 }
 
-$key = (string)($_GET['key'] ?? $_POST['key'] ?? '');
+$authHeader = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+$bearerKey = '';
+if (stripos($authHeader, 'Bearer ') === 0) {
+  $bearerKey = trim(substr($authHeader, 7));
+}
+$key = (string)(
+  $_GET['key']
+  ?? $_POST['key']
+  ?? $_SERVER['HTTP_X_INSTALL_KEY']
+  ?? $_SERVER['HTTP_X_SEED_KEY']
+  ?? $bearerKey
+  ?? ''
+);
 $expected = (string)(env('INSTALL_KEY', '') ?: env('CRON_KEY', ''));
 if ($expected === '' || $key === '' || !hash_equals($expected, $key)) {
   json_response(['ok' => false, 'error' => 'Forbidden'], 403);
