@@ -13,6 +13,7 @@ let volumeSeries = null;
 let sseClean = null;
 let activeQuoteTimer = null;
 let activeQuoteController = null;
+let activityRefreshTimer = null;
 let resizeObserver = null;
 let chartLibPromise = null;
 let lastCandle = null;
@@ -91,12 +92,19 @@ export function render(params) {
         <button class="btn-buy py-3" data-open-order="BUY">BUY</button>
       </div>
 
-      <div class="border-t border-line bg-surface max-h-[260px] lg:max-h-[180px] overflow-auto shrink-0" id="positions-section">
-        <div class="flex items-center gap-3 px-3 h-8 border-b border-line sticky top-0 bg-surface z-10">
-          <span class="text-[10px] font-semibold text-muted uppercase">Open Positions</span>
-          <span class="text-[10px] text-muted" id="pos-count">(0)</span>
+      <div class="border-t border-line bg-surface max-h-[320px] lg:max-h-[220px] overflow-auto shrink-0 trade-activity-panel" id="positions-section">
+        <div class="trade-activity-head">
+          <div>
+            <span class="text-[10px] font-semibold text-muted uppercase">Trading activity</span>
+            <span class="text-[10px] text-muted ml-2" id="activity-summary">Loading...</span>
+          </div>
+          <div class="activity-tabs" role="tablist">
+            <button class="active" data-activity-tab="positions">Positions <b id="pos-count">0</b></button>
+            <button data-activity-tab="orders">Orders <b id="orders-count">0</b></button>
+            <button data-activity-tab="history">History <b id="history-count">0</b></button>
+          </div>
         </div>
-        <div id="positions-body"><p class="text-muted text-[11px] text-center py-4">Loading...</p></div>
+        <div id="activity-body"><p class="text-muted text-[11px] text-center py-4">Loading...</p></div>
       </div>
     </div>
 
@@ -152,6 +160,13 @@ function renderOrderPanel() {
     <label class="block">
       <span class="text-[10px] text-muted">Margin / Amount (USDT)</span>
       <input type="number" min="1" step="any" class="input mt-1" value="${escAttr(String(amt))}" data-amount />
+    </label>
+    <div class="quick-amount-grid" aria-label="Quick order amounts">
+      ${[25, 50, 100, 250].map(v => `<button type="button" data-quick-amount="${v}">$${v}</button>`).join('')}
+    </div>
+    <label class="block">
+      <span class="text-[10px] text-muted">Limit price</span>
+      <input type="number" min="0" step="any" class="input mt-1" placeholder="${p > 0 ? price(p, get('type')) : 'Required for limit'}" data-limit-price />
     </label>
     <label class="block">
       <span class="text-[10px] text-muted">Leverage: <strong data-lev-val>${lev}x</strong></span>
@@ -217,6 +232,7 @@ export function cleanup() {
     sseClean = null;
   }
   stopActiveQuote();
+  stopActivityRefresh();
   disconnect();
   document.body.classList.remove('trade-modal-open');
 }
@@ -248,16 +264,8 @@ async function setup(container) {
       if (list) list.innerHTML = '<p class="text-muted text-[11px] text-center py-4">Markets unavailable</p>';
     });
 
-  api('/trade/portfolio.php', { timeout: 5500 })
-    .then(portfolio => {
-      if (!isCurrentRun(runId, symbol, type)) return;
-      if (portfolio?.positions) renderPositions(container, portfolio.positions);
-    })
-    .catch(() => {
-      if (!isCurrentRun(runId, symbol, type)) return;
-      const body = $('#positions-body', container);
-      if (body) body.innerHTML = '<p class="text-muted text-[11px] text-center py-3">Positions unavailable</p>';
-    });
+  loadTradeActivity(container, runId);
+  activityRefreshTimer = setInterval(() => loadTradeActivity(container, runId, true), 12000);
 
   api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=220`, { timeout: 10000 })
     .then(async candles => {
@@ -345,6 +353,13 @@ function stopActiveQuote() {
   if (activeQuoteController) {
     activeQuoteController.abort();
     activeQuoteController = null;
+  }
+}
+
+function stopActivityRefresh() {
+  if (activityRefreshTimer) {
+    clearInterval(activityRefreshTimer);
+    activityRefreshTimer = null;
   }
 }
 
@@ -477,10 +492,54 @@ function updateSymbolListPrices(container, items) {
   });
 }
 
-function renderPositions(container, positions) {
-  const body = $('#positions-body', container);
+async function loadTradeActivity(container, runId = tradeRunId, silent = false) {
+  if (!isCurrentRun(runId)) return;
+  const body = $('#activity-body', container);
+  if (body && !silent && !container.__tradeActivityLoaded) {
+    body.innerHTML = '<p class="text-muted text-[11px] text-center py-4">Loading trading activity...</p>';
+  }
+
+  const [portfolioRes, ordersRes] = await Promise.allSettled([
+    api('/trade/portfolio.php', { timeout: 6500 }),
+    api('/trade/orders.php?limit=90', { timeout: 6500 }),
+  ]);
+  if (!isCurrentRun(runId)) return;
+
+  const portfolio = portfolioRes.status === 'fulfilled' ? portfolioRes.value : null;
+  const orders = ordersRes.status === 'fulfilled' ? ordersRes.value : null;
+  if (portfolio?.positions) container.__tradePositions = portfolio.positions;
+  if (orders?.items || orders?.orders) container.__tradeOrders = orders.items || orders.orders || [];
+  container.__tradeActivityLoaded = true;
+  renderActivity(container);
+}
+
+function renderActivity(container) {
+  const positions = container.__tradePositions || [];
+  const orders = container.__tradeOrders || [];
+  const openOrders = orders.filter(o => !isHistoryOrder(o));
+  const history = orders.filter(isHistoryOrder);
+  const tab = container.__tradeActivityTab || 'positions';
+
   const count = $('#pos-count', container);
-  if (count) count.textContent = `(${positions.length})`;
+  const ordersCount = $('#orders-count', container);
+  const historyCount = $('#history-count', container);
+  const summary = $('#activity-summary', container);
+  if (count) count.textContent = String(positions.length);
+  if (ordersCount) ordersCount.textContent = String(openOrders.length);
+  if (historyCount) historyCount.textContent = String(history.length);
+  if (summary) summary.textContent = `${positions.length} open / ${openOrders.length} pending / ${history.length} closed`;
+
+  $$('[data-activity-tab]', container).forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.activityTab === tab);
+  });
+
+  if (tab === 'orders') return renderOrdersActivity(container, openOrders);
+  if (tab === 'history') return renderHistoryActivity(container, history);
+  return renderPositions(container, positions);
+}
+
+function renderPositions(container, positions) {
+  const body = $('#activity-body', container);
   if (!body) return;
 
   if (!positions.length) {
@@ -497,6 +556,46 @@ function renderPositions(container, positions) {
         <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Mark</th><th class="text-right py-1">Size</th><th class="text-right py-1">Lev</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1"></th>
       </tr></thead>
       <tbody>${positions.slice(0, 12).map(tradePositionRow).join('')}</tbody>
+    </table></div>`;
+}
+
+function renderOrdersActivity(container, orders) {
+  const body = $('#activity-body', container);
+  if (!body) return;
+  if (!orders.length) {
+    body.innerHTML = '<p class="text-muted text-[11px] text-center py-4">No pending or armed orders</p>';
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="trade-position-cards lg:hidden">
+      ${orders.slice(0, 16).map(tradeOrderCard).join('')}
+    </div>
+    <div class="hidden lg:block overflow-x-auto"><table class="min-w-[720px] lg:min-w-0 w-full text-[11px]">
+      <thead class="text-[9px] text-muted uppercase"><tr>
+        <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Amount</th><th class="text-right py-1">Lev</th><th class="text-right py-1">Status</th><th class="text-right px-3 py-1">Created</th>
+      </tr></thead>
+      <tbody>${orders.slice(0, 16).map(tradeOrderRow).join('')}</tbody>
+    </table></div>`;
+}
+
+function renderHistoryActivity(container, history) {
+  const body = $('#activity-body', container);
+  if (!body) return;
+  if (!history.length) {
+    body.innerHTML = '<p class="text-muted text-[11px] text-center py-4">No closed trades yet</p>';
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="trade-position-cards lg:hidden">
+      ${history.slice(0, 18).map(tradeHistoryCard).join('')}
+    </div>
+    <div class="hidden lg:block overflow-x-auto"><table class="min-w-[820px] lg:min-w-0 w-full text-[11px]">
+      <thead class="text-[9px] text-muted uppercase"><tr>
+        <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Exit</th><th class="text-right py-1">Used</th><th class="text-right py-1">Fee</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1">Closed</th>
+      </tr></thead>
+      <tbody>${history.slice(0, 18).map(tradeHistoryRow).join('')}</tbody>
     </table></div>`;
 }
 
@@ -542,6 +641,106 @@ function tradePositionCard(pos) {
       <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
     </div>
     ${id ? `<button class="btn-xs btn-ghost text-sell w-full" data-close="${escAttr(id)}">Close position</button>` : ''}
+  </article>`;
+}
+
+function isHistoryOrder(o) {
+  const status = String(o.status || '').toLowerCase();
+  return status === 'closed' || status === 'canceled' || status === 'cancelled' || status === 'rejected' || Number(o.closed_at || 0) > 0 || Number(o.exit_price || 0) > 0;
+}
+
+function orderSymbol(o) {
+  return String(o.symbol || '').replace('@R@', '').replace('@D@', '');
+}
+
+function orderSide(o) {
+  return String(o.side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : String(o.side || 'BUY').toUpperCase() === 'CLOSE' ? 'CLOSE' : 'BUY';
+}
+
+function orderAssetType(o) {
+  return o.asset_type || o.type || get('type');
+}
+
+function orderDate(value) {
+  const n = Number(value || 0);
+  if (!n) return '--';
+  try {
+    return new Date(n * 1000).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch (_e) {
+    return String(value);
+  }
+}
+
+function tradeOrderRow(o) {
+  const side = orderSide(o);
+  const type = orderAssetType(o);
+  return `<tr class="border-t border-line/50 hover:bg-panel/50">
+    <td class="px-3 py-1.5 font-semibold">${esc(orderSymbol(o))}</td>
+    <td><span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span></td>
+    <td class="text-muted">${esc(o.order_type || o.market_type || 'market')}</td>
+    <td class="text-right font-mono">${price(o.entry_price || o.fill_price || o.limit_price, type)}</td>
+    <td class="text-right font-mono">${money(o.used_usdt || o.usd_amount || o.amount || 0)}</td>
+    <td class="text-right font-mono">${esc(String(o.leverage || 1))}x</td>
+    <td class="text-right"><span class="status-chip status-chip-derived">${esc(o.status || 'open')}</span></td>
+    <td class="text-right px-3 text-muted">${esc(orderDate(o.created_at))}</td>
+  </tr>`;
+}
+
+function tradeOrderCard(o) {
+  const side = orderSide(o);
+  const type = orderAssetType(o);
+  return `<article class="trade-position-card trade-activity-card">
+    <div class="flex items-start justify-between gap-2">
+      <div>
+        <strong>${esc(orderSymbol(o))}</strong>
+        <small>${esc(o.order_type || 'market')} - ${esc(orderDate(o.created_at))}</small>
+      </div>
+      <span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span>
+    </div>
+    <div class="trade-position-metrics">
+      <span><small>Entry</small><strong>${price(o.entry_price || o.fill_price || o.limit_price, type)}</strong></span>
+      <span><small>Amount</small><strong>${money(o.used_usdt || o.usd_amount || o.amount || 0)}</strong></span>
+      <span><small>Lev</small><strong>${esc(String(o.leverage || 1))}x</strong></span>
+      <span><small>Status</small><strong>${esc(o.status || 'open')}</strong></span>
+    </div>
+  </article>`;
+}
+
+function tradeHistoryRow(o) {
+  const side = orderSide(o);
+  const type = orderAssetType(o);
+  const pnl = Number(o.pnl_usd || o.pnl || 0);
+  return `<tr class="border-t border-line/50 hover:bg-panel/50">
+    <td class="px-3 py-1.5 font-semibold">${esc(orderSymbol(o))}</td>
+    <td><span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span></td>
+    <td class="text-muted">${esc(o.market_type || o.order_type || 'spot')}</td>
+    <td class="text-right font-mono">${price(o.entry_price || o.fill_price, type)}</td>
+    <td class="text-right font-mono">${price(o.exit_price || o.limit_price, type)}</td>
+    <td class="text-right font-mono">${money(o.used_usdt || o.usd_amount || 0)}</td>
+    <td class="text-right font-mono">${money(o.fee_paid || 0)}</td>
+    <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
+    <td class="text-right px-3 text-muted">${esc(orderDate(o.closed_at || o.created_at))}</td>
+  </tr>`;
+}
+
+function tradeHistoryCard(o) {
+  const side = orderSide(o);
+  const type = orderAssetType(o);
+  const pnl = Number(o.pnl_usd || o.pnl || 0);
+  return `<article class="trade-position-card trade-activity-card is-history">
+    <div class="flex items-start justify-between gap-2">
+      <div>
+        <strong>${esc(orderSymbol(o))}</strong>
+        <small>${esc(o.close_reason || o.status || 'closed')} - ${esc(orderDate(o.closed_at || o.created_at))}</small>
+      </div>
+      <span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span>
+    </div>
+    <div class="trade-position-metrics">
+      <span><small>Entry</small><strong>${price(o.entry_price || o.fill_price, type)}</strong></span>
+      <span><small>Exit</small><strong>${price(o.exit_price || o.limit_price, type)}</strong></span>
+      <span><small>Used</small><strong>${money(o.used_usdt || o.usd_amount || 0)}</strong></span>
+      <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
+    </div>
   </article>`;
 }
 
@@ -671,8 +870,18 @@ function bindEvents(container) {
   });
   delegate(container, '[data-close]', 'click', async (e, el) => {
     await api('/trade/close_position.php', { method: 'POST', body: { position_id: el.dataset.close }, timeout: 8000 }).catch(() => null);
-    const data = await api('/trade/portfolio.php', { timeout: 5000 }).catch(() => null);
-    if (data?.positions) renderPositions(container, data.positions);
+    await loadTradeActivity(container, tradeRunId);
+  });
+  delegate(container, '[data-activity-tab]', 'click', (_e, el) => {
+    container.__tradeActivityTab = el.dataset.activityTab || 'positions';
+    renderActivity(container);
+  });
+  delegate(container, '[data-quick-amount]', 'click', (_e, el) => {
+    const value = Number(el.dataset.quickAmount || 0);
+    if (!(value > 0)) return;
+    set('amount', value);
+    syncOrderField(container, 'amount', value);
+    updateOrderInfo(container);
   });
 
   $('#sym-search', container)?.addEventListener('input', e => {
@@ -698,6 +907,7 @@ async function placeOrder(side, container, formRoot) {
   const sl = Number($('[data-sl]', root)?.value || 0);
   const marketType = $('[data-market-type]', root)?.value || get('market') || 'spot';
   const orderType = $('[data-order-type]', root)?.value || get('orderType') || 'MARKET';
+  const limitInput = Number($('[data-limit-price]', root)?.value || 0);
 
   if (amount <= 0) {
     alert('Enter a valid amount first.');
@@ -726,7 +936,7 @@ async function placeOrder(side, container, formRoot) {
         leverage,
         tp: tp || undefined,
         sl: sl || undefined,
-        price: currentPrice,
+        price: orderType === 'LIMIT' ? (limitInput || currentPrice) : currentPrice,
         mode: get('mode'),
       },
       timeout: 10000,
@@ -736,8 +946,7 @@ async function placeOrder(side, container, formRoot) {
       return;
     }
     closeOrderSheet(container);
-    const data = await api('/trade/portfolio.php', { timeout: 5000 }).catch(() => null);
-    if (data?.positions) renderPositions(container, data.positions);
+    await loadTradeActivity(container, tradeRunId);
   } catch (e) {
     console.error('Order failed:', e);
     alert(e.message || 'Order failed');

@@ -105,11 +105,24 @@ export function render() {
         </div>
       </section>
 
+      <section class="card account-capability-panel">
+        <div class="panel-headline">
+          <span class="badge-green">Level benefits</span>
+          <h2>Unlocked capabilities</h2>
+        </div>
+        <div class="account-capability-grid">
+          ${capabilityCard('Funding', 'Manual deposits and withdrawals', kyc.status === 'approved', icons.deposit)}
+          ${capabilityCard('Copy desk', 'Real-only copy trading signals', kyc.status === 'approved' && mode === 'real', icons.earn)}
+          ${capabilityCard('Contracts', 'Tier-based managed contracts', Boolean(current?.level_code || current?.id), icons.trade)}
+          ${capabilityCard('Security', 'KYC and account controls', kyc.status === 'approved', icons.lock)}
+        </div>
+      </section>
+
       <section class="card account-session-card">
         <div>
           <span class="badge-red">Session</span>
           <h2 class="font-black mt-2">Sign out safely</h2>
-          <p class="text-sm text-muted mt-1">Use this when you finish from a shared device. Admin access remains available only through /admin/.</p>
+          <p class="text-sm text-muted mt-1">Use this when you finish from a shared device. Your trading session and client workspace will close safely.</p>
         </div>
         <a href="/logout.php" class="btn-danger btn-sm">Logout</a>
       </section>
@@ -176,4 +189,15 @@ function actionLink(href, icon, label, sub) {
     <strong>${esc(label)}</strong>
     <small>${esc(sub)}</small>
   </a>`;
+}
+
+function capabilityCard(titleText, body, enabled, icon) {
+  return `<div class="account-capability-card ${enabled ? 'enabled' : 'locked'}">
+    <span>${icon}</span>
+    <div>
+      <strong>${esc(titleText)}</strong>
+      <small>${esc(body)}</small>
+    </div>
+    <em>${enabled ? 'Ready' : 'Locked'}</em>
+  </div>`;
 }

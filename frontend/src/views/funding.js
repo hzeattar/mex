@@ -1,5 +1,5 @@
 // Funding View - Deposit & Withdraw
-import { get } from '../state/store.js';
+import { get, set } from '../state/store.js';
 import { money, esc, escAttr } from '../utils/format.js';
 import { api, formApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
@@ -26,6 +26,15 @@ export function render(params) {
           <small>${esc(mode === 'real' ? (real.currency || 'USDT') : (demo.currency || 'USDT_DEMO'))}</small>
         </div>
       </section>
+
+      ${mode !== 'real' ? `<section class="funding-mode-warning">
+        <span class="gate-icon">${icons.lock}</span>
+        <div>
+          <strong>Real account required for live funding</strong>
+          <small>Demo mode keeps this page visible for preview only. Switch to Real before submitting deposits or withdrawals for admin review.</small>
+        </div>
+        <button type="button" class="btn-primary btn-sm" data-switch-real>Switch to Real</button>
+      </section>` : ''}
 
       <section class="funding-steps">
         ${stepCard('1', isDeposit ? 'Pick a method' : 'Choose payout rail', isDeposit ? 'Use only active methods shown by admin.' : 'Select where the funds should be sent.')}
@@ -90,6 +99,11 @@ export function mount(container, params) {
   loadHistory(container, kind);
   container.querySelector('#funding-form')?.addEventListener('submit', (e) => handleSubmit(e, container, kind));
   container.querySelector('#method-select')?.addEventListener('change', () => updateSelectedMethod(container));
+  container.querySelector('[data-switch-real]')?.addEventListener('click', () => {
+    localStorage.setItem('vp_mode', 'real');
+    set('mode', 'real');
+    location.reload();
+  });
 }
 
 async function loadMethods(container, kind) {
@@ -197,6 +211,13 @@ async function handleSubmit(e, container, kind) {
   const fd = new FormData(form);
   fd.append('kind', kind);
   try {
+    if (get('mode') !== 'real') {
+      if (status) {
+        status.textContent = 'Switch to Real before submitting live funding requests.';
+        status.className = 'text-xs text-center text-spread';
+      }
+      return;
+    }
     if (status) {
       status.textContent = 'Submitting request to operations desk...';
       status.className = 'text-xs text-center text-muted';
