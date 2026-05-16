@@ -1073,6 +1073,19 @@ function yahoo_live_quote_or_chart(string $symbol, string $tf = '1m'): array {
   }
 
   $candles = yahoo_chart_candles($symbol, $tf, 8);
+  if (!$candles) {
+    $metaQuote = yahoo_chart_meta_quote($symbol, $tf);
+    if (is_array($metaQuote) && (float)($metaQuote['price'] ?? 0) > 0) return $metaQuote;
+    foreach (['5m', '15m', '1d'] as $fallbackTf) {
+      if ($fallbackTf === $tf) continue;
+      try {
+        $candles = yahoo_chart_candles($symbol, $fallbackTf, 8);
+        if ($candles) break;
+      } catch (Throwable $ignoredFallback) {}
+      $metaQuote = yahoo_chart_meta_quote($symbol, $fallbackTf);
+      if (is_array($metaQuote) && (float)($metaQuote['price'] ?? 0) > 0) return $metaQuote;
+    }
+  }
   if (!$candles) throw new RuntimeException('Yahoo live chart unavailable');
   $last = end($candles);
   if (!is_array($last)) throw new RuntimeException('Yahoo live chart unavailable');
@@ -1090,6 +1103,54 @@ function yahoo_live_quote_or_chart(string $symbol, string $tf = '1m'): array {
     'price' => $price,
     'change_pct' => $chg,
     'updated_at' => (int)($last['time'] ?? 0),
+    'source' => 'yahoo_chart_live',
+  ];
+}
+
+function yahoo_chart_meta_quote(string $symbol, string $tf = '1m'): ?array {
+  $symbol = strtoupper(trim($symbol));
+  if ($symbol === '') return null;
+  $interval = yahoo_interval_for_tf($tf);
+  $range = yahoo_range_for_limit_tf(8, $tf);
+  $url = 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol) . '?interval=' . rawurlencode($interval) . '&range=' . rawurlencode($range) . '&includePrePost=false&events=div%2Csplits';
+
+  try {
+    $d = http_get_json($url);
+  } catch (Throwable $e) {
+    return null;
+  }
+
+  $result = $d['chart']['result'][0] ?? null;
+  if (!is_array($result)) return null;
+  $meta = $result['meta'] ?? null;
+  if (!is_array($meta)) return null;
+
+  $price = 0.0;
+  foreach (['regularMarketPrice', 'postMarketPrice', 'preMarketPrice', 'chartPreviousClose', 'previousClose'] as $key) {
+    if (isset($meta[$key]) && is_numeric($meta[$key]) && (float)$meta[$key] > 0) {
+      $price = (float)$meta[$key];
+      break;
+    }
+  }
+  if (!($price > 0)) return null;
+
+  $prev = 0.0;
+  foreach (['previousClose', 'chartPreviousClose'] as $key) {
+    if (isset($meta[$key]) && is_numeric($meta[$key]) && (float)$meta[$key] > 0) {
+      $prev = (float)$meta[$key];
+      break;
+    }
+  }
+  $changePct = ($prev > 0) ? (($price - $prev) / $prev) * 100.0 : 0.0;
+  $updatedAt = isset($meta['regularMarketTime']) && is_numeric($meta['regularMarketTime'])
+    ? (int)$meta['regularMarketTime']
+    : time();
+  if ($updatedAt > 1000000000000) $updatedAt = (int)floor($updatedAt / 1000);
+
+  return [
+    'price' => $price,
+    'change_pct' => $changePct,
+    'updated_at' => $updatedAt,
     'source' => 'yahoo_chart_live',
   ];
 }
