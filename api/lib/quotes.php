@@ -54,27 +54,76 @@ function quote_singleflight(string $key, int $ttlSec = 2): bool {
  * Detect optional quote columns (older DBs may not have perp extras).
  * Always return a stable shape; missing columns are returned as NULL.
  */
+function quote_table_columns(PDO $pdo, string $table, string $driver): array {
+  static $memory = [];
+  $driver = strtolower($driver);
+  $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+  if ($table === '') return [];
+
+  $cacheKey = $driver . ':' . $table;
+  if (isset($memory[$cacheKey])) return $memory[$cacheKey];
+
+  $dir = __DIR__ . '/../data/cache';
+  if (!is_dir($dir)) @mkdir($dir, 0777, true);
+  $cacheFile = $dir . '/schema_cols_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $cacheKey) . '.json';
+  $ttl = max(60, min(86400, (int)env('QUOTE_SCHEMA_CACHE_TTL', '21600')));
+  if (is_file($cacheFile) && (time() - (int)@filemtime($cacheFile)) <= $ttl) {
+    $cached = json_decode((string)@file_get_contents($cacheFile), true);
+    if (is_array($cached) && is_array($cached['columns'] ?? null)) {
+      $cols = array_values(array_unique(array_filter(array_map('strtolower', $cached['columns']))));
+      return $memory[$cacheKey] = $cols;
+    }
+  }
+
+  $cols = [];
+  try {
+    if ($driver === 'mysql') {
+      $st = $pdo->prepare("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?");
+      $st->execute([$table]);
+      $cols = array_map('strtolower', array_column($st->fetchAll(PDO::FETCH_ASSOC) ?: [], 'COLUMN_NAME'));
+    } else {
+      $st = $pdo->query('PRAGMA table_info(' . $table . ')');
+      foreach (($st ? $st->fetchAll(PDO::FETCH_ASSOC) : []) as $row) {
+        $name = strtolower((string)($row['name'] ?? ''));
+        if ($name !== '') $cols[] = $name;
+      }
+    }
+  } catch (Throwable $e) {
+    $cols = [];
+  }
+
+  $cols = array_values(array_unique(array_filter($cols)));
+  if ($cols) {
+    @file_put_contents($cacheFile, json_encode(['columns' => $cols, 'cached_at' => time()], JSON_UNESCAPED_SLASHES));
+  }
+  return $memory[$cacheKey] = $cols;
+}
+
 function quote_cols_flags(): array {
   static $flags = null;
   if ($flags !== null) return $flags;
   $pdo = db();
   $drv = db_driver();
-  // schema_column_exists is provided by api/lib/schema.php (loaded by common.php)
+  $cols = array_flip(quote_table_columns($pdo, 'market_quotes', $drv));
+  $has = static function(string $col, bool $fallback = false) use ($cols, $pdo, $drv): bool {
+    if ($cols) return isset($cols[strtolower($col)]);
+    return function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', $col, $drv) : $fallback;
+  };
   $flags = [
-    'mark_price'        => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'mark_price', $drv) : true,
-    'index_price'       => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'index_price', $drv) : true,
-    'funding_rate'      => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'funding_rate', $drv) : true,
-    'next_funding_time' => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'next_funding_time', $drv) : true,
-    'source'            => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'source', $drv) : true,
-    'market'            => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'market', $drv) : false,
-    'provider'          => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'provider', $drv) : false,
-    'provider_ts'       => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'provider_ts', $drv) : false,
-    'received_at'       => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'received_at', $drv) : false,
-    'source_strength'   => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'source_strength', $drv) : false,
-    'is_stale'          => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'is_stale', $drv) : false,
-    'as_of'             => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'as_of', $drv) : false,
-    'ingested_at'       => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'ingested_at', $drv) : false,
-    'source_priority'   => function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'source_priority', $drv) : false,
+    'mark_price'        => $has('mark_price', true),
+    'index_price'       => $has('index_price', true),
+    'funding_rate'      => $has('funding_rate', true),
+    'next_funding_time' => $has('next_funding_time', true),
+    'source'            => $has('source', true),
+    'market'            => $has('market'),
+    'provider'          => $has('provider'),
+    'provider_ts'       => $has('provider_ts'),
+    'received_at'       => $has('received_at'),
+    'source_strength'   => $has('source_strength'),
+    'is_stale'          => $has('is_stale'),
+    'as_of'             => $has('as_of'),
+    'ingested_at'       => $has('ingested_at'),
+    'source_priority'   => $has('source_priority'),
   ];
   return $flags;
 }
