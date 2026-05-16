@@ -58,10 +58,15 @@ function qa_quotes_cache_ttl(string $assetType, string $mode, int $count): int {
   if ($mode === 'visible') {
     return $assetType === 'crypto' ? 0 : max(0, min(2, (int)env('QUOTES_API_VISIBLE_CACHE_TTL_NONCRYPTO', '0')));
   }
+  if ($mode === 'focus') {
+    return $assetType === 'crypto'
+      ? max(1, min(5, (int)env('QUOTES_API_FOCUS_CACHE_TTL_CRYPTO', '3')))
+      : max(1, min(8, (int)env('QUOTES_API_FOCUS_CACHE_TTL_NONCRYPTO', '4')));
+  }
   if ($mode === 'cache_only') {
     return $assetType === 'crypto'
-      ? max(1, min(10, (int)env('QUOTES_API_CACHE_ONLY_TTL_CRYPTO', '4')))
-      : max(1, min(10, (int)env('QUOTES_API_CACHE_ONLY_TTL_NONCRYPTO', '4')));
+      ? max(5, min(45, (int)env('QUOTES_API_CACHE_ONLY_TTL_CRYPTO', '15')))
+      : max(10, min(90, (int)env('QUOTES_API_CACHE_ONLY_TTL_NONCRYPTO', '30')));
   }
   if ($mode === 'fresh') {
     return $assetType === 'crypto'
