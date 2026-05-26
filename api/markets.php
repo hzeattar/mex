@@ -154,6 +154,111 @@ function vp_curated_supported_rows(array $rows, string $typeAlias, string $scope
   return $out;
 }
 
+function vp_supported_rescue_limits(string $scope, string $type): array {
+  $scope = strtolower(trim($scope));
+  $type = vp_normalize_asset_type($type);
+  $isHome = ($scope === 'home');
+  return match ($type) {
+    'crypto' => [
+      'batch' => $isHome ? 6 : 8,
+      'direct_budget' => $isHome ? 6 : 8,
+      'direct_yahoo_budget' => 0,
+      'chart_budget' => 0,
+      'ttl' => 1,
+    ],
+    'forex' => [
+      'batch' => $isHome ? 2 : 3,
+      'direct_budget' => $isHome ? 2 : 3,
+      'direct_yahoo_budget' => $isHome ? 2 : 3,
+      'chart_budget' => 1,
+      'ttl' => 2,
+    ],
+    'commodities', 'futures', 'arab', 'stocks' => [
+      'batch' => $isHome ? 2 : 3,
+      'direct_budget' => $isHome ? 2 : 3,
+      'direct_yahoo_budget' => $isHome ? 2 : 3,
+      'chart_budget' => 1,
+      'ttl' => 2,
+    ],
+    default => [
+      'batch' => 2,
+      'direct_budget' => 2,
+      'direct_yahoo_budget' => 1,
+      'chart_budget' => 1,
+      'ttl' => 2,
+    ],
+  };
+}
+
+function vp_rescue_supported_market_quotes(array $items, string $scope): array {
+  if (!$items || !in_array($scope, ['home', 'trade'], true)) return $items;
+
+  $defsByKey = [];
+  foreach (vp_supported_defs_for('all', $scope) as $def) {
+    $defsByKey[vp_supported_market_key((string)($def['type'] ?? ''), (string)($def['symbol'] ?? ''))] = $def;
+  }
+
+  $groups = [];
+  foreach ($items as $idx => $item) {
+    $price = (float)($item['price'] ?? 0);
+    if ($price > 0) continue;
+    $symbol = strtoupper(trim((string)($item['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($item['type'] ?? ''));
+    if ($symbol === '' || $type === '') continue;
+    if (!isset($groups[$type])) $groups[$type] = [];
+    $groups[$type][] = ['index' => $idx, 'symbol' => $symbol, 'item' => $item];
+  }
+
+  if (!$groups) return $items;
+
+  foreach ($groups as $type => $entries) {
+    $limits = vp_supported_rescue_limits($scope, $type);
+    $batch = max(1, (int)($limits['batch'] ?? 2));
+    $slice = array_slice($entries, 0, $batch);
+    $symbols = [];
+    $metaBySymbol = [];
+    foreach ($slice as $entry) {
+      $symbols[] = $entry['symbol'];
+      $meta = market_meta($entry['item']['meta'] ?? null);
+      $defKey = vp_supported_market_key($type, $entry['symbol']);
+      $defMeta = $defsByKey[$defKey] ?? [];
+      $metaBySymbol[$entry['symbol']] = array_merge($defMeta, $meta);
+    }
+    if (!$symbols) continue;
+
+    try {
+      $live = quote_bulk_live($symbols, $type, $metaBySymbol, [
+        'ttl' => (int)($limits['ttl'] ?? 2),
+        'yahoo_ttl' => (int)($limits['ttl'] ?? 2),
+        'massive_ttl' => (int)($limits['ttl'] ?? 2),
+        'direct_budget' => (int)($limits['direct_budget'] ?? $batch),
+        'direct_yahoo_budget' => (int)($limits['direct_yahoo_budget'] ?? $batch),
+        'chart_budget' => (int)($limits['chart_budget'] ?? 0),
+      ]);
+    } catch (Throwable $e) {
+      $live = [];
+    }
+
+    if (!$live) continue;
+
+    foreach ($slice as $entry) {
+      $symbol = $entry['symbol'];
+      $row = is_array($live[$symbol] ?? null) ? $live[$symbol] : null;
+      if (!$row) continue;
+      $price = (float)($row['price'] ?? 0);
+      if (!($price > 0)) continue;
+      $items[$entry['index']]['price'] = $price;
+      $items[$entry['index']]['change_pct'] = (float)($row['change_pct'] ?? 0);
+      $items[$entry['index']]['updated_at'] = (int)($row['updated_at'] ?? time());
+      $items[$entry['index']]['source'] = (string)($row['source'] ?? 'provider_live');
+      $items[$entry['index']]['is_stale'] = !empty($row['is_stale']);
+      $items[$entry['index']]['timing_class'] = (string)($row['timing_class'] ?? 'live');
+    }
+  }
+
+  return $items;
+}
+
 
 function vp_markets_quote_is_usable(string $assetType, float $price, int $updatedAt, string $source): bool {
   if (!($price > 0)) return false;
@@ -630,6 +735,10 @@ try {
       'market_cap' => $metaCap,
       'icon_url' => $iconUrl !== '' ? $iconUrl : null,
     ];
+  }
+
+  if ($supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
+    $items = vp_rescue_supported_market_quotes($items, $scope);
   }
 
   if ($supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
