@@ -94,7 +94,7 @@
 
   /* Rich dashboard and market visuals */
   .home-market-card {
-    @apply relative min-h-[104px] flex items-center gap-3 overflow-hidden rounded-lg border border-line bg-panel-2/50 p-3 text-left transition-colors hover:border-accent/40;
+    @apply relative min-h-[112px] flex items-center gap-3 overflow-hidden rounded-lg border border-line bg-panel-2/50 p-3 text-left transition-colors hover:border-accent/40 hover:bg-panel-2/70;
   }
   .home-market-card::after {
     content: '';
@@ -116,6 +116,44 @@
   }
   .home-market-icon img[src=''],
   .market-logo img[src=''] { @apply hidden; }
+  .hero-balance-card {
+    @apply relative overflow-hidden rounded-lg border border-line bg-surface/80 p-4;
+  }
+  .hero-balance-card::after {
+    content: '';
+    @apply pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-buy/10 blur-2xl;
+  }
+  .hero-balance-card span,
+  .hero-balance-card small {
+    @apply relative z-10 block text-xs text-muted;
+  }
+  .hero-balance-card strong {
+    @apply relative z-10 mt-2 block text-4xl font-black;
+  }
+  .hero-metric-card {
+    @apply rounded-lg border border-line bg-panel-2/60 p-3;
+  }
+  .home-action-grid {
+    @apply items-stretch;
+  }
+  .home-action-card {
+    @apply flex min-h-[108px] flex-col items-start gap-3 rounded-lg border border-line bg-panel-2/35 p-4 text-left transition-colors hover:border-accent/40 hover:bg-panel-2/55;
+  }
+  .home-action-card span:last-child {
+    @apply text-sm font-bold;
+  }
+  .home-support-strip {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+  .home-support-card {
+    @apply flex flex-col gap-2 overflow-hidden;
+  }
+  .home-support-card strong {
+    @apply text-lg font-black;
+  }
+  .home-support-card small {
+    @apply text-sm leading-6 text-muted;
+  }
 
   /* Earn desk */
   .feature-hero {
@@ -260,10 +298,10 @@
     @apply bg-sell/45;
   }
   .position-card {
-    @apply rounded-lg border border-line bg-panel-2/45 p-3;
+    @apply rounded-lg border border-line bg-panel-2/45 p-3 shadow-[0_10px_30px_rgba(4,14,32,.18)];
   }
   .position-metrics {
-    @apply grid grid-cols-4 gap-2;
+    @apply grid grid-cols-2 gap-2 lg:grid-cols-4;
   }
   .position-metrics span {
     @apply min-w-0 rounded-md border border-line bg-surface/55 p-2;
@@ -743,6 +781,14 @@
   .trade-position-metrics {
     @apply grid grid-cols-2 gap-2;
   }
+  .trade-position-card,
+  .order-mobile-card {
+    @apply rounded-xl border border-line bg-gradient-to-b from-panel-2/70 to-surface/80 p-3 shadow-[0_12px_30px_rgba(4,14,32,.18)];
+  }
+  .trade-position-card strong,
+  .order-mobile-card strong {
+    @apply text-sm font-black;
+  }
   .order-ticket-panel {
     @apply rounded-lg border border-line bg-panel/35 p-2;
   }
@@ -782,16 +828,16 @@
     @apply rounded-md border border-line bg-surface px-2 py-1.5 text-[10px] font-black text-muted transition-colors hover:border-accent/45 hover:text-text;
   }
   .trade-activity-head {
-    @apply sticky top-0 z-10 flex flex-col gap-2 border-b border-line bg-surface px-3 py-2 lg:h-10 lg:flex-row lg:items-center lg:justify-between lg:py-0;
+    @apply sticky top-0 z-10 flex flex-col gap-2 border-b border-line bg-surface/95 px-3 py-2 backdrop-blur lg:h-10 lg:flex-row lg:items-center lg:justify-between lg:py-0;
   }
   .activity-tabs {
-    @apply grid grid-cols-3 gap-1 rounded-md border border-line bg-bg p-1;
+    @apply grid grid-cols-3 gap-1 rounded-md border border-line bg-bg p-1 shadow-inner;
   }
   .activity-tabs button {
     @apply rounded px-2 py-1 text-[10px] font-black text-muted transition-colors;
   }
   .activity-tabs button.active {
-    @apply bg-accent/20 text-accent;
+    @apply bg-accent/20 text-accent shadow-[0_8px_24px_rgba(93,124,255,.12)];
   }
   .activity-tabs b {
     @apply ml-1 font-mono text-[9px];
@@ -801,6 +847,15 @@
   }
   .trade-activity-card.is-history {
     @apply border-line-strong;
+  }
+  .symbol-row {
+    @apply rounded-lg border border-transparent;
+  }
+  .symbol-row:hover {
+    @apply border-line-strong;
+  }
+  .symbol-row.active {
+    @apply border-accent/30 shadow-[0_8px_20px_rgba(93,124,255,.08)];
   }
   .order-action-sticky {
     @apply sticky bottom-0 mt-4 border-t border-line bg-surface/95 py-3 backdrop-blur;

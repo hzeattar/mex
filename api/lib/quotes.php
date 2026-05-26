@@ -401,6 +401,20 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
         ];
       }
     } catch (Throwable $e) {}
+    foreach ($out as $sym => $row) {
+      $p = (float)($row['price'] ?? 0);
+      if (!($p > 0)) continue;
+      $chg = (float)($row['change_pct'] ?? 0.0);
+      $upd = (int)($row['updated_at'] ?? $now);
+      $src = (string)($row['source'] ?? 'binance');
+      try {
+        quote_upsert($sym, $assetType, $p, $chg, $upd, [
+          'source' => $src,
+          'as_of' => $upd,
+          'ingested_at' => $now,
+        ]);
+      } catch (Throwable $ignoredPersist) {}
+    }
     return $out;
   }
 
@@ -590,6 +604,20 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       }
     } catch (Throwable $e) {}
     $directBudget--;
+  }
+  foreach ($out as $sym => $row) {
+    $p = (float)($row['price'] ?? 0);
+    if (!($p > 0)) continue;
+    $chg = (float)($row['change_pct'] ?? 0.0);
+    $upd = (int)($row['updated_at'] ?? $now);
+    $src = (string)($row['source'] ?? 'provider_live');
+    try {
+      quote_upsert($sym, $assetType, $p, $chg, $upd, [
+        'source' => $src,
+        'as_of' => $upd,
+        'ingested_at' => $now,
+      ]);
+    } catch (Throwable $ignoredPersist) {}
   }
   return $out;
 }

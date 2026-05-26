@@ -10,29 +10,73 @@ export function render() {
   const brand = get('brand') || {};
   const wallet = activeWallet();
   const mode = get('mode');
+  const level = get('level') || {};
+  const currentLevel = level.current || {};
 
   return `
     <div class="space-y-6 animate-fade-in">
       <!-- Hero -->
-      <section class="card bg-gradient-to-br from-panel-2 to-panel relative overflow-hidden">
-        <div class="absolute inset-0 opacity-[0.04] bg-[radial-gradient(circle_at_30%_20%,#5d7cff,transparent_50%)]"></div>
-        <div class="relative space-y-3">
-          <span class="badge-accent">${esc(brand.name)}</span>
-          <h1 class="text-xl lg:text-2xl font-bold">${mode === 'real' ? 'Real Trading Workspace' : 'Demo Trading Workspace'}</h1>
-          <p class="text-muted text-sm max-w-lg">${esc(brand.tagline || 'Professional multi-market trading platform')}</p>
-        </div>
-        <div class="relative mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          ${walletCard('Available', money(wallet.available), wallet.currency)}
-          ${walletCard('Balance', money(wallet.balance), wallet.currency)}
-          ${walletCard('Mode', mode === 'real' ? 'Real' : 'Demo', mode === 'real' ? 'Live' : 'Practice')}
-          ${walletCard('Markets', '6', 'Active types')}
+      <section class="card feature-hero relative overflow-hidden">
+        <div class="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.95fr)] lg:items-end">
+          <div class="space-y-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="badge-accent">${esc(brand.name)}</span>
+              <span class="status-chip ${mode === 'real' ? 'status-chip-live' : 'status-chip-delayed'}">${mode === 'real' ? 'Real workspace' : 'Demo workspace'}</span>
+              ${levelBadge(currentLevel)}
+            </div>
+            <div class="space-y-2">
+              <h1 class="text-2xl lg:text-4xl font-bold leading-tight">${mode === 'real' ? 'Trading desk' : 'Practice trading desk'}</h1>
+              <p class="text-muted text-sm lg:text-base max-w-2xl">${esc(brand.tagline || 'Professional multi-market trading platform')} with curated markets, copy desk signals, level-linked contracts, and internal execution controls.</p>
+            </div>
+            <div class="feature-hero__stats">
+              <div class="hero-stat">
+                <span>Account level</span>
+                <strong>${esc(currentLevel.name || currentLevel.name_en || currentLevel.level_code || 'Starter')}</strong>
+                <small>Contracts and copy permissions</small>
+              </div>
+              <div class="hero-stat">
+                <span>Execution mode</span>
+                <strong>${mode === 'real' ? 'Real' : 'Demo'}</strong>
+                <small>${mode === 'real' ? 'Internal live review' : 'Practice flow enabled'}</small>
+              </div>
+              <div class="hero-stat">
+                <span>Market coverage</span>
+                <strong>6 desks</strong>
+                <small>Crypto, FX, stocks, metals, futures, Arab</small>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <a href="#/trade" class="btn-primary">Open trade</a>
+              <a href="#/deposit" class="btn-ghost">Deposit</a>
+              <a href="#/invest" class="btn-ghost">Copy & contracts</a>
+            </div>
+          </div>
+          <div class="grid gap-3">
+            <div class="hero-balance-card">
+              <span>${mode === 'real' ? 'Live balance' : 'Practice balance'}</span>
+              <strong>${money(wallet.balance)}</strong>
+              <small>${esc(wallet.currency)}</small>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              ${walletCard('Available', money(wallet.available), wallet.currency)}
+              ${walletCard('Holds', money(wallet.holds || 0), 'Locked margin')}
+              ${walletCard('Workspace', mode === 'real' ? 'Live' : 'Demo', mode === 'real' ? 'Review enabled' : 'Practice')}
+              ${walletCard('Markets', 'Curated', 'Fast watch')}
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- Quick Actions -->
       <section class="card">
-        <h2 class="text-base font-semibold mb-3">Quick Actions</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <span class="badge-green mb-1">Workspace</span>
+            <h2 class="text-base font-semibold">Quick Actions</h2>
+          </div>
+          <p class="text-xs text-muted hidden lg:block">Funding, verification, support, and client services from one desk.</p>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 home-action-grid">
           ${quickAction('Deposit', 'deposit', '#/deposit')}
           ${quickAction('Withdraw', 'withdraw', '#/withdraw')}
           ${quickAction('KYC', 'kyc', '#/kyc')}
@@ -76,6 +120,11 @@ export function render() {
         <div id="home-positions">
           <p class="text-muted text-sm text-center py-6">Loading positions...</p>
         </div>
+      </section>
+
+      <section class="home-support-strip">
+        ${supportStripCard('News room', 'Desk briefings, catalysts, and curated client headlines.', '#/news', 'badge-accent')}
+        ${supportStripCard('Support desk', 'Funding review, KYC follow-up, payout status, and account help.', '#/support', 'badge-green')}
       </section>
     </div>`;
 }
@@ -207,9 +256,22 @@ async function warmMissingHomeQuotes(container, missing) {
     const chunkSize = type === 'crypto' ? 12 : 2;
     const limit = type === 'crypto' ? 12 : 4;
     const unique = [...new Set(symbols)].slice(0, limit);
+    const unresolved = [];
     for (let i = 0; i < unique.length; i += chunkSize) {
       const chunk = unique.slice(i, i + chunkSize);
       const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&cache_only=1&purpose=watchlist`, { timeout: 3500 }).catch(() => null);
+      if (data?.items?.length) data.items.forEach((q) => applyQuoteToMarketCard(container, q, type));
+      chunk.forEach((symbol) => {
+        const card = findMarketCard(container, symbol);
+        const hasPrice = card && card.querySelector('[data-home-price]')?.textContent !== '--';
+        if (!hasPrice) unresolved.push(symbol);
+      });
+    }
+    const rescueChunkSize = type === 'crypto' ? 6 : 2;
+    const rescueList = [...new Set(unresolved)].slice(0, type === 'crypto' ? 6 : 2);
+    for (let i = 0; i < rescueList.length; i += rescueChunkSize) {
+      const chunk = rescueList.slice(i, i + rescueChunkSize);
+      const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&purpose=focus`, { timeout: 4200 }).catch(() => null);
       if (data?.items?.length) data.items.forEach((q) => applyQuoteToMarketCard(container, q, type));
     }
   }
@@ -311,7 +373,7 @@ function positionAge(position) {
 }
 
 function walletCard(label, value, sub) {
-  return `<div class="p-3 rounded-lg bg-panel-2/60 border border-line/50">
+  return `<div class="hero-metric-card">
     <div class="text-[10px] uppercase text-muted tracking-wide">${label}</div>
     <div class="text-base font-bold mt-1">${value}</div>
     <div class="text-[10px] text-muted">${sub || ''}</div>
@@ -319,10 +381,19 @@ function walletCard(label, value, sub) {
 }
 
 function quickAction(label, icon, href) {
-  return `<a href="${href}" class="flex flex-col items-center gap-2 p-3 rounded-lg border border-line hover:border-accent/40 bg-panel-2/30 transition-colors">
+  return `<a href="${href}" class="home-action-card">
     <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-accent/20 to-green/10 grid place-items-center text-accent">${icons[icon] || ''}</span>
     <span class="text-xs font-medium">${label}</span>
   </a>`;
+}
+
+function supportStripCard(title, text, href, badgeClass) {
+  return `<article class="card home-support-card">
+    <span class="${badgeClass}">${esc(title)}</span>
+    <strong>${esc(title)}</strong>
+    <small>${esc(text)}</small>
+    <a href="${href}" class="btn-ghost btn-sm mt-3">Open</a>
+  </article>`;
 }
 
 function copyScrollerPlaceholder(mode) {
@@ -375,6 +446,12 @@ function quoteStateClass(m) {
 
 function quoteStateChip(m) {
   return `<span data-quote-chip class="status-chip ${quoteStateClass(m)}">${quoteStateText(m)}</span>`;
+}
+
+function levelBadge(level) {
+  const code = String(level?.level_code || level?.name_en || 'starter').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const label = level?.name || level?.name_en || level?.level_code || 'Starter';
+  return `<span class="level-badge level-badge--${escAttr(code)}">${esc(label)}</span>`;
 }
 
 function miniSpark(symbol) {

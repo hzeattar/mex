@@ -1,4 +1,4 @@
-import{i as l,a as c,e as n,m as r}from"./main-CAksTdKi.js";function h(){return`
+import{i as l,a as c,e as n,m as r}from"./main-BjluwQko.js";function h(){return`
     <div class="space-y-5 animate-fade-in wallet-page">
       <section class="wallet-hero">
         <div>

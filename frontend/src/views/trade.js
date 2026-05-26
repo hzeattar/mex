@@ -464,9 +464,23 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId) {
   const chunkSize = type === 'crypto' ? 12 : 2;
   const limit = type === 'crypto' ? 18 : 6;
   const unique = [...new Set(missing)].slice(0, limit);
+  const unresolved = [];
   for (let i = 0; i < unique.length; i += chunkSize) {
     const chunk = unique.slice(i, i + chunkSize);
     const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&cache_only=1&purpose=watchlist`, { timeout: 3500 }).catch(() => null);
+    if (!isCurrentRun(runId)) return;
+    if (data?.items?.length) updateSymbolListPrices(container, data.items);
+    chunk.forEach((symbol) => {
+      const row = $$('.symbol-row', container).find((el) => el.dataset.sym === symbol);
+      const hasPrice = row && $('[data-price-cell]', row)?.textContent !== '--';
+      if (!hasPrice) unresolved.push(symbol);
+    });
+  }
+  const rescueChunkSize = type === 'crypto' ? 6 : 2;
+  const rescueList = [...new Set(unresolved)].slice(0, type === 'crypto' ? 8 : 3);
+  for (let i = 0; i < rescueList.length; i += rescueChunkSize) {
+    const chunk = rescueList.slice(i, i + rescueChunkSize);
+    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&purpose=focus`, { timeout: 4200 }).catch(() => null);
     if (!isCurrentRun(runId)) return;
     if (data?.items?.length) updateSymbolListPrices(container, data.items);
   }

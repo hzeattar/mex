@@ -372,10 +372,16 @@ $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
 $cacheKey = 'markets_v10_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
-$cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '45') : (int)env('MARKETS_CACHE_TTL', '60');
+$cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '18') : (int)env('MARKETS_CACHE_TTL', '60');
 $cacheTtl = max(0, min(300, $cacheTtl));
-if ($withQuotes && $typeAlias !== 'crypto') $cacheTtl = max($cacheTtl, 45);
-if ($withQuotes && $scope === 'home') $cacheTtl = max($cacheTtl, 60);
+if ($withQuotes && in_array($scope, ['home', 'trade'], true)) {
+  $interactiveTtl = (int)env('MARKETS_CACHE_TTL_INTERACTIVE', '12');
+  $cacheTtl = max(3, min(60, $interactiveTtl));
+} elseif ($withQuotes && $typeAlias === 'crypto') {
+  $cacheTtl = max(6, min($cacheTtl, 15));
+} elseif ($withQuotes) {
+  $cacheTtl = max(10, min($cacheTtl, 30));
+}
 
 if ($cacheTtl > 0 && is_file($cacheFile)) {
   $age = time() - (int)@filemtime($cacheFile);

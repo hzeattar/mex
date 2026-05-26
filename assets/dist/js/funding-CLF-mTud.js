@@ -1,4 +1,4 @@
-import{s as x,g as f,i as r,m as l,e as d,a as v,b as m,j as S}from"./main-CAksTdKi.js";function L(e){const n=(e._path||"deposit").includes("withdraw")?"withdraw":"deposit",s=n==="deposit",a=f("wallet")||{},t=a.real||{},i=a.demo||{},o=f("mode")==="real"?"real":"demo";return`
+import{s as x,g as f,i as r,m as l,e as d,a as v,b as m,j as S}from"./main-BjluwQko.js";function L(e){const n=(e._path||"deposit").includes("withdraw")?"withdraw":"deposit",s=n==="deposit",a=f("wallet")||{},t=a.real||{},i=a.demo||{},o=f("mode")==="real"?"real":"demo";return`
     <div class="space-y-5 animate-fade-in funding-page">
       <section class="funding-hero">
         <div>
