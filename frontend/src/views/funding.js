@@ -8,9 +8,12 @@ export function render(params) {
   const kind = (params._path || 'deposit').includes('withdraw') ? 'withdraw' : 'deposit';
   const isDeposit = kind === 'deposit';
   const wallet = get('wallet') || {};
+  const kyc = get('kyc') || {};
+  const level = get('level') || {};
   const real = wallet.real || {};
   const demo = wallet.demo || {};
   const mode = get('mode') === 'real' ? 'real' : 'demo';
+  const currentLevel = level.current || {};
 
   return `
     <div class="space-y-5 animate-fade-in funding-page">
@@ -40,6 +43,13 @@ export function render(params) {
         ${stepCard('1', isDeposit ? 'Pick a method' : 'Choose payout rail', isDeposit ? 'Use only active methods shown by admin.' : 'Select where the funds should be sent.')}
         ${stepCard('2', isDeposit ? 'Send funds' : 'Submit review', isDeposit ? 'Use the exact amount and reference when available.' : 'The amount is held while the desk checks it.')}
         ${stepCard('3', isDeposit ? 'Upload proof' : 'Admin approval', isDeposit ? 'Receipts help the desk confirm faster.' : 'Approved payouts are recorded in the ledger.')}
+      </section>
+
+      <section class="funding-summary-grid">
+        ${summaryTile('Account mode', mode === 'real' ? 'Real' : 'Demo', mode === 'real' ? 'Live funding enabled' : 'Preview only')}
+        ${summaryTile('KYC', titleCase(kyc.status || 'not submitted'), kyc.status === 'approved' ? 'Funding unlocked' : 'Approval required for live review')}
+        ${summaryTile('Customer level', currentLevel.name || currentLevel.name_en || 'Starter', 'Contracts and limits depend on tier')}
+        ${summaryTile(isDeposit ? 'Deposit rail' : 'Payout rail', isDeposit ? 'Manual intake' : 'Manual payout', 'Handled by operations desk')}
       </section>
 
       <div class="funding-layout">
@@ -80,15 +90,30 @@ export function render(params) {
           </form>
         </section>
 
-        <section class="card funding-history-panel">
-          <div class="panel-headline">
-            <span class="badge-green">Ledger trail</span>
-            <h2>Recent ${isDeposit ? 'deposits' : 'withdrawals'}</h2>
-          </div>
-          <div id="funding-history" class="funding-history-list">
-            <p class="text-muted text-sm text-center py-8">Loading...</p>
-          </div>
-        </section>
+        <div class="space-y-4">
+          <section class="card funding-sidebar-card">
+            <div class="panel-headline">
+              <span class="badge-green">${isDeposit ? 'Review flow' : 'Payout flow'}</span>
+              <h2>${isDeposit ? 'Deposit checklist' : 'Withdrawal checklist'}</h2>
+            </div>
+            <div class="funding-checklist">
+              ${checkItem('Use active method only', true)}
+              ${checkItem(isDeposit ? 'Upload a clear receipt or proof' : 'Use a valid payout destination', true)}
+              ${checkItem('Real mode required', mode === 'real')}
+              ${checkItem('KYC approval recommended', kyc.status === 'approved')}
+            </div>
+          </section>
+
+          <section class="card funding-history-panel">
+            <div class="panel-headline">
+              <span class="badge-green">Ledger trail</span>
+              <h2>Recent ${isDeposit ? 'deposits' : 'withdrawals'}</h2>
+            </div>
+            <div id="funding-history" class="funding-history-list">
+              <p class="text-muted text-sm text-center py-8">Loading...</p>
+            </div>
+          </section>
+        </div>
       </div>
     </div>`;
 }
@@ -296,4 +321,26 @@ function statusBadge(status) {
   if (isDoneStatus(status)) return 'badge-green';
   if (isMidStatus(status)) return 'badge-accent';
   return 'badge-red';
+}
+
+function titleCase(value) {
+  return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function summaryTile(label, value, sub) {
+  return `<article class="funding-summary-tile">
+    <span>${esc(label)}</span>
+    <strong>${esc(value)}</strong>
+    <small>${esc(sub)}</small>
+  </article>`;
+}
+
+function checkItem(label, done) {
+  return `<div class="funding-check-item ${done ? 'is-done' : 'is-pending'}">
+    <i>${done ? icons.check : icons.lock}</i>
+    <div>
+      <strong>${esc(label)}</strong>
+      <small>${done ? 'Ready' : 'Action required'}</small>
+    </div>
+  </div>`;
 }

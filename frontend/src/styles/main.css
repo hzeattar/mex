@@ -453,6 +453,61 @@
   .funding-layout {
     @apply grid gap-4 lg:grid-cols-2;
   }
+  .account-overview-card {
+    @apply overflow-hidden;
+  }
+  .account-overview-grid {
+    @apply grid gap-3 md:grid-cols-2 xl:grid-cols-4;
+  }
+  .account-overview-item {
+    @apply flex items-start gap-3 rounded-lg border border-line bg-surface/65 p-4;
+  }
+  .account-overview-item > span {
+    @apply grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line bg-panel-2 text-accent;
+  }
+  .account-overview-item > span svg {
+    @apply h-4 w-4;
+  }
+  .account-overview-item small {
+    @apply block text-[10px] uppercase tracking-wider text-muted;
+  }
+  .account-overview-item strong {
+    @apply mt-1 block text-lg font-black;
+  }
+  .account-overview-item p {
+    @apply mt-1 text-xs leading-5 text-muted;
+  }
+  .account-roadmap {
+    @apply space-y-3;
+  }
+  .roadmap-step {
+    @apply rounded-lg border border-line bg-surface/65 p-3;
+  }
+  .roadmap-step span {
+    @apply block text-[10px] uppercase tracking-wider text-muted;
+  }
+  .roadmap-step strong {
+    @apply mt-1 block text-sm font-black;
+  }
+  .roadmap-step small {
+    @apply mt-1 block text-xs leading-5 text-muted;
+  }
+  .account-preference-list {
+    @apply divide-y divide-line/45 overflow-hidden rounded-lg border border-line bg-surface/45;
+  }
+  .preference-row {
+    @apply flex items-start justify-between gap-4 px-4 py-3;
+  }
+  .preference-row span,
+  .preference-row strong {
+    @apply block;
+  }
+  .preference-row span {
+    @apply text-[10px] uppercase tracking-wider text-muted;
+  }
+  .preference-row strong {
+    @apply max-w-[260px] text-right text-sm leading-5 font-semibold text-text;
+  }
   .info-list {
     @apply space-y-2;
   }
@@ -567,6 +622,21 @@
   .funding-steps {
     @apply grid gap-3 md:grid-cols-3;
   }
+  .funding-summary-grid {
+    @apply grid gap-3 sm:grid-cols-2 xl:grid-cols-4;
+  }
+  .funding-summary-tile {
+    @apply rounded-lg border border-line bg-panel-2/45 p-3;
+  }
+  .funding-summary-tile span {
+    @apply block text-[10px] uppercase tracking-wider text-muted;
+  }
+  .funding-summary-tile strong {
+    @apply mt-1 block text-lg font-black;
+  }
+  .funding-summary-tile small {
+    @apply mt-1 block text-xs leading-5 text-muted;
+  }
   .funding-mode-warning {
     @apply flex flex-col gap-3 rounded-lg border border-spread/25 bg-spread/10 p-4 sm:flex-row sm:items-center;
   }
@@ -659,6 +729,30 @@
   .method-instructions {
     @apply mt-3 rounded-md border border-line bg-panel/55 p-3 text-xs leading-5 text-muted;
   }
+  .funding-sidebar-card {
+    @apply h-full;
+  }
+  .funding-checklist {
+    @apply space-y-3;
+  }
+  .funding-check-item {
+    @apply flex items-center gap-3 rounded-lg border border-line bg-surface/65 px-3 py-3;
+  }
+  .funding-check-item > span {
+    @apply grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-panel-2 text-muted;
+  }
+  .funding-check-item > span svg {
+    @apply h-4 w-4;
+  }
+  .funding-check-item strong {
+    @apply block text-sm font-semibold text-text;
+  }
+  .funding-check-item.is-done {
+    @apply border-buy/25 bg-buy/5;
+  }
+  .funding-check-item.is-done > span {
+    @apply border-buy/25 bg-buy/10 text-buy;
+  }
   .funding-history-list {
     @apply space-y-3;
   }
@@ -704,6 +798,21 @@
   }
   .wallet-balance-grid {
     @apply grid gap-4 lg:grid-cols-2;
+  }
+  .wallet-summary-strip {
+    @apply grid gap-3 md:grid-cols-3;
+  }
+  .wallet-summary-tile {
+    @apply rounded-lg border border-line bg-panel-2/45 p-3;
+  }
+  .wallet-summary-tile span {
+    @apply block text-[10px] uppercase tracking-wider text-muted;
+  }
+  .wallet-summary-tile strong {
+    @apply mt-1 block text-base font-black;
+  }
+  .wallet-summary-tile small {
+    @apply mt-1 block text-xs leading-5 text-muted;
   }
   .wallet-balance-card {
     @apply relative overflow-hidden rounded-lg border border-line bg-panel p-4;
@@ -789,6 +898,14 @@
   .order-mobile-card strong {
     @apply text-sm font-black;
   }
+  .portfolio-hero {
+    @apply relative overflow-hidden border-line bg-gradient-to-br from-panel-2/70 via-panel to-surface/90;
+  }
+  .portfolio-hero::after {
+    content: '';
+    @apply pointer-events-none absolute right-0 top-0 h-full w-1/2;
+    background: linear-gradient(135deg, rgba(93, 124, 255, 0.12), rgba(0, 192, 135, 0.05), transparent);
+  }
   .order-ticket-panel {
     @apply rounded-lg border border-line bg-panel/35 p-2;
   }
@@ -817,6 +934,22 @@
   }
   .order-summary-box strong {
     @apply mt-1 truncate font-mono text-[11px] font-black;
+  }
+  .mobile-order-summary {
+    @apply grid grid-cols-3 gap-2 rounded-lg border border-line bg-surface/65 p-2;
+  }
+  .mobile-order-summary span {
+    @apply rounded-md border border-line bg-panel-2/45 px-2 py-2 text-center;
+  }
+  .mobile-order-summary small,
+  .mobile-order-summary strong {
+    @apply block;
+  }
+  .mobile-order-summary small {
+    @apply text-[9px] uppercase tracking-wider text-muted;
+  }
+  .mobile-order-summary strong {
+    @apply mt-1 truncate text-[11px] font-black;
   }
   .order-ticket-note {
     @apply rounded-md border border-line bg-surface/65 p-2 text-[10px] leading-4 text-muted;

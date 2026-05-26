@@ -150,12 +150,17 @@ function renderOrderPanel() {
     <div class="grid grid-cols-2 gap-2">
       <button class="btn-sell trade-price-button" data-side="SELL"><small>Sell</small><span data-sell-price>${p > 0 ? price(p, get('type')) : '--'}</span></button>
       <button class="btn-buy trade-price-button" data-side="BUY"><small>Buy</small><span data-buy-price>${p > 0 ? price(p * 1.0001, get('type')) : '--'}</span></button>
-    </div>
-    <div class="text-center"><span class="spread-display" data-spread-val>Spread: --</span></div>
-    <div class="order-summary-box">
-      <span><small>Available</small><strong data-avail-bal>--</strong></span>
-      <span><small>Est. Units</small><strong data-est-units>--</strong></span>
-      <span><small>Notional</small><strong data-est-notional>--</strong></span>
+      </div>
+      <div class="text-center"><span class="spread-display" data-spread-val>Spread: --</span></div>
+      <div class="mobile-order-summary">
+        <span><small>Mode</small><strong>${esc(get('mode') === 'real' ? 'Real' : 'Demo')}</strong></span>
+        <span><small>Symbol</small><strong>${esc(get('symbol') || '--')}</strong></span>
+        <span><small>Asset</small><strong>${esc(get('type') || '--')}</strong></span>
+      </div>
+      <div class="order-summary-box">
+        <span><small>Available</small><strong data-avail-bal>--</strong></span>
+        <span><small>Est. Units</small><strong data-est-units>--</strong></span>
+        <span><small>Notional</small><strong data-est-notional>--</strong></span>
     </div>
     <label class="block">
       <span class="text-[10px] text-muted">Margin / Amount (USDT)</span>
@@ -653,6 +658,8 @@ function tradePositionCard(pos) {
       <span><small>Mark</small><strong>${mark > 0 ? price(mark, posType) : '--'}</strong></span>
       <span><small>Size</small><strong>${money(pos.qty || pos.amount || pos.size || pos.units || 0)}</strong></span>
       <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
+      <span><small>Margin</small><strong>${money(pos.margin_initial || pos.margin || 0)}</strong></span>
+      <span><small>Leverage</small><strong>${esc(String(pos.leverage || 1))}x</strong></span>
     </div>
     ${id ? `<button class="btn-xs btn-ghost text-sell w-full" data-close="${escAttr(id)}">Close position</button>` : ''}
   </article>`;
@@ -716,6 +723,8 @@ function tradeOrderCard(o) {
       <span><small>Amount</small><strong>${money(o.used_usdt || o.usd_amount || o.amount || 0)}</strong></span>
       <span><small>Lev</small><strong>${esc(String(o.leverage || 1))}x</strong></span>
       <span><small>Status</small><strong>${esc(o.status || 'open')}</strong></span>
+      <span><small>Mode</small><strong>${esc(o.mode || get('mode') || 'demo')}</strong></span>
+      <span><small>Symbol</small><strong>${esc(orderSymbol(o))}</strong></span>
     </div>
   </article>`;
 }
@@ -754,6 +763,8 @@ function tradeHistoryCard(o) {
       <span><small>Exit</small><strong>${price(o.exit_price || o.limit_price, type)}</strong></span>
       <span><small>Used</small><strong>${money(o.used_usdt || o.usd_amount || 0)}</strong></span>
       <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
+      <span><small>Fee</small><strong>${money(o.fee_paid || 0)}</strong></span>
+      <span><small>Type</small><strong>${esc(o.market_type || o.order_type || '--')}</strong></span>
     </div>
   </article>`;
 }

@@ -9,14 +9,17 @@ export function render() {
   const mode = get('mode');
   return `
     <div class="space-y-6 animate-fade-in">
-      <section class="card">
-        <div class="flex items-center justify-between">
+      <section class="card portfolio-hero">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <span class="badge-accent">Portfolio</span>
             <h1 class="text-xl font-bold mt-1">Positions & Orders</h1>
-            <p class="text-muted text-sm">Track open positions, pending orders, and realized PnL.</p>
+            <p class="text-muted text-sm">Monitor live exposure, review order history, and manage open trades with a mobile-friendly activity ledger.</p>
           </div>
-          <button class="btn-ghost btn-sm" id="refresh-portfolio">${icons.refresh} Refresh</button>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="status-chip ${mode === 'real' ? 'status-chip-live' : 'status-chip-derived'}">${mode === 'real' ? 'Real workspace' : 'Demo workspace'}</span>
+            <button class="btn-ghost btn-sm" id="refresh-portfolio">${icons.refresh} Refresh</button>
+          </div>
         </div>
       </section>
 
@@ -155,6 +158,8 @@ function posCard(p) {
       ${mobileMetric('Lev', `${esc(String(p.leverage || 1))}x`)}
       ${mobileMetric('Margin', money(p.margin || p.initial_margin || p.used_margin || 0))}
       ${mobileMetric('Mode', esc(p.mode || get('mode') || 'demo'))}
+      ${mobileMetric('Opened', esc(p.created_at || p.opened_at || '--'))}
+      ${mobileMetric('Type', esc(p.asset_type || p.type || '--'))}
     </div>
     ${id ? `<button class="btn-ghost btn-sm text-red w-full" data-close-pos="${escAttr(id)}">Close position</button>` : ''}
   </article>`;
@@ -203,6 +208,8 @@ function orderCard(o) {
       ${mobileMetric('Amount', money(o.amount))}
       ${mobileMetric('Created', esc(o.created_at || '--'))}
       ${mobileMetric('Mode', esc(o.mode || get('mode') || 'demo'))}
+      ${mobileMetric('Status', esc(o.status || 'pending'))}
+      ${mobileMetric('Side', esc(o.side || '--'))}
     </div>
   </article>`;
 }

@@ -21,6 +21,14 @@ export function render() {
   const name = user.display_name || user.name || user.username || user.email || 'Client';
   const initial = String(name || 'U').trim().charAt(0).toUpperCase() || 'U';
   const kycStatus = (kyc.status || 'not submitted').replace(/_/g, ' ');
+  const depositGap = nextTarget > 0 ? Math.max(0, nextTarget - confirmed) : 0;
+  const accountState = mode === 'real' ? 'Live internal execution' : 'Practice trading workspace';
+  const capabilityCount = [
+    kyc.status === 'approved',
+    Boolean(current?.level_code || current?.id),
+    mode === 'real',
+    Boolean(user.email),
+  ].filter(Boolean).length;
 
   return `
     <div class="space-y-5 animate-fade-in account-page">
@@ -47,7 +55,7 @@ export function render() {
           <div class="level-progress">
             <span style="width:${progress}%"></span>
           </div>
-          <small>${next ? `${money(Math.max(0, nextTarget - confirmed))} USDT to ${esc(next.name || next.name_en || 'next level')}` : 'Top level unlocked'}</small>
+          <small>${next ? `${money(depositGap)} USDT to ${esc(next.name || next.name_en || 'next level')}` : 'Top level unlocked'}</small>
         </div>
       </section>
 
@@ -59,6 +67,19 @@ export function render() {
             <small>${money(lvl.min_deposit_total || 0)} USDT deposits</small>
           </div>
         `).join('')}
+      </section>
+
+      <section class="card account-overview-card">
+        <div class="panel-headline">
+          <span class="badge-accent">Control center</span>
+          <h2>Workspace overview</h2>
+        </div>
+        <div class="account-overview-grid">
+          ${overviewCard('Workspace', mode === 'real' ? 'Real' : 'Demo', accountState, icons.trade)}
+          ${overviewCard('Unlocked', `${capabilityCount}/4`, 'Funding, copy desk, contracts, security', icons.lock)}
+          ${overviewCard('Progress', next ? `${progress}%` : '100%', next ? `${money(depositGap)} USDT to next tier` : 'Top level active', icons.earn)}
+          ${overviewCard('Support', user.email ? 'Priority desk' : 'Email missing', 'Funding review and KYC follow-up', icons.support)}
+        </div>
       </section>
 
       <div class="account-grid">
@@ -86,6 +107,33 @@ export function render() {
             ${securityCard('Email access', user.email ? 'Connected' : 'Missing', icons.account, Boolean(user.email))}
             ${securityCard('Funding review', 'Manual admin approval', icons.wallet, true)}
             ${securityCard('Risk controls', 'Internal execution', icons.lock, true)}
+          </div>
+        </section>
+      </div>
+
+      <div class="account-grid">
+        <section class="card account-panel">
+          <div class="panel-headline">
+            <span class="badge-green">Progression</span>
+            <h2>Level roadmap</h2>
+          </div>
+          <div class="account-roadmap">
+            ${roadmapStep('Current', current?.name || current?.name_en || 'Starter', 'Enabled for your account today')}
+            ${roadmapStep('Confirmed deposits', `${money(confirmed)} USDT`, next ? `${money(depositGap)} USDT remaining` : 'Target reached')}
+            ${roadmapStep('Next tier', next?.name || next?.name_en || 'Top level', next ? `${money(nextTarget)} USDT threshold` : 'No higher tier available')}
+          </div>
+        </section>
+
+        <section class="card account-panel">
+          <div class="panel-headline">
+            <span class="badge-accent">Preferences</span>
+            <h2>Client workspace</h2>
+          </div>
+          <div class="account-preference-list">
+            ${preferenceRow('Trading mode', mode === 'real' ? 'Real account selected' : 'Demo account selected')}
+            ${preferenceRow('Funding workflow', 'Manual deposits and withdrawals with admin review')}
+            ${preferenceRow('Copy desk access', kyc.status === 'approved' && mode === 'real' ? 'Eligible for real-only copy desk' : 'Locked until Real + KYC')}
+            ${preferenceRow('Contract access', current?.name || current?.name_en ? `Mapped to ${current?.name || current?.name_en}` : 'Starter access')}
           </div>
         </section>
       </div>
@@ -199,5 +247,31 @@ function capabilityCard(titleText, body, enabled, icon) {
       <small>${esc(body)}</small>
     </div>
     <em>${enabled ? 'Ready' : 'Locked'}</em>
+  </div>`;
+}
+
+function overviewCard(label, value, sub, icon) {
+  return `<article class="account-overview-item">
+    <span>${icon}</span>
+    <div>
+      <small>${esc(label)}</small>
+      <strong>${esc(value)}</strong>
+      <p>${esc(sub)}</p>
+    </div>
+  </article>`;
+}
+
+function roadmapStep(label, value, sub) {
+  return `<div class="roadmap-step">
+    <span>${esc(label)}</span>
+    <strong>${esc(value)}</strong>
+    <small>${esc(sub)}</small>
+  </div>`;
+}
+
+function preferenceRow(label, value) {
+  return `<div class="preference-row">
+    <span>${esc(label)}</span>
+    <strong>${esc(value)}</strong>
   </div>`;
 }

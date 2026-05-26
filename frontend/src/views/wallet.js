@@ -2,8 +2,13 @@
 import { money, esc } from '../utils/format.js';
 import { api } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
+import { get } from '../state/store.js';
 
 export function render() {
+  const level = get('level') || {};
+  const current = level.current || {};
+  const next = level.next || {};
+  const kyc = get('kyc') || {};
   return `
     <div class="space-y-5 animate-fade-in wallet-page">
       <section class="wallet-hero">
@@ -16,6 +21,12 @@ export function render() {
           <a href="#/deposit" class="btn-primary btn-sm">${icons.deposit} Deposit</a>
           <a href="#/withdraw" class="btn-ghost btn-sm">${icons.withdraw} Withdraw</a>
         </div>
+      </section>
+
+      <section class="wallet-summary-strip">
+        ${walletSummaryTile('Customer level', current.name || current.name_en || 'Starter', next?.name ? `Next: ${next.name}` : 'Top tier active')}
+        ${walletSummaryTile('Funding status', kyc.status === 'approved' ? 'Approved' : 'Review needed', kyc.status === 'approved' ? 'Deposits and withdrawals are enabled' : 'Complete KYC for live funding')}
+        ${walletSummaryTile('Execution mode', get('mode') === 'real' ? 'Real' : 'Demo', get('mode') === 'real' ? 'Manual review active' : 'Practice wallet preview')}
       </section>
 
       <div class="wallet-balance-grid">
@@ -142,4 +153,12 @@ function controlCard(href, icon, title, text) {
     <strong>${esc(title)}</strong>
     <small>${esc(text)}</small>
   </a>`;
+}
+
+function walletSummaryTile(label, value, sub) {
+  return `<article class="wallet-summary-tile">
+    <span>${esc(label)}</span>
+    <strong>${esc(value)}</strong>
+    <small>${esc(sub)}</small>
+  </article>`;
 }
