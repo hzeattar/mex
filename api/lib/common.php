@@ -229,6 +229,10 @@ function mysql_url_env(): string {
 function mysql_url_config(): array {
   $url = mysql_url_env();
   if ($url === '') return [];
+  return mysql_url_parse_config($url);
+}
+
+function mysql_url_parse_config(string $url): array {
   $parts = parse_url($url);
   if (!is_array($parts)) return [];
   $path = trim((string)($parts['path'] ?? ''), '/');
@@ -238,6 +242,40 @@ function mysql_url_config(): array {
     'name' => $path,
     'user' => isset($parts['user']) ? rawurldecode((string)$parts['user']) : '',
     'pass' => isset($parts['pass']) ? rawurldecode((string)$parts['pass']) : '',
+  ];
+}
+
+function mysql_url_config_key(string $key): array {
+  $url = env_nonempty($key);
+  if ($url === '') return [];
+  $parts = parse_url($url);
+  if (!is_array($parts)) return [];
+  $scheme = strtolower((string)($parts['scheme'] ?? ''));
+  if ($scheme !== 'mysql' && $scheme !== 'mariadb') return [];
+  return mysql_url_parse_config($url);
+}
+
+function mysql_private_host_like(string $host): bool {
+  $host = strtolower(trim($host));
+  return $host !== '' && (
+    str_contains($host, '.railway.internal') ||
+    str_contains($host, '.internal') ||
+    $host === 'mysql'
+  );
+}
+
+function mysql_public_proxy_config(): array {
+  $cfg = mysql_url_config_key('MYSQL_PUBLIC_URL');
+  if ($cfg) return $cfg;
+  $host = env_nonempty('RAILWAY_TCP_PROXY_DOMAIN');
+  $port = env_nonempty('RAILWAY_TCP_PROXY_PORT');
+  if ($host === '' || $port === '') return [];
+  return [
+    'host' => $host,
+    'port' => $port,
+    'name' => env_nonempty('MYSQLDATABASE') ?: env_nonempty('MYSQL_DATABASE'),
+    'user' => env_nonempty('MYSQLUSER') ?: 'root',
+    'pass' => env_nonempty('MYSQLPASSWORD') ?: env_nonempty('MYSQL_ROOT_PASSWORD'),
   ];
 }
 
@@ -317,6 +355,17 @@ function db(): PDO {
     }
     $pass = (string)env('DB_PASS', '');
     if (env_placeholder_value($pass) && $mysqlPass !== '') $pass = $mysqlPass;
+    $usePublicProxy = strtolower((string)env('DB_USE_PUBLIC_PROXY', 'auto'));
+    if ($railway && $usePublicProxy !== '0' && $usePublicProxy !== 'false' && mysql_private_host_like($host)) {
+      $publicCfg = mysql_public_proxy_config();
+      if (!empty($publicCfg['host']) && !empty($publicCfg['port'])) {
+        $host = (string)$publicCfg['host'];
+        $port = (string)$publicCfg['port'];
+        if (!empty($publicCfg['name'])) $name = (string)$publicCfg['name'];
+        if (!empty($publicCfg['user'])) $user = (string)$publicCfg['user'];
+        if (array_key_exists('pass', $publicCfg) && (string)$publicCfg['pass'] !== '') $pass = (string)$publicCfg['pass'];
+      }
+    }
     if (!$name || !$user) {
       throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }

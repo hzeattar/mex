@@ -18,6 +18,9 @@ $report = [
   'driver' => db_driver(),
   'time' => time(),
   'error_log' => (string)(ini_get('error_log') ?: ''),
+  'db_host_kind' => mysql_private_host_like(env_nonempty('DB_HOST')) ? 'private' : (env_nonempty('DB_HOST') !== '' ? 'public_or_custom' : 'missing'),
+  'mysql_public_url_present' => env_nonempty('MYSQL_PUBLIC_URL') !== '',
+  'db_use_public_proxy' => (string)env('DB_USE_PUBLIC_PROXY', 'auto'),
 ];
 
 try {
