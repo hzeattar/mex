@@ -970,6 +970,24 @@
   .order-ticket-note {
     @apply rounded-md border border-line bg-surface/65 p-2 text-[10px] leading-4 text-muted;
   }
+  .order-form-status {
+    @apply rounded-lg border px-3 py-2 text-[11px] font-semibold leading-4;
+  }
+  .order-form-status.is-info {
+    @apply border-accent/30 bg-accent/10 text-accent;
+  }
+  .order-form-status.is-success {
+    @apply border-buy/30 bg-buy/10 text-buy;
+  }
+  .order-form-status.is-warning {
+    @apply border-spread/30 bg-spread/10 text-spread;
+  }
+  .order-form-status.is-error {
+    @apply border-sell/30 bg-sell/10 text-sell;
+  }
+  .order-ticket-panel.is-submitting {
+    @apply pointer-events-auto;
+  }
   .quick-amount-grid {
     @apply grid grid-cols-4 gap-1.5;
   }

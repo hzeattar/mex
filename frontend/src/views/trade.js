@@ -187,6 +187,7 @@ function renderOrderPanel() {
         <input type="number" step="any" class="input mt-1" placeholder="Optional" data-sl />
       </label>
     </div>
+    <p class="order-form-status is-info" data-order-status hidden></p>
     <p class="order-ticket-note">Orders execute internally on VertexPluse at the current platform quote. Use TP/SL to document target risk for review.</p>
   </div>`;
 }
@@ -918,14 +919,16 @@ function bindEvents(container) {
 }
 
 async function placeOrder(side, container, formRoot) {
+  const root = formRoot || $('[data-order-form]', container) || container;
+  showOrderStatus(root, '', 'info');
+
   const q = get('activeQuote') || {};
   const currentPrice = Number(q.price || 0);
   if (!currentPrice) {
-    alert('No live price available yet. Please wait for the quote to load.');
+    showOrderStatus(root, 'No live price available yet. Please wait for the quote to load.', 'warning');
     return;
   }
 
-  const root = formRoot || $('[data-order-form]', container) || container;
   const amount = Number($('[data-amount]', root)?.value || get('amount') || 0);
   const leverage = Number($('[data-leverage]', root)?.value || get('leverage') || 1);
   const tp = Number($('[data-tp]', root)?.value || 0);
@@ -935,20 +938,22 @@ async function placeOrder(side, container, formRoot) {
   const limitInput = Number($('[data-limit-price]', root)?.value || 0);
 
   if (amount <= 0) {
-    alert('Enter a valid amount first.');
+    showOrderStatus(root, 'Enter a valid amount first.', 'warning');
     return;
   }
 
   if (side === 'BUY' && sl > 0 && sl >= currentPrice) {
-    alert('For BUY orders, Stop Loss should be below the current price.');
+    showOrderStatus(root, 'For BUY orders, Stop Loss should be below the current price.', 'warning');
     return;
   }
   if (side === 'SELL' && sl > 0 && sl <= currentPrice) {
-    alert('For SELL orders, Stop Loss should be above the current price.');
+    showOrderStatus(root, 'For SELL orders, Stop Loss should be above the current price.', 'warning');
     return;
   }
 
   try {
+    setOrderBusy(root, true);
+    showOrderStatus(root, `Sending ${side === 'BUY' ? 'buy' : 'sell'} order...`, 'info');
     const res = await api('/trade/place_order.php', {
       method: 'POST',
       body: {
@@ -967,15 +972,39 @@ async function placeOrder(side, container, formRoot) {
       timeout: 10000,
     });
     if (res && res.ok === false) {
-      alert(res.error || 'Order failed');
+      showOrderStatus(root, res.error || 'Order failed', 'error');
       return;
     }
-    closeOrderSheet(container);
+    showOrderStatus(root, `${side === 'BUY' ? 'Buy' : 'Sell'} order opened successfully.`, 'success');
     await loadTradeActivity(container, tradeRunId);
+    setTimeout(() => {
+      if (root.closest?.('#mobile-order-sheet')) closeOrderSheet(container);
+      else showOrderStatus(root, '', 'info');
+    }, 900);
   } catch (e) {
     console.error('Order failed:', e);
-    alert(e.message || 'Order failed');
+    showOrderStatus(root, e.message || 'Order failed', 'error');
+  } finally {
+    setOrderBusy(root, false);
   }
+}
+
+function showOrderStatus(root, message, type = 'info') {
+  const status = $('[data-order-status]', root);
+  if (!status) return;
+  status.textContent = message || '';
+  status.hidden = !message;
+  status.className = `order-form-status is-${type}`;
+}
+
+function setOrderBusy(root, busy) {
+  const scopes = [root, root.closest?.('#mobile-order-sheet')].filter(Boolean);
+  const buttons = new Set(scopes.flatMap(scope => $$('[data-side], [data-submit-order]', scope)));
+  buttons.forEach(btn => {
+    btn.disabled = Boolean(busy);
+    btn.classList.toggle('opacity-60', Boolean(busy));
+  });
+  root.classList.toggle('is-submitting', Boolean(busy));
 }
 
 function openMarketDrawer(container) {
