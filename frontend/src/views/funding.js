@@ -1,7 +1,7 @@
 // Funding View - Deposit & Withdraw
 import { get, set } from '../state/store.js';
 import { money, esc, escAttr } from '../utils/format.js';
-import { api, formApi } from '../services/api.js';
+import { api, formApi, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 
 export function render(params) {
@@ -77,7 +77,7 @@ export function render(params) {
             <div id="method-details" class="method-details">
               <p class="text-muted text-sm">Select a method to see address, limits, and desk instructions.</p>
             </div>
-            ${isDeposit ? `<label class="block">
+            ${isDeposit ? `<label class="block" id="proof-field">
               <span class="field-label">Receipt / proof</span>
               <input type="file" name="proof" accept="image/*,.pdf" class="input mt-1 py-1.5" />
             </label>` : ''}
@@ -180,6 +180,14 @@ function updateSelectedMethod(container) {
   if (select && selected && !select.value) select.value = methodId(selected);
   container.querySelectorAll('.method-card').forEach(card => card.classList.toggle('active', card.dataset.method === methodId(selected || {})));
   const details = container.querySelector('#method-details');
+  const proofField = container.querySelector('#proof-field');
+  const submitButton = container.querySelector('#funding-form button[type="submit"]');
+  const provider = String(selected?.provider || selected?.method_group || '').toLowerCase();
+  const isStripe = provider.includes('stripe') || provider.includes('card');
+  if (proofField) proofField.classList.toggle('hidden', isStripe || !selected?.proof_required);
+  if (submitButton && selected) {
+    submitButton.textContent = isStripe ? (selected.checkout_label || 'Continue to secure card checkout') : (container.querySelector('#funding-form')?.dataset.kind === 'deposit' ? 'Submit deposit for review' : 'Submit withdrawal request');
+  }
   if (!details) return;
   if (!selected) {
     details.innerHTML = '<p class="text-muted text-sm">No method selected.</p>';
@@ -199,6 +207,13 @@ function updateSelectedMethod(container) {
       ${detailPill('Maximum', selected.max_amount ? money(selected.max_amount) : 'Desk limit')}
       ${detailPill('Proof', selected.proof_required ? 'Required' : 'Optional')}
     </div>
+    ${isStripe ? `<div class="secure-checkout-strip">
+      <i>${icons.wallet}</i>
+      <div>
+        <strong>Secure hosted card checkout</strong>
+        <small>Card details are collected by Stripe. VertexPluse only receives the payment confirmation.</small>
+      </div>
+    </div>` : ''}
     ${selected.payment_address ? `<div class="copy-address"><span>${esc(selected.payment_address)}</span><button type="button" data-copy-address="${escAttr(selected.payment_address)}">Copy</button></div>` : ''}
     ${selected.instructions ? `<p class="method-instructions">${esc(selected.instructions)}</p>` : ''}
   `;
@@ -234,7 +249,12 @@ async function handleSubmit(e, container, kind) {
   const form = e.target;
   const status = container.querySelector('#form-status');
   const fd = new FormData(form);
-  fd.append('kind', kind);
+  const selected = getSelectedMethod(container);
+  const isDeposit = kind === 'deposit';
+  const amount = Number(fd.get('amount') || 0);
+  const notes = String(fd.get('notes') || '').trim();
+  const provider = String(selected?.provider || selected?.method_group || '').toLowerCase();
+  const isStripe = isDeposit && (provider.includes('stripe') || provider.includes('card'));
   try {
     if (get('mode') !== 'real') {
       if (status) {
@@ -243,17 +263,57 @@ async function handleSubmit(e, container, kind) {
       }
       return;
     }
+    if (!selected) {
+      if (status) {
+        status.textContent = 'Select an active payment method first.';
+        status.className = 'text-xs text-center text-sell';
+      }
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      if (status) {
+        status.textContent = 'Enter a valid amount.';
+        status.className = 'text-xs text-center text-sell';
+      }
+      return;
+    }
     if (status) {
-      status.textContent = 'Submitting request to operations desk...';
+      status.textContent = isStripe ? 'Creating secure card checkout...' : 'Submitting request to operations desk...';
       status.className = 'text-xs text-center text-muted';
     }
-    const endpoint = kind === 'deposit' ? '/deposits/create.php' : '/withdrawals/create.php';
-    const res = await formApi(endpoint, fd, { timeout: 14000 });
+    const method = selected.code || selected.method || selected.id || fd.get('method') || '';
+    const currency = selected.currency || 'USDT';
+    const body = isDeposit
+      ? { provider: selected.provider || '', method, currency, amount, details: { notes } }
+      : { method, currency, amount, destination: notes, details: { notes } };
+    const headers = { 'Idempotency-Key': idempotencyKey(isDeposit ? 'dep' : 'wd') };
+    const endpoint = isStripe ? '/deposits/stripe_checkout.php' : (isDeposit ? '/deposits/create.php' : '/withdrawals/create.php');
+    const res = await postApi(endpoint, body, { timeout: isStripe ? 18000 : 14000, headers });
     if (res && res.ok !== false) {
+      if (isStripe && res.checkout_url) {
+        if (status) {
+          status.textContent = 'Redirecting to Stripe Checkout...';
+          status.className = 'text-xs text-center text-buy';
+        }
+        window.location.assign(res.checkout_url);
+        return;
+      }
+      if (isDeposit) {
+        const proof = form.querySelector('input[name="proof"]')?.files?.[0] || null;
+        const depositId = res.deposit?.id || res.id || res.deposit_id || null;
+        if (proof && depositId) {
+          const proofFd = new FormData();
+          proofFd.append('deposit_id', String(depositId));
+          proofFd.append('proof', proof);
+          await formApi('/deposits/upload_proof.php', proofFd, { timeout: 18000 });
+        }
+      }
       if (status) {
-        status.textContent = 'Request submitted. Admin review is now pending.';
+        status.textContent = isDeposit ? 'Deposit request submitted. Admin review is now pending.' : 'Withdrawal request submitted. Admin review is now pending.';
         status.className = 'text-xs text-center text-buy';
       }
+      form.reset();
+      updateSelectedMethod(container);
       loadHistory(container, kind);
     } else if (status) {
       status.textContent = res?.error || 'Request failed';
@@ -282,9 +342,22 @@ function methodId(m) {
 function methodIcon(m) {
   const label = String(m?.method_group || m?.provider || m?.code || 'USDT').toUpperCase();
   if (String(m?.image_url || '').trim()) return `<img src="${escAttr(m.image_url)}" alt="" />`;
+  if (label.includes('STRIPE') || label.includes('CARD')) return icons.wallet;
   if (label.includes('BANK')) return icons.wallet;
   if (label.includes('TRC') || label.includes('USDT') || label.includes('CRYPTO')) return icons.deposit;
   return icons.wallet;
+}
+
+function getSelectedMethod(container) {
+  const select = container.querySelector('#method-select');
+  const value = select?.value || '';
+  const items = container.__fundingMethods || [];
+  return items.find(m => methodId(m) === value) || items[0] || null;
+}
+
+function idempotencyKey(prefix) {
+  const random = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  return `vp-${prefix}-${random}`;
 }
 
 function detailPill(label, value) {

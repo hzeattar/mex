@@ -116,27 +116,32 @@ function posData(p) {
   const id = p.position_id || p.id || '';
   const symbol = String(p.symbol || '').replace('@R@', '');
   const side = String(p.side || 'buy').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
-  return { pnl, type, mark, id, symbol, side };
+  const entry = Number(p.entry_price || p.open_price || 0);
+  const size = Number(p.qty || p.amount || p.size || p.units || 0);
+  const margin = Number(p.margin_initial || p.margin || p.initial_margin || p.used_margin || 0);
+  const leverage = Number(p.leverage || 1);
+  const opened = p.opened_at_label || p.created_at || p.opened_at || p.updated_at || '';
+  return { pnl, type, mark, id, symbol, side, entry, size, margin, leverage, opened };
 }
 
 function posRow(p) {
-  const { pnl, type, mark, id, symbol, side } = posData(p);
+  const { pnl, type, mark, id, symbol, side, entry, size, margin, leverage } = posData(p);
   return `<tr class="border-b border-line/50 hover:bg-panel-2/30">
     <td class="py-2.5 px-2 font-semibold">${esc(symbol)}</td>
     <td class="py-2.5"><span class="badge ${side === 'BUY' ? 'badge-green' : 'badge-red'}">${esc(side)}</span></td>
     <td class="py-2.5 text-xs text-muted">${esc(p.market_type || p.order_type || 'spot')}</td>
-    <td class="py-2.5 text-right font-mono text-xs">${price(p.entry_price || p.open_price, type)}</td>
+    <td class="py-2.5 text-right font-mono text-xs">${entry > 0 ? price(entry, type) : '--'}</td>
     <td class="py-2.5 text-right font-mono text-xs">${mark > 0 ? price(mark, type) : '--'}</td>
-    <td class="py-2.5 text-right text-xs">${money(p.amount || p.size || p.units || 0)}</td>
-    <td class="py-2.5 text-right font-mono text-xs">${esc(String(p.leverage || 1))}x</td>
-    <td class="py-2.5 text-right text-xs">${money(p.margin || p.initial_margin || p.used_margin || 0)}</td>
+    <td class="py-2.5 text-right text-xs">${money(size)}</td>
+    <td class="py-2.5 text-right font-mono text-xs">${esc(String(leverage || 1))}x</td>
+    <td class="py-2.5 text-right text-xs">${money(margin)}</td>
     <td class="py-2.5 text-right font-mono ${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</td>
     <td class="py-2.5 text-right px-2">${id ? `<button class="btn-ghost btn-sm text-red" data-close-pos="${escAttr(id)}">Close</button>` : ''}</td>
   </tr>`;
 }
 
 function posCard(p) {
-  const { pnl, type, mark, id, symbol, side } = posData(p);
+  const { pnl, type, mark, id, symbol, side, entry, size, margin, leverage, opened } = posData(p);
   return `<article class="portfolio-position-card">
     <div class="flex items-start justify-between gap-3">
       <div>
@@ -144,7 +149,7 @@ function posCard(p) {
           <strong>${esc(symbol)}</strong>
           <span class="badge ${side === 'BUY' ? 'badge-green' : 'badge-red'}">${esc(side)}</span>
         </div>
-        <small>${esc(p.market_type || p.order_type || 'spot')} - ${esc(p.created_at || p.opened_at || '')}</small>
+        <small>${esc(p.market_type || p.order_type || 'spot')} - ${esc(opened || '')}</small>
       </div>
       <div class="text-right">
         <span class="text-[10px] text-muted">Open PnL</span>
@@ -152,13 +157,13 @@ function posCard(p) {
       </div>
     </div>
     <div class="portfolio-position-metrics">
-      ${mobileMetric('Entry', price(p.entry_price || p.open_price, type))}
+      ${mobileMetric('Entry', entry > 0 ? price(entry, type) : '--')}
       ${mobileMetric('Mark', mark > 0 ? price(mark, type) : '--')}
-      ${mobileMetric('Size', money(p.amount || p.size || p.units || 0))}
-      ${mobileMetric('Lev', `${esc(String(p.leverage || 1))}x`)}
-      ${mobileMetric('Margin', money(p.margin || p.initial_margin || p.used_margin || 0))}
+      ${mobileMetric('Size', money(size))}
+      ${mobileMetric('Lev', `${esc(String(leverage || 1))}x`)}
+      ${mobileMetric('Margin', money(margin))}
       ${mobileMetric('Mode', esc(p.mode || get('mode') || 'demo'))}
-      ${mobileMetric('Opened', esc(p.created_at || p.opened_at || '--'))}
+      ${mobileMetric('Opened', esc(opened || '--'))}
       ${mobileMetric('Type', esc(p.asset_type || p.type || '--'))}
     </div>
     ${id ? `<button class="btn-ghost btn-sm text-red w-full" data-close-pos="${escAttr(id)}">Close position</button>` : ''}

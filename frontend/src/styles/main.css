@@ -726,6 +726,22 @@
   .copy-address button {
     @apply rounded-md bg-accent px-2 py-1 text-[10px] font-black text-white;
   }
+  .secure-checkout-strip {
+    @apply mt-3 flex items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 p-3;
+  }
+  .secure-checkout-strip > i {
+    @apply grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface text-accent;
+  }
+  .secure-checkout-strip svg {
+    @apply h-5 w-5;
+  }
+  .secure-checkout-strip strong,
+  .secure-checkout-strip small {
+    @apply block;
+  }
+  .secure-checkout-strip small {
+    @apply mt-1 text-xs leading-5 text-muted;
+  }
   .method-instructions {
     @apply mt-3 rounded-md border border-line bg-panel/55 p-3 text-xs leading-5 text-muted;
   }
@@ -738,10 +754,10 @@
   .funding-check-item {
     @apply flex items-center gap-3 rounded-lg border border-line bg-surface/65 px-3 py-3;
   }
-  .funding-check-item > span {
+  .funding-check-item > i {
     @apply grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-panel-2 text-muted;
   }
-  .funding-check-item > span svg {
+  .funding-check-item > i svg {
     @apply h-4 w-4;
   }
   .funding-check-item strong {
@@ -750,7 +766,7 @@
   .funding-check-item.is-done {
     @apply border-buy/25 bg-buy/5;
   }
-  .funding-check-item.is-done > span {
+  .funding-check-item.is-done > i {
     @apply border-buy/25 bg-buy/10 text-buy;
   }
   .funding-history-list {

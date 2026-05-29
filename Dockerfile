@@ -1,3 +1,5 @@
+FROM composer:2 AS composer-bin
+
 FROM php:8.2-fpm
 
 WORKDIR /app
@@ -20,9 +22,12 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
 
+COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
+
 COPY . /app
 
 RUN set -eux; \
+    if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi; \
     if [ -f php.ini ]; then cp php.ini /usr/local/etc/php/conf.d/vertexpluse.ini; fi; \
     mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx; \
     chown -R www-data:www-data api/data api/uploads; \

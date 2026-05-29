@@ -18,6 +18,7 @@ try { $uid = require_auth(); } catch (Throwable $e) { /* allow anonymous */ }
 // Parse params
 $symbolsRaw = trim((string)($_GET['symbols'] ?? ''));
 $type = strtolower(trim((string)($_GET['type'] ?? 'crypto')));
+$scope = strtolower(trim((string)($_GET['scope'] ?? 'watchlist')));
 $symbols = array_filter(array_map('strtoupper', array_map('trim', explode(',', $symbolsRaw))));
 if (empty($symbols)) $symbols = ['BTCUSDT'];
 $symbols = array_slice($symbols, 0, 20);
@@ -44,13 +45,14 @@ if (function_exists('apache_setenv')) {
 while (ob_get_level() > 0) @ob_end_flush();
 
 // Send initial connection event
-echo "event: connected\ndata: " . json_encode(['symbols' => $symbols, 'type' => $type, 'ts' => time()]) . "\n\n";
+echo "event: connected\ndata: " . json_encode(['symbols' => $symbols, 'type' => $type, 'scope' => $scope, 'ts' => time()]) . "\n\n";
 flush();
 
 $maxRuntime = (int)env('SSE_MAX_RUNTIME', '55');
 $startTime = time();
 $providerType = function_exists('vp_provider_asset_type') ? vp_provider_asset_type($type) : $type;
-$defaultInterval = $providerType === 'crypto' ? 2 : 6;
+$allowLive = in_array($scope, ['focus', 'active', 'symbol'], true) || (int)env('SSE_ALLOW_WATCHLIST_LIVE', '0') === 1;
+$defaultInterval = $allowLive ? ($providerType === 'crypto' ? 2 : 6) : ($providerType === 'crypto' ? 4 : 8);
 $interval = max(1, (int)env('SSE_INTERVAL', (string)$defaultInterval));
 $lastData = '';
 
@@ -65,7 +67,8 @@ while (true) {
 
   try {
     $payload = qa_quote_payload($type, $symbols, [
-      'allow_live' => true,
+      'allow_live' => $allowLive,
+      'allow_stale_display' => true,
       'allow_crypto_seed' => false,
       'allow_noncrypto_seed' => false,
     ]);

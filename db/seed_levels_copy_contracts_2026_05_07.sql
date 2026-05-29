@@ -180,4 +180,35 @@ WHERE a.id IS NULL;
 
 DROP TEMPORARY TABLE vp_seed_announcements;
 
+INSERT INTO payment_methods(kind,code,provider,currency,title_en,title_ar,title_ru,desc_en,desc_ar,desc_ru,image_url,instructions_en,instructions_ar,instructions_ru,min_amount,max_amount,status,sort_order,category_key,created_at,updated_at,account_scope,fields_json,checkout_label,method_group,payment_address,payment_qr_url,proof_required,expires_hours)
+VALUES
+('deposit','stripe_card','stripe','USDT','Card payment','Card payment','Card payment','Secure card checkout through Stripe.','Secure card checkout through Stripe.','Secure card checkout through Stripe.','/assets/img/payment_methods/stripe-card.svg','Pay securely by Visa, Mastercard, Apple Pay, or Google Pay. Your balance is credited after Stripe confirms the payment.','Pay securely by Visa, Mastercard, Apple Pay, or Google Pay. Your balance is credited after Stripe confirms the payment.','Pay securely by Visa, Mastercard, Apple Pay, or Google Pay. Your balance is credited after Stripe confirms the payment.',10,0,'active',5,'card',UNIX_TIMESTAMP(),UNIX_TIMESTAMP(),'real','{}','Pay by card','card','','',0,1)
+ON DUPLICATE KEY UPDATE
+  provider=VALUES(provider),
+  currency=VALUES(currency),
+  title_en=VALUES(title_en),
+  title_ar=VALUES(title_ar),
+  title_ru=VALUES(title_ru),
+  desc_en=VALUES(desc_en),
+  desc_ar=VALUES(desc_ar),
+  desc_ru=VALUES(desc_ru),
+  image_url=VALUES(image_url),
+  instructions_en=VALUES(instructions_en),
+  instructions_ar=VALUES(instructions_ar),
+  instructions_ru=VALUES(instructions_ru),
+  min_amount=VALUES(min_amount),
+  max_amount=VALUES(max_amount),
+  status='active',
+  sort_order=VALUES(sort_order),
+  category_key=VALUES(category_key),
+  updated_at=UNIX_TIMESTAMP(),
+  account_scope=VALUES(account_scope),
+  fields_json=VALUES(fields_json),
+  checkout_label=VALUES(checkout_label),
+  method_group=VALUES(method_group),
+  payment_address=VALUES(payment_address),
+  payment_qr_url=VALUES(payment_qr_url),
+  proof_required=VALUES(proof_required),
+  expires_hours=VALUES(expires_hours);
+
 COMMIT;
