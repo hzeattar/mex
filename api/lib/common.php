@@ -321,11 +321,14 @@ function db(): PDO {
       throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }
     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', '5')));
     $pdoOptions = [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+      PDO::ATTR_TIMEOUT => $connectTimeout,
     ];
-    if (PHP_SAPI !== 'cli' && (string)env('DB_PERSISTENT', '1') !== '0') {
+    $persistentDefault = railway_runtime() ? '0' : '1';
+    if (PHP_SAPI !== 'cli' && (string)env('DB_PERSISTENT', $persistentDefault) !== '0') {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
     }
     $pdo = new PDO($dsn, $user, $pass, $pdoOptions);

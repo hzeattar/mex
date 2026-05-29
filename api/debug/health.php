@@ -21,9 +21,13 @@ $report = [
 ];
 
 try {
+  $dbStart = microtime(true);
   $pdo = db();
   $report['db_ok'] = true;
+  $report['db_connect_ms'] = (int)round((microtime(true) - $dbStart) * 1000);
+  $queryStart = microtime(true);
   $report['db_time'] = (int)($pdo->query('SELECT 1')->fetchColumn() ?: 0);
+  $report['db_query_ms'] = (int)round((microtime(true) - $queryStart) * 1000);
 } catch (Throwable $e) {
   $report['db_ok'] = false;
   $report['db_error'] = $e->getMessage();

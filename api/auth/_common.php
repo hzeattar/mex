@@ -5,15 +5,48 @@ require_once __DIR__ . '/../lib/schema.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/levels.php';
 
+function auth_should_bootstrap_schema(): bool {
+  $override = trim((string)env('AUTH_BOOTSTRAP_SCHEMA', ''));
+  if ($override !== '') {
+    return in_array(strtolower($override), ['1', 'true', 'yes', 'on'], true);
+  }
+  if ((string)env('AUTO_MIGRATE', '0') === '1') return true;
+  $env = strtolower((string)env('APP_ENV', 'production'));
+  return !in_array($env, ['production', 'prod'], true);
+}
+
 function auth_bootstrap_schema(): PDO {
   $pdo = db();
-  try {
-    schema_install($pdo, db_driver());
-    schema_upgrade($pdo, db_driver());
-    schema_seed_defaults($pdo, db_driver());
-  } catch (Throwable $e) {
-    // db() already performs upgrades best-effort; ignore here
+  static $checked = false;
+
+  if (auth_should_bootstrap_schema()) {
+    try {
+      schema_install($pdo, db_driver());
+      schema_upgrade($pdo, db_driver());
+      schema_seed_defaults($pdo, db_driver());
+    } catch (Throwable $e) {
+      // db() already performs upgrades best-effort; ignore here.
+    }
+    return $pdo;
   }
+
+  if (!$checked) {
+    $checked = true;
+    try {
+      $pdo->query('SELECT 1 FROM users LIMIT 1');
+    } catch (Throwable $e) {
+      if ((string)env('AUTH_BOOTSTRAP_ON_MISSING', '1') === '0') {
+        throw $e;
+      }
+      try {
+        schema_install($pdo, db_driver());
+        schema_upgrade($pdo, db_driver());
+      } catch (Throwable $ignored) {
+        throw $e;
+      }
+    }
+  }
+
   return $pdo;
 }
 
