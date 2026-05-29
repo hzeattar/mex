@@ -18,10 +18,14 @@ try {
 }
 
 function site_setting(string $key, string $default = ''): string {
+  static $settingsUnavailable = false;
+  if ($settingsUnavailable) return $default;
+
   try {
     $v = setting_get($key, $default);
     return is_string($v) ? $v : $default;
   } catch (Throwable $e) {
+    $settingsUnavailable = true;
     return $default;
   }
 }
