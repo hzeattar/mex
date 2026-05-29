@@ -19,6 +19,17 @@ try {
 
 function site_setting(string $key, string $default = ''): string {
   static $settingsUnavailable = false;
+  $envKey = strtoupper((string)preg_replace('/[^A-Za-z0-9]+/', '_', $key));
+  $envValue = env_nonempty($envKey);
+  if ($envValue !== '') return $envValue;
+
+  $allowDbSettings = (string)env('SITE_SETTINGS_DB', '') !== '';
+  if (!$allowDbSettings) {
+    $env = strtolower((string)env('APP_ENV', 'local'));
+    $allowDbSettings = !in_array($env, ['production', 'prod'], true);
+  }
+  if (!$allowDbSettings) return $default;
+
   if ($settingsUnavailable) return $default;
 
   try {
