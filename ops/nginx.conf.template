@@ -33,6 +33,7 @@ http {
   server {
     listen 0.0.0.0:${PORT} default_server;
     listen [::]:${PORT} default_server;
+${EXTRA_LISTEN}
     server_name _;
     root /app;
     index index.php index.html;
@@ -90,7 +91,7 @@ http {
       fastcgi_connect_timeout 10s;
       fastcgi_buffers 16 16k;
       fastcgi_buffer_size 32k;
-      fastcgi_pass 127.0.0.1:9000;
+      fastcgi_pass unix:/tmp/php-fpm.sock;
     }
   }
 }
