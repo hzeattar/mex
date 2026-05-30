@@ -39,4 +39,4 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "php -S \"[::]:${PORT:-8080}\" /app/railway-router.php"]
+CMD ["sh", "/app/ops/start-nginx-fpm.sh"]

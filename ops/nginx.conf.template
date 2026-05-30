@@ -7,7 +7,7 @@ events {
 }
 
 http {
-  access_log off;
+  access_log /dev/stdout;
 
   # Inline minimal MIME types (php:8.2-fpm image may lack /etc/nginx/mime.types)
   types {
@@ -31,7 +31,8 @@ http {
   keepalive_timeout 65;
 
   server {
-    listen ${PORT} default_server;
+    listen 0.0.0.0:${PORT} default_server;
+    listen [::]:${PORT} default_server;
     server_name _;
     root /app;
     index index.php index.html;
