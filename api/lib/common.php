@@ -384,8 +384,11 @@ function db(): PDO {
     }
     $pass = (string)env('DB_PASS', '');
     if (env_placeholder_value($pass) && $mysqlPass !== '') $pass = $mysqlPass;
-    $usePublicProxy = strtolower((string)env('DB_USE_PUBLIC_PROXY', 'auto'));
-    if ($railway && $usePublicProxy !== '0' && $usePublicProxy !== 'false' && mysql_private_host_like($host)) {
+    // Railway services should prefer the private service DNS by default.
+    // The public TCP proxy is useful for local tooling, but it adds latency and
+    // has been the source of slow auth/bootstrap requests in production.
+    $usePublicProxy = strtolower((string)env('DB_USE_PUBLIC_PROXY', $railway ? '0' : 'auto'));
+    if ($railway && in_array($usePublicProxy, ['1', 'true', 'yes', 'on'], true) && mysql_private_host_like($host)) {
       $publicCfg = mysql_public_proxy_config();
       if (!empty($publicCfg['host']) && !empty($publicCfg['port'])) {
         $host = (string)$publicCfg['host'];
@@ -399,7 +402,7 @@ function db(): PDO {
       throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }
     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', '5')));
+    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', $railway ? '3' : '5')));
     $pdoOptions = [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -412,7 +415,7 @@ function db(): PDO {
     if ($persistentEnabled) {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
     }
-    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '2' : '0')));
+    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '1' : '0')));
     $lastConnectError = null;
     for ($attempt = 0; $attempt <= $connectRetries; $attempt++) {
       try {
