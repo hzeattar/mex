@@ -34,13 +34,32 @@ if ($uid <= 0 && $limit > 100) {
 }
 if ($uid <= 0) $limit = min($limit, 100);
 
-$pdo = db();
-$st = $pdo->prepare("SELECT meta, type FROM markets WHERE symbol=? LIMIT 1");
-$st->execute([$symbol]);
-$mr = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+$GLOBALS['CANDLES_REQUEST_STARTED_AT'] = microtime(true);
+$GLOBALS['CANDLES_REQUEST_BUDGET_MS'] = max(900, min(10000, (int)env('CANDLES_REQUEST_BUDGET_MS', '4500')));
+$GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+  'connect_timeout' => max(1, min(3, (int)env('CANDLES_UPSTREAM_CONNECT_TIMEOUT', '1'))),
+  'timeout' => max(2, min(5, (int)env('CANDLES_UPSTREAM_TIMEOUT', '2'))),
+  'retries' => max(0, min(1, (int)env('CANDLES_UPSTREAM_RETRIES', '0'))),
+];
+
+$mr = [];
+$typeHintForLookup = vp_normalize_asset_type($typeRaw);
+$needsMarketLookup = ($typeHintForLookup === '' || $typeHintForLookup === 'all' || (int)env('CANDLES_DB_LOOKUP', '0') === 1);
+if ($needsMarketLookup) {
+  try {
+    $pdo = db();
+    $st = $pdo->prepare("SELECT meta, type FROM markets WHERE symbol=? LIMIT 1");
+    $st->execute([$symbol]);
+    $mr = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+  } catch (Throwable $e) {
+    $mr = [];
+  }
+}
 $meta = market_meta($mr['meta'] ?? null);
 $dbType = vp_normalize_asset_type((string)($mr['type'] ?? $typeRaw));
 if ($typeRaw === '' || $typeRaw === 'all') $typeRaw = $dbType;
+$fallbackMeta = candles_default_market_meta($symbol, $typeRaw ?: $dbType);
+if ($fallbackMeta) $meta = array_merge($fallbackMeta, $meta);
 $ctx = vp_market_context($symbol, $typeRaw ?: $dbType, $market, $meta);
 $type = (string)($ctx['asset_type'] ?? vp_normalize_asset_type($typeRaw));
 $providerType = (string)($ctx['provider_type'] ?? vp_provider_asset_type($type));
@@ -67,6 +86,77 @@ function tf_seconds(string $tf): int {
   if ($tf === '3d') return 259200;
   if ($tf === '1w') return 604800;
   return 60;
+}
+
+function candles_default_market_meta(string $symbol, string $type): array {
+  $symbol = strtoupper(trim($symbol));
+  $type = vp_normalize_asset_type($type);
+  $maps = [
+    'forex' => [
+      'EURUSD' => ['yahoo_ticker' => 'EURUSD=X', 'tv_symbol' => 'FX:EURUSD'],
+      'GBPUSD' => ['yahoo_ticker' => 'GBPUSD=X', 'tv_symbol' => 'FX:GBPUSD'],
+      'USDJPY' => ['yahoo_ticker' => 'JPY=X', 'tv_symbol' => 'FX:USDJPY'],
+      'USDCHF' => ['yahoo_ticker' => 'CHF=X', 'tv_symbol' => 'FX:USDCHF'],
+      'AUDUSD' => ['yahoo_ticker' => 'AUDUSD=X', 'tv_symbol' => 'FX:AUDUSD'],
+      'USDCAD' => ['yahoo_ticker' => 'CAD=X', 'tv_symbol' => 'FX:USDCAD'],
+    ],
+    'commodities' => [
+      'XAUUSD' => ['yahoo_ticker' => 'GC=F', 'tv_symbol' => 'OANDA:XAUUSD'],
+      'XAGUSD' => ['yahoo_ticker' => 'SI=F', 'tv_symbol' => 'OANDA:XAGUSD'],
+      'USOIL' => ['yahoo_ticker' => 'CL=F', 'tv_symbol' => 'TVC:USOIL'],
+      'UKOIL' => ['yahoo_ticker' => 'BZ=F', 'tv_symbol' => 'TVC:UKOIL'],
+      'NGAS' => ['yahoo_ticker' => 'NG=F', 'tv_symbol' => 'FX:NGAS'],
+    ],
+    'futures' => [
+      'ES_F' => ['yahoo_ticker' => 'ES=F', 'tv_symbol' => 'CME_MINI:ES1!'],
+      'NQ_F' => ['yahoo_ticker' => 'NQ=F', 'tv_symbol' => 'CME_MINI:NQ1!'],
+      'YM_F' => ['yahoo_ticker' => 'YM=F', 'tv_symbol' => 'CBOT_MINI:YM1!'],
+      'RTY_F' => ['yahoo_ticker' => 'RTY=F', 'tv_symbol' => 'CME_MINI:RTY1!'],
+      'CL_F' => ['yahoo_ticker' => 'CL=F', 'tv_symbol' => 'NYMEX:CL1!'],
+      'GC_F' => ['yahoo_ticker' => 'GC=F', 'tv_symbol' => 'COMEX:GC1!'],
+      'ZN_F' => ['yahoo_ticker' => 'ZN=F', 'tv_symbol' => 'CBOT:ZN1!'],
+      'ZB_F' => ['yahoo_ticker' => 'ZB=F', 'tv_symbol' => 'CBOT:ZB1!'],
+    ],
+    'arab' => [
+      '2222' => ['yahoo_ticker' => '2222.SR', 'tv_symbol' => 'TADAWUL:2222'],
+      '1120' => ['yahoo_ticker' => '1120.SR', 'tv_symbol' => 'TADAWUL:1120'],
+      '2010' => ['yahoo_ticker' => '2010.SR', 'tv_symbol' => 'TADAWUL:2010'],
+      '7010' => ['yahoo_ticker' => '7010.SR', 'tv_symbol' => 'TADAWUL:7010'],
+      '1211' => ['yahoo_ticker' => '1211.SR', 'tv_symbol' => 'TADAWUL:1211'],
+      '1150' => ['yahoo_ticker' => '1150.SR', 'tv_symbol' => 'TADAWUL:1150'],
+      '1180' => ['yahoo_ticker' => '1180.SR', 'tv_symbol' => 'TADAWUL:1180'],
+      '2280' => ['yahoo_ticker' => '2280.SR', 'tv_symbol' => 'TADAWUL:2280'],
+    ],
+  ];
+  if (isset($maps[$type][$symbol])) return $maps[$type][$symbol];
+  if ($type === 'stocks' && preg_match('/^[A-Z.]{1,8}$/', $symbol)) return ['yahoo_ticker' => $symbol];
+  if ($type === 'crypto') return ['tv_symbol' => 'BINANCE:' . $symbol];
+  return [];
+}
+
+function candles_elapsed_ms(): float {
+  $started = (float)($GLOBALS['CANDLES_REQUEST_STARTED_AT'] ?? microtime(true));
+  return (microtime(true) - $started) * 1000.0;
+}
+
+function candles_request_over_budget(int $reserveMs = 0): bool {
+  $budget = (int)($GLOBALS['CANDLES_REQUEST_BUDGET_MS'] ?? 4500);
+  return candles_elapsed_ms() >= max(100, $budget - max(0, $reserveMs));
+}
+
+function candles_cached_or_empty_response(string $symbol, string $market, string $tf, string $type, int $end, int $limit, string $source, string $softError = 'provider_unavailable'): void {
+  $cached = candles_cache_load($symbol, $market, $tf, $type);
+  if ($cached) {
+    $items = candles_from_cache($cached, $end, $limit);
+    json_response([
+      'ok' => true,
+      'items' => candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end),
+      'cached' => true,
+      'source' => 'cache_' . $source,
+      'soft_error' => $softError,
+    ]);
+  }
+  json_response(['ok' => true, 'items' => [], 'source' => 'empty_' . $source, 'soft_error' => $softError]);
 }
 
 
@@ -289,6 +379,8 @@ function candles_finalize_items(array $items, string $symbol, string $market, st
 
 function candles_sync_live_tail(array $items, string $symbol, string $market, string $assetType, int $step, int $end = 0): array {
   if ($end > 0 || !$items || $step <= 0) return $items;
+  if ((int)env('CANDLES_SYNC_LIVE_TAIL', '0') !== 1) return $items;
+  if (candles_request_over_budget((int)env('CANDLES_LIVE_TAIL_RESERVE_MS', '1000'))) return $items;
   try {
     $live = (float)quote_price($symbol, $market, $assetType);
     if (!($live > 0)) return $items;
@@ -407,6 +499,8 @@ function candles_series_matches_live(array $items, string $symbol, string $marke
   if (!$items) return true;
   $kind = strtolower(trim($assetType));
   if ($kind === 'crypto' && !candles_series_has_real_movement($items, 24)) return false;
+  if ((int)env('CANDLES_VALIDATE_LIVE_MATCH', '0') !== 1) return true;
+  if (candles_request_over_budget((int)env('CANDLES_LIVE_MATCH_RESERVE_MS', '1000'))) return true;
   $live = candles_best_live_price($symbol, $market, $assetType);
   if (!($live > 0)) return true;
   $anchor = candles_recent_anchor_close($items, 8);
@@ -528,6 +622,13 @@ try {
       } catch (Throwable $e) {
         $providerErrors[] = (string)$provider['source'] . ': ' . $e->getMessage();
       }
+      if (candles_request_over_budget(800)) {
+        candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
+      }
+    }
+
+    if (candles_request_over_budget(1200)) {
+      candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
     }
 
     try {
@@ -539,6 +640,10 @@ try {
       $providerErrors[] = 'yahoo_crypto_chart: empty_or_flat';
     } catch (Throwable $e) {
       $providerErrors[] = 'yahoo_crypto_chart: ' . $e->getMessage();
+    }
+
+    if (candles_request_over_budget(500)) {
+      candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
     }
 
     $cached = candles_cache_load($symbol,$market,$tf,$type);
@@ -574,7 +679,10 @@ try {
   }
 
   $items = [];
-  $preferAggsForSymbol = ($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $typeRaw ?: $providerType));
+  $paidAggsKey = trim((string)env('POLYGON_API_KEY', env('MASSIVE_API_KEY', '')));
+  $hasAggsProvider = $paidAggsKey !== '';
+  $preferAggsForSymbol = $hasAggsProvider && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $typeRaw ?: $providerType)));
+  $triedYahooChart = false;
 
   if (strtolower((string)env('PRICE_PROVIDER', 'eodhd')) === 'eodhd' && ($type === 'arab' || in_array($providerType, ['stocks','forex'], true) || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
     try {
@@ -594,13 +702,18 @@ try {
     }
   }
 
+  if (candles_request_over_budget(1400)) {
+    candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
+  }
+
   // Keep charts aligned with the same source family as quotes:
   // - Yahoo first for stocks / arab / futures / non-spot commodity contracts
   // - Massive/Polygon aggs first for forex and spot metals, with Yahoo fallback if aggs fail.
-  if (!$preferAggsForSymbol && in_array($providerType, ['stocks','arab','futures','commodities'], true)) {
+  if (!$preferAggsForSymbol && in_array($providerType, ['stocks','arab','futures','commodities','forex'], true)) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
       if ($ySymbol) {
+        $triedYahooChart = true;
         $items = yahoo_chart_candles($ySymbol, $tf, $limit);
         if (count($items) > 0) {
           $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
@@ -623,8 +736,12 @@ try {
     }
   }
 
-  try {
-    $key = (string)env('POLYGON_API_KEY', '');
+  if (candles_request_over_budget(1200)) {
+    candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
+  }
+
+  if ($hasAggsProvider) try {
+    $key = $paidAggsKey;
     $base = upstream_base();
     $headers = upstream_auth_headers($key);
 
@@ -675,11 +792,16 @@ try {
     // fall through to yahoo fallback / synthetic
   }
 
+  if (candles_request_over_budget(900)) {
+    candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
+  }
+
   // Secondary Yahoo chart fallback for FX and spot metals when primary aggs snapshots are unavailable.
-  if (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type))) {
+  if (!$triedYahooChart && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
       if ($ySymbol) {
+        $triedYahooChart = true;
         $items = yahoo_chart_candles($ySymbol, $tf, $limit);
         if (count($items) > 0) {
           $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
@@ -702,6 +824,10 @@ try {
     }
   }
 
+  if (candles_request_over_budget(500)) {
+    candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
+  }
+
   // Before synthetic fallback, preserve any real cached history we already have.
   if (!empty($cachedAll)) {
     $cachedOut = candles_finalize_items(candles_from_cache($cachedAll, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
@@ -710,9 +836,11 @@ try {
     }
   }
 
-  // Fallback synthetic (so UI never breaks)
-  $last = candles_best_live_price($symbol, $market, $type, $meta);
-  if (!($last > 0) && function_exists('qa_quote_payload')) {
+  // Fallback synthetic is opt-in. By default we return cache/empty instead of
+  // extending a stalled chart request with another live quote lookup.
+  $allowFallbackLiveLookup = (int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1;
+  $last = ($allowFallbackLiveLookup && !candles_request_over_budget(1800)) ? candles_best_live_price($symbol, $market, $type, $meta) : 0.0;
+  if ($allowFallbackLiveLookup && !($last > 0) && !candles_request_over_budget(1600) && function_exists('qa_quote_payload')) {
     try {
       $qa = qa_quote_payload($type, [$symbol], [
         'allow_live' => ($type === 'crypto'),
@@ -753,11 +881,14 @@ try {
   try {
     $fallbackCached = candles_cache_load($symbol,$market,$tf,$type);
     if ($fallbackCached) {
-      json_response(['ok'=>true,'items'=>candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end), 'cached'=>true, 'soft_error'=>$e->getMessage()]);
+      json_response(['ok'=>true,'items'=>candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end), 'cached'=>true, 'soft_error'=>'provider_unavailable']);
     }
+    $allowFallbackLiveLookup = (int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1;
     $last = 0.0;
-    try { $last = (float)quote_price($symbol, $market, $type); } catch (Throwable $ignored) { $last = 0.0; }
-    if (!($last > 0) && function_exists('qa_quote_payload')) {
+    if ($allowFallbackLiveLookup && !candles_request_over_budget(400)) {
+      try { $last = (float)quote_price($symbol, $market, $type); } catch (Throwable $ignored) { $last = 0.0; }
+    }
+    if ($allowFallbackLiveLookup && !($last > 0) && !candles_request_over_budget(300) && function_exists('qa_quote_payload')) {
       try {
         $qa = qa_quote_payload($type, [$symbol], [
           'allow_live' => ($type === 'crypto'),
@@ -777,13 +908,13 @@ try {
       $last = is_array($lastBar) ? (float)($lastBar['close'] ?? 0) : 0.0;
     }
     if (!($last > 0)) {
-      json_response(['ok'=>true,'items'=>[],'soft_error'=>$e->getMessage(),'source'=>'empty_error_fallback']);
+      json_response(['ok'=>true,'items'=>[],'soft_error'=>'provider_unavailable','source'=>'empty_error_fallback']);
     }
     $price = $last;
     $step = max(1, tf_seconds($tf));
     $items = candles_quote_seed_items($price, time(), $step, $limit);
-    json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, $step, $end),'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>$e->getMessage()]);
+    json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, $step, $end),'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>'provider_unavailable']);
   } catch (Throwable $ignored2) {
-    json_response(['ok'=>false,'error'=>$e->getMessage()], 500);
+    json_response(['ok'=>true,'items'=>[],'source'=>'empty_error_fallback','soft_error'=>'provider_unavailable']);
   }
 }

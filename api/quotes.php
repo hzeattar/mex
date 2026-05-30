@@ -8,6 +8,12 @@ header('Pragma: no-cache');
 header('Expires: 0');
 header('Content-Type: application/json; charset=utf-8');
 
+$GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+  'connect_timeout' => max(1, min(3, (int)env('QUOTES_UPSTREAM_CONNECT_TIMEOUT', '1'))),
+  'timeout' => max(2, min(5, (int)env('QUOTES_UPSTREAM_TIMEOUT', '2'))),
+  'retries' => max(0, min(1, (int)env('QUOTES_UPSTREAM_RETRIES', '0'))),
+];
+
 $symbolsRaw = (string)($_GET['symbols'] ?? ($_GET['symbol'] ?? ''));
 $typeAlias = vp_normalize_asset_type((string)($_GET['type'] ?? ''));
 if ($typeAlias === '') $typeAlias = 'crypto';
@@ -50,6 +56,57 @@ function quotes_focus_cache_payload_usable(array $payload, string $assetType, in
   return $valid >= min($requestedCount, max(1, (int)ceil($requestedCount * 0.75)));
 }
 
+function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive = true): array {
+  $typeAlias = vp_normalize_asset_type($typeAlias);
+  if ($typeAlias === '' || $typeAlias === 'all') $typeAlias = 'crypto';
+  $live = [];
+  if ($allowLive && $list) {
+    try {
+      $live = quote_bulk_live($list, $typeAlias, [], [
+        'ttl' => $typeAlias === 'crypto' ? 1 : 2,
+        'yahoo_ttl' => 2,
+        'massive_ttl' => 2,
+        'direct_budget' => min(count($list), $typeAlias === 'crypto' ? 12 : 0),
+        'direct_yahoo_budget' => 0,
+        'chart_budget' => 0,
+      ]);
+    } catch (Throwable $e) {
+      $live = [];
+    }
+  }
+
+  $items = [];
+  foreach ($list as $sym) {
+    $sym = strtoupper((string)$sym);
+    $row = is_array($live[$sym] ?? null) ? $live[$sym] : null;
+    $price = (float)($row['price'] ?? 0);
+    $source = (string)($row['source'] ?? $row['provider'] ?? 'unavailable');
+    $delayed = !empty($row['delayed']) || in_array($typeAlias, ['stocks','arab'], true) || ($typeAlias !== 'crypto' && strtolower($source) === 'yahoo');
+    $items[] = [
+      'symbol' => $sym,
+      'type' => $typeAlias,
+      'price' => $price > 0 ? $price : 0.0,
+      'change_pct' => (float)($row['change_pct'] ?? 0),
+      'updated_at' => $price > 0 ? (int)($row['updated_at'] ?? time()) : 0,
+      'provider_updated_at' => $price > 0 ? (int)($row['provider_ts'] ?? $row['updated_at'] ?? time()) : 0,
+      'received_at' => $price > 0 ? (int)($row['received_at'] ?? time()) : 0,
+      'ingested_at' => $price > 0 ? (int)($row['ingested_at'] ?? time()) : 0,
+      'cache_updated_at' => $price > 0 ? (int)($row['received_at'] ?? $row['ingested_at'] ?? time()) : 0,
+      'source' => $price > 0 ? ($source !== '' ? $source : 'provider_live') : 'unavailable',
+      'delayed' => $delayed,
+      'timing_class' => $price > 0 ? ($delayed ? 'delayed' : 'live') : 'unavailable',
+      'age_sec' => $price > 0 ? 0 : null,
+    ];
+  }
+
+  return [
+    'ok' => true,
+    'items' => $items,
+    'authority' => 'quote_authority',
+    'degraded' => true,
+  ];
+}
+
 if (!$list) {
   try {
     $pdo = db();
@@ -64,7 +121,7 @@ if (!$list) {
     $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
     json_response(['ok' => true, 'items' => $rows, 'authority' => 'quote_authority']);
   } catch (Throwable $e) {
-    json_response(['ok' => false, 'error' => $e->getMessage()], 500);
+    json_response(['ok' => true, 'items' => [], 'authority' => 'quote_authority', 'degraded' => true]);
   }
 }
 
@@ -89,12 +146,16 @@ if (!$fresh) {
 $isNonCrypto = ($typeAlias !== 'crypto');
 $isFocusRequest = $isNonCrypto && ($purpose === 'focus') && !$fresh && !$direct && !$strictLive && count($list) <= 3;
 if ($isFocusRequest) {
-  $quickPayload = qa_quote_payload($typeAlias, $list, [
-    'allow_live' => false,
-    'allow_crypto_seed' => false,
-    'allow_noncrypto_seed' => false,
-    'allow_stale_display' => true,
-  ]);
+  try {
+    $quickPayload = qa_quote_payload($typeAlias, $list, [
+      'allow_live' => false,
+      'allow_crypto_seed' => false,
+      'allow_noncrypto_seed' => false,
+      'allow_stale_display' => true,
+    ]);
+  } catch (Throwable $e) {
+    $quickPayload = quotes_degraded_payload($typeAlias, $list, false);
+  }
   if (quotes_focus_cache_payload_usable($quickPayload, $typeAlias, count($list))) {
     $quickPayload['mode'] = 'focus_cache';
     $quickPayload['cache_first'] = true;
@@ -112,19 +173,23 @@ if ($isNonCrypto) {
 $visibleNonCrypto = $visible && $isNonCrypto;
 $focusNonCrypto = $isNonCrypto && (($purpose === 'focus') || $direct || $strictLive);
 $visibleChartBudget = ($visibleNonCrypto && !$cacheOnly) ? max(0, min(4, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_LIMIT_NONCRYPTO', '0'))) : 0;
-$payload = qa_quote_payload($typeAlias, $list, [
-  'strict_live_noncrypto' => $strictLive,
-  'allow_live' => $allowLive,
-  'allow_crypto_seed' => false,
-  'allow_noncrypto_seed' => false,
-  'allow_stale_display' => $visible || $cacheOnly,
-  'direct_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list)))),
-  'direct_yahoo_budget' => $visibleNonCrypto ? 0 : (($direct || $fresh || $focusNonCrypto) ? max(1, min(count($list), 3)) : min(2, count($list))),
-  'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? $visibleChartBudget : min(1, count($list))),
-  'chart_budget_ms' => $visibleNonCrypto ? max(300, min(2000, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_MS_NONCRYPTO', '700'))) : 3000,
-  'allow_direct_batch' => $visibleNonCrypto,
-  'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 2 : 4),
-]);
+try {
+  $payload = qa_quote_payload($typeAlias, $list, [
+    'strict_live_noncrypto' => $strictLive,
+    'allow_live' => $allowLive,
+    'allow_crypto_seed' => false,
+    'allow_noncrypto_seed' => false,
+    'allow_stale_display' => $visible || $cacheOnly,
+    'direct_budget' => ($visibleNonCrypto || $focusNonCrypto) ? 0 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list)))),
+    'direct_yahoo_budget' => ($visibleNonCrypto || $focusNonCrypto) ? 0 : (($direct || $fresh) ? max(1, min(count($list), 3)) : min(2, count($list))),
+    'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? $visibleChartBudget : ($focusNonCrypto ? 0 : min(1, count($list)))),
+    'chart_budget_ms' => $visibleNonCrypto ? max(300, min(2000, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_MS_NONCRYPTO', '700'))) : 3000,
+    'allow_direct_batch' => $visibleNonCrypto,
+    'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 2 : 4),
+  ]);
+} catch (Throwable $e) {
+  $payload = quotes_degraded_payload($typeAlias, $list, $allowLive && !$cacheOnly);
+}
 $payload['mode'] = $mode;
 
 if ($cacheTtl > 0 && qa_payload_has_coverage($payload, $typeAlias, count($list))) {

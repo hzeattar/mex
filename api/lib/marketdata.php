@@ -112,6 +112,12 @@ function http_get_json(string $url, array $headers = []): array {
 
   $retries = (int)env('UPSTREAM_RETRIES', '1');
   $retries = max(0, min(4, $retries));
+  $timeoutOverride = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+  if (is_array($timeoutOverride)) {
+    if (array_key_exists('retries', $timeoutOverride)) {
+      $retries = max(0, min($retries, (int)$timeoutOverride['retries']));
+    }
+  }
   $attempt = 0;
   $lastErr = '';
 
@@ -123,13 +129,21 @@ function http_get_json(string $url, array $headers = []): array {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     $connectTimeout = (int)env('UPSTREAM_CONNECT_TIMEOUT','3');
     $requestTimeout = (int)env('UPSTREAM_TIMEOUT','5');
+    if (is_array($timeoutOverride)) {
+      if (array_key_exists('connect_timeout', $timeoutOverride)) {
+        $connectTimeout = min($connectTimeout, (int)$timeoutOverride['connect_timeout']);
+      }
+      if (array_key_exists('timeout', $timeoutOverride)) {
+        $requestTimeout = min($requestTimeout, (int)$timeoutOverride['timeout']);
+      }
+    }
     if (str_contains($host, 'finance.yahoo.com') || str_contains($host, 'api.binance.com')) {
       $connectTimeout = min($connectTimeout, 2);
       $requestTimeout = min($requestTimeout, 4);
     } elseif (str_contains($host, 'api.massive.com') || str_contains($host, 'api.polygon.io')) {
       $connectTimeout = min($connectTimeout, 2);
       $requestTimeout = min($requestTimeout, 4);
-    } elseif (str_contains($host, 'eodhd.com')) {
+    } elseif (str_contains($host, 'eodhd.com') && !is_array($timeoutOverride)) {
       $connectTimeout = max($connectTimeout, 3);
       $requestTimeout = max($requestTimeout, 8);
     }
@@ -156,7 +170,7 @@ function http_get_json(string $url, array $headers = []): array {
     $lastErr = $err ?: ('HTTP ' . ($code ?: 0));
 
     $retryable = ($code === 429 || ($code >= 500 && $code <= 599) || $raw === false);
-    if (!$retryable || $attempt > ($retries + 1)) {
+    if (!$retryable || $attempt >= ($retries + 1)) {
       throw new UpstreamHttpException($code ?: 0, 'Upstream error: ' . $lastErr . ' url=' . upstream_slim_url($url));
     }
 
@@ -193,8 +207,21 @@ function binance_ticker_24h(array $symbols): array {
 function http_get_raw(string $url, array $headers = []): string {
   $ch = curl_init($url);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
-  curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+  $timeoutOverride = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+  $connectTimeout = 8;
+  $requestTimeout = 12;
+  if (is_array($timeoutOverride)) {
+    if (array_key_exists('connect_timeout', $timeoutOverride)) {
+      $connectTimeout = min($connectTimeout, (int)$timeoutOverride['connect_timeout']);
+    }
+    if (array_key_exists('timeout', $timeoutOverride)) {
+      $requestTimeout = min($requestTimeout, (int)$timeoutOverride['timeout']);
+    }
+  }
+  $connectTimeout = max(1, $connectTimeout);
+  $requestTimeout = max($connectTimeout + 1, $requestTimeout);
+  curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $connectTimeout);
+  curl_setopt($ch, CURLOPT_TIMEOUT, $requestTimeout);
   if ($headers) curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
   $raw = curl_exec($ch);
   $err = curl_error($ch);

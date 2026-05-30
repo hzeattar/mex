@@ -18,26 +18,30 @@ function qa_parse_symbols(string $symbolsRaw): array {
 function qa_market_meta_by_symbols(array $symbols): array {
   $symbols = array_values(array_unique(array_filter(array_map('strtoupper', $symbols))));
   if (!$symbols) return [];
-  $pdo = db();
-  $in = implode(',', array_fill(0, count($symbols), '?'));
-  $st = $pdo->prepare("SELECT symbol, type, seed_price, meta, name, sort_order, tv_symbol, status FROM markets WHERE symbol IN ($in)");
-  $st->execute($symbols);
-  $out = [];
-  foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
-    $sym = strtoupper((string)($row['symbol'] ?? ''));
-    if ($sym === '') continue;
-    $out[$sym] = [
-      'symbol' => $sym,
-      'type' => vp_normalize_asset_type((string)($row['type'] ?? '')),
-      'seed_price' => (float)($row['seed_price'] ?? 0),
-      'meta' => market_meta($row['meta'] ?? null),
-      'name' => (string)($row['name'] ?? $sym),
-      'sort_order' => (int)($row['sort_order'] ?? 0),
-      'tv_symbol' => (string)($row['tv_symbol'] ?? ''),
-      'status' => (string)($row['status'] ?? 'active'),
-    ];
+  try {
+    $pdo = db();
+    $in = implode(',', array_fill(0, count($symbols), '?'));
+    $st = $pdo->prepare("SELECT symbol, type, seed_price, meta, name, sort_order, tv_symbol, status FROM markets WHERE symbol IN ($in)");
+    $st->execute($symbols);
+    $out = [];
+    foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+      $sym = strtoupper((string)($row['symbol'] ?? ''));
+      if ($sym === '') continue;
+      $out[$sym] = [
+        'symbol' => $sym,
+        'type' => vp_normalize_asset_type((string)($row['type'] ?? '')),
+        'seed_price' => (float)($row['seed_price'] ?? 0),
+        'meta' => market_meta($row['meta'] ?? null),
+        'name' => (string)($row['name'] ?? $sym),
+        'sort_order' => (int)($row['sort_order'] ?? 0),
+        'tv_symbol' => (string)($row['tv_symbol'] ?? ''),
+        'status' => (string)($row['status'] ?? 'active'),
+      ];
+    }
+    return $out;
+  } catch (Throwable $e) {
+    return [];
   }
-  return $out;
 }
 
 function qa_quote_rows_by_symbols(array $symbols, ?string $typeAlias = null): array {
@@ -89,7 +93,11 @@ function qa_quote_rows_by_symbols(array $symbols, ?string $typeAlias = null): ar
 
   $rows = [];
   foreach ($symbols as $sym) {
-    $row = quote_get($sym, $typeAlias ?: null);
+    try {
+      $row = quote_get($sym, $typeAlias ?: null);
+    } catch (Throwable $e) {
+      $row = null;
+    }
     if (is_array($row)) $rows[$sym] = $row;
   }
   return $rows;

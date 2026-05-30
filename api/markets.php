@@ -18,6 +18,7 @@ $grouped = isset($_GET['grouped']);
 $withQuotes = (int)($_GET['with_quotes'] ?? 0) === 1;
 $lite = (int)($_GET['lite'] ?? 0) === 1;
 $forceLive = ((int)($_GET['force_live'] ?? 0) === 1);
+$allowListRescue = $forceLive || ((int)($_GET['rescue'] ?? env('MARKETS_RESCUE_LIVE_ON_MISS', '0')) === 1);
 $scope = strtolower((string)($_GET['scope'] ?? ''));
 $supportedOnly = ((int)($_GET['supported'] ?? 0) === 1) || in_array($scope, ['home', 'trade'], true);
 
@@ -346,6 +347,108 @@ function normalize_tv_symbol(string $symbol, string $type, string $tvSymbol=''):
   if ($kind === 'forex') return 'FX:' . $sym;
   if ($kind === 'stocks') return (preg_match('/^[A-Z]+$/', $sym) ? 'NASDAQ:' : 'NYSE:') . $sym;
   return $raw !== '' ? $raw : $sym;
+}
+
+function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope, bool $withQuotes, bool $supportedOnly, array $sigMap = [], bool $allowRescue = true): array {
+  $quoteBaseOpts = [
+    'allow_crypto_seed' => false,
+    'allow_noncrypto_seed' => false,
+    'allow_stale_display' => true,
+    'direct_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
+    'direct_yahoo_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
+    'chart_budget' => in_array($typeAlias, ['arab','futures'], true) ? 12 : 6,
+  ];
+
+  $authoritativeQuotes = [];
+  if ($withQuotes) {
+    $cryptoRows = [];
+    $otherRows = [];
+    foreach ($rows as $quoteRow) {
+      if (vp_normalize_asset_type((string)($quoteRow['type'] ?? '')) === 'crypto') $cryptoRows[] = $quoteRow;
+      else $otherRows[] = $quoteRow;
+    }
+    if ($otherRows) {
+      try {
+        $authoritativeQuotes = array_replace(
+          $authoritativeQuotes,
+          qa_overlay_market_rows($otherRows, array_merge($quoteBaseOpts, ['with_live' => false]))
+        );
+      } catch (Throwable $e) {}
+    }
+    if ($cryptoRows) {
+      try {
+        $authoritativeQuotes = array_replace(
+          $authoritativeQuotes,
+          qa_overlay_market_rows($cryptoRows, array_merge($quoteBaseOpts, [
+            'with_live' => false,
+            'direct_yahoo_budget' => 0,
+            'chart_budget' => 0,
+          ]))
+        );
+      } catch (Throwable $e) {}
+    }
+  }
+
+  $items = [];
+  foreach ($rows as $r) {
+    $sym = strtoupper((string)($r['symbol'] ?? ''));
+    $assetType = vp_normalize_asset_type((string)($r['type'] ?? ''));
+    if ($sym === '' || $assetType === '') continue;
+    $sourceType = vp_provider_asset_type($assetType);
+    $quote = is_array($authoritativeQuotes[$sym] ?? null) ? $authoritativeQuotes[$sym] : null;
+    $price = (float)($quote['price'] ?? 0);
+    $chg = (float)($quote['change_pct'] ?? 0);
+    $upd = (int)($quote['updated_at'] ?? 0);
+    $src = (string)($quote['source'] ?? 'unavailable');
+    $isStale = !empty($quote['is_stale']);
+    $timingClass = (string)($quote['timing_class'] ?? ($isStale ? 'stale' : ($price > 0 ? 'live' : 'unavailable')));
+
+    $metaRow = market_meta($r['meta'] ?? null);
+    $metaVolume = (float)($metaRow['quote_volume'] ?? $metaRow['quoteVolume'] ?? $metaRow['volume'] ?? $metaRow['turnover'] ?? $metaRow['qv'] ?? 0);
+    $metaCap = (float)($metaRow['market_cap'] ?? $metaRow['marketCap'] ?? $metaRow['cap'] ?? 0);
+    $metaRank = (int)($metaRow['market_rank'] ?? $metaRow['rank'] ?? $metaRow['cmc_rank'] ?? $metaRow['marketCapRank'] ?? 0);
+    $iconUrl = '';
+    foreach (['icon_url','image_url','logo_url','icon','image','logo'] as $iconKey) {
+      if (!empty($metaRow[$iconKey])) {
+        $iconUrl = trim((string)$metaRow[$iconKey]);
+        break;
+      }
+    }
+
+    $items[] = [
+      'symbol' => $sym,
+      'name' => (string)($r['name'] ?? $sym),
+      'type' => $assetType,
+      'tv_symbol' => normalize_tv_symbol($sym, $sourceType, (string)($r['tv_symbol'] ?? '')),
+      'price' => $price,
+      'change_pct' => $chg,
+      'updated_at' => $upd,
+      'source' => $src,
+      'is_stale' => $isStale,
+      'timing_class' => $timingClass,
+      'signal_count' => (int)($sigMap[$sym] ?? 0),
+      'sort_order' => (int)($r['sort_order'] ?? 0),
+      'market_rank' => $metaRank,
+      'volume' => $metaVolume,
+      'market_cap' => $metaCap,
+      'icon_url' => $iconUrl !== '' ? $iconUrl : null,
+    ];
+  }
+
+  if ($allowRescue && $supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
+    $items = vp_rescue_supported_market_quotes($items, $scope);
+  }
+
+  if ($supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
+    $pricedItems = array_values(array_filter($items, static function(array $it): bool {
+      $price = (float)($it['price'] ?? 0);
+      $source = strtolower(trim((string)($it['source'] ?? '')));
+      return $price > 0 && $source !== '' && $source !== 'unavailable';
+    }));
+    if ($pricedItems) $items = $pricedItems;
+  }
+
+  return $items;
 }
 
 function vp_fallback_futures_markets(): array {
@@ -737,7 +840,7 @@ try {
     ];
   }
 
-  if ($supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
+  if ($allowListRescue && $supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
 
@@ -764,5 +867,33 @@ try {
   @file_put_contents($cacheFile, json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX);
   json_response($out);
 } catch (Throwable $e) {
-  json_response(['ok' => false, 'error' => $e->getMessage()], 500);
+  $fallbackScope = $scope ?: 'home';
+  $fallbackDefs = vp_supported_defs_for($typeAlias, $fallbackScope);
+  if (!$fallbackDefs) $fallbackDefs = vp_supported_defs_for($typeAlias, '');
+  if (!$fallbackDefs) $fallbackDefs = vp_supported_defs_for('all', 'home');
+
+  $rows = [];
+  foreach ($fallbackDefs as $def) {
+    $rows[] = vp_build_supported_market_row($def, 980000);
+  }
+
+  if ($lite && !$grouped) {
+    $limit = $fallbackScope === 'home' ? 16 : 18;
+    if (count($rows) > $limit) $rows = array_slice($rows, 0, $limit);
+  }
+
+  $items = vp_market_items_from_rows($rows, $typeAlias, $fallbackScope, false, true, [], false);
+  if ($grouped) {
+    $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];
+    foreach ($items as $it) {
+      if (!isset($groups[$it['type']])) $groups[$it['type']] = [];
+      $groups[$it['type']][] = $it;
+    }
+    $out = ['ok' => true, 'groups' => $groups, 'items' => $items, 'degraded' => true];
+  } else {
+    $out = ['ok' => true, 'items' => $items, 'degraded' => true];
+  }
+
+  @file_put_contents($cacheFile, json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX);
+  json_response($out);
 }
