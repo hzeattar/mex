@@ -6,22 +6,16 @@
 export PORT
 
 cd /app
-mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx /var/log/nginx /var/lib/nginx/body
+mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx /tmp
 chown -R www-data:www-data api/data api/uploads 2>/dev/null || true
 chmod -R 775 api/data api/uploads 2>/dev/null || true
 
 echo "[start] rendering nginx config for PORT=${PORT}"
-envsubst '$PORT' < /app/ops/nginx.conf.template > /etc/nginx/conf.d/default.conf
-
-# Remove any default site configs that might conflict
-rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
-
-# Ensure nginx log directory and PID directory exist
-mkdir -p /var/log/nginx /var/lib/nginx/body
-chown -R www-data:www-data /var/log/nginx /var/lib/nginx 2>/dev/null || true
+# Render the full nginx.conf (not just a server block)
+envsubst '$PORT' < /app/ops/nginx.conf.template > /tmp/nginx.conf
 
 echo "[start] validating nginx config"
-nginx -t 2>&1 || { echo "[start] FATAL: nginx config invalid"; exit 1; }
+nginx -t -c /tmp/nginx.conf 2>&1 || { echo "[start] FATAL: nginx config invalid"; exit 1; }
 
 echo "[start] starting php-fpm"
 php-fpm -D 2>&1
@@ -30,4 +24,4 @@ php-fpm -D 2>&1
 sleep 2
 
 echo "[start] PHP-FPM started, nginx starting on PORT=${PORT}"
-exec nginx -g 'daemon off;'
+exec nginx -c /tmp/nginx.conf -g 'daemon off;'
