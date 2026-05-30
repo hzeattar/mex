@@ -25,6 +25,12 @@ $supportedOnly = ((int)($_GET['supported'] ?? 0) === 1) || in_array($scope, ['ho
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
+$GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+  'connect_timeout' => max(1, min(2, (int)env('MARKETS_UPSTREAM_CONNECT_TIMEOUT', '1'))),
+  'timeout' => max(1, min(3, (int)env('MARKETS_UPSTREAM_TIMEOUT', '2'))),
+  'retries' => 0,
+];
+
 function vp_supported_market_defs(): array {
   return [
     ['symbol'=>'BTCUSDT','name'=>'Bitcoin / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:BTCUSDT','sort_order'=>10,'seed_price'=>68000,'icon'=>'btc'],
@@ -174,11 +180,18 @@ function vp_supported_rescue_limits(string $scope, string $type): array {
       'chart_budget' => 1,
       'ttl' => 2,
     ],
-    'commodities', 'futures', 'arab', 'stocks' => [
+    'stocks' => [
+      'batch' => $isHome ? 3 : 4,
+      'direct_budget' => $isHome ? 3 : 4,
+      'direct_yahoo_budget' => $isHome ? 3 : 4,
+      'chart_budget' => 0,
+      'ttl' => 2,
+    ],
+    'commodities', 'futures', 'arab' => [
       'batch' => $isHome ? 2 : 3,
       'direct_budget' => $isHome ? 2 : 3,
       'direct_yahoo_budget' => $isHome ? 2 : 3,
-      'chart_budget' => 1,
+      'chart_budget' => 0,
       'ttl' => 2,
     ],
     default => [
@@ -193,6 +206,8 @@ function vp_supported_rescue_limits(string $scope, string $type): array {
 
 function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   if (!$items || !in_array($scope, ['home', 'trade'], true)) return $items;
+  $started = microtime(true);
+  $budgetMs = max(500, min(6000, (int)env('MARKETS_RESCUE_BUDGET_MS', $scope === 'home' ? '3200' : '2500')));
 
   $defsByKey = [];
   foreach (vp_supported_defs_for('all', $scope) as $def) {
@@ -213,6 +228,7 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   if (!$groups) return $items;
 
   foreach ($groups as $type => $entries) {
+    if (((microtime(true) - $started) * 1000) >= $budgetMs) break;
     $limits = vp_supported_rescue_limits($scope, $type);
     $batch = max(1, (int)($limits['batch'] ?? 2));
     $slice = array_slice($entries, 0, $batch);
@@ -232,9 +248,11 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
         'ttl' => (int)($limits['ttl'] ?? 2),
         'yahoo_ttl' => (int)($limits['ttl'] ?? 2),
         'massive_ttl' => (int)($limits['ttl'] ?? 2),
+        'persist' => false,
         'direct_budget' => (int)($limits['direct_budget'] ?? $batch),
         'direct_yahoo_budget' => (int)($limits['direct_yahoo_budget'] ?? $batch),
         'chart_budget' => (int)($limits['chart_budget'] ?? 0),
+        'chart_budget_ms' => 600,
       ]);
     } catch (Throwable $e) {
       $live = [];
@@ -578,7 +596,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v10_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
+$cacheKey = 'markets_v11_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '18') : (int)env('MARKETS_CACHE_TTL', '60');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -598,6 +616,40 @@ if ($cacheTtl > 0 && is_file($cacheFile)) {
     echo (string)@file_get_contents($cacheFile);
     exit;
   }
+}
+
+$fastSupported = $supportedOnly
+  && in_array($scope, ['home', 'trade'], true)
+  && ((int)env('MARKETS_SUPPORTED_FAST_PATH', '1') === 1);
+if ($fastSupported) {
+  $rows = [];
+  foreach (vp_supported_defs_for($typeAlias, $scope) as $def) {
+    $rows[] = vp_build_supported_market_row($def, 970000);
+  }
+
+  if ($lite && !$grouped) {
+    $limit = $scope === 'home' ? 16 : 18;
+    if (count($rows) > $limit) $rows = array_slice($rows, 0, $limit);
+  }
+
+  $items = vp_market_items_from_rows($rows, $typeAlias, $scope, false, true, [], false);
+  if ($withQuotes && $allowListRescue) {
+    $items = vp_rescue_supported_market_quotes($items, $scope);
+  }
+
+  if ($grouped) {
+    $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];
+    foreach ($items as $it) {
+      if (!isset($groups[$it['type']])) $groups[$it['type']] = [];
+      $groups[$it['type']][] = $it;
+    }
+    $out = ['ok' => true, 'groups' => $groups, 'items' => $items, 'fast_path' => true];
+  } else {
+    $out = ['ok' => true, 'items' => $items, 'fast_path' => true];
+  }
+
+  @file_put_contents($cacheFile, json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX);
+  json_response($out);
 }
 
 try {

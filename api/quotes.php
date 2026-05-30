@@ -148,7 +148,7 @@ $isUiFastPath = !$fresh && !$direct && !$strictLive && (
   $cacheOnly ||
   $visible ||
   $purpose === 'watchlist' ||
-  ($purpose === 'focus' && count($list) <= 3)
+  ($purpose === 'focus' && count($list) <= 12)
 );
 if ($isUiFastPath) {
   $fastAllowLive = !$cacheOnly && !$visible && $purpose === 'focus';
