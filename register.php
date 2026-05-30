@@ -230,7 +230,11 @@ $langUrl = '/register.php?lang=' . rawurlencode($langSwitch) . '&next=' . rawurl
         </label>
         <label class="span-2">
           <span><?php echo mex_reg_h($copy['password']); ?></span>
-          <input type="password" name="password" minlength="6" autocomplete="new-password" required>
+          <input type="password" name="password" id="reg-password" minlength="6" autocomplete="new-password" required>
+          <div class="mex-pwd-strength" id="pwd-strength">
+            <div class="mex-pwd-bar"><span id="pwd-bar-fill"></span></div>
+            <small id="pwd-label"></small>
+          </div>
         </label>
         <p class="mex-auth-risk span-2"><?php echo mex_reg_h($copy['risk']); ?></p>
         <button class="mex-auth-submit span-2" type="submit"><?php echo mex_reg_h($copy['submit']); ?></button>
@@ -289,5 +293,29 @@ $langUrl = '/register.php?lang=' . rawurlencode($langSwitch) . '&next=' . rawurl
   })();
 </script>
 <?php endif; ?>
+<script>
+(function(){
+  var pw = document.getElementById('reg-password');
+  var fill = document.getElementById('pwd-bar-fill');
+  var label = document.getElementById('pwd-label');
+  if (!pw || !fill || !label) return;
+  var weak='<?php echo $lang==="ar"?"ضعيفة":"Weak"; ?>';
+  var fair='<?php echo $lang==="ar"?"مقبولة":"Fair"; ?>';
+  var good='<?php echo $lang==="ar"?"جيدة":"Good"; ?>';
+  var strong='<?php echo $lang==="ar"?"قوية":"Strong"; ?>';
+  pw.addEventListener('input',function(){
+    var v=pw.value,score=0;
+    if(v.length>=6)score++;if(v.length>=10)score++;
+    if(/[A-Z]/.test(v))score++;if(/[0-9]/.test(v))score++;
+    if(/[^A-Za-z0-9]/.test(v))score++;
+    var pct=Math.min(score/5*100,100);
+    fill.style.width=pct+'%';
+    if(score<=1){fill.style.background='#f35f86';label.textContent=weak;label.style.color='#f35f86';}
+    else if(score<=2){fill.style.background='#fcd535';label.textContent=fair;label.style.color='#fcd535';}
+    else if(score<=3){fill.style.background='#4fc3f7';label.textContent=good;label.style.color='#4fc3f7';}
+    else{fill.style.background='#00c087';label.textContent=strong;label.style.color='#00c087';}
+  });
+})();
+</script>
 </body>
 </html>

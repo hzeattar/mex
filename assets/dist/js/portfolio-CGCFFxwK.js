@@ -1,4 +1,4 @@
-import{g as h,i as S,a as $,e as s,m as a,d as w,c as u,b as v,h as L}from"./main-DC6eObyD.js";function O(){const t=h("mode");return`
+import{g as h,i as S,b as $,e as s,m as a,d as w,j as u,c as v,h as L}from"./main-Ca1FYfWG.js";function C(){const t=h("mode");return`
     <div class="space-y-6 animate-fade-in">
       <section class="card portfolio-hero">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -40,7 +40,7 @@ import{g as h,i as S,a as $,e as s,m as a,d as w,c as u,b as v,h as L}from"./mai
           <p class="text-muted text-sm text-center py-8">Loading orders...</p>
         </div>
       </section>
-    </div>`}function j(t){f(t),t.querySelector("#refresh-portfolio")?.addEventListener("click",()=>f(t))}async function f(t){try{const[e,i]=await Promise.all([$("/trade/portfolio.php",{timeout:8e3}),$("/trade/orders.php",{timeout:8e3})]);e&&k(t,e),i&&T(t,i.items||i.orders||[])}catch(e){t.querySelector("#positions-table").innerHTML=`<p class="text-red text-sm text-center py-4">${s(e.message)}</p>`}}function k(t,e){const i=e.positions||[],o=Number(e.balance||e.equity||0),r=Number(e.open_pnl||e.unrealized_pnl||0),p=Number(e.equity||o+r),l=t.querySelector("#portfolio-metrics");l&&(l.innerHTML=`
+    </div>`}function O(t){f(t),t.querySelector("#refresh-portfolio")?.addEventListener("click",()=>f(t))}async function f(t){try{const[e,i]=await Promise.all([$("/trade/portfolio.php",{timeout:8e3}),$("/trade/orders.php",{timeout:8e3})]);e&&k(t,e),i&&T(t,i.items||i.orders||[])}catch(e){t.querySelector("#positions-table").innerHTML=`<p class="text-red text-sm text-center py-4">${s(e.message)}</p>`}}function k(t,e){const i=e.positions||[],o=Number(e.balance||e.equity||0),r=Number(e.open_pnl||e.unrealized_pnl||0),p=Number(e.equity||o+r),l=t.querySelector("#portfolio-metrics");l&&(l.innerHTML=`
       ${b("Equity",a(p),"Total value")}
       ${b("Open PnL",a(r),r>=0?"Profit":"Loss",r>=0?"text-green":"text-red")}
       ${b("Positions",String(i.length),"Open trades")}
@@ -128,4 +128,4 @@ import{g as h,i as S,a as $,e as s,m as a,d as w,c as u,b as v,h as L}from"./mai
     <div class="text-[10px] uppercase text-muted tracking-wide">${t}</div>
     <div class="text-lg font-bold mt-1 ${o}">${e}</div>
     <div class="text-[10px] text-muted">${i}</div>
-  </div>`}function y(){return'<div class="skeleton h-20 rounded-lg"></div>'}export{j as mount,O as render};
+  </div>`}function y(){return'<div class="skeleton h-20 rounded-lg"></div>'}export{O as mount,C as render};

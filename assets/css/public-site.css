@@ -778,6 +778,12 @@ html{scroll-behavior:smooth}
 }
 .mex-auth-page[dir="rtl"] .mex-auth-card-head,
 .mex-auth-page.is-rtl .mex-auth-card-head{letter-spacing:0}
+
+/* Password Strength */
+.mex-pwd-strength{margin-top:8px}
+.mex-pwd-bar{height:4px;border-radius:4px;background:rgba(135,166,220,.12);overflow:hidden}
+.mex-pwd-bar span{display:block;height:100%;width:0;border-radius:4px;transition:width .25s,background .25s}
+#pwd-label{display:block;margin-top:4px;font-size:11px;font-weight:800;min-height:14px}
 @media (max-width:960px){
   .mex-auth-shell{grid-template-columns:1fr;align-items:start}
   .mex-auth-hero{min-height:auto}
@@ -1084,37 +1090,174 @@ html{scroll-behavior:smooth}
 .mex-cta{display:block;text-align:center;padding-block:42px}
 .mex-cta p{margin-inline:auto}
 .mex-cta .mex-hero-actions{justify-content:center}
-.mex-landing-footer{
+.mex-landing-footer-full{
   width:min(1280px,calc(100% - 36px));
   margin:22px auto 34px;
-  padding:20px 24px;
+  padding:28px;
+  border:1px solid rgba(135,166,220,.16);
+  background:linear-gradient(180deg,rgba(17,35,66,.92),rgba(9,18,35,.94));
+  border-radius:24px;
+  box-shadow:0 22px 70px rgba(0,0,0,.26);
+}
+.mex-footer-grid{
+  display:grid;
+  grid-template-columns:1.4fr repeat(3,minmax(0,1fr));
+  gap:28px;
+  padding-bottom:24px;
+  border-bottom:1px solid rgba(135,166,220,.12);
+}
+.mex-footer-brand-col strong{
+  display:block;
+  font-size:22px;
+  margin-bottom:10px;
+  background:linear-gradient(135deg,#5d7cff,#00c087);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.mex-footer-brand-col p{
+  color:#8ea9d8;
+  font-size:13px;
+  line-height:1.7;
+  max-width:320px;
+}
+.mex-footer-col h4{
+  margin:0 0 14px;
+  color:#e0ecff;
+  font-size:14px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.mex-footer-col a{
+  display:block;
+  color:#8ea9d8;
+  font-size:13px;
+  line-height:2;
+  text-decoration:none;
+  transition:color .15s;
+}
+.mex-footer-col a:hover{color:#fff}
+.mex-footer-bottom{
+  padding-top:20px;
   display:flex;
   justify-content:space-between;
   gap:18px;
-  color:#93aadb;
-  font-size:13px;
+  align-items:flex-start;
+  flex-wrap:wrap;
 }
-.mex-landing-footer strong{color:#fff}
+.mex-footer-bottom span{color:#a9bce4;font-size:13px;font-weight:800}
+.mex-footer-bottom small{color:#6b82ae;font-size:11px;line-height:1.7;max-width:900px}
+
+/* Live Ticker Strip */
+.mex-ticker-strip{
+  overflow:hidden;
+  background:rgba(5,10,22,.88);
+  border-bottom:1px solid rgba(135,166,220,.10);
+  padding:8px 0;
+  position:relative;
+  z-index:15;
+}
+.mex-ticker-track{
+  display:flex;
+  width:max-content;
+  animation:tickerScroll 60s linear infinite;
+}
+.mex-ticker-track:hover{animation-play-state:paused}
+@keyframes tickerScroll{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-33.333%)}
+}
+.mex-ticker-item{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:4px 18px;
+  white-space:nowrap;
+  font-size:12px;
+}
+.mex-ticker-item b{color:#d5e3ff;font-weight:900}
+.mex-ticker-price{color:#fff;font-weight:900;font-style:normal}
+.mex-ticker-change{font-style:normal;font-weight:900;font-size:11px;color:#00e49b}
+.mex-ticker-change.down{color:#ff5f75}
+
+/* Trust Grid */
+.mex-trust-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;
+}
+.mex-trust-card{
+  min-height:180px;
+  border:1px solid rgba(135,166,220,.16);
+  border-radius:20px;
+  background:rgba(5,12,26,.56);
+  padding:22px;
+  transition:border-color .2s,transform .2s;
+}
+.mex-trust-card:hover{
+  border-color:rgba(93,124,255,.35);
+  transform:translateY(-2px);
+}
+.mex-trust-icon{
+  width:46px;
+  height:46px;
+  display:grid;
+  place-items:center;
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(93,124,255,.18),rgba(0,192,135,.12));
+  color:#6ee7ff;
+  margin-bottom:14px;
+}
+.mex-trust-icon svg{width:22px;height:22px}
+.mex-trust-card h3{margin:0 0 8px;font-size:17px}
+.mex-trust-card p{margin:0;color:#a9bce4;font-size:13px;line-height:1.7}
+
+/* Price flash animation on landing */
+@keyframes landPriceFlashUp{0%{background:transparent}15%{background:rgba(0,228,155,.15)}100%{background:transparent}}
+@keyframes landPriceFlashDown{0%{background:transparent}15%{background:rgba(255,95,117,.15)}100%{background:transparent}}
+.price-flash-up{animation:landPriceFlashUp .8s ease !important}
+.price-flash-down{animation:landPriceFlashDown .8s ease !important}
+
+/* Price age indicator */
+.mex-price-age{margin-top:6px}
+.mex-price-age small{color:#6b82ae;font-size:11px;font-weight:700}
+
+/* Hero accent */
+.mex-hero h1 .mex-accent{
+  background:linear-gradient(135deg,#5d7cff,#00c087);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.mex-market-card-live{transition:transform .18s,border-color .18s}
+.mex-market-card-live:hover{transform:translateY(-2px);border-color:rgba(93,124,255,.35)}
+
 @media (max-width:1040px){
   .mex-landing-top{grid-template-columns:1fr auto}
   .mex-landing-nav{grid-column:1/-1;justify-content:flex-start}
   .mex-hero{grid-template-columns:1fr}
   .mex-hero-copy{min-height:auto}
   .mex-market-grid,.mex-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mex-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mex-footer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:680px){
   .mex-landing-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px}
   .mex-landing-nav{display:none}
   .mex-landing-actions{gap:7px;flex-wrap:wrap}
   .mex-btn,.mex-lang-pill{min-height:38px;padding:0 11px;font-size:12px}
-  .mex-hero,.mex-section,.mex-landing-footer{width:min(100% - 20px,1280px);border-radius:18px}
+  .mex-hero,.mex-section,.mex-landing-footer-full{width:min(100% - 20px,1280px);border-radius:18px}
   .mex-hero-copy,.mex-section{padding:18px}
   .mex-hero h1{font-size:34px;line-height:1.08}
   .mex-hero p,.mex-section-head p,.mex-split-section p,.mex-cta p{font-size:14px}
   .mex-hero-stats,.mex-market-grid,.mex-feature-grid{grid-template-columns:1fr}
+  .mex-trust-grid{grid-template-columns:1fr}
   .mex-terminal-chart{min-height:220px;gap:6px}
   .mex-terminal-row{grid-template-columns:1fr auto}
   .mex-terminal-row em{grid-column:1/-1;width:max-content}
   .mex-split-section{display:grid}
-  .mex-landing-footer{display:grid}
+  .mex-footer-grid{grid-template-columns:1fr;gap:18px}
+  .mex-footer-bottom{flex-direction:column}
+  .mex-ticker-item{padding:4px 12px;font-size:11px}
 }

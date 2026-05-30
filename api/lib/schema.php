@@ -5,7 +5,7 @@ declare(strict_types=1);
 // common.php stores this value into /api/data/.schema_version after a successful migration.
 // Use a monotonic, human-readable value.
 // Bump when schema_upgrade adds new columns so existing installs auto-upgrade.
-const SCHEMA_VERSION = '2026-04-15.10';
+const SCHEMA_VERSION = '2026-05-30.1';
 
 /**
  * Schema installer for MySQL (production) or SQLite (local/demo).
@@ -2378,6 +2378,39 @@ function schema_upgrade(PDO $pdo, string $driver = 'sqlite') {
     $addColumn('trading_signals', 'copy_profit_share_pct', 'REAL', '0');
     $addColumn('trading_signals', 'copy_leverage', 'INTEGER', '1');
     $addColumn('trading_signals', 'show_on_home', 'INTEGER', '1');
+
+    // Unique constraint on trading_signals to prevent duplicate rows on re-seed
+    try {
+      if ($driver === 'mysql') {
+        // Check if unique key already exists
+        $st = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trading_signals' AND INDEX_NAME = 'uq_ts_symbol_type_tf'");
+        $st->execute();
+        if ((int)$st->fetchColumn() === 0) {
+          $pdo->exec("ALTER TABLE trading_signals ADD UNIQUE KEY uq_ts_symbol_type_tf (market_symbol, market_type, COALESCE(timeframe, ''))");
+        }
+      } else {
+        $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_ts_symbol_type_tf ON trading_signals(market_symbol, market_type, COALESCE(timeframe, ''))");
+      }
+    } catch (Throwable $e) {}
+
+    // Add indexes for performance
+    try {
+      if ($driver === 'mysql') {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'market_quotes' AND INDEX_NAME = 'idx_quotes_symbol_type'");
+        $st->execute();
+        if ((int)$st->fetchColumn() === 0) {
+          $pdo->exec("ALTER TABLE market_quotes ADD INDEX idx_quotes_symbol_type (symbol, type)");
+        }
+        $st = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'positions' AND INDEX_NAME = 'idx_positions_user_status'");
+        $st->execute();
+        if ((int)$st->fetchColumn() === 0) {
+          $pdo->exec("ALTER TABLE positions ADD INDEX idx_positions_user_status (user_id, status)");
+        }
+      } else {
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_quotes_symbol_type ON market_quotes(symbol, type)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_positions_user_status ON positions(user_id, status)");
+      }
+    } catch (Throwable $e) {}
 
     try {
       $pdo->exec($driver === 'mysql'

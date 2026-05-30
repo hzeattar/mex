@@ -54,7 +54,7 @@ export function render() {
           <div class="grid gap-3">
             <div class="hero-balance-card">
               <span>${mode === 'real' ? 'Live balance' : 'Practice balance'}</span>
-              <strong>${money(wallet.balance)}</strong>
+              <strong data-count-to="${wallet.balance}">${money(wallet.balance)}</strong>
               <small>${esc(wallet.currency)}</small>
             </div>
             <div class="grid grid-cols-2 gap-3">
@@ -137,7 +137,35 @@ export function mount(container) {
       if (fallback) fallback.style.display = 'grid';
     }
   }, true);
+
+  // Counting animation for balance
+  container.querySelectorAll('[data-count-to]').forEach(el => {
+    animateCount(el, 0, parseFloat(el.dataset.countTo) || 0, 900);
+  });
+
+  // Stagger reveal for market cards
+  setTimeout(() => {
+    container.querySelectorAll('#home-markets > *').forEach((card, i) => {
+      card.classList.add('stagger-item');
+      card.style.animationDelay = `${i * 0.05 + 0.1}s`;
+    });
+  }, 50);
+
   loadHomeData(container);
+}
+
+function animateCount(el, from, to, duration) {
+  const start = performance.now();
+  const isDecimal = to % 1 !== 0;
+  function tick(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = from + (to - from) * eased;
+    el.textContent = isDecimal ? current.toFixed(2) : Math.round(current).toLocaleString();
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 }
 
 async function loadHomeData(container) {

@@ -10,6 +10,8 @@ import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
 let chart = null;
 let candleSeries = null;
 let volumeSeries = null;
+let ma7Series = null;
+let ma25Series = null;
 let sseClean = null;
 let activeQuoteTimer = null;
 let activeQuoteController = null;
@@ -793,6 +795,7 @@ async function initChart(container, candles, runId = tradeRunId) {
     crosshair: { mode: 0, vertLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff' }, horzLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff' } },
     timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: 4 },
     rightPriceScale: { borderColor: 'rgba(129,160,220,0.08)' },
+    watermark: { visible: true, text: 'MEX Group', color: 'rgba(93,124,255,0.08)', fontSize: 48, horzAlign: 'center', vertAlign: 'center' },
     width: Math.max(320, el.clientWidth),
     height: Math.max(260, el.clientHeight),
   });
@@ -808,6 +811,10 @@ async function initChart(container, candles, runId = tradeRunId) {
   volumeSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
   chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
 
+  // Moving Averages
+  ma7Series = chart.addLineSeries({ color: 'rgba(255,193,7,0.55)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  ma25Series = chart.addLineSeries({ color: 'rgba(93,124,255,0.55)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+
   const data = candles
     .map(c => ({
       time: Number(c.time || c.t),
@@ -822,6 +829,12 @@ async function initChart(container, candles, runId = tradeRunId) {
 
   candleSeries.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
   volumeSeries.setData(data.map(c => ({ time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' })));
+
+  // Calculate and set MA lines
+  const closes = data.map(d => ({ time: d.time, close: d.close }));
+  ma7Series.setData(calcMA(closes, 7));
+  ma25Series.setData(calcMA(closes, 25));
+
   lastCandle = data.length ? { ...data[data.length - 1] } : null;
   chart.timeScale().fitContent();
 
@@ -1154,6 +1167,16 @@ function tfSeconds(tf) {
 function loadChartLib() {
   if (!chartLibPromise) chartLibPromise = import('lightweight-charts');
   return chartLibPromise;
+}
+
+function calcMA(closes, period) {
+  const result = [];
+  for (let i = period - 1; i < closes.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < period; j++) sum += closes[i - j].close;
+    result.push({ time: closes[i].time, value: sum / period });
+  }
+  return result;
 }
 
 function marketListUrl(type) {

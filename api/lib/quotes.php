@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/marketdata.php';
 require_once __DIR__ . '/market_resolver.php';
+require_once __DIR__ . '/quote_sources.php';
 
 function market_meta($meta): array {
   if (is_array($meta)) return $meta;
@@ -135,18 +136,18 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
   if ($providerType === 'crypto') {
-    return in_array($src, ['binance','trade_stream','stream','provider_live'], true);
+    return in_array($src, ['binance','trade_stream','stream','provider_live','twelvedata'], true);
   }
   if ($assetType === 'forex') {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','frankfurter','stooq'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','frankfurter','stooq','twelvedata','fcsapi'], true);
   }
   if ($assetType === 'stocks') {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','stooq'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','stooq','twelvedata'], true);
   }
   if (in_array($assetType, ['arab','commodities','futures'], true)) {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo_chart_live','yahoo'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo_chart_live','yahoo','twelvedata','fcsapi'], true);
   }
-  if (in_array($src, ['eodhd','eodhd_rest','provider_live'], true)) return true;
+  if (in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','fcsapi'], true)) return true;
   return false;
 }
 
@@ -424,6 +425,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   $yahooBySym = [];
   $massiveBySym = [];
   $eodhdBySym = [];
+  $twelvedataBySym = [];
+  $fcsapiBySym = [];
   $preferredProvider = strtolower((string)env('PRICE_PROVIDER', 'eodhd'));
   $massiveFallbackEnabled = ((int)env('ENABLE_MASSIVE_FALLBACK', '0') === 1) && $preferredProvider === 'massive';
   foreach ($symbols as $sym) {
@@ -452,6 +455,16 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
     if ($massiveFallbackEnabled && ($providerType === 'forex' || ($providerType === 'commodities' && $spotMetal))) {
       $m = massive_market_ticker($sym, $assetType, $meta);
       if ($m) $massiveBySym[$sym] = $m;
+    }
+    // TwelveData fallback for forex, commodities, stocks
+    if (twelvedata_enabled() && in_array($providerType, ['forex','commodities','stocks','indices','futures'], true)) {
+      $td = twelvedata_symbol_for_market($sym, $assetType, $meta);
+      if ($td) $twelvedataBySym[$sym] = $td;
+    }
+    // FCS API fallback for forex and commodities
+    if (fcsapi_enabled() && in_array($providerType, ['forex','commodities'], true)) {
+      $fcs = fcsapi_symbol_for_market($sym, $assetType, $meta);
+      if ($fcs) $fcsapiBySym[$sym] = $fcs;
     }
   }
 
@@ -578,6 +591,52 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
           'updated_at' => quote_row_provider_ts($row, $now),
           'source' => (string)($row['source'] ?? 'massive'),
+        ];
+      }
+    } catch (Throwable $e) {}
+  }
+
+  if ($twelvedataBySym) {
+    try {
+      $ttl = max(3, min(30, (int)env('TWELVEDATA_PRICE_TTL', '5')));
+      $fetchMap = $twelvedataBySym;
+      $bulk = twelvedata_quote_many_cached(array_values(array_unique(array_values($fetchMap))), $ttl);
+      foreach ($fetchMap as $sym => $ticker) {
+        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
+        $row = is_array($bulk[$ticker] ?? null) ? $bulk[$ticker] : null;
+        if (!$row) continue;
+        $p = (float)($row['price'] ?? 0);
+        if (!($p > 0)) continue;
+        $out[$sym] = [
+          'symbol' => $sym,
+          'type' => $assetType,
+          'price' => $p,
+          'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'updated_at' => $now,
+          'source' => 'twelvedata',
+        ];
+      }
+    } catch (Throwable $e) {}
+  }
+
+  if ($fcsapiBySym) {
+    try {
+      $ttl = max(5, min(60, (int)env('FCSAPI_PRICE_TTL', '10')));
+      $fetchMap = $fcsapiBySym;
+      $bulk = fcsapi_quote_many_cached(array_values(array_unique(array_values($fetchMap))), $ttl);
+      foreach ($fetchMap as $sym => $ticker) {
+        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
+        $row = is_array($bulk[$ticker] ?? null) ? $bulk[$ticker] : null;
+        if (!$row) continue;
+        $p = (float)($row['price'] ?? 0);
+        if (!($p > 0)) continue;
+        $out[$sym] = [
+          'symbol' => $sym,
+          'type' => $assetType,
+          'price' => $p,
+          'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'updated_at' => $now,
+          'source' => 'fcsapi',
         ];
       }
     } catch (Throwable $e) {}

@@ -12,8 +12,10 @@ if (!function_exists('vp_quote_source_rank')) {
             'binance' => 100,
             'trade_stream', 'stream' => 96,
             'provider_live' => 92,
+            'twelvedata' => 86,
             'massive', 'polygon' => 90,
             'eodhd', 'eodhd_rest', 'eodhd_intraday' => 88,
+            'fcsapi' => 82,
             'provider_fallback' => 84,
             'yahoo', 'yahoo_chart_live' => 72,
             'fx_fallback', 'frankfurter', 'stooq' => 66,
@@ -60,5 +62,307 @@ if (!function_exists('vp_quote_candidate_score')) {
             'trusted' => $trusted,
             'rank' => $rank,
         ];
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// TwelveData provider — free tier: 8 credits/min, 800/day
+// Covers: forex, stocks, commodities, crypto, ETFs, indices
+// Env: QUOTES_TWELVEDATA_KEY (required)
+// ──────────────────────────────────────────────────────────────
+
+if (!function_exists('twelvedata_enabled')) {
+    function twelvedata_enabled(): bool {
+        $key = trim((string)env('QUOTES_TWELVEDATA_KEY', ''));
+        return $key !== '' && strtolower((string)env('TWELVEDATA_ENABLED', '1')) !== '0';
+    }
+}
+
+if (!function_exists('twelvedata_symbol_for_market')) {
+    /**
+     * Convert internal symbol to TwelveData ticker format.
+     * EURUSD → EUR/USD, XAUUSD → XAU/USD, AAPL → AAPL
+     */
+    function twelvedata_symbol_for_market(string $symbol, string $assetType, array $meta = []): ?string {
+        $symbol = strtoupper(trim($symbol));
+        $assetType = vp_normalize_asset_type($assetType);
+        $providerType = vp_provider_asset_type($assetType);
+
+        // Check meta for explicit override
+        $td = trim((string)($meta['twelvedata_ticker'] ?? ''));
+        if ($td !== '') return $td;
+
+        if ($providerType === 'forex') {
+            // EURUSD → EUR/USD
+            if (preg_match('/^([A-Z]{3})([A-Z]{3})$/', $symbol, $m)) {
+                return $m[1] . '/' . $m[2];
+            }
+            return null;
+        }
+
+        if ($providerType === 'commodities') {
+            // XAUUSD → XAU/USD, XAGUSD → XAG/USD
+            if (preg_match('/^(XAU|XAG|XPT|XPD)(USD)$/', $symbol, $m)) {
+                return $m[1] . '/' . $m[2];
+            }
+            // USOIL → crude oil
+            if ($symbol === 'USOIL' || $symbol === 'UKOIL') {
+                return $symbol === 'USOIL' ? 'CL/USD' : 'BZ/USD';
+            }
+            return null;
+        }
+
+        if ($providerType === 'crypto') {
+            // BTCUSDT → BTC/USDT
+            if (preg_match('/^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|DOT|MATIC|AVAX|LINK|UNI|LTC|BCH|ETC|FIL|ATOM|NEAR|FTM|ALGO|VET|ICP|HBAR|SAND|MANA|AXS|THETA|XTZ|EGLD|AAVE|GRT)(USDT?)$/', $symbol, $m)) {
+                return $m[1] . '/' . $m[2];
+            }
+            return null;
+        }
+
+        // Stocks, arab, futures — use as-is
+        if (in_array($providerType, ['stocks', 'arab', 'futures', 'indices'], true)) {
+            if (preg_match('/^[A-Z0-9._\-]{1,20}$/', $symbol)) {
+                return $symbol;
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('twelvedata_quote_many')) {
+    /**
+     * Fetch real-time quotes from TwelveData API.
+     * Supports up to 10 symbols per request (batch).
+     * Returns: [ticker => ['price'=>float,'change_pct'=>float,'source'=>'twelvedata'], ...]
+     */
+    function twelvedata_quote_many(array $tickers, int $timeoutSec = 3): array {
+        if (!twelvedata_enabled()) return [];
+        $key = trim((string)env('QUOTES_TWELVEDATA_KEY', ''));
+        if ($key === '' || !$tickers) return [];
+
+        $tickers = array_values(array_unique(array_filter($tickers)));
+        if (!$tickers) return [];
+
+        $out = [];
+
+        // TwelveData batch endpoint supports max 30 symbols per request
+        $chunks = array_chunk($tickers, 30);
+        foreach ($chunks as $chunk) {
+            try {
+                $symList = implode(',', array_map('rawurlencode', $chunk));
+                $url = "https://api.twelvedata.com/quote?symbol={$symList}&apikey=" . rawurlencode($key);
+
+                $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+                $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+                    'connect_timeout' => max(1, min(3, $timeoutSec)),
+                    'timeout' => max(2, min(6, $timeoutSec + 2)),
+                    'retries' => 0,
+                ];
+
+                $j = http_get_json($url);
+
+                if ($prevTimeout !== null) {
+                    $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout;
+                } else {
+                    unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+                }
+
+                if (!is_array($j)) continue;
+
+                // Batch response: { "EUR/USD": {...}, "XAU/USD": {...} } or single: {...}
+                // Single symbol response has "symbol" key
+                if (isset($j['symbol']) && isset($j['close'])) {
+                    $ticker = $chunk[0] ?? '';
+                    $price = (float)($j['close'] ?? 0);
+                    $chg = (float)($j['change'] ?? 0);
+                    $prevClose = (float)($j['previous_close'] ?? 0);
+                    $chgPct = $prevClose > 0 ? (($chg / $prevClose) * 100.0) : (float)($j['percent_change'] ?? 0);
+                    if ($price > 0) {
+                        $out[$ticker] = [
+                            'price' => $price,
+                            'change_pct' => $chgPct,
+                            'source' => 'twelvedata',
+                        ];
+                    }
+                    continue;
+                }
+
+                // Batch response
+                foreach ($j as $ticker => $data) {
+                    if (!is_array($data)) continue;
+                    $price = (float)($data['close'] ?? 0);
+                    if ($price <= 0) continue;
+                    $chg = (float)($data['change'] ?? 0);
+                    $prevClose = (float)($data['previous_close'] ?? 0);
+                    $chgPct = $prevClose > 0 ? (($chg / $prevClose) * 100.0) : (float)($data['percent_change'] ?? 0);
+                    $out[$ticker] = [
+                        'price' => $price,
+                        'change_pct' => $chgPct,
+                        'source' => 'twelvedata',
+                    ];
+                }
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('twelvedata_quote_many_cached')) {
+    function twelvedata_quote_many_cached(array $tickers, int $ttl = 5): array {
+        $ttl = max(1, min(60, $ttl));
+        $dir = __DIR__ . '/../data/cache';
+        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        $cacheKey = 'td_' . md5(implode(',', $tickers));
+        $cacheFile = $dir . '/' . $cacheKey . '.json';
+        $now = time();
+
+        if (is_file($cacheFile)) {
+            $age = $now - (int)@filemtime($cacheFile);
+            if ($age >= 0 && $age < $ttl) {
+                $raw = @file_get_contents($cacheFile);
+                $d = $raw ? json_decode($raw, true) : null;
+                if (is_array($d)) return $d;
+            }
+        }
+
+        $result = twelvedata_quote_many($tickers);
+        if ($result) {
+            @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        }
+        return $result;
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// FCS API provider — free tier: covers forex, commodities
+// Env: QUOTES_FCS_KEY (optional, works without key with limits)
+// ──────────────────────────────────────────────────────────────
+
+if (!function_exists('fcsapi_enabled')) {
+    function fcsapi_enabled(): bool {
+        return strtolower((string)env('FCSAPI_ENABLED', '1')) !== '0';
+    }
+}
+
+if (!function_exists('fcsapi_symbol_for_market')) {
+    function fcsapi_symbol_for_market(string $symbol, string $assetType, array $meta = []): ?string {
+        $symbol = strtoupper(trim($symbol));
+        $assetType = vp_normalize_asset_type($assetType);
+        $providerType = vp_provider_asset_type($assetType);
+
+        $fcs = trim((string)($meta['fcsapi_ticker'] ?? ''));
+        if ($fcs !== '') return $fcs;
+
+        if ($providerType === 'forex') {
+            // EURUSD → EUR/USD
+            if (preg_match('/^([A-Z]{3})([A-Z]{3})$/', $symbol, $m)) {
+                return $m[1] . '/' . $m[2];
+            }
+            return null;
+        }
+
+        if ($providerType === 'commodities') {
+            if (preg_match('/^(XAU|XAG|XPT|XPD)(USD)$/', $symbol, $m)) {
+                return $m[1] . '/' . $m[2];
+            }
+            return null;
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('fcsapi_quote_many')) {
+    /**
+     * Fetch quotes from FCS API.
+     * Returns: [ticker => ['price'=>float,'change_pct'=>float,'source'=>'fcsapi'], ...]
+     */
+    function fcsapi_quote_many(array $tickers, int $timeoutSec = 3): array {
+        if (!fcsapi_enabled() || !$tickers) return [];
+        $key = trim((string)env('QUOTES_FCS_KEY', ''));
+
+        $out = [];
+        // FCS API supports comma-separated symbols
+        $symList = implode(',', array_map(function($t) {
+            return str_replace('/', '', $t); // EUR/USD → EURUSD for FCS
+        }, $tickers));
+
+        try {
+            $url = "https://fcsapi.com/api-v3/forex/latest?symbol=" . rawurlencode($symList);
+            if ($key !== '') $url .= "&access_key=" . rawurlencode($key);
+
+            $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+            $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+                'connect_timeout' => max(1, min(3, $timeoutSec)),
+                'timeout' => max(2, min(6, $timeoutSec + 2)),
+                'retries' => 0,
+            ];
+
+            $j = http_get_json($url);
+
+            if ($prevTimeout !== null) {
+                $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout;
+            } else {
+                unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+            }
+
+            if (!is_array($j) || ($j['status'] ?? '') !== 'true') return [];
+
+            $responses = is_array($j['response'] ?? null) ? $j['response'] : [];
+            if (isset($responses['s']) || isset($responses['price'])) {
+                $responses = [$responses]; // single response
+            }
+
+            foreach ($responses as $idx => $item) {
+                if (!is_array($item)) continue;
+                $price = (float)($item['price'] ?? $item['c'] ?? 0);
+                if ($price <= 0) continue;
+                $chg = (float)($item['chg'] ?? $item['change'] ?? 0);
+                $chgPct = (float)($item['chg_p'] ?? $item['change_p'] ?? 0);
+                $ticker = $tickers[$idx] ?? null;
+                if ($ticker) {
+                    $out[$ticker] = [
+                        'price' => $price,
+                        'change_pct' => $chgPct,
+                        'source' => 'fcsapi',
+                    ];
+                }
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('fcsapi_quote_many_cached')) {
+    function fcsapi_quote_many_cached(array $tickers, int $ttl = 10): array {
+        $ttl = max(1, min(60, $ttl));
+        $dir = __DIR__ . '/../data/cache';
+        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        $cacheKey = 'fcs_' . md5(implode(',', $tickers));
+        $cacheFile = $dir . '/' . $cacheKey . '.json';
+        $now = time();
+
+        if (is_file($cacheFile)) {
+            $age = $now - (int)@filemtime($cacheFile);
+            if ($age >= 0 && $age < $ttl) {
+                $raw = @file_get_contents($cacheFile);
+                $d = $raw ? json_decode($raw, true) : null;
+                if (is_array($d)) return $d;
+            }
+        }
+
+        $result = fcsapi_quote_many($tickers);
+        if ($result) {
+            @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        }
+        return $result;
     }
 }
