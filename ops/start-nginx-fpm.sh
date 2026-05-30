@@ -17,6 +17,7 @@ cd /app
 mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx /tmp
 chown -R www-data:www-data api/data api/uploads 2>/dev/null || true
 chmod -R 775 api/data api/uploads 2>/dev/null || true
+rm -f /tmp/php-fpm.sock
 
 echo "[start] PORT=${PORT} - rendering nginx config"
 envsubst '$PORT $EXTRA_LISTEN' < /app/ops/nginx.conf.template > /tmp/nginx.conf
