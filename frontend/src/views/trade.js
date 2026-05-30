@@ -176,7 +176,7 @@ function renderOrderPanel() {
       <input type="number" min="0" step="any" class="input mt-1" placeholder="${p > 0 ? price(p, get('type')) : 'Required for limit'}" data-limit-price />
     </label>
     <label class="block">
-      <span class="text-[10px] text-muted">Leverage: <strong data-lev-val>${lev}x</strong></span>
+      <span class="text-[10px] text-muted">Leverage: <strong data-lev-val id="leverage-label">${lev}x</strong></span>
       <input type="range" min="1" max="100" value="${escAttr(String(lev))}" class="w-full mt-1 accent-accent" data-leverage />
     </label>
     <div class="grid grid-cols-2 gap-2">
@@ -909,6 +909,14 @@ function bindEvents(container) {
     set('leverage', Number(el.value));
     syncOrderField(container, 'leverage', el.value);
     updateOrderInfo(container);
+    // Risk color gradient: green (low) → yellow (mid) → red (high)
+    const val = Number(el.value);
+    const max = Number(el.max) || 100;
+    const pct = val / max;
+    const color = pct < 0.3 ? '#00c087' : pct < 0.6 ? '#fcd535' : '#f6465d';
+    el.style.accentColor = color;
+    const label = container.querySelector('#leverage-label');
+    if (label) { label.textContent = val + 'x'; label.style.color = color; }
   });
   delegate(container, '[data-amount]', 'input', (e, el) => {
     set('amount', Number(el.value));
