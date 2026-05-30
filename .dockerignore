@@ -25,3 +25,6 @@ api/uploads/**
 *.patch
 
 node_modules
+frontend/node_modules
+vendor
+mex.zip
