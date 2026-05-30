@@ -1,5 +1,5 @@
 server {
-  listen ${PORT};
+  listen [::]:${PORT} ipv6only=off default_server;
   server_name _;
   root /app;
   index index.php index.html;
