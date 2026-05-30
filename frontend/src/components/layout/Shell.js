@@ -4,28 +4,28 @@ import { navigate, currentPath } from '../../router.js';
 import { esc, money } from '../../utils/format.js';
 import { $, $$, delegate } from '../../utils/dom.js';
 import { icons } from '../common/Icons.js';
-import { currentLocale, setLocale } from '../../utils/i18n.js';
+import { currentLocale, setLocale, t, translateDom } from '../../utils/i18n.js';
 import { api } from '../../services/api.js';
 
 const NAV = [
-  { route: 'home', label: 'Home', icon: 'home' },
-  { route: 'trade', label: 'Trade', icon: 'trade' },
-  { route: 'portfolio', label: 'Portfolio', icon: 'portfolio' },
-  { route: 'wallet', label: 'Funds', icon: 'wallet' },
-  { route: 'invest', label: 'Earn', icon: 'earn' },
+  { route: 'home', key: 'nav.home', label: 'Home', icon: 'home' },
+  { route: 'trade', key: 'nav.trade', label: 'Trade', icon: 'trade' },
+  { route: 'portfolio', key: 'nav.portfolio', label: 'Portfolio', icon: 'portfolio' },
+  { route: 'wallet', key: 'nav.wallet', label: 'Funds', icon: 'wallet' },
+  { route: 'invest', key: 'nav.earn', label: 'Earn', icon: 'earn' },
 ];
 
 const NAV_MORE = [
-  { route: 'news', label: 'News', icon: 'news' },
-  { route: 'support', label: 'Support', icon: 'support' },
-  { route: 'account', label: 'Account', icon: 'account' },
+  { route: 'news', key: 'nav.news', label: 'News', icon: 'news' },
+  { route: 'support', key: 'nav.support', label: 'Support', icon: 'support' },
+  { route: 'account', key: 'nav.account', label: 'Account', icon: 'account' },
 ];
 
 const MOBILE_NAV = [
-  { route: 'home', label: 'Home', icon: 'home' },
-  { route: 'trade', label: 'Trade', icon: 'trade' },
-  { route: 'invest', label: 'Earn', icon: 'earn' },
-  { route: 'wallet', label: 'Funds', icon: 'wallet' },
+  { route: 'home', key: 'nav.home', label: 'Home', icon: 'home' },
+  { route: 'trade', key: 'nav.trade', label: 'Trade', icon: 'trade' },
+  { route: 'invest', key: 'nav.earn', label: 'Earn', icon: 'earn' },
+  { route: 'wallet', key: 'nav.wallet', label: 'Funds', icon: 'wallet' },
 ];
 
 export function renderShell(app) {
@@ -37,13 +37,13 @@ export function renderShell(app) {
     <div class="flex flex-col h-screen overflow-hidden" id="shell">
       <!-- Desktop Top Navigation Bar -->
       <header class="hidden lg:flex items-center h-12 px-4 border-b border-line bg-surface shrink-0 z-50">
-        <a href="#/home" class="flex items-center gap-2 mr-6">
-          <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-buy grid place-items-center text-white font-black text-[10px]">V</div>
-          <strong class="text-sm tracking-tight">${esc(brand.name)}</strong>
+        <a href="#/home" class="mex-shell-brand mr-6">
+          <img src="/assets/img/mexgroup_logo.svg" alt="MEX Group" onerror="this.style.display='none'">
+          <span><strong>${esc(brand.name || t('brand.name', 'MEX Group'))}</strong><small>${esc(brand.product || t('brand.product', 'VertexPluse'))}</small></span>
         </a>
         <nav class="flex items-center gap-1" id="desktop-nav">
-          ${NAV.map(n => `<a href="#/${n.route}" class="nav-tab" data-nav="${n.route}"><span class="w-4 h-4">${icons[n.icon]}</span>${n.label}</a>`).join('')}
-          ${NAV_MORE.map(n => `<a href="#/${n.route}" class="nav-tab" data-nav="${n.route}">${n.label}</a>`).join('')}
+          ${NAV.map(n => `<a href="#/${n.route}" class="nav-tab" data-nav="${n.route}"><span class="w-4 h-4">${icons[n.icon]}</span>${t(n.key, n.label)}</a>`).join('')}
+          ${NAV_MORE.map(n => `<a href="#/${n.route}" class="nav-tab" data-nav="${n.route}">${t(n.key, n.label)}</a>`).join('')}
         </nav>
         <div class="flex-1"></div>
         <div class="flex items-center gap-3">
@@ -53,12 +53,11 @@ export function renderShell(app) {
           </div>
           <button class="mode-btn ${mode === 'real' ? 'is-real' : ''}" id="mode-toggle" title="Switch mode">
             <span class="mode-dot"></span>
-            <span class="mode-label">${mode === 'real' ? 'Real' : 'Demo'}</span>
+            <span class="mode-label">${mode === 'real' ? t('mode.real', 'Real') : t('mode.demo', 'Demo')}</span>
           </button>
           <select class="lang-select" id="lang-select">
             <option value="en" ${currentLocale() === 'en' ? 'selected' : ''}>EN</option>
             <option value="ar" ${currentLocale() === 'ar' ? 'selected' : ''}>AR</option>
-            <option value="ru" ${currentLocale() === 'ru' ? 'selected' : ''}>RU</option>
           </select>
           <button class="icon-btn relative" id="notif-btn" title="Notifications">
             ${icons.bell}
@@ -70,14 +69,14 @@ export function renderShell(app) {
 
       <!-- Mobile Header -->
       <header class="lg:hidden flex items-center justify-between h-12 px-3 border-b border-line bg-surface shrink-0 z-50">
-        <a href="#/home" class="flex items-center gap-2">
-          <div class="w-6 h-6 rounded-md bg-gradient-to-br from-accent to-buy grid place-items-center text-white font-black text-[8px]">V</div>
-          <strong class="text-xs">${esc(brand.name)}</strong>
+        <a href="#/home" class="mex-shell-brand mex-shell-brand-sm">
+          <img src="/assets/img/mexgroup_logo.svg" alt="MEX Group" onerror="this.style.display='none'">
+          <span><strong>${esc(brand.name || t('brand.name', 'MEX Group'))}</strong></span>
         </a>
         <div class="flex items-center gap-2">
           <button class="mode-btn mode-btn-sm ${mode === 'real' ? 'is-real' : ''}" id="mode-toggle-m">
             <span class="mode-dot"></span>
-            <span class="mode-label">${mode === 'real' ? 'Real' : 'Demo'}</span>
+            <span class="mode-label">${mode === 'real' ? t('mode.real', 'Real') : t('mode.demo', 'Demo')}</span>
           </button>
           <button class="icon-btn icon-btn-sm" id="notif-btn-m">${icons.bell}<span class="notif-badge hidden" id="notif-badge-m">0</span></button>
           <a href="#/account" class="icon-btn icon-btn-sm" title="Account">${icons.account}</a>
@@ -91,18 +90,19 @@ export function renderShell(app) {
 
       <!-- Mobile Bottom Nav -->
       <nav class="lg:hidden fixed bottom-0 inset-x-0 z-50 flex items-center justify-around h-14 bg-surface/95 backdrop-blur-xl border-t border-line" style="padding-bottom:env(safe-area-inset-bottom)" id="bottom-nav">
-        ${MOBILE_NAV.map(n => `<a href="#/${n.route}" class="mobile-tab" data-nav="${n.route}"><span class="w-5 h-5">${icons[n.icon]}</span><span class="mobile-tab-label">${n.label}</span></a>`).join('')}
+        ${MOBILE_NAV.map(n => `<a href="#/${n.route}" class="mobile-tab" data-nav="${n.route}"><span class="w-5 h-5">${icons[n.icon]}</span><span class="mobile-tab-label">${t(n.key, n.label)}</span></a>`).join('')}
       </nav>
 
       <!-- Notification Panel -->
       <div class="notif-panel hidden" id="notif-panel">
-        <div class="notif-panel-header"><strong>Notifications</strong><button class="icon-btn icon-btn-sm" id="notif-close">${icons.close}</button></div>
-        <div class="notif-panel-body" id="notif-list"><p class="text-muted text-xs text-center py-6">Loading...</p></div>
+        <div class="notif-panel-header"><strong>${t('common.notifications', 'Notifications')}</strong><button class="icon-btn icon-btn-sm" id="notif-close">${icons.close}</button></div>
+        <div class="notif-panel-body" id="notif-list"><p class="text-muted text-xs text-center py-6">${t('common.loading', 'Loading...')}</p></div>
       </div>
     </div>`;
 
   bindShell(app);
   syncActive();
+  translateDom(app);
   window.addEventListener('hashchange', syncActive);
 }
 
@@ -134,9 +134,10 @@ async function loadNotifications() {
   try {
     const data = await api('/notifications/list.php', { timeout: 6000 });
     const items = data?.items || [];
-    if (!items.length) { list.innerHTML = '<p class="text-muted text-xs text-center py-6">No notifications</p>'; return; }
+    if (!items.length) { list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.no_notifications', 'No notifications')}</p>`; return; }
     list.innerHTML = items.slice(0, 20).map(n => `<div class="notif-item ${n.read ? '' : 'unread'}"><p class="text-xs">${esc(n.message || n.title || '--')}</p><span class="text-[10px] text-muted">${esc(n.created_at || '')}</span></div>`).join('');
-  } catch (e) { list.innerHTML = '<p class="text-muted text-xs text-center py-6">Failed to load</p>'; }
+    translateDom(list);
+  } catch (e) { list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.failed_to_load', 'Failed to load')}</p>`; }
 }
 
 function syncActive() {

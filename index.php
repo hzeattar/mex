@@ -1,359 +1,293 @@
 <?php
-DECLARE(strict_types=1);
+declare(strict_types=1);
+
 require_once __DIR__ . '/site_bootstrap.php';
 
-$isLoggedIn = session_user_id() > 0;
-$s = site_defaults();
-$tgBot = telegram_login_bot_username();
-$brand = htmlspecialchars($s['brand'], ENT_QUOTES);
+$isLoggedIn = false;
+try {
+  $isLoggedIn = session_user_id() > 0;
+} catch (Throwable $e) {
+  $isLoggedIn = false;
+}
+
+$lang = strtolower((string)($_GET['lang'] ?? $_COOKIE['vp_lang'] ?? 'en'));
+$lang = in_array($lang, ['en', 'ar'], true) ? $lang : 'en';
+$isRtl = $lang === 'ar';
+$next = rawurlencode('/app.php#/home');
+
+$copy = [
+  'en' => [
+    'meta' => 'MEX Group client trading platform for crypto, forex, stocks, commodities, copy trading, contracts, deposits, withdrawals, and account management.',
+    'login' => 'Log in',
+    'register' => 'Create account',
+    'dashboard' => 'Open dashboard',
+    'logout' => 'Log out',
+    'nav_markets' => 'Markets',
+    'nav_platform' => 'Platform',
+    'nav_earn' => 'Earn',
+    'nav_funding' => 'Funding',
+    'nav_support' => 'Support',
+    'kicker' => 'MEX Group trading desk',
+    'title' => 'One secure workspace for markets, copy trading, and client funding.',
+    'subtitle' => 'VertexPluse runs inside the MEX Group experience: fast quotes, professional charts, internal demo and real trading, KYC, deposits, withdrawals, contracts, and support from one clean client portal.',
+    'primary' => 'Start trading',
+    'secondary' => 'View platform',
+    'stat_1' => 'Multi-asset desk',
+    'stat_2' => 'Manual funding review',
+    'stat_3' => 'Copy and contracts',
+    'markets_title' => 'Live market snapshot',
+    'markets_sub' => 'Curated instruments for the client dashboard, warmed through the platform quote authority.',
+    'platform_title' => 'Built for serious client operations',
+    'platform_sub' => 'A lightweight web platform rebuilt for speed, clarity, and mobile-first trading workflows.',
+    'feature_trade' => 'Trading workspace',
+    'feature_trade_text' => 'Watchlists, chart, order ticket, positions, orders, and history in one focused screen.',
+    'feature_wallet' => 'Funding and wallet',
+    'feature_wallet_text' => 'Manual deposits and withdrawals with proof, status timelines, ledger history, and optional Stripe card checkout.',
+    'feature_earn' => 'Copy trading and contracts',
+    'feature_earn_text' => 'Real-only copy desk, KYC gates, level-based contracts, and transparent account eligibility.',
+    'feature_admin' => 'Operations admin',
+    'feature_admin_text' => 'Users, KYC, deposits, withdrawals, markets, signals, contracts, support, ledger, and audit logs.',
+    'earn_title' => 'Copy signals and level contracts',
+    'earn_sub' => 'Demo users can preview the desk. Real account users with approved KYC can copy signals or subscribe to level-gated contracts.',
+    'funding_title' => 'Funding that stays auditable',
+    'funding_sub' => 'Client requests stay visible from creation to approval. Card payments use Stripe Checkout when enabled, and manual methods remain available.',
+    'support_title' => 'Launch your client area',
+    'support_sub' => 'Log in to manage trades, verification, deposits, withdrawals, copy subscriptions, contracts, support tickets, and account settings.',
+    'footer' => 'Trading involves risk. Real execution is internal to the platform unless separately integrated with an external broker or exchange.',
+    'loading' => 'Loading',
+  ],
+  'ar' => [
+    'meta' => 'منصة تداول عملاء MEX Group للكريبتو والفوركس والأسهم والسلع ونسخ الصفقات والعقود والإيداع والسحب وإدارة الحساب.',
+    'login' => 'تسجيل الدخول',
+    'register' => 'إنشاء حساب',
+    'dashboard' => 'فتح لوحة التحكم',
+    'logout' => 'تسجيل الخروج',
+    'nav_markets' => 'الأسواق',
+    'nav_platform' => 'المنصة',
+    'nav_earn' => 'العقود والنسخ',
+    'nav_funding' => 'التمويل',
+    'nav_support' => 'الدعم',
+    'kicker' => 'مكتب تداول MEX Group',
+    'title' => 'مساحة واحدة آمنة للأسواق ونسخ الصفقات وتمويل العملاء.',
+    'subtitle' => 'VertexPluse تعمل داخل تجربة MEX Group: أسعار سريعة، شارت احترافي، تداول تجريبي وحقيقي داخلي، توثيق، إيداع، سحب، عقود، ودعم من بوابة عميل واحدة.',
+    'primary' => 'ابدأ التداول',
+    'secondary' => 'شاهد المنصة',
+    'stat_1' => 'أسواق متعددة',
+    'stat_2' => 'مراجعة تمويل يدوية',
+    'stat_3' => 'نسخ وعقود',
+    'markets_title' => 'لقطة مباشرة للأسواق',
+    'markets_sub' => 'رموز مختارة للوحة العميل يتم تسخين أسعارها عبر مصدر الأسعار الموحد داخل المنصة.',
+    'platform_title' => 'مصممة لتشغيل عملاء حقيقي',
+    'platform_sub' => 'منصة ويب خفيفة أعيد بناؤها للسرعة والوضوح وتجربة تداول ممتازة على الموبايل.',
+    'feature_trade' => 'مساحة التداول',
+    'feature_trade_text' => 'قوائم مراقبة، شارت، تذكرة أوامر، مراكز، أوامر، وسجل داخل شاشة واحدة واضحة.',
+    'feature_wallet' => 'المحفظة والتمويل',
+    'feature_wallet_text' => 'إيداع وسحب يدوي مع إثبات، مراحل حالة، سجل محاسبي، ودفع بطاقة عبر Stripe عند التفعيل.',
+    'feature_earn' => 'نسخ الصفقات والعقود',
+    'feature_earn_text' => 'نسخ للحساب الحقيقي فقط، بوابات KYC، عقود حسب المستوى، ووضوح في أهلية الحساب.',
+    'feature_admin' => 'إدارة التشغيل',
+    'feature_admin_text' => 'المستخدمون، KYC، الإيداعات، السحوبات، الأسواق، الإشارات، العقود، الدعم، السجل المالي، والتدقيق.',
+    'earn_title' => 'إشارات نسخ وعقود حسب المستوى',
+    'earn_sub' => 'مستخدمو الديمو يمكنهم المعاينة. مستخدمو الحساب الحقيقي مع KYC معتمد يمكنهم نسخ الإشارات أو الاشتراك في العقود.',
+    'funding_title' => 'تمويل قابل للمراجعة',
+    'funding_sub' => 'طلبات العملاء تظل واضحة من الإنشاء حتى الاعتماد. الدفع بالبطاقة يتم عبر Stripe Checkout عند تفعيله، والطرق اليدوية متاحة.',
+    'support_title' => 'ادخل إلى منطقة العميل',
+    'support_sub' => 'سجل الدخول لإدارة التداول، التوثيق، الإيداعات، السحوبات، نسخ الصفقات، العقود، تذاكر الدعم، وإعدادات الحساب.',
+    'footer' => 'التداول يحتوي على مخاطر. التنفيذ الحقيقي داخلي داخل المنصة ما لم يتم ربط وسيط أو بورصة خارجية لاحقًا.',
+    'loading' => 'جار التحميل',
+  ],
+];
+
+$t = $copy[$lang];
+$brand = 'MEX Group';
+$product = 'VertexPluse';
+$brandEsc = htmlspecialchars($brand, ENT_QUOTES, 'UTF-8');
+$productEsc = htmlspecialchars($product, ENT_QUOTES, 'UTF-8');
+
+function e(string $value): string {
+  return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
 ?>
 <!doctype html>
-<html lang="en">
+<html lang="<?php echo e($lang); ?>" dir="<?php echo $isRtl ? 'rtl' : 'ltr'; ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#050a16">
-  <meta name="description" content="<?php echo htmlspecialchars($s['tagline'], ENT_QUOTES); ?>">
-  <title><?php echo $brand; ?></title>
-  <link rel="dns-prefetch" href="//telegram.org">
-  <link rel="preconnect" href="https://telegram.org" crossorigin>
-  <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
-  <link rel="stylesheet" href="/assets/css/public-site.css?v=<?php echo @filemtime(__DIR__.'/assets/css/public-site.css') ?: time(); ?>">
+  <meta name="theme-color" content="#060b18">
+  <meta name="description" content="<?php echo e($t['meta']); ?>">
+  <title><?php echo $brandEsc; ?> | <?php echo $productEsc; ?></title>
+  <link rel="stylesheet" href="/assets/css/public-site.css?v=<?php echo @filemtime(__DIR__ . '/assets/css/public-site.css') ?: time(); ?>">
 </head>
-<body class="landing-page">
-  <div class="utility-bar">
-    <div class="container utility-inner">
-      <div class="utility-left">
-        <span>AE 800703040</span>
-        <a href="#support">Contact Us</a>
-      </div>
-      <div class="utility-right">
-        <?php if ($isLoggedIn): ?>
-          <a href="/app.php#/home">Open Dashboard</a>
-          <a class="btn mini primary" href="/logout.php">Log out</a>
-        <?php else: ?>
-          <a href="/login.php">Log in</a>
-          <a class="btn mini primary" href="/register.php">Start Trading</a>
-        <?php endif; ?>
-      </div>
-    </div>
-  </div>
-
-  <header class="site-header site-header-landing">
-    <div class="container site-header-inner landing-header-grid">
-      <a class="site-brand landing-brand" href="/">
-        <span class="site-brand-mark"><?php echo $brand; ?></span>
-        <span class="site-brand-sep">PART OF</span>
-        <span class="site-brand-main">Trading Platform</span>
-      </a>
-
-      <nav class="site-nav landing-nav">
-        <a href="#about">About</a>
-        <a href="#products">Products</a>
-        <a href="#platforms">Platforms</a>
-        <a href="#accounts">Accounts</a>
-        <a href="#funding">Funding</a>
-        <a href="#support">Support</a>
-        <a href="/login.php">EN</a>
-      </nav>
-
-      <div class="site-actions site-actions-landing">
-        <?php if ($isLoggedIn): ?>
-          <a class="btn ghost" href="/logout.php">Log Out</a>
-          <a class="btn primary" href="/app.php#/home">Open Dashboard</a>
-        <?php else: ?>
-          <a class="btn ghost" href="/login.php?next=<?php echo rawurlencode('/app.php#/home'); ?>">Log In</a>
-          <a class="btn primary" href="/register.php?next=<?php echo rawurlencode('/app.php#/home'); ?>">Start Trading</a>
-        <?php endif; ?>
-      </div>
+<body class="mex-landing-page <?php echo $isRtl ? 'is-rtl' : ''; ?>">
+  <header class="mex-landing-top">
+    <a class="mex-landing-brand" href="/?lang=<?php echo e($lang); ?>" aria-label="<?php echo $brandEsc; ?>">
+      <img src="/assets/img/mexgroup_logo.svg" alt="" onerror="this.style.display='none'">
+      <span>
+        <strong><?php echo $brandEsc; ?></strong>
+        <small><?php echo $productEsc; ?></small>
+      </span>
+    </a>
+    <nav class="mex-landing-nav" aria-label="Primary">
+      <a href="#markets"><?php echo e($t['nav_markets']); ?></a>
+      <a href="#platform"><?php echo e($t['nav_platform']); ?></a>
+      <a href="#earn"><?php echo e($t['nav_earn']); ?></a>
+      <a href="#funding"><?php echo e($t['nav_funding']); ?></a>
+      <a href="#support"><?php echo e($t['nav_support']); ?></a>
+    </nav>
+    <div class="mex-landing-actions">
+      <a class="mex-lang-pill" href="/?lang=<?php echo $lang === 'ar' ? 'en' : 'ar'; ?>"><?php echo $lang === 'ar' ? 'EN' : 'AR'; ?></a>
+      <?php if ($isLoggedIn): ?>
+        <a class="mex-btn mex-btn-soft" href="/logout.php"><?php echo e($t['logout']); ?></a>
+        <a class="mex-btn mex-btn-primary" href="/app.php#/home"><?php echo e($t['dashboard']); ?></a>
+      <?php else: ?>
+        <a class="mex-btn mex-btn-soft" href="/login.php?lang=<?php echo e($lang); ?>&next=<?php echo $next; ?>"><?php echo e($t['login']); ?></a>
+        <a class="mex-btn mex-btn-primary" href="/register.php?lang=<?php echo e($lang); ?>&next=<?php echo $next; ?>"><?php echo e($t['register']); ?></a>
+      <?php endif; ?>
     </div>
   </header>
 
-  <section class="landing-hero landing-hero-v3">
-    <div class="landing-hero-bg"></div>
-    <div class="container hero-inner hero-inner-v3">
-      <div class="hero-copy-stack compact">
-        <?php
-          $heroTitleRaw = trim((string)($s['hero_title'] ?? 'Life is Better with Money'));
-          $heroLead = $heroTitleRaw;
-          $heroTail = '';
-          if (preg_match('/^(.*)\s+with\s+(.*)$/i', $heroTitleRaw, $m)) {
-            $heroLead = trim((string)$m[1]);
-            $heroTail = trim((string)$m[2]);
-          }
-        ?>
-        <h1 class="hero-title hero-title-ref">
-          <?php if ($heroTail !== ''): ?>
-            <span class="hero-line"><?php echo htmlspecialchars($heroLead, ENT_QUOTES); ?></span>
-            <span class="hero-line">with <span class="hero-accent"><?php echo htmlspecialchars($heroTail, ENT_QUOTES); ?></span></span>
-          <?php else: ?>
-            <?php echo htmlspecialchars($heroTitleRaw, ENT_QUOTES); ?>
-          <?php endif; ?>
-        </h1>
-        <p class="hero-sub hero-sub-ref"><?php echo htmlspecialchars($s['hero_subtitle'], ENT_QUOTES); ?></p>
-        <div class="hero-actions">
-          <?php if ($isLoggedIn): ?>
-            <a class="btn primary" href="/app.php#/home">Open Dashboard</a>
-            <a class="btn outline" href="/app.php#/markets">Browse Markets</a>
-          <?php else: ?>
-            <a class="btn primary" href="<?php echo htmlspecialchars($s['hero_primary_url'], ENT_QUOTES); ?>"><?php echo htmlspecialchars($s['hero_primary_text'], ENT_QUOTES); ?></a>
-            <a class="btn outline" href="<?php echo htmlspecialchars($s['hero_secondary_url'], ENT_QUOTES); ?>"><?php echo htmlspecialchars($s['hero_secondary_text'], ENT_QUOTES); ?></a>
-          <?php endif; ?>
+  <main>
+    <section class="mex-hero">
+      <div class="mex-hero-copy">
+        <span class="mex-kicker"><?php echo e($t['kicker']); ?></span>
+        <h1><?php echo e($t['title']); ?></h1>
+        <p><?php echo e($t['subtitle']); ?></p>
+        <div class="mex-hero-actions">
+          <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/trade' : '/register.php?lang=' . e($lang) . '&next=' . $next; ?>"><?php echo e($t['primary']); ?></a>
+          <a class="mex-btn mex-btn-soft" href="<?php echo $isLoggedIn ? '/app.php#/home' : '/login.php?lang=' . e($lang) . '&next=' . $next; ?>"><?php echo e($t['secondary']); ?></a>
         </div>
-        <div class="hero-mini">Multiple Platforms, <span>Infinite Possibilities</span></div>
-        <div class="hero-platform-row">
-          <div class="hero-platform-pill"><span class="hero-platform-icon">▣</span> <?php echo $brand; ?> App</div>
-          <div class="hero-platform-pill"><span class="hero-platform-icon">◉</span> MetaTrader 4 &amp; 5</div>
-          <?php if ($tgBot !== ''): ?>
-            <div class="hero-platform-pill"><span class="hero-platform-icon">✈</span> Telegram Login</div>
-          <?php endif; ?>
-        </div>
-        <div class="hero-live-strip" id="heroLiveStrip">
-          <div class="hero-live-pill" data-live-symbol="BTCUSDT"><span>BTCUSDT</span><strong>—</strong><small>Loading</small></div>
-          <div class="hero-live-pill" data-live-symbol="EURUSD"><span>EURUSD</span><strong>—</strong><small>Loading</small></div>
-          <div class="hero-live-pill" data-live-symbol="XAUUSD"><span>XAUUSD</span><strong>—</strong><small>Loading</small></div>
+        <div class="mex-hero-stats">
+          <div><strong>70+</strong><span><?php echo e($t['stat_1']); ?></span></div>
+          <div><strong>24/7</strong><span><?php echo e($t['stat_2']); ?></span></div>
+          <div><strong>KYC</strong><span><?php echo e($t['stat_3']); ?></span></div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <div class="cookie-strip">
-    <div class="container cookie-strip-inner">
-      <div>By clicking “Accept All Cookies”, you agree to the storing of cookies on your device to enhance site navigation, analyze site usage, and assist in our marketing efforts.</div>
-      <button class="cookie-btn" type="button">Accept All Cookies</button>
-    </div>
-  </div>
-
-  <section id="about" class="landing-section landing-intro compact-top">
-    <div class="container narrow text-center">
-      <div class="section-kicker">Our products</div>
-      <p class="landing-intro-copy">Confidently trade with <?php echo $brand; ?> cutting-edge trading platforms offering groundbreaking levels of stability and reliability. Subscribe and execute on tight pricing and liquidity while keeping registration, KYC, deposits, withdrawals, and portfolio management inside one clean web workflow.</p>
-    </div>
-  </section>
-
-  <section id="products" class="landing-section products-section">
-    <div class="container">
-      <div class="pill-row center">
-        <button class="section-pill active" type="button" data-market-type="forex">Forex</button>
-        <button class="section-pill" type="button" data-market-type="commodities">Metals</button>
-        <button class="section-pill" type="button" data-market-type="stocks">Shares</button>
-        <button class="section-pill" type="button" data-market-type="forex">Indices</button>
-        <button class="section-pill" type="button" data-market-type="commodities">Commodities</button>
-      </div>
-
-      <div class="product-feature-grid refined">
-        <div class="product-copy-card">
-          <div class="section-kicker">Forex</div>
-          <h2 class="section-title left">Invest in <span>Forex</span></h2>
-          <p class="section-sub left">Trade over 55 major, cross, and exotic Forex pairs, and benefit from tight spreads in the industry.</p>
-          <div class="feature-box-grid">
-            <div class="feature-box"><strong>Up to 500:1</strong><small>Highest levels of leverage</small></div>
-            <div class="feature-box"><strong>0.0* Pips</strong><small>Tightest spreads in the industry</small></div>
-          </div>
+      <div class="mex-hero-terminal" aria-label="Market terminal preview">
+        <div class="mex-terminal-top">
+          <span></span><span></span><span></span>
+          <strong><?php echo $productEsc; ?> Desk</strong>
         </div>
-        <div class="product-visual-card refined">
-          <div class="phone-shell">
-            <div class="phone-glow"></div>
-            <div class="phone-screen" id="productPhoneWidget">
-              <div class="phone-header" id="productPhoneSymbol">EUR / USD</div>
-              <div class="phone-price" id="productPhonePrice">—</div>
-              <div class="phone-change" id="productPhoneChange">Loading</div>
-              <div class="phone-chart"></div>
+        <div class="mex-terminal-chart">
+          <i style="height:38%"></i><i style="height:52%"></i><i style="height:46%"></i><i style="height:67%"></i><i style="height:58%"></i><i style="height:74%"></i><i style="height:61%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:70%"></i><i style="height:84%"></i><i style="height:76%"></i>
+        </div>
+        <div class="mex-terminal-row"><span>BTCUSDT</span><strong data-price-symbol="BTCUSDT">--</strong><em>Binance</em></div>
+        <div class="mex-terminal-row"><span>EURUSD</span><strong data-price-symbol="EURUSD">--</strong><em>Delayed</em></div>
+        <div class="mex-terminal-row"><span>XAUUSD</span><strong data-price-symbol="XAUUSD">--</strong><em>Metals</em></div>
+      </div>
+    </section>
+
+    <section id="markets" class="mex-section">
+      <div class="mex-section-head">
+        <span class="mex-kicker">Markets</span>
+        <h2><?php echo e($t['markets_title']); ?></h2>
+        <p><?php echo e($t['markets_sub']); ?></p>
+      </div>
+      <div class="mex-market-grid">
+        <?php foreach ([
+          ['BTCUSDT', 'Bitcoin / Tether', 'crypto'],
+          ['ETHUSDT', 'Ethereum / Tether', 'crypto'],
+          ['EURUSD', 'Euro / Dollar', 'forex'],
+          ['AAPL', 'Apple Inc.', 'stocks'],
+          ['XAUUSD', 'Gold Spot', 'commodities'],
+          ['USOIL', 'WTI Crude Oil', 'commodities'],
+          ['ES_F', 'S&P 500 Futures', 'futures'],
+          ['2222', 'Saudi Aramco', 'arab'],
+        ] as $m): ?>
+          <article class="mex-market-card">
+            <div class="mex-market-icon"><?php echo e(substr($m[0], 0, 2)); ?></div>
+            <div>
+              <strong><?php echo e($m[0]); ?></strong>
+              <span><?php echo e($m[1]); ?></span>
             </div>
-          </div>
-          <div class="coin-stack coin-eur">EUR</div>
-          <div class="coin-stack coin-usd">USD</div>
-        </div>
+            <div class="mex-market-price">
+              <strong data-price-symbol="<?php echo e($m[0]); ?>" data-price-type="<?php echo e($m[2]); ?>">--</strong>
+              <small data-change-symbol="<?php echo e($m[0]); ?>"><?php echo e($t['loading']); ?></small>
+            </div>
+          </article>
+        <?php endforeach; ?>
       </div>
+    </section>
 
-      <div class="ticker-row refined" id="landingTickerRow">
-        <div class="ticker-card" data-symbol="NZDUSD"><span>NZDUSD</span><strong>—</strong><small>Loading</small></div>
-        <div class="ticker-card" data-symbol="GBPUSD"><span>GBPUSD</span><strong>—</strong><small>Loading</small></div>
-        <div class="ticker-card" data-symbol="USDCAD"><span>USDCAD</span><strong>—</strong><small>Loading</small></div>
-        <div class="ticker-card" data-symbol="AUDUSD"><span>AUDUSD</span><strong>—</strong><small>Loading</small></div>
-        <div class="ticker-card" data-symbol="USDCHF"><span>USDCHF</span><strong>—</strong><small>Loading</small></div>
-        <div class="ticker-card" data-symbol="EURUSD"><span>EURUSD</span><strong>—</strong><small>Loading</small></div>
+    <section id="platform" class="mex-section mex-feature-section">
+      <div class="mex-section-head">
+        <span class="mex-kicker"><?php echo $productEsc; ?></span>
+        <h2><?php echo e($t['platform_title']); ?></h2>
+        <p><?php echo e($t['platform_sub']); ?></p>
       </div>
-
-      <div class="center" style="margin-top:24px">
-        <a class="btn outline" href="/app.php#/markets">View More</a>
+      <div class="mex-feature-grid">
+        <article><span>01</span><h3><?php echo e($t['feature_trade']); ?></h3><p><?php echo e($t['feature_trade_text']); ?></p></article>
+        <article><span>02</span><h3><?php echo e($t['feature_wallet']); ?></h3><p><?php echo e($t['feature_wallet_text']); ?></p></article>
+        <article><span>03</span><h3><?php echo e($t['feature_earn']); ?></h3><p><?php echo e($t['feature_earn_text']); ?></p></article>
+        <article><span>04</span><h3><?php echo e($t['feature_admin']); ?></h3><p><?php echo e($t['feature_admin_text']); ?></p></article>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section id="platforms" class="landing-section platforms-section">
-    <div class="container">
-      <div class="section-kicker text-center">Platforms</div>
-      <h2 class="section-title text-center">Explore our Mobile Trading Platforms</h2>
-      <div class="pill-row center smaller">
-        <span class="section-pill active">MT4 / MT5</span>
-        <span class="section-pill">MultiBank Trader 4/5</span>
-        <span class="section-pill active-light"><?php echo $brand; ?> App <em>Coming Soon</em></span>
-      </div>
-
-      <div class="platform-split">
-        <div class="platform-copy">
-          <div class="section-kicker">Investing Redefined</div>
-          <h3>Get a smarter and faster mobile trading experience on the go, designed for you as a modern investor.</h3>
-          <ul class="platform-points">
-            <li>Trade seamlessly, anytime, anywhere.</li>
-            <li>Access multiple investment tools, all in one place.</li>
-            <li>Enjoy web-first onboarding, funding, and KYC.</li>
-            <li>Receive tailored real-time market updates.</li>
-          </ul>
-          <div class="step-list">
-            <div class="step-item"><span>1</span><div><strong>Download Mobile App</strong><small>High-performance app for iOS and Android.</small></div></div>
-            <div class="step-item"><span>2</span><div><strong>Register</strong><small>Open your account in minutes.</small></div></div>
-            <div class="step-item"><span>3</span><div><strong>Fund your account and start trading</strong><small>Top up your live wallet and begin.</small></div></div>
-          </div>
-        </div>
-        <div class="platform-art">
-          <div class="platform-device-group">
-            <div class="device-main"></div>
-            <div class="device-mini one"></div>
-            <div class="device-mini two"></div>
-            <div class="device-mini three"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="accounts" class="landing-section accounts-section">
-    <div class="container">
-      <div class="section-kicker text-center">Accounts</div>
-      <h2 class="section-title text-center smaller-title">Select an Account That Suits Your Trading Style</h2>
-      <div class="accounts-grid polished">
-        <article class="account-card standard">
-          <div class="account-icon">◔</div>
-          <h3><span>Standard</span> Account</h3>
-          <p>A commission-free account that is perfect for new traders looking to start investing. Standard accounts offer instant execution and stable spreads.</p>
-          <div class="account-points">
-            <div class="account-point"><i>✓</i> Minimum Initial Deposit of $50</div>
-            <div class="account-point"><i>✓</i> Spreads from 1.5 pips</div>
-            <div class="account-point"><i>✓</i> Leverage up to 1:500</div>
-          </div>
-        </article>
-        <article class="account-card pro">
-          <div class="account-icon">◎</div>
-          <h3><span>Pro</span> Account</h3>
-          <p>The pro account is suitable for traders looking to take advantage of zero commissions, tight spreads, and instant execution.</p>
-          <div class="account-points">
-            <div class="account-point"><i>✓</i> Minimum Initial Deposit of $1000</div>
-            <div class="account-point"><i>✓</i> Spreads from 0.8 pips</div>
-            <div class="account-point"><i>✓</i> Leverage up to 1:500</div>
-          </div>
-        </article>
-        <article class="account-card ecn">
-          <div class="account-icon">◉</div>
-          <h3><span>ECN</span> Account</h3>
-          <p>An ECN account is best suited for traders looking for raw spreads and instant execution.</p>
-          <div class="account-points">
-            <div class="account-point"><i>✓</i> Minimum Initial Deposit of $10000</div>
-            <div class="account-point"><i>✓</i> Spreads from 0.0 pips</div>
-            <div class="account-point"><i>✓</i> Leverage up to 1:500</div>
-          </div>
-        </article>
-      </div>
-
-      <div class="bonus-band refined" id="funding">
-        <div class="bonus-card bonus-card-left"><div class="bonus-big">25%</div><div class="bonus-label">Deposit Bonus</div></div>
-        <div class="bonus-card bonus-card-right">
-          <h3>Receive up to <span>$40,000</span></h3>
-          <p>in tradable and withdrawable bonuses</p>
-          <?php if ($isLoggedIn): ?>
-            <a class="btn primary" href="/app.php#/wallet">Fund Live Account</a>
-          <?php else: ?>
-            <a class="btn primary" href="/register.php">Start Trading Now</a>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="landing-section">
-    <div class="container">
-      <h2 class="section-title text-center smaller-title">Choose Where To Go Next</h2>
-      <div class="next-grid refined">
-        <a class="next-card" href="#about"><div class="next-icon">📣</div><h3>Why Us</h3></a>
-        <a class="next-card" href="/app.php#/wallet"><div class="next-icon">💼</div><h3>Account Funding</h3></a>
-        <a class="next-card" href="#support"><div class="next-icon">🛡</div><h3>Support</h3></a>
-      </div>
-    </div>
-  </section>
-
-  <section class="landing-section landing-cta">
-    <div class="container">
-      <div class="join-band">
-        <div>
-          <div class="section-kicker light">Want to get started?</div>
-          <h3>Open your account and move from landing to dashboard in one clean workflow.</h3>
-        </div>
-        <div class="join-actions">
-          <?php if ($isLoggedIn): ?>
-            <a class="btn dark" href="/app.php#/home">Open Dashboard</a>
-          <?php else: ?>
-            <a class="btn dark" href="/register.php?next=<?php echo rawurlencode('/app.php#/home'); ?>">Join <?php echo $brand; ?></a>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <footer id="footer" class="landing-footer">
-    <div class="container footer-topline">
-      <div class="footer-brand"><?php echo $brand; ?><small><?php echo htmlspecialchars($s['tagline'], ENT_QUOTES); ?></small></div>
-      <div class="footer-mini-links"><a href="#">My KYC</a><a href="#support">Contact Us</a><a href="#support">Support</a></div>
-    </div>
-    <div class="container footer-grid-landing">
+    <section id="earn" class="mex-section mex-split-section">
       <div>
-        <h4>About</h4>
-        <a href="#about">Why Us</a>
-        <a href="#">Regulations</a>
+        <span class="mex-kicker">Earn</span>
+        <h2><?php echo e($t['earn_title']); ?></h2>
+        <p><?php echo e($t['earn_sub']); ?></p>
       </div>
+      <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/invest' : '/register.php?lang=' . e($lang) . '&next=' . rawurlencode('/app.php#/invest'); ?>"><?php echo e($t['nav_earn']); ?></a>
+    </section>
+
+    <section id="funding" class="mex-section mex-split-section">
       <div>
-        <h4>Products</h4>
-        <a href="/app.php#/markets">Forex</a>
-        <a href="/app.php#/markets">Metals</a>
-        <a href="/app.php#/markets">Shares</a>
-        <a href="/app.php#/markets">Indices</a>
-        <a href="/app.php#/markets">Commodities</a>
+        <span class="mex-kicker">Funding</span>
+        <h2><?php echo e($t['funding_title']); ?></h2>
+        <p><?php echo e($t['funding_sub']); ?></p>
       </div>
-      <div>
-        <h4>Platforms</h4>
-        <a href="/app.php#/trade"><?php echo $brand; ?> App</a>
-        <a href="/app.php#/trade">MT4 Platform</a>
-        <a href="/app.php#/trade">MT5 Platform</a>
-        <a href="/app.php#/trade">Web Terminal</a>
+      <a class="mex-btn mex-btn-soft" href="<?php echo $isLoggedIn ? '/app.php#/deposit' : '/login.php?lang=' . e($lang) . '&next=' . rawurlencode('/app.php#/deposit'); ?>"><?php echo e($t['nav_funding']); ?></a>
+    </section>
+
+    <section id="support" class="mex-section mex-cta">
+      <span class="mex-kicker">Client area</span>
+      <h2><?php echo e($t['support_title']); ?></h2>
+      <p><?php echo e($t['support_sub']); ?></p>
+      <div class="mex-hero-actions">
+        <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/home' : '/login.php?lang=' . e($lang) . '&next=' . $next; ?>"><?php echo $isLoggedIn ? e($t['dashboard']) : e($t['login']); ?></a>
+        <a class="mex-btn mex-btn-soft" href="/app.php#/support"><?php echo e($t['nav_support']); ?></a>
       </div>
-      <div>
-        <h4>Accounts</h4>
-        <a href="/register.php">Standard</a>
-        <a href="/register.php">Pro</a>
-        <a href="/register.php">ECN</a>
-        <a href="/app.php#/wallet">Account Funding</a>
-        <a href="/app.php#/wallet">Withdrawals</a>
-      </div>
-      <div id="support">
-        <h4>Tools</h4>
-        <a href="/app.php#/trade">Trading Tools</a>
-        <a href="/app.php#/markets">Trading Conditions</a>
-        <a href="/app.php#/invest">Education</a>
-        <a href="mailto:<?php echo htmlspecialchars($s['support_email'], ENT_QUOTES); ?>">Support Email</a>
-        <?php if ($tgBot !== ''): ?><a href="/login.php?next=<?php echo rawurlencode('/app.php#/home'); ?>#telegram-login">Telegram Sign In</a><?php endif; ?>
-      </div>
-    </div>
-    <div class="container footer-bottomline">
-      <div class="footer-accept">We accept <span>VISA</span> <span>Mastercard</span></div>
-      <div class="footer-policy-row">
-        <a href="#">Privacy Policy</a>
-        <a href="#">Cookie Policy</a>
-        <a href="#">Terms &amp; Conditions</a>
-        <a href="#">Risk Warning</a>
-      </div>
-      <p class="footer-disclaimer"><?php echo htmlspecialchars($s['public_footer_note'], ENT_QUOTES); ?> Contact: <a href="mailto:<?php echo htmlspecialchars($s['support_email'], ENT_QUOTES); ?>"><?php echo htmlspecialchars($s['support_email'], ENT_QUOTES); ?></a></p>
-    </div>
+    </section>
+  </main>
+
+  <footer class="mex-landing-footer">
+    <strong><?php echo $brandEsc; ?></strong>
+    <span><?php echo e($t['footer']); ?></span>
   </footer>
-  <script src="/assets/js/public-site.js?v=<?php echo @filemtime(__DIR__.'/assets/js/public-site.js') ?: time(); ?>" defer></script>
+
+  <script>
+    (function(){
+      var symbols = Array.from(document.querySelectorAll('[data-price-symbol]')).map(function(el){ return el.getAttribute('data-price-symbol'); });
+      symbols = Array.from(new Set(symbols.filter(Boolean)));
+      if (!symbols.length) return;
+      function fmt(v){
+        var n = Number(v);
+        if (!isFinite(n) || n <= 0) return '--';
+        if (n >= 1000) return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        if (n >= 1) return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+        return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 6 });
+      }
+      fetch('/api/quotes.php?symbols=' + encodeURIComponent(symbols.join(',')) + '&purpose=landing', { headers: { Accept: 'application/json' } })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(data){
+          if (!data) return;
+          var quotes = data.quotes || data.data || data.items || [];
+          if (!Array.isArray(quotes) && typeof quotes === 'object') quotes = Object.values(quotes);
+          quotes.forEach(function(q){
+            var sym = String(q.symbol || q.market || '').toUpperCase();
+            var price = q.price || q.last || q.bid || q.close;
+            var change = q.change_pct || q.changePercent || q.change || 0;
+            document.querySelectorAll('[data-price-symbol="' + sym + '"]').forEach(function(el){ el.textContent = fmt(price); });
+            document.querySelectorAll('[data-change-symbol="' + sym + '"]').forEach(function(el){
+              var c = Number(change);
+              el.textContent = isFinite(c) ? ((c >= 0 ? '+' : '') + c.toFixed(2) + '%') : 'Delayed';
+              el.className = c < 0 ? 'down' : 'up';
+            });
+          });
+        })
+        .catch(function(){});
+    })();
+  </script>
 </body>
 </html>

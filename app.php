@@ -37,7 +37,8 @@ if (!$jsFile) {
   exit;
 }
 
-$brandName = htmlspecialchars(site_setting('site.brand', 'VertexPluse'), ENT_QUOTES);
+$productName = site_setting('site.brand', 'VertexPluse');
+$brandName = htmlspecialchars('MEX Group', ENT_QUOTES);
 $brandTagline = htmlspecialchars(site_setting('site.tagline', 'Professional trading & investment platform'), ENT_QUOTES);
 $supportEmail = json_encode(site_setting('site.support_email', 'support@vertexpluse.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 ?>
@@ -69,14 +70,15 @@ $supportEmail = json_encode(site_setting('site.support_email', 'support@vertexpl
   <div id="app">
     <div class="boot-screen">
       <div style="text-align:center">
-        <div class="boot-mark" style="margin:0 auto 16px">V</div>
+        <div class="boot-mark" style="margin:0 auto 16px">M</div>
         <strong style="font-size:14px"><?php echo $brandName; ?></strong>
         <p style="color:rgba(200,220,255,0.5);font-size:12px;margin-top:6px">Loading workspace...</p>
       </div>
     </div>
   </div>
   <script>
-    window.__BRAND_NAME = <?php echo json_encode(site_setting('site.brand', 'VertexPluse'), JSON_UNESCAPED_UNICODE); ?>;
+    window.__BRAND_NAME = <?php echo json_encode('MEX Group', JSON_UNESCAPED_UNICODE); ?>;
+    window.__BRAND_PRODUCT = <?php echo json_encode($productName, JSON_UNESCAPED_UNICODE); ?>;
     window.__BRAND_TAGLINE = <?php echo json_encode(site_setting('site.tagline', 'Professional trading & investment platform'), JSON_UNESCAPED_UNICODE); ?>;
     window.__SUPPORT_EMAIL = <?php echo $supportEmail; ?>;
   </script>

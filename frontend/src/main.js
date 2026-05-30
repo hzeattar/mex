@@ -4,12 +4,13 @@ import { createStore, set, get, subscribe } from './state/store.js';
 import { defineRoute, startRouter, navigate } from './router.js';
 import { api } from './services/api.js';
 import { renderShell } from './components/layout/Shell.js';
+import { initI18n, t, translateDom } from './utils/i18n.js';
 
 // Initial state
 const initialState = {
   booted: false,
   user: null,
-  brand: { name: 'VertexPluse', tagline: 'Professional trading workspace' },
+  brand: { name: 'MEX Group', product: 'VertexPluse', tagline: 'Professional trading workspace' },
   mode: localStorage.getItem('vp_mode') || 'demo',
   route: 'home',
   // Markets
@@ -60,11 +61,18 @@ defineRoute('account', () => import('./views/account.js'));
 async function boot() {
   const app = document.getElementById('app');
   try {
+    await initI18n();
     const data = await api('/bootstrap.php', { timeout: 9000 });
     if (!data || data.ok === false) throw new Error(data?.error || 'Bootstrap failed');
 
     set('user', data.user || null);
-    set('brand', { ...get('brand'), ...(data.brand || {}) });
+    const remoteBrand = data.brand || {};
+    set('brand', {
+      ...get('brand'),
+      product: window.__BRAND_PRODUCT || remoteBrand.name || get('brand').product || 'VertexPluse',
+      tagline: remoteBrand.tagline || get('brand').tagline,
+      name: window.__BRAND_NAME || 'MEX Group',
+    });
     set('wallet', data.wallet || null);
     set('level', data.level || null);
     set('kyc', data.kyc || null);
@@ -73,6 +81,7 @@ async function boot() {
 
     // Render shell
     renderShell(app);
+    translateDom(app);
 
     // Start router
     const view = app.querySelector('#view');
@@ -81,11 +90,12 @@ async function boot() {
     app.innerHTML = `
       <div class="min-h-screen flex items-center justify-center p-8">
         <div class="card max-w-md text-center space-y-4">
-          <h1 class="text-xl font-bold text-red">Connection Failed</h1>
+          <h1 class="text-xl font-bold text-red">${t('common.connection_failed', 'Connection failed')}</h1>
           <p class="text-muted text-sm">${err.message}</p>
-          <button class="btn-primary" onclick="location.reload()">Retry</button>
+          <button class="btn-primary" onclick="location.reload()">${t('common.retry', 'Retry')}</button>
         </div>
       </div>`;
+    translateDom(app);
   }
 }
 

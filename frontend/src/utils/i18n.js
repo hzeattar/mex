@@ -1,37 +1,196 @@
-// i18n - Internationalization service
-let locale = localStorage.getItem('vp_lang') || navigator.language?.slice(0, 2) || 'en';
-let translations = {};
-
+// Lightweight i18n service for the Vite client shell.
+// EN and AR are first-class. Other stored locales safely fall back to EN.
 const SUPPORTED = ['en', 'ar', 'ru', 'de', 'fr', 'hi', 'zh'];
+const PRIMARY = ['en', 'ar'];
+const FALLBACK_LOCALE = 'en';
+
+const BUILT_INS = {
+  en: {
+    'brand.name': 'MEX Group',
+    'brand.product': 'VertexPluse',
+    'brand.tagline': 'Professional trading workspace',
+    'nav.home': 'Home',
+    'nav.trade': 'Trade',
+    'nav.portfolio': 'Portfolio',
+    'nav.wallet': 'Funds',
+    'nav.earn': 'Earn',
+    'nav.news': 'News',
+    'nav.support': 'Support',
+    'nav.account': 'Account',
+    'common.loading': 'Loading...',
+    'common.retry': 'Retry',
+    'common.connection_failed': 'Connection failed',
+    'common.no_notifications': 'No notifications',
+    'common.failed_to_load': 'Failed to load',
+    'common.notifications': 'Notifications',
+    'mode.real': 'Real',
+    'mode.demo': 'Demo',
+    'topbar.balance': 'Balance',
+    'auth.service_reconnecting': 'Service reconnecting, please retry in a moment.',
+  },
+  ar: {
+    'brand.name': 'MEX Group',
+    'brand.product': 'VertexPluse',
+    'brand.tagline': 'مساحة تداول احترافية',
+    'nav.home': 'الرئيسية',
+    'nav.trade': 'التداول',
+    'nav.portfolio': 'المحفظة',
+    'nav.wallet': 'الأموال',
+    'nav.earn': 'العقود',
+    'nav.news': 'الأخبار',
+    'nav.support': 'الدعم',
+    'nav.account': 'الحساب',
+    'common.loading': 'جاري التحميل...',
+    'common.retry': 'إعادة المحاولة',
+    'common.connection_failed': 'تعذر الاتصال',
+    'common.no_notifications': 'لا توجد إشعارات',
+    'common.failed_to_load': 'تعذر التحميل',
+    'common.notifications': 'الإشعارات',
+    'mode.real': 'حقيقي',
+    'mode.demo': 'تجريبي',
+    'topbar.balance': 'الرصيد',
+    'auth.service_reconnecting': 'الخدمة تعيد الاتصال الآن، حاول مرة أخرى بعد لحظات.',
+  },
+};
+
+const PHRASES = {
+  ar: {
+    Home: 'الرئيسية',
+    Trade: 'التداول',
+    Portfolio: 'المحفظة',
+    Funds: 'الأموال',
+    Earn: 'العقود',
+    News: 'الأخبار',
+    Support: 'الدعم',
+    Account: 'الحساب',
+    Deposit: 'إيداع',
+    Withdraw: 'سحب',
+    KYC: 'التحقق',
+    Wallet: 'الأموال',
+    Markets: 'الأسواق',
+    'Fast watch': 'متابعة سريعة',
+    'Copy Trading': 'نسخ الصفقات',
+    Contracts: 'العقود',
+    'Open Positions': 'الصفقات المفتوحة',
+    'Open positions': 'الصفقات المفتوحة',
+    'No open positions yet.': 'لا توجد صفقات مفتوحة بعد.',
+    'Order Ticket': 'تذكرة الأمر',
+    Market: 'سوق',
+    Limit: 'محدد',
+    Stop: 'إيقاف',
+    Sell: 'بيع',
+    Buy: 'شراء',
+    'Buy / Long': 'شراء / لونج',
+    'Sell / Short': 'بيع / شورت',
+    Positions: 'الصفقات',
+    Orders: 'الأوامر',
+    History: 'السجل',
+    'Real account required': 'مطلوب حساب حقيقي',
+    'KYC required': 'مطلوب التحقق',
+    'Copy Real': 'نسخ حقيقي',
+    'Current level': 'المستوى الحالي',
+    'Next level': 'المستوى التالي',
+    'Real available': 'المتاح الحقيقي',
+    'Active copies': 'نسخ نشطة',
+    'Active contracts': 'عقود نشطة',
+    'Manual requests': 'طلبات يدوية',
+    Deposits: 'الإيداعات',
+    Withdrawals: 'السحوبات',
+    Verification: 'التحقق',
+    Approved: 'مقبول',
+    Pending: 'قيد المراجعة',
+    Rejected: 'مرفوض',
+    'Latest transactions': 'آخر المعاملات',
+    Profile: 'الملف الشخصي',
+    Security: 'الأمان',
+    Preferences: 'التفضيلات',
+    Capabilities: 'الصلاحيات',
+    'Connection failed': 'تعذر الاتصال',
+    Retry: 'إعادة المحاولة',
+    Notifications: 'الإشعارات',
+    'No notifications': 'لا توجد إشعارات',
+    'Failed to load': 'تعذر التحميل',
+  },
+};
+
+let locale = localStorage.getItem('vp_lang') || navigator.language?.slice(0, 2) || FALLBACK_LOCALE;
+let translations = { ...BUILT_INS.en };
+
+function normalizeLocale(lang) {
+  const normalized = String(lang || FALLBACK_LOCALE).slice(0, 2).toLowerCase();
+  if (!SUPPORTED.includes(normalized)) return FALLBACK_LOCALE;
+  return normalized;
+}
 
 export async function initI18n() {
-  if (!SUPPORTED.includes(locale)) locale = 'en';
+  locale = normalizeLocale(locale);
+  if (!PRIMARY.includes(locale)) locale = FALLBACK_LOCALE;
   await loadLocale(locale);
 }
 
 export async function loadLocale(lang) {
-  if (!SUPPORTED.includes(lang)) lang = 'en';
-  locale = lang;
+  locale = normalizeLocale(lang);
+  if (!PRIMARY.includes(locale)) locale = FALLBACK_LOCALE;
+
+  let remote = {};
   try {
-    const res = await fetch(`/assets/i18n/${lang}.json`);
-    if (res.ok) translations = await res.json();
-    else translations = {};
+    const res = await fetch(`/assets/i18n/${locale}.json`, { cache: 'no-store' });
+    if (res.ok) remote = await res.json();
   } catch (e) {
-    translations = {};
+    remote = {};
   }
-  localStorage.setItem('vp_lang', lang);
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+  translations = {
+    ...BUILT_INS.en,
+    ...(BUILT_INS[locale] || {}),
+    ...(remote && typeof remote === 'object' ? remote : {}),
+  };
+
+  localStorage.setItem('vp_lang', locale);
+  document.documentElement.lang = locale;
+  document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+  document.body?.classList.toggle('rtl', locale === 'ar');
+  document.body?.classList.toggle('ltr', locale !== 'ar');
+  return translations;
 }
 
 export function t(key, fallback = '') {
-  return translations[key] || fallback || key;
+  return translations[key] || BUILT_INS.en[key] || fallback || key;
 }
 
 export function currentLocale() {
   return locale;
 }
 
+export function isRTL() {
+  return locale === 'ar';
+}
+
 export function setLocale(lang) {
   loadLocale(lang).then(() => window.location.reload());
+}
+
+export function translateDom(root = document) {
+  if (locale !== 'ar') return;
+  const phraseMap = PHRASES.ar;
+  const target = root instanceof Element || root instanceof Document ? root : document;
+  const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (parent.closest('[data-no-i18n],script,style,textarea,input,select')) return NodeFilter.FILTER_REJECT;
+      const text = node.nodeValue || '';
+      const trimmed = text.trim();
+      if (!trimmed || trimmed.length > 80 || !phraseMap[trimmed]) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const text = node.nodeValue || '';
+    const trimmed = text.trim();
+    node.nodeValue = text.replace(trimmed, phraseMap[trimmed]);
+  }
 }

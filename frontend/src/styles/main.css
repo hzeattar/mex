@@ -38,6 +38,24 @@
   .input { @apply w-full rounded-[var(--radius)] border border-line bg-surface px-3 py-2 text-xs text-text placeholder:text-muted/50 focus:outline-none focus:border-accent/50 transition-colors; }
 
   /* Navigation */
+  .mex-shell-brand {
+    @apply flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-panel;
+  }
+  .mex-shell-brand img {
+    @apply h-8 w-8 rounded-lg object-contain bg-gradient-to-br from-accent to-buy p-1.5 shadow-lg;
+  }
+  .mex-shell-brand strong {
+    @apply block text-sm font-black tracking-tight;
+  }
+  .mex-shell-brand small {
+    @apply -mt-0.5 block text-[10px] font-bold uppercase tracking-wider text-muted;
+  }
+  .mex-shell-brand-sm img {
+    @apply h-7 w-7 rounded-md;
+  }
+  .mex-shell-brand-sm strong {
+    @apply text-xs;
+  }
   .nav-tab { @apply flex items-center gap-1.5 px-3 h-full text-xs text-muted hover:text-text transition-colors border-b-2 border-transparent; }
   .nav-tab.active { @apply text-text border-accent; }
   .nav-tab svg { @apply w-3.5 h-3.5; }
@@ -153,6 +171,20 @@
   }
   .home-support-card small {
     @apply text-sm leading-6 text-muted;
+  }
+
+  html[dir="rtl"] body {
+    font-family: Tahoma, 'Inter', system-ui, sans-serif;
+  }
+  html[dir="rtl"] .nav-tab,
+  html[dir="rtl"] .mobile-tab,
+  html[dir="rtl"] .btn,
+  html[dir="rtl"] .badge {
+    letter-spacing: 0;
+  }
+  html[dir="rtl"] .notif-panel {
+    left: 1rem;
+    right: auto;
   }
 
   /* Earn desk */

@@ -314,6 +314,35 @@ function require_pdo_driver(string $driverName): void {
   }
 }
 
+function db_connect_retryable(Throwable $e): bool {
+  $message = strtolower($e->getMessage());
+  $code = (string)$e->getCode();
+  $mysqlErrorCode = null;
+
+  if ($e instanceof PDOException && isset($e->errorInfo) && is_array($e->errorInfo)) {
+    $mysqlErrorCode = isset($e->errorInfo[1]) ? (int)$e->errorInfo[1] : null;
+  }
+
+  if (in_array($mysqlErrorCode, [2006, 2013], true)) return true;
+  if (in_array($code, ['2006', '2013'], true)) return true;
+
+  if ($code === 'HY000') {
+    return str_contains($message, 'server has gone away')
+      || str_contains($message, 'lost connection')
+      || str_contains($message, 'connection timed out')
+      || str_contains($message, 'connection timeout')
+      || str_contains($message, 'temporarily unavailable');
+  }
+
+  return str_contains($message, 'server has gone away')
+    || str_contains($message, 'lost connection to mysql server');
+}
+
+function db_connect_backoff(int $attempt): void {
+  $delayUs = min(750000, 150000 * ($attempt + 1));
+  usleep($delayUs);
+}
+
 
 function db(): PDO {
   static $pdo = null;
@@ -376,11 +405,31 @@ function db(): PDO {
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
       PDO::ATTR_TIMEOUT => $connectTimeout,
     ];
-    $persistentDefault = railway_runtime() ? '0' : '1';
-    if (PHP_SAPI !== 'cli' && (string)env('DB_PERSISTENT', $persistentDefault) !== '0') {
+    $persistentRaw = strtolower(trim((string)env('DB_PERSISTENT', $railway ? '0' : '1')));
+    $persistentEnabled = !$railway
+      && PHP_SAPI !== 'cli'
+      && !in_array($persistentRaw, ['0', 'false', 'no', 'off'], true);
+    if ($persistentEnabled) {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
     }
-    $pdo = new PDO($dsn, $user, $pass, $pdoOptions);
+    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '2' : '0')));
+    $lastConnectError = null;
+    for ($attempt = 0; $attempt <= $connectRetries; $attempt++) {
+      try {
+        $pdo = new PDO($dsn, $user, $pass, $pdoOptions);
+        break;
+      } catch (Throwable $e) {
+        $lastConnectError = $e;
+        if ($attempt >= $connectRetries || !db_connect_retryable($e)) {
+          throw $e;
+        }
+        db_connect_backoff($attempt);
+      }
+    }
+    if (!$pdo instanceof PDO) {
+      if ($lastConnectError instanceof Throwable) throw $lastConnectError;
+      throw new RuntimeException('Could not connect to the configured database.');
+    }
 
     // Auto-install/upgrade schema (MySQL + SQLite). Idempotent & safe to call often.
     static $bootstrapped = false;

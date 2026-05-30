@@ -1,4 +1,6 @@
 // Hash-based SPA router with lazy-loaded views
+import { t, translateDom } from './utils/i18n.js';
+
 const routes = new Map();
 let currentRoute = null;
 let beforeHooks = [];
@@ -47,9 +49,11 @@ export async function startRouter(container) {
         if (typeof html === 'string') container.innerHTML = html;
       }
       if (route.module.mount) route.module.mount(container, enriched);
+      translateDom(container);
     } catch (err) {
       console.error('Route error:', err);
-      container.innerHTML = `<div class="flex items-center justify-center min-h-[40vh]"><div class="text-center"><p class="text-red text-sm">${err.message || 'Page failed to load'}</p><button class="btn-ghost btn-sm mt-3" onclick="location.reload()">Retry</button></div></div>`;
+      container.innerHTML = `<div class="flex items-center justify-center min-h-[40vh]"><div class="text-center"><p class="text-red text-sm">${err.message || t('common.failed_to_load', 'Page failed to load')}</p><button class="btn-ghost btn-sm mt-3" onclick="location.reload()">${t('common.retry', 'Retry')}</button></div></div>`;
+      translateDom(container);
     }
   };
 
