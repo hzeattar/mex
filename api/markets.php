@@ -212,7 +212,8 @@ function vp_supported_rescue_limits(string $scope, string $type): array {
 function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   if (!$items || !in_array($scope, ['home', 'trade'], true)) return $items;
   $started = microtime(true);
-  $budgetMs = max(500, min(6000, (int)env('MARKETS_RESCUE_BUDGET_MS', $scope === 'home' ? '3200' : '2500')));
+  $budgetMs = max(300, min(2500, (int)env('MARKETS_RESCUE_BUDGET_MS', $scope === 'home' ? '900' : '700')));
+  $allowNonCryptoRescue = ((int)($_GET['rescue_noncrypto'] ?? env('MARKETS_RESCUE_NONCRYPTO', '0')) === 1);
 
   $defsByKey = [];
   foreach (vp_supported_defs_for('all', $scope) as $def) {
@@ -234,6 +235,7 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
 
   foreach ($groups as $type => $entries) {
     if (((microtime(true) - $started) * 1000) >= $budgetMs) break;
+    if ($type !== 'crypto' && !$allowNonCryptoRescue) continue;
     $limits = vp_supported_rescue_limits($scope, $type);
     $batch = max(1, (int)($limits['batch'] ?? 2));
     $slice = array_slice($entries, 0, $batch);
@@ -609,7 +611,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v12_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
+$cacheKey = 'markets_v13_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '18') : (int)env('MARKETS_CACHE_TTL', '60');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -645,7 +647,7 @@ if ($fastSupported) {
     if (count($rows) > $limit) $rows = array_slice($rows, 0, $limit);
   }
 
-  $items = vp_market_items_from_rows($rows, $typeAlias, $scope, false, true, [], false);
+  $items = vp_market_items_from_rows($rows, $typeAlias, $scope, $withQuotes, true, [], false);
   if ($withQuotes && $allowListRescue) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
