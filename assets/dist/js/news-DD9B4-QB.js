@@ -1,4 +1,4 @@
-import{i as r,b as d,e as s}from"./main-B7BYCc04.js";function o(){return`
+import{i as r,a as d,e as s}from"./main-DC6eObyD.js";function o(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">
