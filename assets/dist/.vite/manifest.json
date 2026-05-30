@@ -6,7 +6,7 @@
     "isDynamicEntry": true
   },
   "src/main.js": {
-    "file": "js/main-Ca1FYfWG.js",
+    "file": "js/main-CH6stR6A.js",
     "name": "main",
     "src": "src/main.js",
     "isEntry": true,
@@ -33,7 +33,7 @@
     "isDynamicEntry": true
   },
   "src/views/account.js": {
-    "file": "js/account-BnMWt9bD.js",
+    "file": "js/account-Bx-ke1yh.js",
     "name": "account",
     "src": "src/views/account.js",
     "isDynamicEntry": true,
@@ -42,7 +42,7 @@
     ]
   },
   "src/views/funding.js": {
-    "file": "js/funding-fVnZNOjg.js",
+    "file": "js/funding-BdsNOj40.js",
     "name": "funding",
     "src": "src/views/funding.js",
     "isDynamicEntry": true,
@@ -51,7 +51,7 @@
     ]
   },
   "src/views/home.js": {
-    "file": "js/home-DeE_LdvW.js",
+    "file": "js/home-BWUClvGI.js",
     "name": "home",
     "src": "src/views/home.js",
     "isDynamicEntry": true,
@@ -61,7 +61,7 @@
     ]
   },
   "src/views/invest.js": {
-    "file": "js/invest-CNTYCtZA.js",
+    "file": "js/invest-BiskVm4T.js",
     "name": "invest",
     "src": "src/views/invest.js",
     "isDynamicEntry": true,
@@ -71,7 +71,7 @@
     ]
   },
   "src/views/kyc.js": {
-    "file": "js/kyc-QmhWDgZ8.js",
+    "file": "js/kyc-DdyQG9dM.js",
     "name": "kyc",
     "src": "src/views/kyc.js",
     "isDynamicEntry": true,
@@ -80,7 +80,7 @@
     ]
   },
   "src/views/news.js": {
-    "file": "js/news-ChZkR8tE.js",
+    "file": "js/news-DpPZpGte.js",
     "name": "news",
     "src": "src/views/news.js",
     "isDynamicEntry": true,
@@ -89,7 +89,7 @@
     ]
   },
   "src/views/portfolio.js": {
-    "file": "js/portfolio-CGCFFxwK.js",
+    "file": "js/portfolio-CMrGzmQa.js",
     "name": "portfolio",
     "src": "src/views/portfolio.js",
     "isDynamicEntry": true,
@@ -98,7 +98,7 @@
     ]
   },
   "src/views/support.js": {
-    "file": "js/support-CnpsYGC4.js",
+    "file": "js/support-C1Ppi6XB.js",
     "name": "support",
     "src": "src/views/support.js",
     "isDynamicEntry": true,
@@ -107,7 +107,7 @@
     ]
   },
   "src/views/trade.js": {
-    "file": "js/trade-PNXTTd_a.js",
+    "file": "js/trade-CLh2qB3y.js",
     "name": "trade",
     "src": "src/views/trade.js",
     "isDynamicEntry": true,
@@ -120,7 +120,7 @@
     ]
   },
   "src/views/wallet.js": {
-    "file": "js/wallet-BtQ2PPv6.js",
+    "file": "js/wallet-BPzvuaPG.js",
     "name": "wallet",
     "src": "src/views/wallet.js",
     "isDynamicEntry": true,
@@ -129,7 +129,7 @@
     ]
   },
   "style.css": {
-    "file": "css/style-DoYrpdYe.css",
+    "file": "css/style-BDh-WJMR.css",
     "src": "style.css"
   }
 }

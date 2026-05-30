@@ -1,4 +1,4 @@
-import{s as P,g as v,i as p,m as g,e as i,b as M,c as x,h as H,f as E}from"./main-Ca1FYfWG.js";function z(t){const s=t._path||"deposit",n=t.action||"",a=s.includes("withdraw")||n==="withdraw"?"withdraw":"deposit",e=a==="deposit",o=v("wallet")||{},d=v("kyc")||{},l=v("level")||{},c=o.real||{},u=o.demo||{},r=v("mode")==="real"?"real":"demo",m=l.current||{};return`
+import{s as P,g as v,i as p,m as g,e as i,b as M,c as x,h as H,f as E}from"./main-CH6stR6A.js";function z(t){const s=t._path||"deposit",n=t.action||"",a=s.includes("withdraw")||n==="withdraw"?"withdraw":"deposit",e=a==="deposit",o=v("wallet")||{},d=v("kyc")||{},l=v("level")||{},c=o.real||{},u=o.demo||{},r=v("mode")==="real"?"real":"demo",m=l.current||{};return`
     <div class="space-y-5 animate-fade-in funding-page">
       <section class="funding-hero">
         <div>

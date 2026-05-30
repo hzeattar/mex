@@ -18,6 +18,7 @@ export function render() {
           <p>Track live funds, demo balance, ledger movements, deposits, withdrawals, and admin review state.</p>
         </div>
         <div class="wallet-actions">
+          <button id="toggle-balance" class="btn-ghost btn-sm" data-hidden="0">${icons.eye}</button>
           <a href="#/deposit" class="btn-primary btn-sm">${icons.deposit} Deposit</a>
           <a href="#/withdraw" class="btn-ghost btn-sm">${icons.withdraw} Withdraw</a>
         </div>
@@ -69,6 +70,18 @@ export function render() {
 export function mount(container) {
   loadWallet(container);
   container.querySelector('#refresh-wallet')?.addEventListener('click', () => loadWallet(container));
+  // Toggle balance visibility
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('#toggle-balance');
+    if (!btn) return;
+    const isHidden = btn.dataset.hidden === '1';
+    btn.dataset.hidden = isHidden ? '0' : '1';
+    btn.innerHTML = isHidden ? icons.eye : icons.eyeOff;
+    container.querySelectorAll('[data-balance-value]').forEach(el => {
+      el.style.filter = isHidden ? '' : 'blur(6px)';
+      el.style.userSelect = isHidden ? '' : 'none';
+    });
+  });
 }
 
 async function loadWallet(container) {
@@ -95,7 +108,7 @@ function walletBlock(w, type) {
     <div class="wallet-balance-head">
       <div>
         <span>${real ? 'Real wallet' : 'Demo wallet'}</span>
-        <strong>${money(w.balance || 0)}</strong>
+        <strong data-balance-value>${money(w.balance || 0)}</strong>
         <small>${esc(w.currency || (real ? 'USDT' : 'USDT_DEMO'))}</small>
       </div>
       <div class="wallet-icon">${icons.wallet}</div>
