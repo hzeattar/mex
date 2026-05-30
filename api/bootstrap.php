@@ -11,9 +11,18 @@ require_once __DIR__ . '/lib/levels.php';
 
 require_method('GET');
 
-$pdo = auth_bootstrap_schema();
 $uid = require_auth();
-$row = auth_find_user($pdo, $uid);
+try {
+  $pdo = auth_bootstrap_schema();
+  $row = auth_find_user($pdo, $uid);
+} catch (Throwable $e) {
+  error_log('MEX bootstrap database unavailable: ' . $e->getMessage());
+  json_response([
+    'ok' => false,
+    'error' => 'Service reconnecting, please retry in a moment.',
+    'code' => 'service_reconnecting',
+  ], 503);
+}
 if (!$row) {
   clear_session_user_id();
   json_response(['ok' => false, 'error' => 'Unauthorized'], 401);

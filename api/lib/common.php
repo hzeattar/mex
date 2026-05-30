@@ -384,11 +384,12 @@ function db(): PDO {
     }
     $pass = (string)env('DB_PASS', '');
     if (env_placeholder_value($pass) && $mysqlPass !== '') $pass = $mysqlPass;
-    // Railway services should prefer the private service DNS by default.
-    // The public TCP proxy is useful for local tooling, but it adds latency and
-    // has been the source of slow auth/bootstrap requests in production.
-    $usePublicProxy = strtolower((string)env('DB_USE_PUBLIC_PROXY', $railway ? '0' : 'auto'));
-    if ($railway && in_array($usePublicProxy, ['1', 'true', 'yes', 'on'], true) && mysql_private_host_like($host)) {
+    // In this Railway project the private MySQL endpoint may be unavailable
+    // unless outbound IPv6/private networking is fully enabled on the app
+    // service. Prefer the public TCP proxy on Railway for reliability, while
+    // allowing DB_USE_PUBLIC_PROXY=0 once private networking is verified.
+    $usePublicProxy = strtolower((string)env('DB_USE_PUBLIC_PROXY', $railway ? '1' : 'auto'));
+    if ($railway && !in_array($usePublicProxy, ['0', 'false', 'no', 'off'], true) && mysql_private_host_like($host)) {
       $publicCfg = mysql_public_proxy_config();
       if (!empty($publicCfg['host']) && !empty($publicCfg['port'])) {
         $host = (string)$publicCfg['host'];
