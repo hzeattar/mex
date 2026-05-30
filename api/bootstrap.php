@@ -194,10 +194,10 @@ json_response([
   'ok' => true,
   'user' => auth_user_payload($row),
   'brand' => [
-    'name' => vp_boot_setting('site.brand', 'VertexPluse'),
+    'name' => vp_boot_setting('site.brand', 'MEX Group'),
     'tagline' => vp_boot_setting('site.tagline', 'Professional trading & investment platform'),
-    'support_email' => vp_boot_setting('site.support_email', 'support@vertexpluse.com'),
-    'logo_url' => vp_boot_setting('site.app_logo_url', './assets/img/vertexpluse-logo.svg'),
+    'support_email' => vp_boot_setting('site.support_email', 'support@mexgroup.com'),
+    'logo_url' => vp_boot_setting('site.app_logo_url', './assets/img/mexgroup_logo.svg'),
   ],
   'wallet' => vp_boot_wallet($uid),
   'kyc' => vp_boot_kyc($pdo, $uid),

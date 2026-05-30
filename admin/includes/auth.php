@@ -304,7 +304,7 @@ function admin_header(string $title = 'Admin'): void {
   echo "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">";
   echo "<title>" . htmlspecialchars($title, ENT_QUOTES) . "</title>";
   echo "<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;max-width:1100px;margin:20px auto;padding:0 14px}a{color:#0ea5e9}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}input,select,button{padding:8px;border-radius:10px;border:1px solid #e5e7eb}button{cursor:pointer}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.badge{display:inline-block;padding:2px 10px;border-radius:999px;background:#0ea5e91a;border:1px solid #0ea5e933}</style>";
-  echo "</head><body><header><div><strong>VertexPluse Admin</strong> <span class=\"badge\">PHP</span></div><nav>";
+  echo "</head><body><header><div><strong>MEX Group Admin</strong> <span class=\"badge\">PHP</span></div><nav>";
   echo "<a href=\"/admin/index.php\">Home</a> · <a href=\"/admin/users.php\">Users</a> · <a href=\"/admin/managers.php\">Managers</a> · <a href=\"/admin/trading_settings.php\">Trading Settings</a> · <a href=\"/admin/deposit_methods.php\">Deposit Methods</a> · <a href=\"/admin/balance_adjust.php\">Adjust Balance</a> · <a href=\"/admin/deposits.php\">Deposits</a> · <a href=\"/admin/withdrawals.php\">Withdrawals</a> · <a href=\"/admin/invest_plans.php\">Invest Plans</a>";
   echo "</nav></header>";
 }
@@ -501,7 +501,7 @@ function admin_layout(string $title, string $body): void {
   }
   </style></head><body>";
   if (admin_is_logged_in()) {
-    echo "<div class='top'><div class='top-row'><div class='top-brand'><span class='top-badge'>VP</span><div class='top-title'><span>VertexPluse Admin</span><small>Clean operations console</small></div></div><span class='top-spacer'></span><a class='btn' href='/admin/logout.php'>Logout</a></div>";
+    echo "<div class='top'><div class='top-row'><div class='top-brand'><span class='top-badge'>MEX</span><div class='top-title'><span>MEX Group Admin</span><small>Operations console</small></div></div><span class='top-spacer'></span><a class='btn' href='/admin/logout.php'>Logout</a></div>";
     echo "<div class='top-nav-row'><div class='top-nav-label'>Core control</div><div class='top-nav'>";
     foreach ($navPrimary as $href => $label) {
       $active = ($currentPath === $href) ? ' active' : '';

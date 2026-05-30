@@ -38,8 +38,8 @@ export function renderShell(app) {
       <!-- Desktop Top Navigation Bar -->
       <header class="hidden lg:flex items-center h-12 px-4 border-b border-line bg-surface shrink-0 z-50">
         <a href="#/home" class="mex-shell-brand mr-6">
-          <img src="/assets/img/mexgroup_logo.svg" alt="MEX Group" onerror="this.style.display='none'">
-          <span><strong>${esc(brand.name || t('brand.name', 'MEX Group'))}</strong><small>${esc(brand.product || t('brand.product', 'VertexPluse'))}</small></span>
+          <img class="brand-logo" src="/assets/img/mexgroup_logo.svg" alt="MEX Group">
+          <span><strong>${esc(brand.name || t('brand.name', 'MEX Group'))}</strong><small>${esc(brand.product || t('brand.product', 'Trading Platform'))}</small></span>
         </a>
         <nav class="flex items-center gap-1" id="desktop-nav">
           ${NAV.map(n => `<a href="#/${n.route}" class="nav-tab" data-nav="${n.route}"><span class="w-4 h-4">${icons[n.icon]}</span>${t(n.key, n.label)}</a>`).join('')}
@@ -69,10 +69,13 @@ export function renderShell(app) {
 
       <!-- Mobile Header -->
       <header class="lg:hidden flex items-center justify-between h-12 px-3 border-b border-line bg-surface shrink-0 z-50">
-        <a href="#/home" class="mex-shell-brand mex-shell-brand-sm">
-          <img src="/assets/img/mexgroup_logo.svg" alt="MEX Group" onerror="this.style.display='none'">
-          <span><strong>${esc(brand.name || t('brand.name', 'MEX Group'))}</strong></span>
-        </a>
+        <div class="flex items-center gap-2">
+          <button class="icon-btn icon-btn-sm" id="markets-hamburger" title="Markets">${icons.hamburger}</button>
+          <a href="#/home" class="mex-shell-brand mex-shell-brand-sm">
+            <img class="brand-logo" src="/assets/img/mexgroup_logo.svg" alt="MEX Group">
+            <span><strong>${esc(brand.name || t('brand.name', 'MEX Group'))}</strong></span>
+          </a>
+        </div>
         <div class="flex items-center gap-2">
           <button class="mode-btn mode-btn-sm ${mode === 'real' ? 'is-real' : ''}" id="mode-toggle-m">
             <span class="mode-dot"></span>
@@ -93,6 +96,23 @@ export function renderShell(app) {
         ${MOBILE_NAV.map(n => `<a href="#/${n.route}" class="mobile-tab" data-nav="${n.route}"><span class="w-5 h-5">${icons[n.icon]}</span><span class="mobile-tab-label">${t(n.key, n.label)}</span></a>`).join('')}
       </nav>
 
+      <!-- Markets Side Drawer (Hamburger) -->
+      <div class="markets-drawer hidden" id="markets-drawer">
+        <div class="markets-drawer-overlay" id="markets-drawer-overlay"></div>
+        <div class="markets-drawer-panel" id="markets-drawer-panel">
+          <div class="markets-drawer-header">
+            <button class="icon-btn icon-btn-sm" id="markets-drawer-close">${icons.back || icons.close}</button>
+            <strong>${t('nav.markets', 'Markets')}</strong>
+          </div>
+          <div class="markets-drawer-search">
+            <input type="text" id="markets-search-input" placeholder="${t('common.search', 'Search...')}" class="w-full">
+          </div>
+          <div class="markets-drawer-body" id="markets-drawer-list">
+            <div class="loading-spinner-sm"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Notification Panel -->
       <div class="notif-panel hidden" id="notif-panel">
         <div class="notif-panel-header"><strong>${t('common.notifications', 'Notifications')}</strong><button class="icon-btn icon-btn-sm" id="notif-close">${icons.close}</button></div>
@@ -103,6 +123,12 @@ export function renderShell(app) {
   bindShell(app);
   syncActive();
   translateDom(app);
+
+  // Brand logo fallback via event listener (not inline onerror)
+  app.querySelectorAll('.brand-logo').forEach(img => {
+    img.addEventListener('error', function() { this.style.display = 'none'; }, { once: true });
+  });
+
   window.addEventListener('hashchange', syncActive);
 }
 
@@ -112,6 +138,12 @@ function bindShell(app) {
   $('#lang-select', app)?.addEventListener('change', e => setLocale(e.target.value));
   $$('#notif-btn, #notif-btn-m', app).forEach(b => b?.addEventListener('click', toggleNotifications));
   $('#notif-close', app)?.addEventListener('click', () => $('#notif-panel')?.classList.add('hidden'));
+
+  // Markets hamburger / drawer
+  $('#markets-hamburger', app)?.addEventListener('click', openMarketsDrawer);
+  $('#markets-drawer-close', app)?.addEventListener('click', closeMarketsDrawer);
+  $('#markets-drawer-overlay', app)?.addEventListener('click', closeMarketsDrawer);
+  $('#markets-search-input', app)?.addEventListener('input', filterMarketsDrawer);
 }
 
 function toggleMode() {
@@ -145,6 +177,73 @@ function syncActive() {
   $$('[data-nav]').forEach(el => {
     el.classList.toggle('active', el.dataset.nav === path);
   });
+}
+
+/* ── Markets Side Drawer ── */
+let _marketsCache = null;
+
+async function openMarketsDrawer() {
+  const drawer = $('#markets-drawer');
+  if (!drawer) return;
+  drawer.classList.remove('hidden');
+  await loadMarketsList();
+}
+
+function closeMarketsDrawer() {
+  const drawer = $('#markets-drawer');
+  if (drawer) drawer.classList.add('hidden');
+}
+
+async function loadMarketsList() {
+  const list = $('#markets-drawer-list');
+  if (!list) return;
+  try {
+    if (!_marketsCache) {
+      const data = await api('/markets.php', { timeout: 8000 });
+      _marketsCache = data?.markets || data || [];
+    }
+    renderMarketsList(_marketsCache, '');
+  } catch (e) {
+    list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.failed_to_load', 'Failed to load')}</p>`;
+  }
+}
+
+let _marketIconFn = null;
+
+async function renderMarketsList(markets, query) {
+  const list = $('#markets-drawer-list');
+  if (!list) return;
+  if (!_marketIconFn) {
+    try { const mod = await import('../../utils/marketIcon.js'); _marketIconFn = mod.marketIcon; } catch(e) { _marketIconFn = () => ''; }
+  }
+  const q = query.toLowerCase();
+  const filtered = q ? markets.filter(m => (m.symbol || m.name || '').toLowerCase().includes(q)) : markets;
+  if (!filtered.length) { list.innerHTML = `<p class="text-muted text-xs text-center py-4">${t('common.no_results', 'No results')}</p>`; return; }
+  list.innerHTML = filtered.map(m => {
+    const sym = esc(m.symbol || '');
+    const name = esc(m.name || sym);
+    const price = m.price != null ? parseFloat(m.price).toFixed(m.type === 'crypto' ? 2 : 4) : '--';
+    const change = m.change_pct != null ? parseFloat(m.change_pct).toFixed(2) : '';
+    const changeClass = change.startsWith('-') ? 'text-red-400' : change ? 'text-green-400' : '';
+    return `<a href="#/trade?symbol=${encodeURIComponent(sym)}" class="markets-drawer-item" data-symbol="${sym}">
+      <img src="${_marketIconFn(sym)}" alt="" class="market-icon-sm">
+      <div class="markets-drawer-info"><strong>${name}</strong><span class="text-[10px] text-muted">${esc(m.type || '')}</span></div>
+      <div class="markets-drawer-price text-right"><span class="font-mono text-xs">${price}</span>${change ? `<span class="text-[10px] ${changeClass}">${change}%</span>` : ''}</div>
+    </a>`;
+  }).join('');
+  // Logo fallback via event listener (not inline onerror)
+  list.querySelectorAll('.market-icon-sm').forEach(img => {
+    img.addEventListener('error', function() { this.style.display = 'none'; }, { once: true });
+  });
+  // Click to navigate and close
+  list.querySelectorAll('.markets-drawer-item').forEach(a => {
+    a.addEventListener('click', () => closeMarketsDrawer());
+  });
+}
+
+function filterMarketsDrawer(e) {
+  if (!_marketsCache) return;
+  renderMarketsList(_marketsCache, e.target.value || '');
 }
 
 function activeWallet() {

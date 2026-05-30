@@ -1,4 +1,4 @@
-import{e as n,g as o,a as l,h as p}from"./main-B1VhLVa2.js";function u(){return`
+import{e as n,g as o,b as l,h as p}from"./main-B7BYCc04.js";function u(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">
@@ -7,7 +7,7 @@ import{e as n,g as o,a as l,h as p}from"./main-B1VhLVa2.js";function u(){return`
             <h1 class="text-xl font-bold mt-1">Help Center</h1>
             <p class="text-muted text-sm">Create tickets and get help from the support team.</p>
           </div>
-          <a class="btn-ghost btn-sm" href="mailto:${n(o("brand.support_email")||"support@vertexpluse.com")}">Email</a>
+          <a class="btn-ghost btn-sm" href="mailto:${n(o("brand.support_email")||"support@mexgroup.com")}">Email</a>
         </div>
       </section>
 

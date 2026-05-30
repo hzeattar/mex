@@ -188,7 +188,7 @@ function renderOrderPanel() {
       </label>
     </div>
     <p class="order-form-status is-info" data-order-status hidden></p>
-    <p class="order-ticket-note">Orders execute internally on VertexPluse at the current platform quote. Use TP/SL to document target risk for review.</p>
+    <p class="order-ticket-note">Orders execute internally on MEX Group at the current platform quote. Use TP/SL to document target risk for review.</p>
   </div>`;
 }
 
@@ -217,6 +217,14 @@ function renderMobileOrderSheet(symbol, type) {
 }
 
 export function mount(container) {
+  // Attach logo fallback handlers (not inline onerror)
+  container.addEventListener('error', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.dataset.fallback === 'initial') {
+      e.target.style.display = 'none';
+      const fallback = e.target.nextElementSibling;
+      if (fallback) fallback.style.display = 'grid';
+    }
+  }, true);
   setup(container);
 }
 
@@ -951,6 +959,13 @@ async function placeOrder(side, container, formRoot) {
     return;
   }
 
+  // Show confirmation dialog before executing
+  const confirmed = await showOrderConfirmation({
+    side, symbol: get('symbol'), type: get('type'), amount, leverage,
+    tp, sl, marketType, orderType, currentPrice, limitInput, mode: get('mode')
+  });
+  if (!confirmed) return;
+
   try {
     setOrderBusy(root, true);
     showOrderStatus(root, `Sending ${side === 'BUY' ? 'buy' : 'sell'} order...`, 'info');
@@ -987,6 +1002,64 @@ async function placeOrder(side, container, formRoot) {
   } finally {
     setOrderBusy(root, false);
   }
+}
+
+/* ── Order Confirmation Dialog ── */
+function showOrderConfirmation({ side, symbol, type, amount, leverage, tp, sl, marketType, orderType, currentPrice, limitInput, mode }) {
+  return new Promise(resolve => {
+    const existing = document.getElementById('order-confirm-modal');
+    if (existing) existing.remove();
+
+    const isBuy = side === 'BUY';
+    const execPrice = orderType === 'LIMIT' ? (limitInput || currentPrice) : currentPrice;
+    const notional = amount * leverage;
+    const pnl = tp > 0 ? Math.abs(tp - execPrice) * (notional / execPrice) : null;
+    const loss = sl > 0 ? Math.abs(sl - execPrice) * (notional / execPrice) : null;
+
+    const modal = document.createElement('div');
+    modal.id = 'order-confirm-modal';
+    modal.className = 'fixed inset-0 z-[300] flex items-end sm:items-center justify-center';
+    modal.innerHTML = `
+      <div class="absolute inset-0 bg-black/70" id="confirm-backdrop"></div>
+      <div class="relative w-full max-w-md mx-4 mb-4 sm:mb-0 bg-surface border border-line rounded-2xl shadow-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-line text-center">
+          <h3 class="text-lg font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}">${isBuy ? 'Buy' : 'Sell'} Order</h3>
+          <p class="text-xs text-muted mt-1">Review and confirm your order</p>
+        </div>
+        <div class="px-5 py-4 space-y-3">
+          <div class="flex justify-between text-sm"><span class="text-muted">Symbol</span><strong>${esc(symbol)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">Type</span><strong>${esc(orderType)} / ${esc(marketType)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">Side</span><strong class="${isBuy ? 'text-green-400' : 'text-red-400'}">${side}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">Amount</span><strong>$${amount.toFixed(2)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">Leverage</span><strong>${leverage}x</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">Notional</span><strong>$${notional.toFixed(2)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">Price</span><strong class="font-mono">${parseFloat(execPrice).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>
+          ${tp > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Take Profit</span><strong class="font-mono text-green-400">${parseFloat(tp).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>` : ''}
+          ${sl > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Stop Loss</span><strong class="font-mono text-red-400">${parseFloat(sl).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>` : ''}
+          ${pnl !== null ? `<div class="flex justify-between text-sm"><span class="text-muted">Est. Profit</span><strong class="text-green-400">$${pnl.toFixed(2)}</strong></div>` : ''}
+          ${loss !== null ? `<div class="flex justify-between text-sm"><span class="text-muted">Est. Loss</span><strong class="text-red-400">$${loss.toFixed(2)}</strong></div>` : ''}
+          <div class="flex justify-between text-sm"><span class="text-muted">Mode</span><strong>${mode === 'real' ? 'Real' : 'Demo'}</strong></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 px-5 py-4 border-t border-line">
+          <button class="btn-ghost py-2.5" id="confirm-cancel">Cancel</button>
+          <button class="${isBuy ? 'btn-buy' : 'btn-sell'} py-2.5 text-white font-bold" id="confirm-execute">Confirm ${side}</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    const close = (result) => {
+      modal.remove();
+      document.body.style.overflow = '';
+      resolve(result);
+    };
+
+    modal.querySelector('#confirm-backdrop').addEventListener('click', () => close(false));
+    modal.querySelector('#confirm-cancel').addEventListener('click', () => close(false));
+    modal.querySelector('#confirm-execute').addEventListener('click', () => close(true));
+    modal.querySelector('#confirm-execute').focus();
+  });
 }
 
 function showOrderStatus(root, message, type = 'info') {
@@ -1115,7 +1188,7 @@ function quoteStateClass(label) {
 
 function marketLogo(symbol, type, className) {
   return `<span class="${className} grid place-items-center overflow-hidden border border-line bg-surface">
-    <img src="${escAttr(marketIconPath({ symbol, type }, type))}" class="h-full w-full object-cover" alt="${escAttr(symbol)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';" />
+    <img src="${escAttr(marketIconPath({ symbol, type }, type))}" class="h-full w-full object-cover" alt="${escAttr(symbol)}" loading="lazy" data-fallback="initial" />
     <b class="hidden h-full w-full place-items-center bg-accent/20 text-[9px] font-black">${esc(marketInitial(symbol))}</b>
   </span>`;
 }

@@ -22,13 +22,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 function fkey(string $k): string { return str_replace('.', '_', $k); }
-$about_en = htmlspecialchars((string)setting_get('bot.about.en', 'VertexPluse is a professional web trading and investment platform.'), ENT_QUOTES,'UTF-8');
+$about_en = htmlspecialchars((string)setting_get('bot.about.en', 'MEX Group is a professional web trading and investment platform.'), ENT_QUOTES,'UTF-8');
 $about_ar = htmlspecialchars((string)setting_get('bot.about.ar', ''), ENT_QUOTES,'UTF-8');
 $about_ru = htmlspecialchars((string)setting_get('bot.about.ru', ''), ENT_QUOTES,'UTF-8');
 $rules_en = htmlspecialchars((string)setting_get('bot.rules.en', ''), ENT_QUOTES,'UTF-8');
 $rules_ar = htmlspecialchars((string)setting_get('bot.rules.ar', ''), ENT_QUOTES,'UTF-8');
 $rules_ru = htmlspecialchars((string)setting_get('bot.rules.ru', ''), ENT_QUOTES,'UTF-8');
-$welcome_en = htmlspecialchars((string)setting_get('bot.welcome.en', 'Welcome to VertexPluse. Choose your language, then open the client area.'), ENT_QUOTES,'UTF-8');
+$welcome_en = htmlspecialchars((string)setting_get('bot.welcome.en', 'Welcome to MEX Group. Choose your language, then open the client area.'), ENT_QUOTES,'UTF-8');
 $welcome_ar = htmlspecialchars((string)setting_get('bot.welcome.ar', ''), ENT_QUOTES,'UTF-8');
 $welcome_ru = htmlspecialchars((string)setting_get('bot.welcome.ru', ''), ENT_QUOTES,'UTF-8');
 $bot_token = htmlspecialchars((string)setting_get('bot.token', ''), ENT_QUOTES,'UTF-8');

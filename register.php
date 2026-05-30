@@ -15,7 +15,7 @@ function mex_reg_lang(): string {
     'expires' => time() + 31536000,
     'path' => '/',
     'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-    'httponly' => false,
+    'httponly' => true,
     'samesite' => 'Lax',
   ]);
   return $lang;
@@ -26,7 +26,7 @@ function mex_register_copy(string $lang): array {
     'title' => 'Create account',
     'page_title' => 'Create your MEX Group account',
     'eyebrow' => 'MEX Group onboarding',
-    'headline' => 'Open your VertexPluse trading workspace.',
+    'headline' => 'Open your MEX Group trading workspace.',
     'subtitle' => 'Start with a demo balance, complete KYC, fund manually or by card, then use internal real trading, copy signals, and contracts.',
     'first' => 'First name',
     'last' => 'Last name',
@@ -57,7 +57,7 @@ function mex_register_copy(string $lang): array {
     'title' => 'إنشاء حساب',
     'page_title' => 'إنشاء حساب MEX Group',
     'eyebrow' => 'بدء استخدام MEX Group',
-    'headline' => 'افتح مساحة تداول VertexPluse.',
+    'headline' => 'افتح مساحة تداول MEX Group.',
     'subtitle' => 'ابدأ برصيد تجريبي، أكمل التحقق، موّل الحساب يدويًا أو بالبطاقة، ثم استخدم التداول الداخلي ونسخ الصفقات والعقود.',
     'first' => 'الاسم الأول',
     'last' => 'اسم العائلة',
@@ -166,7 +166,7 @@ $langUrl = '/register.php?lang=' . rawurlencode($langSwitch) . '&next=' . rawurl
   <header class="mex-auth-top">
     <a class="mex-auth-brand" href="/">
       <img src="/assets/img/mexgroup_logo.svg" alt="MEX Group">
-      <span><strong>MEX Group</strong><small>VertexPluse onboarding</small></span>
+      <span><strong>MEX Group</strong><small>Trading Platform</small></span>
     </a>
     <nav class="mex-auth-links" aria-label="Account links">
       <a href="/"><?php echo mex_reg_h($copy['home']); ?></a>

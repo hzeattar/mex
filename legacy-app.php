@@ -29,10 +29,10 @@ $theme_js_v  = is_file($theme_js)  ? (int)@filemtime($theme_js)  : $js_v;
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Legacy VertexPluse client area." />
+  <meta name="description" content="MEX Group client area." />
   <meta name="theme-color" content="#060A14" />
   <meta name="color-scheme" content="dark" />
-  <title><?php echo htmlspecialchars(site_setting('site.brand', 'VertexPluse'), ENT_QUOTES); ?> - Legacy App</title>
+  <title><?php echo htmlspecialchars(site_setting('site.brand', 'MEX Group'), ENT_QUOTES); ?> - Client Area</title>
   <link rel="dns-prefetch" href="//cdn.jsdelivr.net" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <script>
@@ -46,10 +46,10 @@ $theme_js_v  = is_file($theme_js)  ? (int)@filemtime($theme_js)  : $js_v;
   <div id="app"></div>
   <script>
     window.__VP_TRADE_V2 = true;
-    window.__SUPPORT_EMAIL = <?php echo json_encode(site_setting('site.support_email', 'support@vertexpluse.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
-    window.__BRAND_NAME = <?php echo json_encode(site_setting('site.brand', 'VertexPluse'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
+    window.__SUPPORT_EMAIL = <?php echo json_encode(site_setting('site.support_email', 'support@mexgroup.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
+    window.__BRAND_NAME = <?php echo json_encode(site_setting('site.brand', 'MEX Group'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
     window.__BRAND_TAGLINE = <?php echo json_encode(site_setting('site.tagline', 'Professional trading & investment platform'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
-    window.__BRAND_LOGO_URL = <?php echo json_encode(site_setting('site.app_logo_url', $defaultLogoUrl ?? './assets/img/vertexpluse-logo.svg'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
+    window.__BRAND_LOGO_URL = <?php echo json_encode(site_setting('site.app_logo_url', $defaultLogoUrl ?? './assets/img/mexgroup_logo.svg'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
     window.__MARKETS_FIRST_BATCH_SIZE = <?php echo (int)env('MARKETS_FIRST_BATCH_SIZE', '12'); ?>;
     window.__MARKETS_BATCH_SIZE = <?php echo (int)env('MARKETS_BATCH_SIZE', '20'); ?>;
   </script>

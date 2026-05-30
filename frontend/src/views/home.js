@@ -47,7 +47,7 @@ export function render() {
             </div>
             <div class="flex flex-wrap gap-2">
               <a href="#/trade" class="btn-primary">Open trade</a>
-              <a href="#/deposit" class="btn-ghost">Deposit</a>
+              <a href="#/funding?action=deposit" class="btn-ghost">Deposit</a>
               <a href="#/invest" class="btn-ghost">Copy & contracts</a>
             </div>
           </div>
@@ -67,27 +67,25 @@ export function render() {
         </div>
       </section>
 
-      <!-- Quick Actions -->
+      <!-- Funding Shortcuts -->
       <section class="card">
         <div class="flex items-center justify-between gap-3 mb-3">
           <div>
-            <span class="badge-green mb-1">Workspace</span>
+            <span class="badge-green mb-1">Funding</span>
             <h2 class="text-base font-semibold">Quick Actions</h2>
           </div>
-          <p class="text-xs text-muted hidden lg:block">Funding, verification, support, and client services from one desk.</p>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 home-action-grid">
-          ${quickAction('Deposit', 'deposit', '#/deposit')}
-          ${quickAction('Withdraw', 'withdraw', '#/withdraw')}
+        <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 home-action-grid">
+          ${quickAction('Deposit', 'deposit', '#/funding?action=deposit')}
+          ${quickAction('Withdraw', 'withdraw', '#/funding?action=withdraw')}
           ${quickAction('KYC', 'kyc', '#/kyc')}
-          ${quickAction('Earn', 'earn', '#/invest')}
           ${quickAction('Support', 'support', '#/support')}
           ${quickAction('News', 'news', '#/news')}
         </div>
       </section>
 
       <!-- Copy Trading -->
-      <section class="card">
+      <section class="card blur-gate ${mode !== 'real' ? 'blur-active' : ''}">
         <div class="flex items-center justify-between mb-3">
           <div>
             <span class="badge-green mb-1">Copy Desk</span>
@@ -95,9 +93,10 @@ export function render() {
           </div>
           <a href="#/invest" class="btn-ghost btn-sm">View all</a>
         </div>
-        <div class="relative" id="home-copy-section">
+        <div class="blur-gate-content relative" id="home-copy-section">
           ${copyScrollerPlaceholder(mode)}
         </div>
+        ${mode !== 'real' ? `<div class="blur-gate-overlay"><span class="badge">Real Account Only — Switch to Real & verify KYC</span></div>` : ''}
       </section>
 
       <!-- Featured Markets -->
@@ -130,6 +129,14 @@ export function render() {
 }
 
 export function mount(container) {
+  // Attach logo fallback handlers (not inline onerror)
+  container.addEventListener('error', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.dataset.fallback === 'initial') {
+      e.target.style.display = 'none';
+      const fallback = e.target.nextElementSibling;
+      if (fallback) fallback.style.display = 'grid';
+    }
+  }, true);
   loadHomeData(container);
 }
 
@@ -308,8 +315,8 @@ function findMarketCard(container, symbol) {
 function marketLogo(market, className) {
   const symbol = market.symbol || '--';
   return `<span class="${className}">
-    <img src="${escAttr(marketIconPath(market, market.type || 'crypto'))}" alt="${escAttr(symbol)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';" />
-    <b>${esc(marketInitial(symbol))}</b>
+    <img src="${escAttr(marketIconPath(market, market.type || 'crypto'))}" alt="${escAttr(symbol)}" loading="lazy" data-fallback="initial" />
+    <b style="display:none">${esc(marketInitial(symbol))}</b>
   </span>`;
 }
 

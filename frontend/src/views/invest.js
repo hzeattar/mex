@@ -20,7 +20,7 @@ export function render() {
         <div class="relative z-10">
           <span class="badge-accent">Earn desk</span>
           <h1 class="text-2xl lg:text-3xl font-black mt-2">Copy Trading & Contracts</h1>
-          <p class="text-muted text-sm mt-2 max-w-2xl">Follow approved copy signals on Real accounts, or subscribe to level-gated contracts managed inside VertexPluse.</p>
+          <p class="text-muted text-sm mt-2 max-w-2xl">Follow approved copy signals on Real accounts, or subscribe to level-gated contracts managed inside MEX Group.</p>
         </div>
         <div class="feature-hero__stats">
           ${heroStat('Mode', mode === 'real' ? 'Real' : 'Demo', mode === 'real' ? 'Internal execution' : 'Preview only')}

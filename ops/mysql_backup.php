@@ -51,7 +51,7 @@ if (!is_dir($dir) && !mkdir($dir, 0777, true) && !is_dir($dir)) {
 
 $fh = fopen($backup, 'wb');
 if (!$fh) throw new RuntimeException('Cannot open backup file: ' . $backup);
-fwrite($fh, "-- Railway MySQL backup before VertexPluse full import\n");
+fwrite($fh, "-- Railway MySQL backup before MEX Group full import\n");
 fwrite($fh, "-- Created at " . gmdate('c') . "\n");
 fwrite($fh, "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n");
 

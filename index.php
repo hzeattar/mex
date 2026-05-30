@@ -29,7 +29,7 @@ $copy = [
     'nav_support' => 'Support',
     'kicker' => 'MEX Group trading desk',
     'title' => 'One secure workspace for markets, copy trading, and client funding.',
-    'subtitle' => 'VertexPluse runs inside the MEX Group experience: fast quotes, professional charts, internal demo and real trading, KYC, deposits, withdrawals, contracts, and support from one clean client portal.',
+    'subtitle' => 'MEX Group experience: fast quotes, professional charts, internal demo and real trading, KYC, deposits, withdrawals, contracts, and support from one clean client portal.',
     'primary' => 'Start trading',
     'secondary' => 'View platform',
     'stat_1' => 'Multi-asset desk',
@@ -69,7 +69,7 @@ $copy = [
     'nav_support' => 'الدعم',
     'kicker' => 'مكتب تداول MEX Group',
     'title' => 'مساحة واحدة آمنة للأسواق ونسخ الصفقات وتمويل العملاء.',
-    'subtitle' => 'VertexPluse تعمل داخل تجربة MEX Group: أسعار سريعة، شارت احترافي، تداول تجريبي وحقيقي داخلي، توثيق، إيداع، سحب، عقود، ودعم من بوابة عميل واحدة.',
+    'subtitle' => 'تجربة MEX Group: أسعار سريعة، شارت احترافي، تداول تجريبي وحقيقي داخلي، توثيق، إيداع، سحب، عقود، ودعم من بوابة عميل واحدة.',
     'primary' => 'ابدأ التداول',
     'secondary' => 'شاهد المنصة',
     'stat_1' => 'أسواق متعددة',
@@ -100,7 +100,7 @@ $copy = [
 
 $t = $copy[$lang];
 $brand = 'MEX Group';
-$product = 'VertexPluse';
+$product = 'MEX Group';
 $brandEsc = htmlspecialchars($brand, ENT_QUOTES, 'UTF-8');
 $productEsc = htmlspecialchars($product, ENT_QUOTES, 'UTF-8');
 

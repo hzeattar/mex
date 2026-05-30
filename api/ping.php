@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/lib/common.php';
 
-$payload = ['ok'=>true,'service'=>'vertexpluse','time'=>time()];
+$payload = ['ok'=>true,'service'=>'mexgroup','time'=>time()];
 
 if ((int)($_GET['diag'] ?? 0) === 1) {
   $payload['php'] = [

@@ -1,4 +1,4 @@
-// VertexPluse Frontend v2 - Main Entry Point
+// MEX Group Frontend v2 - Main Entry Point
 import './styles/main.css';
 import { createStore, set, get, subscribe } from './state/store.js';
 import { defineRoute, startRouter, navigate } from './router.js';
@@ -10,7 +10,7 @@ import { initI18n, t, translateDom } from './utils/i18n.js';
 const initialState = {
   booted: false,
   user: null,
-  brand: { name: 'MEX Group', product: 'VertexPluse', tagline: 'Professional trading workspace' },
+  brand: { name: 'MEX Group', product: 'Trading Platform', tagline: 'Professional trading workspace' },
   mode: localStorage.getItem('vp_mode') || 'demo',
   route: 'home',
   // Markets
@@ -51,6 +51,7 @@ defineRoute('portfolio', () => import('./views/portfolio.js'));
 defineRoute('wallet', () => import('./views/wallet.js'));
 defineRoute('deposit', () => import('./views/funding.js'));
 defineRoute('withdraw', () => import('./views/funding.js'));
+defineRoute('funding', () => import('./views/funding.js'));
 defineRoute('kyc', () => import('./views/kyc.js'));
 defineRoute('invest', () => import('./views/invest.js'));
 defineRoute('news', () => import('./views/news.js'));
@@ -69,7 +70,7 @@ async function boot() {
     const remoteBrand = data.brand || {};
     set('brand', {
       ...get('brand'),
-      product: window.__BRAND_PRODUCT || remoteBrand.name || get('brand').product || 'VertexPluse',
+      product: window.__BRAND_PRODUCT || remoteBrand.name || get('brand').product || 'Trading Platform',
       tagline: remoteBrand.tagline || get('brand').tagline,
       name: window.__BRAND_NAME || 'MEX Group',
     });

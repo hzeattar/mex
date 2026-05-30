@@ -88,6 +88,25 @@
   .notif-item { @apply px-4 py-3 border-b border-line/50 hover:bg-surface/50; }
   .notif-item.unread { @apply border-l-2 border-l-accent; }
 
+  /* Markets Side Drawer */
+  .markets-drawer { @apply fixed inset-0 z-[90]; }
+  .markets-drawer-overlay { @apply absolute inset-0 bg-black/60; }
+  .markets-drawer-panel { @apply absolute left-0 top-0 bottom-0 w-[280px] max-w-[85vw] bg-surface border-r border-line flex flex-col; }
+  .markets-drawer-header { @apply flex items-center gap-3 px-4 py-3 border-b border-line; }
+  .markets-drawer-search { @apply px-4 py-2 border-b border-line; }
+  .markets-drawer-search input { @apply w-full bg-panel border border-line rounded-md px-3 py-1.5 text-xs text-text placeholder-muted outline-none focus:border-accent; }
+  .markets-drawer-body { @apply flex-1 overflow-auto; }
+  .markets-drawer-item { @apply flex items-center gap-3 px-4 py-2.5 border-b border-line/30 hover:bg-panel/50 transition-colors; }
+  .markets-drawer-info { @apply flex-1 min-w-0; }
+  .markets-drawer-info strong { @apply text-xs block truncate; }
+  .market-icon-sm { @apply w-6 h-6 rounded-full object-contain flex-shrink-0; }
+
+  /* Blur Gating */
+  .blur-gate { position: relative; }
+  .blur-gate.blur-active > .blur-gate-content { filter: blur(6px); pointer-events: none; user-select: none; }
+  .blur-gate-overlay { @apply absolute inset-0 flex items-center justify-center z-10; }
+  .blur-gate-overlay .badge { @apply bg-accent/20 text-accent text-[10px] px-3 py-1.5 rounded-full; }
+
   /* Badge */
   .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider; }
   .badge-buy { @apply badge bg-buy/10 text-buy; }

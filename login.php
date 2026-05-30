@@ -15,7 +15,7 @@ function mex_auth_lang(): string {
     'expires' => time() + 31536000,
     'path' => '/',
     'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-    'httponly' => false,
+    'httponly' => true,
     'samesite' => 'Lax',
   ]);
   return $lang;
@@ -26,7 +26,7 @@ function mex_login_copy(string $lang): array {
     'title' => 'Log in',
     'page_title' => 'Log in to MEX Group',
     'eyebrow' => 'MEX Group client portal',
-    'headline' => 'Access your VertexPluse trading workspace.',
+    'headline' => 'Access your MEX Group trading workspace.',
     'subtitle' => 'Manage markets, funding, KYC, copy trading, contracts, and portfolio activity from one secure dashboard.',
     'email' => 'Email address',
     'password' => 'Password',
@@ -56,7 +56,7 @@ function mex_login_copy(string $lang): array {
     'title' => 'تسجيل الدخول',
     'page_title' => 'تسجيل الدخول إلى MEX Group',
     'eyebrow' => 'بوابة عملاء MEX Group',
-    'headline' => 'ادخل إلى مساحة تداول VertexPluse.',
+    'headline' => 'ادخل إلى مساحة تداول MEX Group.',
     'subtitle' => 'تحكم في الأسواق والتمويل والتحقق ونسخ الصفقات والعقود والمحفظة من لوحة واحدة آمنة.',
     'email' => 'البريد الإلكتروني',
     'password' => 'كلمة المرور',
@@ -149,7 +149,7 @@ $langUrl = '/login.php?lang=' . rawurlencode($langSwitch) . '&next=' . rawurlenc
   <header class="mex-auth-top">
     <a class="mex-auth-brand" href="/">
       <img src="/assets/img/mexgroup_logo.svg" alt="MEX Group">
-      <span><strong>MEX Group</strong><small>VertexPluse workspace</small></span>
+      <span><strong>MEX Group</strong><small>Trading Platform</small></span>
     </a>
     <nav class="mex-auth-links" aria-label="Account links">
       <a href="/"><?php echo mex_auth_h($copy['home']); ?></a>

@@ -60,7 +60,7 @@ ob_start();
   <form method="post" class="grid">
     <div style="grid-column:1/-1">
       <label>Support Entry (router bot username / URL)</label><br>
-      <input name="support_entry" value="<?=h($entryCurrent)?>" placeholder="@vertexpluse_support_bot">
+      <input name="support_entry" value="<?=h($entryCurrent)?>" placeholder="@mexgroup_support_bot">
       <div class="muted small" style="margin-top:6px">Key: <code>support.entry</code> (the Mini App opens this first)</div>
     </div>
 

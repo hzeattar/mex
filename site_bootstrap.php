@@ -43,15 +43,15 @@ function site_setting(string $key, string $default = ''): string {
 
 function site_defaults(): array {
   return [
-    'brand' => site_setting('site.brand', 'VertexPluse'),
+    'brand' => site_setting('site.brand', 'MEX Group'),
     'tagline' => site_setting('site.tagline', 'Professional multi-asset trading platform'),
-    'hero_title' => site_setting('site.hero_title', 'Life is Better with Money'),
+    'hero_title' => site_setting('site.hero_title', 'Trade with MEX Group'),
     'hero_subtitle' => site_setting('site.hero_subtitle', 'Trade with a modern web platform for crypto, forex, stocks, commodities, investment plans, and account funding.'),
     'hero_primary_text' => site_setting('site.hero_primary_text', 'Open Live Account'),
     'hero_primary_url' => site_setting('site.hero_primary_url', '/register.php'),
-    'hero_secondary_text' => site_setting('site.hero_secondary_text', 'Try Client Area'),
+    'hero_secondary_text' => site_setting('site.hero_secondary_text', 'Try Demo Account'),
     'hero_secondary_url' => site_setting('site.hero_secondary_url', '/login.php'),
-    'support_email' => site_setting('site.support_email', 'support@vertexpluse.com'),
+    'support_email' => site_setting('site.support_email', 'support@mexgroup.com'),
     'public_footer_note' => site_setting('site.public_footer_note', 'Trade CFDs and digital assets responsibly. Markets involve risk.'),
   ];
 }

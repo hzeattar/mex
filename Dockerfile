@@ -28,7 +28,7 @@ COPY . /app
 
 RUN set -eux; \
     if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi; \
-    if [ -f php.ini ]; then cp php.ini /usr/local/etc/php/conf.d/vertexpluse.ini; fi; \
+    if [ -f php.ini ]; then cp php.ini /usr/local/etc/php/conf.d/mexgroup.ini; fi; \
     mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx; \
     chown -R www-data:www-data api/data api/uploads; \
     chmod -R 775 api/data api/uploads; \

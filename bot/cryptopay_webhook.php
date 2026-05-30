@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Crypto Pay API webhook handler.
- * URL (Option A): https://vertexpluse.com/bot/cryptopay_webhook.php?secret=YOUR_SECRET
+ * URL (Option A): https://mexgroup.com/bot/cryptopay_webhook.php?secret=YOUR_SECRET
  */
 
 header('Content-Type: application/json; charset=utf-8');

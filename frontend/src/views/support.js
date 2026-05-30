@@ -15,7 +15,7 @@ export function render() {
             <h1 class="text-xl font-bold mt-1">Help Center</h1>
             <p class="text-muted text-sm">Create tickets and get help from the support team.</p>
           </div>
-          <a class="btn-ghost btn-sm" href="mailto:${esc(get('brand.support_email') || 'support@vertexpluse.com')}">Email</a>
+          <a class="btn-ghost btn-sm" href="mailto:${esc(get('brand.support_email') || 'support@mexgroup.com')}">Email</a>
         </div>
       </section>
 

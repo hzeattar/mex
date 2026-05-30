@@ -287,8 +287,8 @@ function railway_mysql_placeholders_only(): bool {
   $user = strtolower(env_nonempty('DB_USER'));
   $pass = env_nonempty('DB_PASS');
   $localHost = ($host === '' || in_array($host, ['localhost', '127.0.0.1'], true));
-  $placeholderName = ($name === '' || in_array($name, ['mex', 'vertexpluse', 'vertexpluse_meg'], true));
-  $placeholderUser = ($user === '' || in_array($user, ['root', 'vertexpluse_user', 'vertexpluse_mega'], true));
+  $placeholderName = ($name === '' || in_array($name, ['mex', 'vertexpluse', 'vertexpluse_meg', 'mexgroup'], true));
+  $placeholderUser = ($user === '' || in_array($user, ['root', 'vertexpluse_user', 'vertexpluse_mega', 'mexgroup_user'], true));
   return $localHost && $placeholderName && $placeholderUser && env_placeholder_value($pass);
 }
 
@@ -375,11 +375,11 @@ function db(): PDO {
     if ($port === '' || ($railway && $mysqlPort !== '' && $port === '3306')) $port = $mysqlPort !== '' ? $mysqlPort : '3306';
 
     $name = trim((string)env('DB_NAME', ''));
-    if ($name === '' || ($railway && $mysqlName !== '' && in_array(strtolower($name), ['mex', 'vertexpluse', 'vertexpluse_meg'], true))) {
+    if ($name === '' || ($railway && $mysqlName !== '' && in_array(strtolower($name), ['mex', 'vertexpluse', 'vertexpluse_meg', 'mexgroup'], true))) {
       $name = $mysqlName;
     }
     $user = trim((string)env('DB_USER', ''));
-    if ($user === '' || ($railway && $mysqlUser !== '' && in_array(strtolower($user), ['root', 'vertexpluse_user', 'vertexpluse_mega'], true))) {
+    if ($user === '' || ($railway && $mysqlUser !== '' && in_array(strtolower($user), ['root', 'vertexpluse_user', 'vertexpluse_mega', 'mexgroup_user'], true))) {
       $user = $mysqlUser;
     }
     $pass = (string)env('DB_PASS', '');
@@ -403,7 +403,7 @@ function db(): PDO {
       throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }
     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', $railway ? '2' : '5')));
+    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', $railway ? '8' : '5')));
     $pdoOptions = [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -416,7 +416,7 @@ function db(): PDO {
     if ($persistentEnabled) {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
     }
-    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '0' : '0')));
+    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '2' : '0')));
     $lastConnectError = null;
     for ($attempt = 0; $attempt <= $connectRetries; $attempt++) {
       try {

@@ -5,7 +5,9 @@ import { api, formApi, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 
 export function render(params) {
-  const kind = (params._path || 'deposit').includes('withdraw') ? 'withdraw' : 'deposit';
+  const routePath = params._path || 'deposit';
+  const routeAction = params.action || '';
+  const kind = (routePath.includes('withdraw') || routeAction === 'withdraw') ? 'withdraw' : 'deposit';
   const isDeposit = kind === 'deposit';
   const wallet = get('wallet') || {};
   const kyc = get('kyc') || {};
@@ -211,7 +213,7 @@ function updateSelectedMethod(container) {
       <i>${icons.wallet}</i>
       <div>
         <strong>Secure hosted card checkout</strong>
-        <small>Card details are collected by Stripe. VertexPluse only receives the payment confirmation.</small>
+        <small>Card details are collected by Stripe. MEX Group only receives the payment confirmation.</small>
       </div>
     </div>` : ''}
     ${selected.payment_address ? `<div class="copy-address"><span>${esc(selected.payment_address)}</span><button type="button" data-copy-address="${escAttr(selected.payment_address)}">Copy</button></div>` : ''}
