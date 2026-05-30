@@ -18,16 +18,13 @@ nginx -t
 echo "[start] starting php-fpm"
 php-fpm -D
 
-# Wait for PHP-FPM to be ready (up to 10 seconds)
-echo "[start] waiting for PHP-FPM on port 9000..."
+# Wait for PHP-FPM to be ready on port 9000 (up to 10 seconds)
+echo "[start] waiting for PHP-FPM on 127.0.0.1:9000..."
 i=0
 while [ $i -lt 10 ]; do
-  if php-fpm -t 2>/dev/null; then
-    # Check if FPM socket is accepting connections
-    if curl -s --max-time 1 http://127.0.0.1:9000 2>/dev/null || nc -z 127.0.0.1 9000 2>/dev/null; then
-      echo "[start] PHP-FPM is ready"
-      break
-    fi
+  if [ -e /proc/$(pgrep -f "php-fpm: pool www" 2>/dev/null | head -1)/status ] 2>/dev/null; then
+    echo "[start] PHP-FPM is ready"
+    break
   fi
   i=$((i + 1))
   echo "[start] waiting for PHP-FPM... ($i/10)"
@@ -44,7 +41,7 @@ try {
 } catch (Throwable \$e) {
   echo '[start] WARNING: DB connection failed: ' . \$e->getMessage() . PHP_EOL;
 }
-" 2>/dev/null || echo "[start] WARNING: DB health check failed, continuing anyway"
+" 2>&1 || echo "[start] WARNING: DB health check failed, continuing anyway"
 
 echo "[start] starting nginx (listening on ${PORT})"
 exec nginx -g 'daemon off;'
