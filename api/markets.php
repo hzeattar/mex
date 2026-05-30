@@ -18,9 +18,14 @@ $grouped = isset($_GET['grouped']);
 $withQuotes = (int)($_GET['with_quotes'] ?? 0) === 1;
 $lite = (int)($_GET['lite'] ?? 0) === 1;
 $forceLive = ((int)($_GET['force_live'] ?? 0) === 1);
-$allowListRescue = $forceLive || ((int)($_GET['rescue'] ?? env('MARKETS_RESCUE_LIVE_ON_MISS', '0')) === 1);
 $scope = strtolower((string)($_GET['scope'] ?? ''));
 $supportedOnly = ((int)($_GET['supported'] ?? 0) === 1) || in_array($scope, ['home', 'trade'], true);
+$supportedInteractive = $withQuotes && $supportedOnly && in_array($scope, ['home', 'trade'], true);
+$disableSupportedRescue = ((int)($_GET['no_rescue'] ?? 0) === 1)
+  || ((int)env('MARKETS_SUPPORTED_RESCUE_DISABLED', '0') === 1);
+$allowListRescue = $forceLive
+  || ($supportedInteractive && !$disableSupportedRescue)
+  || ((int)($_GET['rescue'] ?? env('MARKETS_RESCUE_LIVE_ON_MISS', '0')) === 1);
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -248,7 +253,7 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
         'ttl' => (int)($limits['ttl'] ?? 2),
         'yahoo_ttl' => (int)($limits['ttl'] ?? 2),
         'massive_ttl' => (int)($limits['ttl'] ?? 2),
-        'persist' => false,
+        'persist' => ((int)env('MARKETS_RESCUE_PERSIST_QUOTES', '1') === 1),
         'direct_budget' => (int)($limits['direct_budget'] ?? $batch),
         'direct_yahoo_budget' => (int)($limits['direct_yahoo_budget'] ?? $batch),
         'chart_budget' => (int)($limits['chart_budget'] ?? 0),
@@ -271,11 +276,26 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
       $items[$entry['index']]['updated_at'] = (int)($row['updated_at'] ?? time());
       $items[$entry['index']]['source'] = (string)($row['source'] ?? 'provider_live');
       $items[$entry['index']]['is_stale'] = !empty($row['is_stale']);
-      $items[$entry['index']]['timing_class'] = (string)($row['timing_class'] ?? 'live');
+      $items[$entry['index']]['timing_class'] = function_exists('qa_quote_timing_class')
+        ? qa_quote_timing_class($row, $type)
+        : (string)($row['timing_class'] ?? 'live');
+      $items[$entry['index']]['age_sec'] = 0;
+      $items[$entry['index']]['delayed'] = ($items[$entry['index']]['timing_class'] === 'delayed');
     }
   }
 
   return $items;
+}
+
+function vp_filter_priced_supported_items(array $items, string $scope, bool $withQuotes, bool $supportedOnly): array {
+  if (!$supportedOnly || !$withQuotes || !in_array($scope, ['home', 'trade'], true)) return $items;
+  $pricedItems = array_values(array_filter($items, static function(array $it): bool {
+    $price = (float)($it['price'] ?? 0);
+    $source = strtolower(trim((string)($it['source'] ?? '')));
+    $timing = strtolower(trim((string)($it['timing_class'] ?? '')));
+    return $price > 0 && $source !== '' && $source !== 'unavailable' && $timing !== 'unavailable' && $timing !== 'seed';
+  }));
+  return $pricedItems ?: $items;
 }
 
 
@@ -457,14 +477,7 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
 
-  if ($supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
-    $pricedItems = array_values(array_filter($items, static function(array $it): bool {
-      $price = (float)($it['price'] ?? 0);
-      $source = strtolower(trim((string)($it['source'] ?? '')));
-      return $price > 0 && $source !== '' && $source !== 'unavailable';
-    }));
-    if ($pricedItems) $items = $pricedItems;
-  }
+  $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
 
   return $items;
 }
@@ -596,7 +609,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v11_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '.json';
+$cacheKey = 'markets_v12_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '18') : (int)env('MARKETS_CACHE_TTL', '60');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -636,6 +649,7 @@ if ($fastSupported) {
   if ($withQuotes && $allowListRescue) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
+  $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, true);
 
   if ($grouped) {
     $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];
@@ -896,14 +910,7 @@ try {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
 
-  if ($supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
-    $pricedItems = array_values(array_filter($items, static function(array $it): bool {
-      $price = (float)($it['price'] ?? 0);
-      $source = strtolower(trim((string)($it['source'] ?? '')));
-      return $price > 0 && $source !== '' && $source !== 'unavailable';
-    }));
-    if ($pricedItems) $items = $pricedItems;
-  }
+  $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
 
   if ($grouped) {
     $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];
@@ -935,6 +942,10 @@ try {
   }
 
   $items = vp_market_items_from_rows($rows, $typeAlias, $fallbackScope, false, true, [], false);
+  if ($withQuotes && $allowListRescue && in_array($fallbackScope, ['home', 'trade'], true)) {
+    $items = vp_rescue_supported_market_quotes($items, $fallbackScope);
+  }
+  $items = vp_filter_priced_supported_items($items, $fallbackScope, $withQuotes, true);
   if ($grouped) {
     $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];
     foreach ($items as $it) {
