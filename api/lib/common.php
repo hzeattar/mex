@@ -436,6 +436,9 @@ function db(): PDO {
     }
 
     // Auto-install/upgrade schema (MySQL + SQLite). Idempotent & safe to call often.
+    // On Railway, schema migration runs on the first request. If it takes too long
+    // or fails, we must not crash the entire container — return the PDO connection
+    // so the app can at least serve pages that don't need DB.
     static $bootstrapped = false;
     if (!$bootstrapped && env('AUTO_MIGRATE','1') !== '0') {
       $bootstrapped = true;
@@ -446,40 +449,46 @@ function db(): PDO {
 
       // Defensive: in case an older schema.php is deployed
       if (!function_exists('schema_install')) {
-        throw new RuntimeException('schema_install() is missing. Upload /api/lib/schema.php from the latest package.');
+        error_log('[db] schema_install() is missing — skipping migration');
+        return $pdo;
       }
       if (!function_exists('schema_upgrade')) {
-        // schema_upgrade is optional; older installs may not have it
         function schema_upgrade(PDO $pdo, string $driver = 'mysql'): void { /* noop */ }
       }
 
       // Install base tables then apply upgrades (both are idempotent)
-      $lock = migrate_lock_acquire();
+      // Wrap in try/catch so a failed migration does not kill the container.
       try {
-        schema_install($pdo, $driver);
-        schema_upgrade($pdo, $driver);
-        vp_feature_bootstrap($pdo, $driver);
-        // Seed defaults only once (heavy writes). Upgrades should not re-seed unless forced.
-        $seedDone = '';
+        $lock = migrate_lock_acquire();
         try {
-          $seedDone = (string)(schema_setting_get($pdo, $driver, 'META_SEED_DONE', '') ?: '');
-        } catch (Throwable $e) {
+          schema_install($pdo, $driver);
+          schema_upgrade($pdo, $driver);
+          vp_feature_bootstrap($pdo, $driver);
+          // Seed defaults only once (heavy writes). Upgrades should not re-seed unless forced.
           $seedDone = '';
-        }
-        if ($seedDone !== '1' || defined('FORCE_SEED')) {
-          if (function_exists('schema_seed_defaults')) {
-            schema_seed_defaults($pdo, $driver);
+          try {
+            $seedDone = (string)(schema_setting_get($pdo, $driver, 'META_SEED_DONE', '') ?: '');
+          } catch (Throwable $e) {
+            $seedDone = '';
           }
+          if ($seedDone !== '1' || defined('FORCE_SEED')) {
+            if (function_exists('schema_seed_defaults')) {
+              schema_seed_defaults($pdo, $driver);
+            }
+          }
+        // Persist schema version in DB to avoid repeated upgrades when marker file isn't writable.
+          try {
+            $now = time();
+            schema_setting_set($pdo, $driver, 'META_SCHEMA_VER', (string)$schemaVer, $now);
+          } catch (Throwable $e) {
+            // ignore
+          }
+        } finally {
+          migrate_lock_release($lock);
         }
-      // Persist schema version in DB to avoid repeated upgrades when marker file isn't writable.
-        try {
-          $now = time();
-          schema_setting_set($pdo, $driver, 'META_SCHEMA_VER', (string)$schemaVer, $now);
-        } catch (Throwable $e) {
-          // ignore
-        }
-      } finally {
-        migrate_lock_release($lock);
+      } catch (Throwable $migrateError) {
+        error_log('[db] Schema migration failed (non-fatal): ' . $migrateError->getMessage());
+        // Still return the PDO connection — the app can handle missing tables gracefully
       }
     }
     return $pdo;

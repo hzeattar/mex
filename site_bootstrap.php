@@ -7,11 +7,14 @@ require_once __DIR__ . '/api/lib/schema.php';
 try {
   $env = strtolower((string)env('APP_ENV', 'local'));
   $autoMigrate = (string)env('AUTO_MIGRATE', '0') === '1';
+  // On Railway with AUTO_MIGRATE=1, the db() function already handles
+  // schema migration internally. Do NOT call schema_install/upgrade/seed
+  // here to avoid double migration on every request — just trigger db()
+  // to ensure the connection and migration are initialized.
   if ($autoMigrate || !in_array($env, ['production', 'prod'], true)) {
     $pdo = db();
-    schema_install($pdo, db_driver());
-    schema_upgrade($pdo, db_driver());
-    schema_seed_defaults($pdo, db_driver());
+    // db() already calls schema_install, schema_upgrade, vp_feature_bootstrap,
+    // and schema_seed_defaults internally — no need to call them again here.
   }
 } catch (Throwable $e) {
   // Public pages should stay reachable even if maintenance tasks fail.
