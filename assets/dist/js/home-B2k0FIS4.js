@@ -1,4 +1,4 @@
-import{g,e as o,m as v,a as y,b as x,i as P,p as S,n as U,c as $,t as j}from"./main-XDGP6CXh.js";import{m as R,a as D}from"./marketIcon-BqfrwX_4.js";function ne(){const e=g("brand")||{},s=K(),a=g("mode"),n=(g("level")||{}).current||{};return`
+import{g,e as o,m as v,a as y,b as x,i as P,p as S,n as U,c as $,t as j}from"./main-B1VhLVa2.js";import{m as R,a as D}from"./marketIcon-BqfrwX_4.js";function ne(){const e=g("brand")||{},s=K(),a=g("mode"),n=(g("level")||{}).current||{};return`
     <div class="space-y-6 animate-fade-in">
       <!-- Hero -->
       <section class="card feature-hero relative overflow-hidden">

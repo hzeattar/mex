@@ -255,7 +255,9 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
         'ttl' => (int)($limits['ttl'] ?? 2),
         'yahoo_ttl' => (int)($limits['ttl'] ?? 2),
         'massive_ttl' => (int)($limits['ttl'] ?? 2),
-        'persist' => ((int)env('MARKETS_RESCUE_PERSIST_QUOTES', '1') === 1),
+        // List endpoints must remain read/paint fast even when MySQL is
+        // reconnecting. Cron warmers are responsible for durable persistence.
+        'persist' => ((int)env('MARKETS_RESCUE_PERSIST_QUOTES', '0') === 1),
         'direct_budget' => (int)($limits['direct_budget'] ?? $batch),
         'direct_yahoo_budget' => (int)($limits['direct_yahoo_budget'] ?? $batch),
         'chart_budget' => (int)($limits['chart_budget'] ?? 0),
@@ -291,6 +293,7 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
 
 function vp_filter_priced_supported_items(array $items, string $scope, bool $withQuotes, bool $supportedOnly): array {
   if (!$supportedOnly || !$withQuotes || !in_array($scope, ['home', 'trade'], true)) return $items;
+  if ((int)env('MARKETS_HIDE_UNPRICED_SUPPORTED', '0') !== 1) return $items;
   $pricedItems = array_values(array_filter($items, static function(array $it): bool {
     $price = (float)($it['price'] ?? 0);
     $source = strtolower(trim((string)($it['source'] ?? '')));
@@ -611,7 +614,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v13_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
+$cacheKey = 'markets_v14_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '18') : (int)env('MARKETS_CACHE_TTL', '60');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -647,7 +650,10 @@ if ($fastSupported) {
     if (count($rows) > $limit) $rows = array_slice($rows, 0, $limit);
   }
 
-  $items = vp_market_items_from_rows($rows, $typeAlias, $scope, $withQuotes, true, [], false);
+  // Supported first-screen lists are deliberately DB-free/cache-free here:
+  // the UI hydrates missing rows through quotes.php batch requests, while
+  // this endpoint always returns a stable curated list immediately.
+  $items = vp_market_items_from_rows($rows, $typeAlias, $scope, false, true, [], false);
   if ($withQuotes && $allowListRescue) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }

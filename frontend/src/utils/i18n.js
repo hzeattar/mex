@@ -1,7 +1,6 @@
 // Lightweight i18n service for the Vite client shell.
-// EN and AR are first-class. Other stored locales safely fall back to EN.
-const SUPPORTED = ['en', 'ar', 'ru', 'de', 'fr', 'hi', 'zh'];
-const PRIMARY = ['en', 'ar'];
+// EN and AR are first-class. Any stored legacy locale safely falls back to EN.
+const SUPPORTED = ['en', 'ar'];
 const FALLBACK_LOCALE = 'en';
 
 const BUILT_INS = {
@@ -40,7 +39,7 @@ const BUILT_INS = {
     'nav.news': 'الأخبار',
     'nav.support': 'الدعم',
     'nav.account': 'الحساب',
-    'common.loading': 'جاري التحميل...',
+    'common.loading': 'جار التحميل...',
     'common.retry': 'إعادة المحاولة',
     'common.connection_failed': 'تعذر الاتصال',
     'common.no_notifications': 'لا توجد إشعارات',
@@ -65,7 +64,7 @@ const PHRASES = {
     Account: 'الحساب',
     Deposit: 'إيداع',
     Withdraw: 'سحب',
-    KYC: 'التحقق',
+    KYC: 'التوثيق',
     Wallet: 'الأموال',
     Markets: 'الأسواق',
     'Fast watch': 'متابعة سريعة',
@@ -86,7 +85,7 @@ const PHRASES = {
     Orders: 'الأوامر',
     History: 'السجل',
     'Real account required': 'مطلوب حساب حقيقي',
-    'KYC required': 'مطلوب التحقق',
+    'KYC required': 'مطلوب التوثيق',
     'Copy Real': 'نسخ حقيقي',
     'Current level': 'المستوى الحالي',
     'Next level': 'المستوى التالي',
@@ -96,7 +95,7 @@ const PHRASES = {
     'Manual requests': 'طلبات يدوية',
     Deposits: 'الإيداعات',
     Withdrawals: 'السحوبات',
-    Verification: 'التحقق',
+    Verification: 'التوثيق',
     Approved: 'مقبول',
     Pending: 'قيد المراجعة',
     Rejected: 'مرفوض',
@@ -110,6 +109,21 @@ const PHRASES = {
     Notifications: 'الإشعارات',
     'No notifications': 'لا توجد إشعارات',
     'Failed to load': 'تعذر التحميل',
+    'Trading desk': 'مكتب التداول',
+    'Professional trading & investment platform': 'منصة تداول وعقود احترافية',
+    'Open Trade': 'افتح التداول',
+    'Real balance': 'الرصيد الحقيقي',
+    Available: 'المتاح',
+    Balance: 'الرصيد',
+    Holds: 'محجوز',
+    Mode: 'الوضع',
+    'Internal execution': 'تنفيذ داخلي',
+    'Quick actions': 'إجراءات سريعة',
+    'Copy signals and level contracts': 'نسخ صفقات وعقود مرتبطة بالمستوى',
+    'Start a real funding request': 'ابدأ طلب تمويل حقيقي',
+    'Request manual admin payout': 'اطلب سحب يدوي من الإدارة',
+    'Verify account documents': 'وثق مستندات الحساب',
+    'Client trading platform': 'منصة تداول العملاء',
   },
 };
 
@@ -118,19 +132,16 @@ let translations = { ...BUILT_INS.en };
 
 function normalizeLocale(lang) {
   const normalized = String(lang || FALLBACK_LOCALE).slice(0, 2).toLowerCase();
-  if (!SUPPORTED.includes(normalized)) return FALLBACK_LOCALE;
-  return normalized;
+  return SUPPORTED.includes(normalized) ? normalized : FALLBACK_LOCALE;
 }
 
 export async function initI18n() {
   locale = normalizeLocale(locale);
-  if (!PRIMARY.includes(locale)) locale = FALLBACK_LOCALE;
   await loadLocale(locale);
 }
 
 export async function loadLocale(lang) {
   locale = normalizeLocale(lang);
-  if (!PRIMARY.includes(locale)) locale = FALLBACK_LOCALE;
 
   let remote = {};
   try {
@@ -181,7 +192,7 @@ export function translateDom(root = document) {
       if (parent.closest('[data-no-i18n],script,style,textarea,input,select')) return NodeFilter.FILTER_REJECT;
       const text = node.nodeValue || '';
       const trimmed = text.trim();
-      if (!trimmed || trimmed.length > 80 || !phraseMap[trimmed]) return NodeFilter.FILTER_REJECT;
+      if (!trimmed || trimmed.length > 90 || !phraseMap[trimmed]) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
