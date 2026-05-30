@@ -1,511 +1,298 @@
 <?php
 declare(strict_types=1);
-
 require_once __DIR__ . '/site_bootstrap.php';
 
-$isLoggedIn = false;
+$lang = 'en';
+$rtl = false;
 try {
-  $isLoggedIn = session_user_id() > 0;
+  require_once __DIR__ . '/includes/shared/site-helpers.php';
+  $lang = site_locale();
+  $rtl = site_is_rtl($lang);
 } catch (Throwable $e) {
-  $isLoggedIn = false;
+  $l = strtolower((string)($_GET['lang'] ?? $_COOKIE['vp_lang'] ?? 'en'));
+  $lang = in_array($l, ['en','ar','ru','tr','fr','de','es','it','pt','nl','pl','zh','ja','ko','vi'], true) ? $l : 'en';
+  $rtl = $lang === 'ar';
 }
 
-$lang = strtolower((string)($_GET['lang'] ?? $_COOKIE['vp_lang'] ?? 'en'));
-$lang = in_array($lang, ['en', 'ar'], true) ? $lang : 'en';
-$isRtl = $lang === 'ar';
-$next = rawurlencode('/app.php#/home');
+$isLoggedIn = false;
+try { $isLoggedIn = session_user_id() > 0; } catch (Throwable $e) { $isLoggedIn = false; }
 
-$copy = [
-  'en' => [
-    'meta' => 'MEX Group — Professional multi-asset trading platform for crypto, forex, stocks, commodities, copy trading, and investment contracts.',
-    'login' => 'Log in',
-    'register' => 'Create account',
-    'dashboard' => 'Open dashboard',
-    'logout' => 'Log out',
-    'nav_markets' => 'Markets',
-    'nav_platform' => 'Platform',
-    'nav_earn' => 'Earn',
-    'nav_funding' => 'Funding',
-    'nav_support' => 'Support',
-    'kicker' => 'MEX Group Trading Desk',
-    'title_1' => 'Trade',
-    'title_2' => 'Global',
-    'title_3' => 'Markets',
-    'subtitle' => 'Access 70+ instruments across crypto, forex, stocks, and commodities from one professional workspace. Fast execution, transparent pricing, and institutional-grade security.',
-    'primary' => 'Start trading',
-    'secondary' => 'View platform',
-    'stat_markets' => '70+',
-    'stat_markets_label' => 'Markets',
-    'stat_uptime' => '24/7',
-    'stat_uptime_label' => 'Operations',
-    'stat_kyc' => 'KYC',
-    'stat_kyc_label' => 'Verified',
-    'markets_title' => 'Live market prices',
-    'markets_sub' => 'Real-time and delayed prices from our multi-provider quote engine. Auto-refreshing every 15 seconds.',
-    'platform_title' => 'Built for serious traders',
-    'platform_sub' => 'A lightweight web platform rebuilt for speed, clarity, and mobile-first trading workflows.',
-    'feature_trade' => 'Trading workspace',
-    'feature_trade_text' => 'Professional charts, order ticket with instant confirmation, positions tracking, and full trade history.',
-    'feature_wallet' => 'Funding & wallet',
-    'feature_wallet_text' => 'Manual deposits and withdrawals with proof upload, status timelines, ledger history, and optional Stripe card checkout.',
-    'feature_earn' => 'Copy trading & contracts',
-    'feature_earn_text' => 'Follow top signal providers, subscribe to level-gated investment contracts, and earn passively.',
-    'feature_admin' => 'Operations admin',
-    'feature_admin_text' => 'Full control: users, KYC, deposits, withdrawals, markets, signals, contracts, support, and audit logs.',
-    'trust_title' => 'Why traders choose MEX Group',
-    'trust_1' => 'Multi-asset coverage',
-    'trust_1_text' => 'Crypto, forex, stocks, commodities, and futures — all from one account.',
-    'trust_2' => 'Transparent pricing',
-    'trust_2_text' => 'Live quotes from multiple providers with clear source labels and price age indicators.',
-    'trust_3' => 'Secure operations',
-    'trust_3_text' => 'KYC verification, protected sessions, and manual funding review for every transaction.',
-    'trust_4' => 'Copy trading',
-    'trust_4_text' => 'Follow verified signal providers with transparent performance metrics and risk indicators.',
-    'earn_title' => 'Copy signals and level contracts',
-    'earn_sub' => 'Demo users can preview the desk. Real account users with approved KYC can copy signals or subscribe to level-gated contracts.',
-    'funding_title' => 'Funding that stays auditable',
-    'funding_sub' => 'Client requests stay visible from creation to approval. Card payments use Stripe Checkout when enabled, and manual methods remain available.',
-    'support_title' => 'Launch your client area',
-    'support_sub' => 'Log in to manage trades, verification, deposits, withdrawals, copy subscriptions, contracts, support tickets, and account settings.',
-    'footer_company' => 'Company',
-    'footer_products' => 'Products',
-    'footer_resources' => 'Resources',
-    'footer_legal' => 'Legal',
-    'footer_about' => 'About MEX Group',
-    'footer_about_text' => 'Professional multi-asset trading platform serving global clients with transparent pricing and institutional-grade operations.',
-    'footer_trade' => 'Trading Desk',
-    'footer_copy' => 'Copy Trading',
-    'footer_invest' => 'Investment Contracts',
-    'footer_funding' => 'Funding',
-    'footer_kyc' => 'KYC Verification',
-    'footer_support' => 'Support Center',
-    'footer_api' => 'API Documentation',
-    'footer_terms' => 'Terms of Service',
-    'footer_privacy' => 'Privacy Policy',
-    'footer_risk' => 'Risk Disclosure',
-    'footer_disclaimer' => 'Trading involves significant risk. Real execution is internal to the platform unless separately integrated with an external broker or exchange. Past performance does not guarantee future results.',
-    'last_updated' => 'Last updated',
-    'seconds_ago' => 'seconds ago',
-    'loading' => 'Loading',
-    'live' => 'Live',
-    'delayed' => 'Delayed',
-  ],
-  'ar' => [
-    'meta' => 'MEX Group — منصة تداول احترافية متعددة الأصول للكريبتو والفوركس والأسهم والسلع ونسخ الصفقات والعقود الاستثمارية.',
-    'login' => 'تسجيل الدخول',
-    'register' => 'إنشاء حساب',
-    'dashboard' => 'فتح لوحة التحكم',
-    'logout' => 'تسجيل الخروج',
-    'nav_markets' => 'الأسواق',
-    'nav_platform' => 'المنصة',
-    'nav_earn' => 'العقود والنسخ',
-    'nav_funding' => 'التمويل',
-    'nav_support' => 'الدعم',
-    'kicker' => 'مكتب تداول MEX Group',
-    'title_1' => 'تداول',
-    'title_2' => 'الأسواق',
-    'title_3' => 'العالمية',
-    'subtitle' => 'وصول لـ 70+ أداة عبر الكريبتو والفوركس والأسهم والسلع من مساحة عمل واحدة احترافية. تنفيذ سريع، تسعير شفاف، وأمان بمستوى مؤسسي.',
-    'primary' => 'ابدأ التداول',
-    'secondary' => 'شاهد المنصة',
-    'stat_markets' => '70+',
-    'stat_markets_label' => 'أسواق',
-    'stat_uptime' => '24/7',
-    'stat_uptime_label' => 'عمليات',
-    'stat_kyc' => 'KYC',
-    'stat_kyc_label' => 'موثق',
-    'markets_title' => 'أسعار الأسواق المباشرة',
-    'markets_sub' => 'أسعار مباشرة ومتأخرة من محرك تسعير متعدد المزودين. تحديث تلقائي كل 15 ثانية.',
-    'platform_title' => 'مصممة للمتداولين المحترفين',
-    'platform_sub' => 'منصة ويب خفيفة أعيد بناؤها للسرعة والوضوح وتجربة تداول ممتازة على الموبايل.',
-    'feature_trade' => 'مساحة التداول',
-    'feature_trade_text' => 'شارت احترافي، تذكرة أوامر مع تأكيد فوري، متابعة المراكز، وسجل كامل للصفقات.',
-    'feature_wallet' => 'المحفظة والتمويل',
-    'feature_wallet_text' => 'إيداع وسحب يدوي مع رفع إثبات، مراحل حالة، سجل محاسبي، ودفع بطاقة عبر Stripe عند التفعيل.',
-    'feature_earn' => 'نسخ الصفقات والعقود',
-    'feature_earn_text' => 'تابع أفضل مزودي الإشارات، اشترك في عقود استثمارية حسب المستوى، واكسب بشكل سلبي.',
-    'feature_admin' => 'إدارة التشغيل',
-    'feature_admin_text' => 'تحكم كامل: المستخدمون، KYC، الإيداعات، السحوبات، الأسواق، الإشارات، العقود، الدعم، وسجل التدقيق.',
-    'trust_title' => 'لماذا يختار المتداولون MEX Group',
-    'trust_1' => 'تغطية متعددة الأصول',
-    'trust_1_text' => 'كريبتو، فوركس، أسهم، سلع، وعقود آجلة — كلها من حساب واحد.',
-    'trust_2' => 'تسعير شفاف',
-    'trust_2_text' => 'أسعار مباشرة من مزودين متعددين مع تسمية المصدر ومؤشر عمر السعر.',
-    'trust_3' => 'عمليات آمنة',
-    'trust_3_text' => 'تحقق KYC، جلسات محمية، ومراجعة يدوية للتمويل لكل معاملة.',
-    'trust_4' => 'نسخ الصفقات',
-    'trust_4_text' => 'تابع مزودي إشارات موثقين بمقاييس أداء شفافة ومؤشرات مخاطر.',
-    'earn_title' => 'إشارات نسخ وعقود حسب المستوى',
-    'earn_sub' => 'مستخدمو الديمو يمكنهم المعاينة. مستخدمو الحساب الحقيقي مع KYC معتمد يمكنهم نسخ الإشارات أو الاشتراك في العقود.',
-    'funding_title' => 'تمويل قابل للمراجعة',
-    'funding_sub' => 'طلبات العملاء تظل واضحة من الإنشاء حتى الاعتماد. الدفع بالبطاقة عبر Stripe Checkout عند التفعيل، والطرق اليدوية متاحة.',
-    'support_title' => 'ادخل إلى منطقة العميل',
-    'support_sub' => 'سجل الدخول لإدارة التداول، التوثيق، الإيداعات، السحوبات، نسخ الصفقات، العقود، تذاكر الدعم، وإعدادات الحساب.',
-    'footer_company' => 'الشركة',
-    'footer_products' => 'المنتجات',
-    'footer_resources' => 'الموارد',
-    'footer_legal' => 'قانوني',
-    'footer_about' => 'عن MEX Group',
-    'footer_about_text' => 'منصة تداول احترافية متعددة الأصول تخدم عملاء عالميين بتسعير شفاف وعمليات بمستوى مؤسسي.',
-    'footer_trade' => 'مكتب التداول',
-    'footer_copy' => 'نسخ الصفقات',
-    'footer_invest' => 'العقود الاستثمارية',
-    'footer_funding' => 'التمويل',
-    'footer_kyc' => 'تحقق KYC',
-    'footer_support' => 'مركز الدعم',
-    'footer_api' => 'توثيق API',
-    'footer_terms' => 'شروط الخدمة',
-    'footer_privacy' => 'سياسة الخصوصية',
-    'footer_risk' => 'إفصاح المخاطر',
-    'footer_disclaimer' => 'التداول يحتوي على مخاطر كبيرة. التنفيذ الحقيقي داخلي داخل المنصة ما لم يتم ربط وسيط أو بورصة خارجية. الأداء السابق لا يضمن النتائج المستقبلية.',
-    'last_updated' => 'آخر تحديث',
-    'seconds_ago' => 'ثانية مضت',
-    'loading' => 'جار التحميل',
-    'live' => 'مباشر',
-    'delayed' => 'متأخر',
-  ],
-];
+function _h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
-$t = $copy[$lang];
-$brand = 'MEX Group';
-$product = 'MEX Group';
-$brandEsc = htmlspecialchars($brand, ENT_QUOTES, 'UTF-8');
-$productEsc = htmlspecialchars($product, ENT_QUOTES, 'UTF-8');
+// Simple copy for index without full helper system
+$txt = function(string $key) use($lang): string {
+  $t = [
+    'hero_kicker'=>['en'=>'MEX GROUP TRADING DESK','ar'=>'مكتب تداول MEX GROUP','ru'=>'ТОРГОВЫЙ СТОЛ','tr'=>'MEX GROUP TİCARET','fr'=>'BUREAU','de'=>'MEX GROUP TRADING','es'=>'ESCRITORIO','it'=>'DESK','pt'=>'MESA','nl'=>'HANDELSPLATFORM','pl'=>'STANOWISKO','zh'=>'MEX GROUP 交易台','ja'=>'トレーディングデスク','ko'=>'트레이딩 데스크','vi'=>'BÀN GIAO DỊCH'],
+    'hero_title_1'=>['en'=>'Trade','ar'=>'تداول','ru'=>'Торгуйте','tr'=>'Ticaret','fr'=>'Tradez','de'=>'Handeln','es'=>'Opere','it'=>'Fai','pt'=>'Negocie','nl'=>'Handel','pl'=>'Handluj','zh'=>'交易','ja'=>'取引','ko'=>'거래','vi'=>'Giao dịch'],
+    'hero_title_2'=>['en'=>'Global Markets','ar'=>'الأسواق العالمية','ru'=>'глобальными','tr'=>'Küresel','fr'=>'Marchés','de'=>'Globale','es'=>'Mercados','it'=>'Mercati','pt'=>'Mercados','nl'=>'Wereldmarkten','pl'=>'Na Rynkach','zh'=>'全球市场','ja'=>'グローバル市場','ko'=>'글로벌','vi'=>'Thị Trường'],
+    'hero_title_3'=>['en'=>'From One Account','ar'=>'من حساب واحد','ru'=>'Из одного','tr'=>'tek','fr'=>'depuis un','de'=>'Mit einem','es'=>'desde una','it'=>'da un','pt'=>'de uma','nl'=>'uit één','pl'=>'z jednego','zh'=>'一个账户','ja'=>'一つで全て','ko'=>'하나의','vi'=>'Từ Một'],
+    'hero_subtitle'=>['en'=>'Access 70+ instruments across crypto, forex, stocks, and commodities with professional charts, instant execution, and institutional-grade security. Start with a free demo.','ar'=>'وصول لـ 70+ أداة عبر الكريبتو والفوركس مع شارت احترافي وأمان بمستوى مؤسسي. ابدأ بديمو مجاني.','ru'=>'Доступ к 70+ инструментов крипто, форекс, акций с профессиональными графиками. Начните с бесплатного демо.','tr'=>'Kripto, forex, emtialar arasında 70+ enstrümana profesyonel grafiklerle erişin. Ücretsiz demo ile başlayın.','fr'=>'Accédez à 70+ instruments crypto, forex avec graphiques professionnels. Commencez par un essai gratuit.','de'=>'Greifen Sie auf 70+ Instrumente zu mit professionellen Charts. Starten Sie kostenlos.','es'=>'Accede a 70+ instrumentos con gráficos profesionales. Empieza con demo gratis.','it'=>'Accedi a 70+ strumenti con grafici professionali. Inizia con una demo gratuita.','pt'=>'Acesse 70+ instrumentos com gráficos profissionais. Comece com demo grátis.','nl'=>'Toegang tot 70+ instrumenten met professionele grafieken. Start gratis met een demo.','pl'=>'Dostęp do 70+ instrumentów z profesjonalnymi wykresami. Zacznij od darmowego dema.','zh'=>'通过专业图表访问加密、外汇等 70 多种工具。从免费模拟开始。','ja'=>'プロフェッショナルチャートで70以上の銘柄にアクセス。無料デモから開始。','ko'=>'전문 차트로 70개 이상 상품에 접근하세요. 무료 데모로 시작하세요.','vi'=>'Truy cập 70+ công cụ với biểu đồ chuyên nghiệp. Bắt đầu bằng tài khoản demo miễn phí.'],
+    'hero_cta_primary'=>['en'=>'Start trading','ar'=>'ابدأ التداول','ru'=>'Начать','tr'=>'Başla','fr'=>'Commencer','de'=>'Jetzt traden','es'=>'Empieza','it'=>'Inizia','pt'=>'Comece','nl'=>'Start','pl'=>'Zacznij','zh'=>'开始交易','ja'=>'開始','ko'=>'거래 시작','vi'=>'Bắt đầu'],
+    'hero_cta_secondary'=>['en'=>'View platform','ar'=>'شاهد المنصة','ru'=>'Посмотреть','tr'=>'Gör','fr'=>'Voir','de'=>'Plattform','es'=>'Ver','it'=>'Vedi','pt'=>'Ver','nl'=>'Bekijk','pl'=>'Zobacz','zh'=>'浏览平台','ja'=>'プラットフォーム','ko'=>'플랫폼','vi'=>'Xem nền tảng'],
+    'markets_live'=>['en'=>'Live Prices','ar'=>'أسعار مباشرة','ru'=>'Цены','tr'=>'Canlı','fr'=>'Prix','de'=>'Kurse','es'=>'Precios','it'=>'Prezzi','pt'=>'Preços','nl'=>'Koersen','pl'=>'Ceny','zh'=>'实时价格','ja'=>'ライブ相場','ko'=>'실시간 가격','vi'=>'Giá trực tiếp'],
+    'markets_sub'=>['en'=>'Real-time and delayed quotes from our multi-provider engine. Auto-refreshing every 15 seconds.','ar'=>'أسعار مباشرة من محرك متعدد المزودين. تحديث كل 15 ثانية.','ru'=>'Котировки от многоуровневой системы. Обновление каждые 15 сек.','tr'=>'Çoklu sağlayıcı motorumuzdan canlı kotasyonlar. Her 15 saniyede.','fr'=>'Devis en direct de notre moteur multi-fournisseurs. Auto toutes les 15s.','de'=>'Echtzeitkurse von unserem Multi-Provider. Alle 15 Sekunden.','es'=>'Cotizaciones de nuestro motor multi-proveedor. Auto cada 15s.','it'=>'Quotazioni in tempo reale dal motore multi-provider. Ogni 15s.','pt'=>'Cotações de nosso motor multi-provedor. A cada 15s.','nl'=>'Koersen van multiprovider. Elke 15 sec.','pl'=>'Kursy z wielodostawczego silnika. Co 15 sek.','zh'=>'来自多提供商引擎的实时报价。每15秒自动刷新。','ja'=>'マルチプロバイダーエンジンからのライブ相場。15秒ごとに自動更新。','ko'=>'다중 공급자 엔진의 실시간 호가. 15초마다 갱신.','vi'=>'Từ động cơ đa nhà cung cấp. Tự động mỗi 15 giây.'],
+    'update'=>['en'=>'Updated','ar'=>'آخر تحديث','ru'=>'Обновлено','tr'=>'Güncellendi','fr'=>'Mis à jour','de'=>'Aktualisiert','es'=>'Actualizado','it'=>'Aggiornato','pt'=>'Atualizado','nl'=>'Geüpdatet','pl'=>'Zaktualizowano','zh'=>'更新于','ja'=>'更新','ko'=>'업데이트','vi'=>'Cập nhật'],
+    'sec'=>['en'=>'seconds ago','ar'=>'ثانية مضت','ru'=>'сек. назад','tr'=>'sn önce','fr'=>'secondes','de'=>'Sek.','es'=>'segundos','it'=>'secondi','pt'=>'segundos','nl'=>'sec.','pl'=>'sek. temu','zh'=>'秒前','ja'=>'秒前','ko'=>'초 전','vi'=>'giây trước'],
+    'trust_title'=>['en'=>'Why MEX Group','ar'=>'لماذا MEX','ru'=>'Почему MEX','tr'=>'Neden','fr'=>'Pourquoi','de'=>'Warum','es'=>'¿Por qué?','it'=>'Perché','pt'=>'Por que','nl'=>'Waarom MEX','pl'=>'Dlaczego','zh'=>'为何选择 MEX','ja'=>'なぜMEX？','ko'=>'왜 MEX?','vi'=>'Tại sao MEX?'],
+    'multi'=>['en'=>'Multi-asset','ar'=>'تعدد الأصول','ru'=>'Мультиактив','tr'=>'Çoklu','fr'=>'Multi-actif','de'=>'Multi-Asset','es'=>'Multi-activo','it'=>'Multi-asset','pt'=>'Multiativo','nl'=>'Multi-asset','pl'=>'Wieloaktywowa','zh'=>'多资产','ja'=>'マルチアセット','ko'=>'다중자산','vi'=>'Đa tài sản'],
+    'multi_text'=>['en'=>'Crypto, forex, stocks, commodities — all from one account.','ar'=>'كريبتو، فوركس، أسهم، سلع — كلها من حساب واحد.','ru'=>'Крипта, форекс, акции, товары — всё из одного счёта.','tr'=>'Kripto, forex, hisse, emtialar — hepsi tek hesaptan.','fr'=>'Crypto, forex, actions, matières — tout depuis un compte.','de'=>'Krypto, Forex, Aktien, Rohstoffe — alles von einem Konto.','es'=>'Cripto, forex, acciones, materias — todo desde una cuenta.','it'=>'Cripto, forex, azioni, materie — tutto da un conto.','pt'=>'Cripto, forex, ações, commodities — tudo de uma conta.','nl'=>'Crypto, forex, aandelen, grondstoffen — van één account.','pl'=>'Krypto, forex, akcje, surowce — wszystko z jednego konta.','zh'=>'加密货币、外汇、股票、商品——全部来自一个账户。','ja'=>'暗号通貨、為替、株式、商品 — 一つの口座で全て。','ko'=>'암호화폐, 외환, 주식, 원자재 — 모두 하나의 계정에서.','vi'=>'Tiền mã hóa, ngoại hối, cổ phiếu, hàng hóa — tất cả từ một tài khoản.'],
+    'pricing'=>['en'=>'Transparent Pricing','ar'=>'تسعير شفاف','ru'=>'Прозрачность','tr'=>'Şeffaf','fr'=>'Prix ','de'=>'Transparente','es'=>'Precios ','it'=>'Prezzi ','pt'=>'Preços ','nl'=>'Transparante','pl'=>'Przezroczyste','zh'=>'透明定价','ja'=>'透明な価格','ko'=>'투명한 가격','vi'=>'Minh bạch'],
+    'pricing_text'=>['en'=>'Live quotes from multiple providers with clear source labels and price age indicators.','ar'=>'أسعار من مزودين متعددين مع تسمية المصدر ومؤشر عمر السعر.','ru'=>'Прямые котировки от нескольких провайдеров с ясными метками источника.','tr'=>'Birden fazla sağlayıcıdan canlı kotasyonlar, net kaynak etiketleri.','fr'=>'Devis temps réel de plusieurs fournisseurs avec étiquettes de source.','de'=>'Echtzeitkurse von mehreren Anbietern mit klaren Quellenlabels.','es'=>'Cotizaciones en vivo de varios proveedores con etiquetas de fuente.','it'=>'Quotazioni in tempo reale da più provider con etichette fonte.','pt'=>'Cotações ao vivo de vários provedores com etiquetas de origem.','nl'=>'Livekoersen van meerdere providers met bronlabels.','pl'=>'Kursy na żywo od wielu dostawców z jasnymi etykietami źródeł.','zh'=>'多个提供商的实时报价，带有清晰的来源标签。','ja'=>'複数プロバイダーからのライブ相場、明確なソースラベル付き。','ko'=>'여러 공급자의 실시간 호가, 출처 라벨.','vi'=>'Báo giá trực tiếp từ nhiều nhà cung cấp với nhãn nguồn rõ ràng.'],
+    'secure'=>['en'=>'Institutional Security','ar'=>'أمان مؤسسي','ru'=>'Безопасность','tr'=>'Kurumsal','fr'=>'Sécurité','de'=>'Institutionelle','es'=>'Seguridad','it'=>'Sicurezza','pt'=>'Segurança','nl'=>'Institutionele','pl'=>'Bezpieczeństwo','zh'=>'机构级安全','ja'=>'機関レベル','ko'=>'기관 수준','vi'=>'Bảo mật tổ chức'],
+    'secure_text'=>['en'=>'KYC verification, protected sessions, and manual funding review.','ar'=>'تحقق KYC، جلسات محمية، مراجعة يدوية.','ru'=>'Верификация KYC, защищённые сессии и ручная проверка средств.','tr'=>'KYC doğrulama, korumalı oturumlar ve manuel fon incelemesi.','fr'=>'Vérification KYC, sessions protégées et examen manuel des fonds.','de'=>'KYC-Verifizierung, geschützte Sitzungen und manuelle Prüfung.','es'=>'Verificación KYC, sesiones protegidas y revisión manual de fondos.','it'=>'Verifica KYC, sessioni protette, controllo manuale dei fondi.','pt'=>'Verificação KYC, sessões protegidas e revisão manual de fundos.','nl'=>'KYC-verificatie, beveiligde sessies en handmatige review.','pl'=>'Weryfikacja KYC, chronione sesje, szyfrowana komunikacja.','zh'=>'KYC验证、受保护会话和人工资金审核。','ja'=>'KYC認証、保護されたセッション、手動資金審査。','ko'=>'KYC 인증, 보호된 세션, 수동 자금 검토.','vi'=>'Xác minh KYC, phiên bảo vệ, giao tiếp mã hóa.'],
+    'copy'=>['en'=>'Copy Trading','ar'=>'نسخ الصفقات','ru'=>'Копирование','tr'=>'Kopyalama','fr'=>'Copier','de'=>'Kopierhandel','es'=>'Copiar','it'=>'Copy Trading','pt'=>'Copy','nl'=>'Copy','pl'=>'Copy Trading','zh'=>'跟单交易','ja'=>'コピー','ko'=>'자동 복제','vi'=>'Sao chép'],
+    'copy_text'=>['en'=>'Follow verified signal providers with transparent performance metrics.','ar'=>'تابع مزودي إشارات موثقين بمقاييس أداء شفافة.','ru'=>'Следите за подтверждёнными поставщиками сигналов с прозрачными показателями.','tr'=>'Doğrulanmış sinyal sağlayıcılarını şeffaf metriklerle takip edin.','fr'=>'Suivez des fournisseurs de signaux vérifiés avec indicateurs transparents.','de'=>'Folgen Sie verifizierten Signalgebern mit transparenten Leistungskennzahlen.','es'=>'Siga proveedores de señales verificados con métricas transparentes.','it'=>'Segui provider di segnali verificati con metriche trasparenti.','pt'=>'Siga provedores de sinais verificados com métricas transparentes.','nl'=>'Volg geverifieerde signalen met transparante prestaties.','pl'=>'Śledź zweryfikowanych dostawców sygnałów z transparentnymi wskaźnikami.','zh'=>'通过透明的绩效指标跟踪经过验证的信号提供商。','ja'=>'透明なパフォーマンス指標で検証済みのシグナル提供業者をフォロー。','ko'=>'투명한 성능 지표로 검증된 시그널 공급자를 팔로우하세요.','vi'=>'Theo dõi nhà cung cấp tín hiệu đã xác minh với chỉ số hiệu suất minh bạch.'],
+    'cta_title'=>['en'=>'Ready to start?','ar'=>'مستعد تبدأ؟','ru'=>'Готовы?','tr'=>'Hazır mısın?','fr'=>'Prêt?','de'=>'Bereit?','es'=>'¿Listo?','it'=>'Pronto?','pt'=>'Pronto?','nl'=>'Klaar?','pl'=>'Gotowy?','zh'=>'准备好了吗？','ja'=>'準備はできましたか？','ko'=>'준비되셨나요?','vi'=>'Sẵn sàng?'],
+    'cta_sub'=>['en'=>'Open your MEX Group account in minutes.','ar'=>'افتح حساب MEX Group في دقائق.','ru'=>'Откройте счёт MEX за несколько минут.','tr'=>'Dakikalar içinde hesabınızı açın.','fr'=>'Ouvrez votre compte MEX Group en minutes.','de'=>'Eröffnen Sie Ihr Konto in Minuten.','es'=>'Abre tu cuenta MEX en minutos.','it'=>'Apri il tuo conto MEX in pochi minuti.','pt'=>'Abra sua conta MEXGroup em minutos.','nl'=>'Open uw account in enkele minuten.','pl'=>'Otwórz konto MEX w kilka minut.','zh'=>'在几分钟内开设您的账户。','ja'=>'数分でアカウントを開設。','ko'=>'몇 분 만에 계정을 개설하세요.','vi'=>'Mở tài khoản MEX Group trong vài phút.'],
+    'cta_btn'=>['en'=>'Create free account','ar'=>'إنشاء حساب مجاني','ru'=>'Создать','tr'=>'Ücretsiz','fr'=>'Créer','de'=>'Kostenlos','es'=>'Crear','it'=>'Crea account','pt'=>'Criar conta','nl'=>'Gratis','pl'=>'Załóż konto','zh'=>'创建免费账户','ja'=>'無料アカウント','ko'=>'무료 계정','vi'=>'Tạo tài khoản'],
+    'footer_desc'=>['en'=>'Professional multi-asset trading platform with transparent pricing.','ar'=>'منصة تداول احترافية متعددة بتسعير شفاف.','ru'=>'Профессиональная мультиактивная платформа с прозрачным ценообразованием.','tr'=>'Profesyonel çoklu varlık ticaret platformu.','fr'=>'Plateforme multi-actif avec prix transparents.','de'=>'Professionelle Multi-Asset-Plattform mit transparenten Preisen.','es'=>'Plataforma multi-activo con precios transparentes.','it'=>'Piattaforma multi-asset con prezzi trasparenti.','pt'=>'Plataforma multiativo com preços transparentes.','nl'=>'Professioneel multi-asset platform met transparante prijzen.','pl'=>'Profesjonalna platforma wieloaktywowa z transparentnymi cenami.','zh'=>'专业的多资产交易平台，提供透明定价。','ja'=>'透明な価格設定のプロフェッショナルな複合資産取引プラットフォーム。','ko'=>'전문 다중 자산 거래 플랫폼, 투명한 가격 책정.','vi'=>'Nền tảng giao dịch đa tài sản chuyên nghiệp với định giá minh bạch.'],
+    'footer_disclaimer'=>['en'=>'Trading involves significant risk. Past performance does not guarantee future results.','ar'=>'التداول يحتوي على مخاطر. الأداء السابق لا يضمن النتائج.','ru'=>'Торговля связана с рисками. Прошлые результаты не гарантируют будущего.','tr'=>'Ticaret ciddi risk içerir. Geçmiş performans gelecek sonuçları garanti etmez.','fr'=>'Le trading comporte des risques. La performance passée ne garantit pas les résultats futurs.','de'=>'Der Handel birgt Risiken. Die bisherige Leistung garantiert keine Zukunft.','es'=>'El trading conlleva riesgos. El rendimiento pasado no garantiza resultados futuros.','it'=>'Il trading comporta rischi. Le performance passate non garantiscono risultati futuri.','pt'=>'A negociação envolve riscos. O desempenho passado não garante resultados futuros.','nl'=>'Trading brengt risico s met zich mee. Eerdere prestaties garanderen niet de toekomst.','pl'=>'Handel wiąże się z ryzykiem. Wyniki z przeszłości nie gwarantują przyszłości.','zh'=>'交易涉及重大风险。过去的业绩不能保证未来的结果。','ja'=>'取引には大きな損失リスクがあります。過去の業績は将来の結果を保証しません。','ko'=>'거래에는 상당한 손실 위험이 있습니다. 과거 성과가 미래 결과를 보장하지는 않습니다.','vi'=>'Giao dịch này có rủi ro lớn. Kết quả trong quá khứ không đảm bảo tương lai.'],
+  ];
+  return $t[$lang] ?? $t['en'] ?? $key;
+};
 
-function e(string $value): string {
-  return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-}
-
-// Ticker symbols for the marquee
 $tickerSymbols = [
-  ['BTCUSDT','crypto'],['ETHUSDT','crypto'],['BNBUSDT','crypto'],['XRPUSDT','crypto'],
-  ['EURUSD','forex'],['GBPUSD','forex'],['USDJPY','forex'],
-  ['XAUUSD','commodities'],['USOIL','commodities'],
-  ['AAPL','stocks'],['TSLA','stocks'],
+  ['BTCUSDT','crypto'],['ETHUSDT','crypto'],['BNBUSDT','crypto'],['SOLUSDT','crypto'],
+  ['EURUSD','forex'],['GBPUSD','forex'],['USDJPY','forex'],['XAUUSD','commodities'],
+  ['AAPL','stocks'],['TSLA','stocks'],['NVDA','stocks'],
+  ['USOIL','commodities'],['NATGAS','commodities'],
 ];
 ?>
 <!doctype html>
-<html lang="<?php echo e($lang); ?>" dir="<?php echo $isRtl ? 'rtl' : 'ltr'; ?>">
+<html lang="<?php echo _h($lang); ?>" dir="<?php echo $rtl ? 'rtl' : 'ltr'; ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#060b18">
-  <meta name="description" content="<?php echo e($t['meta']); ?>">
-  <title><?php echo $brandEsc; ?> | <?php echo $productEsc; ?></title>
+  <meta name="description" content="MEX Group — Professional multi-asset trading platform for crypto, forex, stocks, commodities, copy trading.">
+  <title>MEX Group | Trading Platform</title>
   <link rel="stylesheet" href="/assets/css/public-site.css?v=<?php echo @filemtime(__DIR__ . '/assets/css/public-site.css') ?: time(); ?>">
 </head>
-<body class="mex-landing-page <?php echo $isRtl ? 'is-rtl' : ''; ?>">
+<body class="mex-landing-page <?php echo $rtl ? 'is-rtl' : ''; ?>">
 
   <!-- Header -->
-  <header class="mex-landing-top">
-    <a class="mex-landing-brand" href="/?lang=<?php echo e($lang); ?>" aria-label="<?php echo $brandEsc; ?>">
-      <img src="/assets/img/mexgroup_logo.svg" alt="" onerror="this.style.display='none'">
-      <span>
-        <strong><?php echo $brandEsc; ?></strong>
-        <small><?php echo $productEsc; ?></small>
-      </span>
-    </a>
-    <nav class="mex-landing-nav" aria-label="Primary">
-      <a href="#markets"><?php echo e($t['nav_markets']); ?></a>
-      <a href="#platform"><?php echo e($t['nav_platform']); ?></a>
-      <a href="#earn"><?php echo e($t['nav_earn']); ?></a>
-      <a href="#funding"><?php echo e($t['nav_funding']); ?></a>
-      <a href="#support"><?php echo e($t['nav_support']); ?></a>
-    </nav>
-    <div class="mex-landing-actions">
-      <a class="mex-lang-pill" href="/?lang=<?php echo $lang === 'ar' ? 'en' : 'ar'; ?>"><?php echo $lang === 'ar' ? 'EN' : 'AR'; ?></a>
-      <?php if ($isLoggedIn): ?>
-        <a class="mex-btn mex-btn-soft" href="/logout.php"><?php echo e($t['logout']); ?></a>
-        <a class="mex-btn mex-btn-primary" href="/app.php#/home"><?php echo e($t['dashboard']); ?></a>
-      <?php else: ?>
-        <a class="mex-btn mex-btn-soft" href="/login.php?lang=<?php echo e($lang); ?>&next=<?php echo $next; ?>"><?php echo e($t['login']); ?></a>
-        <a class="mex-btn mex-btn-primary" href="/register.php?lang=<?php echo e($lang); ?>&next=<?php echo $next; ?>"><?php echo e($t['register']); ?></a>
-      <?php endif; ?>
+  <header class="mex-header" id="mex-header">
+    <div class="mex-header-inner">
+      <a class="mex-logo" href="/?lang=<?php echo _h($lang); ?>" aria-label="MEX Group">
+        <img src="/assets/img/mexgroup_logo.svg" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+        <span class="mex-logo-fallback">MX</span>
+        <strong>MEX Group</strong>
+      </a>
+      <nav class="mex-header-nav" aria-label="Main">
+        <a class="mex-nav-link is-active" href="/?lang=<?php echo _h($lang); ?>">Home</a>
+        <a class="mex-nav-link" href="/markets.php?lang=<?php echo _h($lang); ?>">Markets</a>
+        <a class="mex-nav-link" href="/features.php?lang=<?php echo _h($lang); ?>">Features</a>
+        <a class="mex-nav-link" href="/about.php?lang=<?php echo _h($lang); ?>">About</a>
+        <a class="mex-nav-link" href="/contact.php?lang=<?php echo _h($lang); ?>">Contact</a>
+      </nav>
+      <div class="mex-header-actions">
+        <!-- Language Switcher -->
+        <div class="mex-lang-wrap">
+          <button class="mex-lang-btn" id="mex-lang-trigger" aria-haspopup="listbox" aria-expanded="false">
+            <span class="mex-lang-current"><?php echo strtoupper(_h($lang)); ?></span>
+            <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <div class="mex-lang-dropdown" id="mex-lang-dropdown" role="listbox">
+            <?php $langs=['en'=>'English','ar'=>'العربية','ru'=>'Русский','tr'=>'Türkçe','fr'=>'Français','de'=>'Deutsch','es'=>'Español','it'=>'Italiano','pt'=>'Português','nl'=>'Nederlands','pl'=>'Polski','zh'=>'中文','ja'=>'日本語','ko'=>'한국어','vi'=>'Tiếng Việt']; foreach($langs as $c=>$name): ?>
+              <a class="mex-lang-opt<?php echo $c===$lang?' is-active':''; ?>" href="?lang=<?php echo _h($c); ?>"><?php echo _h($name); ?></a>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
+        <?php if ($isLoggedIn): ?>
+          <a class="mex-btn mex-btn-primary mex-btn-sm" href="/app.php#/home">Open App</a>
+        <?php else: ?>
+          <div class="mex-header-btns">
+            <a class="mex-btn mex-btn-soft mex-btn-sm" href="/login.php?lang=<?php echo _h($lang); ?>">Log in</a>
+            <a class="mex-btn mex-btn-primary mex-btn-sm" href="/register.php?lang=<?php echo _h($lang); ?>">Create Account</a>
+          </div>
+        <?php endif; ?>
+
+        <button class="mex-hamburger" id="mex-hamburger" aria-label="Menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
     </div>
   </header>
+
+  <!-- Hero -->
+  <section class="mex-hero-v2">
+    <div class="mex-hero-grid">
+      <div class="mex-hero-text">
+        <span class="mex-kicker"><?php echo _h($txt('hero_kicker')); ?></span>
+        <h1><span class="accent"><?php echo _h($txt('hero_title_1')); ?></span> <?php echo _h($txt('hero_title_2')); ?><br><?php echo _h($txt('hero_title_3')); ?></h1>
+        <p><?php echo _h($txt('hero_subtitle')); ?></p>
+        <div class="mex-hero-actions">
+          <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/trade' : '/register.php?lang=' . _h($lang) . '&next=' . rawurlencode('/app.php#/trade'); ?>"><?php echo _h($txt('hero_cta_primary')); ?></a>
+          <a class="mex-btn mex-btn-soft" href="/features.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('hero_cta_secondary')); ?></a>
+        </div>
+        <div class="mex-hero-stats-v2">
+          <div class="mex-hero-stat"><strong>70+</strong><span>Instruments</span></div>
+          <div class="mex-hero-stat"><strong>99.9%</strong><span>Uptime</span></div>
+          <div class="mex-hero-stat"><strong>180+</strong><span>Countries</span></div>
+        </div>
+      </div>
+      <div class="mex-hero-terminal" aria-label="Market terminal preview">
+        <div class="mex-terminal-top"><span></span><span></span><span></span><strong>MEX Group Desk</strong></div>
+        <div class="mex-terminal-chart">
+          <i style="height:38%"></i><i style="height:52%"></i><i style="height:46%"></i><i style="height:67%"></i><i style="height:58%"></i><i style="height:74%"></i><i style="height:61%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:70%"></i><i style="height:84%"></i><i style="height:76%"></i>
+        </div>
+        <div class="mex-terminal-row"><span>BTCUSDT</span><strong data-price-symbol="BTCUSDT">--</strong><em>LIVE</em></div>
+        <div class="mex-terminal-row"><span>EURUSD</span><strong data-price-symbol="EURUSD">--</strong><em>FX</em></div>
+        <div class="mex-terminal-row"><span>XAUUSD</span><strong data-price-symbol="XAUUSD">--</strong><em>Metals</em></div>
+      </div>
+    </div>
+  </section>
 
   <!-- Live Ticker Strip -->
   <div class="mex-ticker-strip" id="ticker-strip">
     <div class="mex-ticker-track">
       <div class="mex-ticker-items" id="ticker-items">
-        <?php for ($i = 0; $i < 3; $i++): ?>
-        <?php foreach ($tickerSymbols as $ts): ?>
-          <span class="mex-ticker-item" data-ticker-symbol="<?php echo e($ts[0]); ?>" data-ticker-type="<?php echo e($ts[1]); ?>">
-            <b><?php echo e($ts[0]); ?></b>
-            <em class="mex-ticker-price" data-price-symbol="<?php echo e($ts[0]); ?>">--</em>
-            <i class="mex-ticker-change" data-change-symbol="<?php echo e($ts[0]); ?>">0.00%</i>
+        <?php for($loop=0;$loop<3;$loop++): foreach($tickerSymbols as $ts): ?>
+          <span class="mex-ticker-item" data-ticker-symbol="<?php echo _h($ts[0]); ?>">
+            <b><?php echo _h($ts[0]); ?></b>
+            <em class="mex-ticker-price" data-price-symbol="<?php echo _h($ts[0]); ?>">--</em>
+            <i class="mex-ticker-change" data-change-symbol="<?php echo _h($ts[0]); ?>">0.00%</i>
           </span>
-        <?php endforeach; ?>
-        <?php endfor; ?>
+        <?php endforeach; endfor; ?>
       </div>
     </div>
   </div>
 
-  <main>
-    <!-- Hero Section -->
-    <section class="mex-hero">
-      <div class="mex-hero-copy">
-        <span class="mex-kicker"><?php echo e($t['kicker']); ?></span>
-        <h1><span class="hero-line"><?php echo e($t['title_1']); ?></span> <span class="mex-accent"><?php echo e($t['title_2']); ?></span> <span class="hero-line"><?php echo e($t['title_3']); ?></span></h1>
-        <p><?php echo e($t['subtitle']); ?></p>
-        <div class="mex-hero-actions">
-          <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/trade' : '/register.php?lang=' . e($lang) . '&next=' . $next; ?>"><?php echo e($t['primary']); ?></a>
-          <a class="mex-btn mex-btn-soft" href="<?php echo $isLoggedIn ? '/app.php#/home' : '/login.php?lang=' . e($lang) . '&next=' . $next; ?>"><?php echo e($t['secondary']); ?></a>
-        </div>
-        <div class="mex-hero-stats">
-          <div><strong><?php echo e($t['stat_markets']); ?></strong><span><?php echo e($t['stat_markets_label']); ?></span></div>
-          <div><strong><?php echo e($t['stat_uptime']); ?></strong><span><?php echo e($t['stat_uptime_label']); ?></span></div>
-          <div><strong><?php echo e($t['stat_kyc']); ?></strong><span><?php echo e($t['stat_kyc_label']); ?></span></div>
-        </div>
+  <!-- Trust Section -->
+  <section class="mex-section">
+    <div class="mex-section-head">
+      <span class="mex-kicker">MEX Group</span>
+      <h2><?php echo _h($txt('trust_title')); ?></h2>
+    </div>
+    <div class="mex-trust-grid-v2">
+      <div class="mex-trust-card-v2">
+        <div class="mex-trust-ico-v2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
+        <h3><?php echo _h($txt('multi')); ?></h3>
+        <p><?php echo _h($txt('multi_text')); ?></p>
       </div>
-      <div class="mex-hero-terminal" aria-label="Market terminal preview">
-        <div class="mex-terminal-top">
-          <span></span><span></span><span></span>
-          <strong><?php echo $productEsc; ?> Desk</strong>
-        </div>
-        <div class="mex-terminal-chart">
-          <i style="height:38%"></i><i style="height:52%"></i><i style="height:46%"></i><i style="height:67%"></i><i style="height:58%"></i><i style="height:74%"></i><i style="height:61%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:70%"></i><i style="height:84%"></i><i style="height:76%"></i>
-        </div>
-        <div class="mex-terminal-row"><span>BTCUSDT</span><strong data-price-symbol="BTCUSDT">--</strong><em><?php echo e($t['live']); ?></em></div>
-        <div class="mex-terminal-row"><span>EURUSD</span><strong data-price-symbol="EURUSD">--</strong><em><?php echo e($t['delayed']); ?></em></div>
-        <div class="mex-terminal-row"><span>XAUUSD</span><strong data-price-symbol="XAUUSD">--</strong><em>Metals</em></div>
+      <div class="mex-trust-card-v2">
+        <div class="mex-trust-ico-v2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
+        <h3><?php echo _h($txt('pricing')); ?></h3>
+        <p><?php echo _h($txt('pricing_text')); ?></p>
       </div>
-    </section>
-
-    <!-- Markets Section -->
-    <section id="markets" class="mex-section">
-      <div class="mex-section-head">
-        <span class="mex-kicker"><?php echo e($t['nav_markets']); ?></span>
-        <h2><?php echo e($t['markets_title']); ?></h2>
-        <p><?php echo e($t['markets_sub']); ?></p>
-        <div class="mex-price-age" id="price-age" style="display:none">
-          <small><?php echo e($t['last_updated']); ?>: <span id="price-age-sec">0</span> <?php echo e($t['seconds_ago']); ?></small>
-        </div>
+      <div class="mex-trust-card-v2">
+        <div class="mex-trust-ico-v2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+        <h3><?php echo _h($txt('secure')); ?></h3>
+        <p><?php echo _h($txt('secure_text')); ?></p>
       </div>
-      <div class="mex-market-grid">
-        <?php foreach ([
-          ['BTCUSDT', 'Bitcoin / Tether', 'crypto'],
-          ['ETHUSDT', 'Ethereum / Tether', 'crypto'],
-          ['EURUSD', 'Euro / Dollar', 'forex'],
-          ['GBPUSD', 'Pound / Dollar', 'forex'],
-          ['XAUUSD', 'Gold Spot', 'commodities'],
-          ['USOIL', 'WTI Crude Oil', 'commodities'],
-          ['AAPL', 'Apple Inc.', 'stocks'],
-          ['TSLA', 'Tesla Inc.', 'stocks'],
-        ] as $m): ?>
-          <article class="mex-market-card mex-market-card-live">
-            <div class="mex-market-icon"><?php echo e(substr($m[0], 0, 2)); ?></div>
-            <div>
-              <strong><?php echo e($m[0]); ?></strong>
-              <span><?php echo e($m[1]); ?></span>
-            </div>
-            <div class="mex-market-price">
-              <strong data-price-symbol="<?php echo e($m[0]); ?>" data-price-type="<?php echo e($m[2]); ?>">--</strong>
-              <small data-change-symbol="<?php echo e($m[0]); ?>"><?php echo e($t['loading']); ?></small>
-            </div>
-          </article>
-        <?php endforeach; ?>
-      </div>
-    </section>
-
-    <!-- Trust Section -->
-    <section id="trust" class="mex-section">
-      <div class="mex-section-head" style="text-align:center">
-        <span class="mex-kicker"><?php echo e($t['trust_title']); ?></span>
-        <h2><?php echo e($t['trust_title']); ?></h2>
-      </div>
-      <div class="mex-trust-grid">
-        <article class="mex-trust-card">
-          <div class="mex-trust-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-          </div>
-          <h3><?php echo e($t['trust_1']); ?></h3>
-          <p><?php echo e($t['trust_1_text']); ?></p>
-        </article>
-        <article class="mex-trust-card">
-          <div class="mex-trust-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-          </div>
-          <h3><?php echo e($t['trust_2']); ?></h3>
-          <p><?php echo e($t['trust_2_text']); ?></p>
-        </article>
-        <article class="mex-trust-card">
-          <div class="mex-trust-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          </div>
-          <h3><?php echo e($t['trust_3']); ?></h3>
-          <p><?php echo e($t['trust_3_text']); ?></p>
-        </article>
-        <article class="mex-trust-card">
-          <div class="mex-trust-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          </div>
-          <h3><?php echo e($t['trust_4']); ?></h3>
-          <p><?php echo e($t['trust_4_text']); ?></p>
-        </article>
-      </div>
-    </section>
-
-    <!-- Platform Features Section -->
-    <section id="platform" class="mex-section mex-feature-section">
-      <div class="mex-section-head">
-        <span class="mex-kicker"><?php echo $productEsc; ?></span>
-        <h2><?php echo e($t['platform_title']); ?></h2>
-        <p><?php echo e($t['platform_sub']); ?></p>
-      </div>
-      <div class="mex-feature-grid">
-        <article><span>01</span><h3><?php echo e($t['feature_trade']); ?></h3><p><?php echo e($t['feature_trade_text']); ?></p></article>
-        <article><span>02</span><h3><?php echo e($t['feature_wallet']); ?></h3><p><?php echo e($t['feature_wallet_text']); ?></p></article>
-        <article><span>03</span><h3><?php echo e($t['feature_earn']); ?></h3><p><?php echo e($t['feature_earn_text']); ?></p></article>
-        <article><span>04</span><h3><?php echo e($t['feature_admin']); ?></h3><p><?php echo e($t['feature_admin_text']); ?></p></article>
-      </div>
-    </section>
-
-    <!-- Earn Section -->
-    <section id="earn" class="mex-section mex-split-section">
-      <div>
-        <span class="mex-kicker">Earn</span>
-        <h2><?php echo e($t['earn_title']); ?></h2>
-        <p><?php echo e($t['earn_sub']); ?></p>
-      </div>
-      <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/invest' : '/register.php?lang=' . e($lang) . '&next=' . rawurlencode('/app.php#/invest'); ?>"><?php echo e($t['nav_earn']); ?></a>
-    </section>
-
-    <!-- Funding Section -->
-    <section id="funding" class="mex-section mex-split-section">
-      <div>
-        <span class="mex-kicker">Funding</span>
-        <h2><?php echo e($t['funding_title']); ?></h2>
-        <p><?php echo e($t['funding_sub']); ?></p>
-      </div>
-      <a class="mex-btn mex-btn-soft" href="<?php echo $isLoggedIn ? '/app.php#/deposit' : '/login.php?lang=' . e($lang) . '&next=' . rawurlencode('/app.php#/deposit'); ?>"><?php echo e($t['nav_funding']); ?></a>
-    </section>
-
-    <!-- Support / CTA Section -->
-    <section id="support" class="mex-section mex-cta">
-      <span class="mex-kicker">Client area</span>
-      <h2><?php echo e($t['support_title']); ?></h2>
-      <p><?php echo e($t['support_sub']); ?></p>
-      <div class="mex-hero-actions">
-        <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/home' : '/login.php?lang=' . e($lang) . '&next=' . $next; ?>"><?php echo $isLoggedIn ? e($t['dashboard']) : e($t['login']); ?></a>
-        <a class="mex-btn mex-btn-soft" href="/app.php#/support"><?php echo e($t['nav_support']); ?></a>
-      </div>
-    </section>
-  </main>
-
-  <!-- Footer -->
-  <footer class="mex-landing-footer-full">
-    <div class="mex-footer-grid">
-      <div class="mex-footer-col mex-footer-brand-col">
-        <strong class="mex-footer-logo"><?php echo $brandEsc; ?></strong>
-        <p><?php echo e($t['footer_about_text']); ?></p>
-      </div>
-      <div class="mex-footer-col">
-        <h4><?php echo e($t['footer_products']); ?></h4>
-        <a href="/app.php#/trade"><?php echo e($t['footer_trade']); ?></a>
-        <a href="/app.php#/invest"><?php echo e($t['footer_copy']); ?></a>
-        <a href="/app.php#/invest"><?php echo e($t['footer_invest']); ?></a>
-        <a href="/app.php#/deposit"><?php echo e($t['footer_funding']); ?></a>
-      </div>
-      <div class="mex-footer-col">
-        <h4><?php echo e($t['footer_resources']); ?></h4>
-        <a href="/app.php#/kyc"><?php echo e($t['footer_kyc']); ?></a>
-        <a href="/app.php#/support"><?php echo e($t['footer_support']); ?></a>
-        <a href="#"><?php echo e($t['footer_api']); ?></a>
-      </div>
-      <div class="mex-footer-col">
-        <h4><?php echo e($t['footer_legal']); ?></h4>
-        <a href="#"><?php echo e($t['footer_terms']); ?></a>
-        <a href="#"><?php echo e($t['footer_privacy']); ?></a>
-        <a href="#"><?php echo e($t['footer_risk']); ?></a>
+      <div class="mex-trust-card-v2">
+        <div class="mex-trust-ico-v2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
+        <h3><?php echo _h($txt('copy')); ?></h3>
+        <p><?php echo _h($txt('copy_text')); ?></p>
       </div>
     </div>
-    <div class="mex-footer-bottom">
-      <span>&copy; <?php echo date('Y'); ?> <?php echo $brandEsc; ?>. All rights reserved.</span>
-      <small><?php echo e($t['footer_disclaimer']); ?></small>
+  </section>
+
+  <!-- Live Markets -->
+  <section class="mex-section alt" id="markets">
+    <div class="mex-section-head">
+      <span class="mex-kicker">Markets</span>
+      <h2><?php echo _h($txt('markets_live')); ?></h2>
+      <p><?php echo _h($txt('markets_sub')); ?></p>
+    </div>
+    <div class="mex-market-grid-v2">
+      <?php foreach([['BTCUSDT','Bitcoin','crypto'],['ETHUSDT','Ethereum','crypto'],['EURUSD','Euro / Dollar','forex'],['GBPUSD','Pound / Dollar','forex'],['XAUUSD','Gold','commodities'],['AAPL','Apple Inc.','stocks']] as $m): ?>
+        <div class="mex-market-card-v2">
+          <div class="mc-top">
+            <span class="mc-symbol"><?php echo _h($m[0]); ?></span>
+            <span class="mc-badge"><?php echo _h(strtoupper($m[2])); ?></span>
+          </div>
+          <strong class="mc-price" data-price-symbol="<?php echo _h($m[0]); ?>">--</strong>
+          <span class="mc-change" data-change-symbol="<?php echo _h($m[0]); ?>">0.00%</span>
+          <span class="mc-name"><?php echo _h($m[1]); ?></span>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <p style="text-align:center;margin-top:24px"><small style="color:#5d7ea8;font-size:12px"><?php echo _h($txt('update')); ?>: <span id="price-age-sec">0</span> <?php echo _h($txt('sec')); ?></small></p>
+  </section>
+
+  <!-- CTA -->
+  <section class="mex-cta-section">
+    <span class="mex-kicker">MEX Group</span>
+    <h2><?php echo _h($txt('cta_title')); ?></h2>
+    <p><?php echo _h($txt('cta_sub')); ?></p>
+    <div class="mex-cta-row">
+      <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn ? '/app.php#/home' : '/register.php?lang=' . _h($lang); ?>"><?php echo _h($txt('cta_btn')); ?></a>
+      <a class="mex-btn mex-btn-soft" href="/contact.php?lang=<?php echo _h($lang); ?>">Contact us</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mex-footer">
+    <div class="mex-footer-inner">
+      <div class="mex-footer-main">
+        <div class="mex-footer-brand">
+          <a class="mex-footer-logo" href="/?lang=<?php echo _h($lang); ?>">
+            <img src="/assets/img/mexgroup_logo.svg" alt="">
+            <strong>MEX Group</strong>
+          </a>
+          <p><?php echo _h($txt('footer_desc')); ?></p>
+        </div>
+        <div class="mex-footer-col">
+          <h4>Products</h4>
+          <a href="/app.php#/trade">Trading Desk</a>
+          <a href="/app.php#/invest">Copy Trading</a>
+          <a href="/app.php#/invest">Investment Contracts</a>
+          <a href="/app.php#/deposit">Funding</a>
+        </div>
+        <div class="mex-footer-col">
+          <h4>Resources</h4>
+          <a href="/app.php#/kyc">Verification</a>
+          <a href="/app.php#/support">Support Center</a>
+          <a href="#">API Docs</a>
+        </div>
+        <div class="mex-footer-col">
+          <h4>Legal</h4>
+          <a href="/legal.php?page=terms&lang=<?php echo _h($lang); ?>">Terms</a>
+          <a href="/legal.php?page=privacy&lang=<?php echo _h($lang); ?>">Privacy</a>
+          <a href="/legal.php?page=risk&lang=<?php echo _h($lang); ?>">Risk Disclosure</a>
+        </div>
+      </div>
+      <div class="mex-footer-bottom">
+        <span>&copy; <?php echo date('Y'); ?> MEX Group. <?php echo _h($txt('footer_disclaimer')); ?></span>
+      </div>
     </div>
   </footer>
 
+  <!-- Scripts -->
   <script>
   (function(){
-    var lastPriceTime = 0;
-    var priceAgeEl = document.getElementById('price-age');
-    var priceAgeSec = document.getElementById('price-age-sec');
-
-    function fmt(v){
-      var n = Number(v);
-      if (!isFinite(n) || n <= 0) return '--';
-      if (n >= 1000) return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-      if (n >= 1) return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-      return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-    }
-
+    var lastPriceTime=0,secEl=document.getElementById('price-age-sec');
+    setInterval(function(){if(lastPriceTime&&secEl)secEl.textContent=Math.round((Date.now()-lastPriceTime)/1000);},1000);
+    function fmt(v){var n=Number(v);if(!isFinite(n)||n<=0)return'--';if(n>=1000)return'$'+n.toLocaleString(undefined,{maximumFractionDigits:2});if(n>=1)return'$'+n.toLocaleString(undefined,{maximumFractionDigits:4});return'$'+n.toLocaleString(undefined,{maximumFractionDigits:6});}
     function fetchPrices(){
-      var symbols = Array.from(document.querySelectorAll('[data-price-symbol]')).map(function(el){
-        return el.getAttribute('data-price-symbol');
-      });
-      symbols = Array.from(new Set(symbols.filter(Boolean)));
-      if (!symbols.length) return;
-
-      fetch('/api/quotes.php?symbols=' + encodeURIComponent(symbols.join(',')) + '&type=all&purpose=landing', {
-        headers: { Accept: 'application/json' }
-      })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(data){
-        if (!data) return;
-        var quotes = data.quotes || data.data || data.items || [];
-        if (!Array.isArray(quotes) && typeof quotes === 'object') quotes = Object.values(quotes);
-
-        lastPriceTime = Date.now();
-        if (priceAgeEl) priceAgeEl.style.display = '';
-
+      var symbols=Array.from(document.querySelectorAll('[data-price-symbol]')).map(function(el){return el.getAttribute('data-price-symbol');});
+      symbols=Array.from(new Set(symbols.filter(Boolean)));
+      if(!symbols.length)return;
+      fetch('/api/quotes.php?symbols='+encodeURIComponent(symbols.join(','))+'&type=all&purpose=landing',{headers:{Accept:'application/json'}})
+      .then(function(r){return r.ok?r.json():null;}).then(function(data){
+        if(!data)return; lastPriceTime=Date.now();
+        var quotes=data.quotes||data.data||data.items||[];
+        if(!Array.isArray(quotes)&&typeof quotes==='object')quotes=Object.values(quotes);
         quotes.forEach(function(q){
-          var sym = String(q.symbol || q.market || '').toUpperCase();
-          var price = q.price || q.last || q.bid || q.close;
-          var change = q.change_pct || q.changePercent || q.change || 0;
-          var c = Number(change);
-
-          document.querySelectorAll('[data-price-symbol="' + sym + '"]').forEach(function(el){
-            var oldText = el.textContent;
-            var newText = fmt(price);
-            if (oldText !== '--' && oldText !== newText) {
-              el.classList.remove('price-flash-up', 'price-flash-down');
-              void el.offsetWidth;
-              el.classList.add(c >= 0 ? 'price-flash-up' : 'price-flash-down');
-            }
-            el.textContent = newText;
-          });
-
-          document.querySelectorAll('[data-change-symbol="' + sym + '"]').forEach(function(el){
-            el.textContent = isFinite(c) ? ((c >= 0 ? '+' : '') + c.toFixed(2) + '%') : 'Delayed';
-            el.className = c < 0 ? 'down' : 'up';
-          });
-
-          // Update ticker
-          document.querySelectorAll('[data-ticker-symbol="' + sym + '"]').forEach(function(el){
-            var priceEl = el.querySelector('.mex-ticker-price');
-            var changeEl = el.querySelector('.mex-ticker-change');
-            if (priceEl) priceEl.textContent = fmt(price);
-            if (changeEl) {
-              changeEl.textContent = isFinite(c) ? ((c >= 0 ? '+' : '') + c.toFixed(2) + '%') : '';
-              changeEl.className = 'mex-ticker-change ' + (c < 0 ? 'down' : 'up');
-            }
-          });
+          var sym=String(q.symbol||q.market||'').toUpperCase();
+          var price=q.price||q.last||q.bid||q.close;
+          var change=q.change_pct||q.changePercent||q.change||0;
+          var c=Number(change);
+          document.querySelectorAll('[data-price-symbol="'+sym+'"]').forEach(function(el){el.textContent=fmt(price);});
+          document.querySelectorAll('[data-change-symbol="'+sym+'"]').forEach(function(el){el.textContent=isFinite(c)?((c>=0?'+':'')+c.toFixed(2)+'%'):'--';el.className=c<0?'mc-change down':'mc-change';});
+          document.querySelectorAll('[data-ticker-symbol="'+sym+'"]').forEach(function(el){var pe=el.querySelector('.mex-ticker-price');var ce=el.querySelector('.mex-ticker-change');if(pe)pe.textContent=fmt(price);if(ce){ce.textContent=isFinite(c)?((c>=0?'+':'')+c.toFixed(2)+'%'):'';ce.className='mex-ticker-change '+(c<0?'down':'up');}});
         });
-      })
-      .catch(function(){});
+      }).catch(function(){});
     }
-
-    // Update age indicator
-    setInterval(function(){
-      if (lastPriceTime && priceAgeSec) {
-        priceAgeSec.textContent = Math.round((Date.now() - lastPriceTime) / 1000);
-      }
-    }, 1000);
-
-    // Initial fetch + 15s interval
-    fetchPrices();
-    setInterval(fetchPrices, 15000);
+    fetchPrices();setInterval(fetchPrices,15000);
+    // Lang dropdown
+    var lb=document.getElementById('mex-lang-trigger'),ld=document.getElementById('mex-lang-dropdown');
+    if(lb&&ld){lb.addEventListener('click',function(e){e.stopPropagation();var o=lb.getAttribute('aria-expanded')==='true';lb.setAttribute('aria-expanded',o?'false':'true');ld.classList.toggle('is-open',!o);});document.addEventListener('click',function(){lb.setAttribute('aria-expanded','false');ld.classList.remove('is-open');});ld.addEventListener('click',function(e){e.stopPropagation();});}
+    // Mobile menu
+    var h=document.getElementById('mex-hamburger'),n=document.querySelector('.mex-header-nav'),hdr=document.getElementById('mex-header');
+    if(h&&n){h.addEventListener('click',function(){var o=h.getAttribute('aria-expanded')==='true';h.setAttribute('aria-expanded',o?'false':'true');n.classList.toggle('is-open',!o);h.classList.toggle('is-active',!o);});document.querySelectorAll('.mex-header-nav a').forEach(function(a){a.addEventListener('click',function(){h.setAttribute('aria-expanded','false');n.classList.remove('is-open');h.classList.remove('is-active');});});}
   })();
   </script>
 </body>

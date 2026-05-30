@@ -167,13 +167,25 @@ $langUrl = '/register.php?lang=' . rawurlencode($langSwitch) . '&next=' . rawurl
 <body class="mex-auth-page mex-auth-page-register<?php echo $isRtl ? ' is-rtl' : ''; ?>">
   <header class="mex-auth-top">
     <a class="mex-auth-brand" href="/">
-      <img src="/assets/img/mexgroup_logo.svg" alt="MEX Group">
-      <span><strong>MEX Group</strong><small>Trading Platform</small></span>
+      <img src="/assets/img/mexgroup_logo.svg" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="mex-logo-fallback" style="display:none">MX</span><span><strong>MEX Group</strong><small>Trading Platform</small></span>
     </a>
     <nav class="mex-auth-links" aria-label="Account links">
-      <a href="/"><?php echo mex_reg_h($copy['home']); ?></a>
-      <a href="<?php echo mex_reg_h($loginUrl); ?>"><?php echo mex_reg_h($copy['login']); ?></a>
-      <a href="<?php echo mex_reg_h($langUrl); ?>"><?php echo mex_reg_h($copy['lang_switch']); ?></a>
+      <a href="/" class="mex-auth-top-link"><?php echo mex_reg_h($copy['home']); ?></a>
+      <a href="<?php echo mex_reg_h($loginUrl); ?>" class="mex-auth-top-link"><?php echo mex_reg_h($copy['login']); ?></a>
+      <div class="mex-lang-wrap" style="margin-left:8px">
+        <button class="mex-lang-btn" id="mex-lang-trigger" style="padding:2px 8px;min-height:28px">
+          <span class="mex-lang-current"><?php echo strtoupper(mex_reg_h($lang==='ar'?'العربية':'English')); ?></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+        <div class="mex-lang-dropdown" id="mex-lang-dropdown" role="listbox" style="right:0;left:auto">
+          <?php foreach(['en'=>'English','ar'=>'العربية'] as $c=>$n):
+            $isActive = $c===$lang;
+            $url = '/register.php?lang=' . rawurlencode($c) . '&next=' . rawurlencode($next);
+          ?>
+          <a class="mex-lang-opt<?php echo $isActive ? ' is-active' : ''; ?>" href="<?php echo mex_reg_h($url); ?>"><?php echo mex_reg_h($n); ?></a>
+          <?php endforeach; ?>
+        </div>
+      </div>
     </nav>
   </header>
 
@@ -290,6 +302,22 @@ $langUrl = '/register.php?lang=' . rawurlencode($langSwitch) . '&next=' . rawurl
     s.setAttribute('data-userpic', 'false');
     s.setAttribute('data-onauth', 'vpTelegramAuth(user)');
     wrap.appendChild(s);
+  })();
+  // Lang dropdown
+  (function(){
+    var lb=document.getElementById('mex-lang-trigger'),ld=document.getElementById('mex-lang-dropdown');
+    if(!lb||!ld)return;
+    lb.addEventListener('click',function(e){e.stopPropagation();var o=lb.getAttribute('aria-expanded')==='true';lb.setAttribute('aria-expanded',o?'false':'true');ld.classList.toggle('is-open',!o);});
+    document.addEventListener('click',function(){lb.setAttribute('aria-expanded','false');ld.classList.remove('is-open');});
+  })();
+</script>
+<?php else: ?>
+<script>
+  (function(){
+    var lb=document.getElementById('mex-lang-trigger'),ld=document.getElementById('mex-lang-dropdown');
+    if(!lb||!ld)return;
+    lb.addEventListener('click',function(e){e.stopPropagation();var o=lb.getAttribute('aria-expanded')==='true';lb.setAttribute('aria-expanded',o?'false':'true');ld.classList.toggle('is-open',!o);});
+    document.addEventListener('click',function(){lb.setAttribute('aria-expanded','false');ld.classList.remove('is-open');});
   })();
 </script>
 <?php endif; ?>
