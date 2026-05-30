@@ -403,7 +403,7 @@ function db(): PDO {
       throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }
     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', $railway ? '3' : '5')));
+    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', $railway ? '2' : '5')));
     $pdoOptions = [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -416,7 +416,7 @@ function db(): PDO {
     if ($persistentEnabled) {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
     }
-    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '1' : '0')));
+    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '0' : '0')));
     $lastConnectError = null;
     for ($attempt = 0; $attempt <= $connectRetries; $attempt++) {
       try {
