@@ -18,9 +18,15 @@ echo "[start] validating nginx config"
 nginx -t -c /tmp/nginx.conf 2>&1 || { echo "[start] FATAL: nginx config invalid"; exit 1; }
 
 echo "[start] starting php-fpm on 127.0.0.1:9000"
-php-fpm -D 2>&1 || { echo "[start] WARNING: php-fpm start returned non-zero"; }
+php-fpm -F 2>&1 &
+FPM_PID="$!"
 
 sleep 2
+
+if ! kill -0 "$FPM_PID" 2>/dev/null; then
+  echo "[start] FATAL: php-fpm exited before nginx could start"
+  exit 1
+fi
 
 echo "[start] PHP-FPM started, nginx starting on PORT=${PORT}"
 exec nginx -c /tmp/nginx.conf -g 'daemon off;'
