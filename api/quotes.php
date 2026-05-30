@@ -62,14 +62,29 @@ function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive
   $live = [];
   if ($allowLive && $list) {
     try {
+      $count = count($list);
+      $isCrypto = ($typeAlias === 'crypto');
+      $chartBudget = 0;
+      $chartBudgetMs = 0;
+      if (!$isCrypto) {
+        $chartBudget = match ($typeAlias) {
+          'stocks' => min($count, 4),
+          'commodities', 'futures', 'arab' => min($count, 3),
+          'forex' => min($count, 2),
+          default => min($count, 2),
+        };
+        $chartBudgetMs = max(600, min(3500, (int)env('QUOTES_FAST_CHART_FALLBACK_MS_NONCRYPTO', '2200')));
+      }
       $live = quote_bulk_live($list, $typeAlias, [], [
-        'ttl' => $typeAlias === 'crypto' ? 1 : 2,
+        'ttl' => $isCrypto ? 1 : 2,
         'yahoo_ttl' => 2,
         'massive_ttl' => 2,
         'persist' => false,
-        'direct_budget' => min(count($list), $typeAlias === 'crypto' ? 12 : 0),
-        'direct_yahoo_budget' => 0,
-        'chart_budget' => 0,
+        'direct_budget' => min($count, $isCrypto ? 12 : 0),
+        'direct_yahoo_budget' => (!$isCrypto && $count === 1) ? 1 : 0,
+        'chart_budget' => $chartBudget,
+        'chart_budget_ms' => $chartBudgetMs,
+        'allow_direct_batch' => !$isCrypto && $chartBudget > 0,
       ]);
     } catch (Throwable $e) {
       $live = [];
@@ -82,7 +97,8 @@ function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive
     $row = is_array($live[$sym] ?? null) ? $live[$sym] : null;
     $price = (float)($row['price'] ?? 0);
     $source = (string)($row['source'] ?? $row['provider'] ?? 'unavailable');
-    $delayed = !empty($row['delayed']) || in_array($typeAlias, ['stocks','arab'], true) || ($typeAlias !== 'crypto' && strtolower($source) === 'yahoo');
+    $sourceLc = strtolower($source);
+    $delayed = !empty($row['delayed']) || in_array($typeAlias, ['stocks','arab'], true) || ($typeAlias !== 'crypto' && str_starts_with($sourceLc, 'yahoo'));
     $items[] = [
       'symbol' => $sym,
       'type' => $typeAlias,
