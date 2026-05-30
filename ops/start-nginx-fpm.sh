@@ -23,6 +23,7 @@ envsubst '$PORT $EXTRA_LISTEN' < /app/ops/nginx.conf.template > /tmp/nginx.conf
 
 echo "[start] validating nginx config"
 nginx -t -c /tmp/nginx.conf 2>&1 || { echo "[start] FATAL: nginx config invalid"; exit 1; }
+grep -n "listen " /tmp/nginx.conf || true
 
 echo "[start] starting php-fpm on /tmp/php-fpm.sock"
 php-fpm -F 2>&1 &

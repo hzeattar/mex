@@ -61,6 +61,11 @@ ${EXTRA_LISTEN}
       try_files $uri =204;
     }
 
+    location = /__nginx_health {
+      default_type text/plain;
+      return 200 "ok\n";
+    }
+
     location / {
       try_files $uri $uri/ /index.php?$query_string;
     }
