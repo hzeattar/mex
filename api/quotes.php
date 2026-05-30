@@ -66,6 +66,7 @@ function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive
         'ttl' => $typeAlias === 'crypto' ? 1 : 2,
         'yahoo_ttl' => 2,
         'massive_ttl' => 2,
+        'persist' => false,
         'direct_budget' => min(count($list), $typeAlias === 'crypto' ? 12 : 0),
         'direct_yahoo_budget' => 0,
         'chart_budget' => 0,
@@ -141,6 +142,23 @@ if (!$fresh) {
     echo json_encode($cached, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
   }
+}
+
+$isUiFastPath = !$fresh && !$direct && !$strictLive && (
+  $cacheOnly ||
+  $visible ||
+  $purpose === 'watchlist' ||
+  ($purpose === 'focus' && count($list) <= 3)
+);
+if ($isUiFastPath) {
+  $fastAllowLive = !$cacheOnly && !$visible && $purpose === 'focus';
+  $fastPayload = quotes_degraded_payload($typeAlias, $list, $fastAllowLive);
+  $fastPayload['mode'] = $fastAllowLive ? 'focus_fast' : 'cache_fast';
+  $fastPayload['cache_first'] = true;
+  if ($cacheTtl > 0 && qa_payload_has_coverage($fastPayload, $typeAlias, count($list))) {
+    qa_cache_write($cacheFile, $fastPayload);
+  }
+  json_response($fastPayload);
 }
 
 $isNonCrypto = ($typeAlias !== 'crypto');

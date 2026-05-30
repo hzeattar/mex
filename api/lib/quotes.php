@@ -374,6 +374,7 @@ function quote_mark_price(string $symbol, string $assetType = 'crypto'): float {
 function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol = [], array $opts = []): array {
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
+  $persistQuotes = array_key_exists('persist', $opts) ? (bool)$opts['persist'] : true;
   $symbols = array_values(array_unique(array_filter(array_map(static function($s){
     $s = strtoupper(trim((string)$s));
     return ($s !== '' && preg_match('/^[A-Z0-9:._\-]{2,32}$/', $s)) ? $s : '';
@@ -401,19 +402,21 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
         ];
       }
     } catch (Throwable $e) {}
-    foreach ($out as $sym => $row) {
-      $p = (float)($row['price'] ?? 0);
-      if (!($p > 0)) continue;
-      $chg = (float)($row['change_pct'] ?? 0.0);
-      $upd = (int)($row['updated_at'] ?? $now);
-      $src = (string)($row['source'] ?? 'binance');
-      try {
-        quote_upsert($sym, $assetType, $p, $chg, $upd, [
-          'source' => $src,
-          'as_of' => $upd,
-          'ingested_at' => $now,
-        ]);
-      } catch (Throwable $ignoredPersist) {}
+    if ($persistQuotes) {
+      foreach ($out as $sym => $row) {
+        $p = (float)($row['price'] ?? 0);
+        if (!($p > 0)) continue;
+        $chg = (float)($row['change_pct'] ?? 0.0);
+        $upd = (int)($row['updated_at'] ?? $now);
+        $src = (string)($row['source'] ?? 'binance');
+        try {
+          quote_upsert($sym, $assetType, $p, $chg, $upd, [
+            'source' => $src,
+            'as_of' => $upd,
+            'ingested_at' => $now,
+          ]);
+        } catch (Throwable $ignoredPersist) {}
+      }
     }
     return $out;
   }
@@ -605,19 +608,21 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
     } catch (Throwable $e) {}
     $directBudget--;
   }
-  foreach ($out as $sym => $row) {
-    $p = (float)($row['price'] ?? 0);
-    if (!($p > 0)) continue;
-    $chg = (float)($row['change_pct'] ?? 0.0);
-    $upd = (int)($row['updated_at'] ?? $now);
-    $src = (string)($row['source'] ?? 'provider_live');
-    try {
-      quote_upsert($sym, $assetType, $p, $chg, $upd, [
-        'source' => $src,
-        'as_of' => $upd,
-        'ingested_at' => $now,
-      ]);
-    } catch (Throwable $ignoredPersist) {}
+  if ($persistQuotes) {
+    foreach ($out as $sym => $row) {
+      $p = (float)($row['price'] ?? 0);
+      if (!($p > 0)) continue;
+      $chg = (float)($row['change_pct'] ?? 0.0);
+      $upd = (int)($row['updated_at'] ?? $now);
+      $src = (string)($row['source'] ?? 'provider_live');
+      try {
+        quote_upsert($sym, $assetType, $p, $chg, $upd, [
+          'source' => $src,
+          'as_of' => $upd,
+          'ingested_at' => $now,
+        ]);
+      } catch (Throwable $ignoredPersist) {}
+    }
   }
   return $out;
 }
