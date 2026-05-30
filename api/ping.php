@@ -1,9 +1,16 @@
 <?php
-require_once __DIR__ . '/lib/common.php';
+// Ultra-light health check — does NOT require database.
+// Returns 200 as long as PHP-FPM is alive and nginx is forwarding.
+// Add ?diag=1 for DB + runtime diagnostics.
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 $payload = ['ok'=>true,'service'=>'mexgroup','time'=>time()];
 
 if ((int)($_GET['diag'] ?? 0) === 1) {
+  require_once __DIR__ . '/lib/common.php';
   $payload['php'] = [
     'version' => PHP_VERSION,
     'pdo_drivers' => PDO::getAvailableDrivers(),
@@ -32,6 +39,14 @@ if ((int)($_GET['diag'] ?? 0) === 1) {
     'db_pass_present' => env_nonempty('DB_PASS') !== '',
     'placeholder_mysql_config' => railway_mysql_placeholders_only(),
   ];
+  // Test DB connection only in diag mode
+  try {
+    $pdo = db();
+    $payload['db_status'] = 'connected';
+    $payload['db_driver_actual'] = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+  } catch (Throwable $e) {
+    $payload['db_status'] = 'failed: ' . $e->getMessage();
+  }
 }
 
-json_response($payload);
+echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

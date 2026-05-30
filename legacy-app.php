@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/site_bootstrap.php';
-if (session_user_id() <= 0) {
+$legacy_uid = 0;
+try { $legacy_uid = session_user_id(); } catch (Throwable $e) { $legacy_uid = 0; }
+if ($legacy_uid <= 0) {
   $next = rawurlencode('/legacy-app.php#/home');
   header('Location: /login.php?next=' . $next);
   exit;

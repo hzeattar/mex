@@ -89,7 +89,9 @@ $lang = mex_reg_lang();
 $isRtl = $lang === 'ar';
 $copy = mex_register_copy($lang);
 $next = safe_public_redirect_target((string)($_REQUEST['next'] ?? ''), '/app.php#/home');
-if (session_user_id() > 0) { header('Location: ' . $next); exit; }
+$_reg_uid = 0;
+try { $_reg_uid = session_user_id(); } catch (Throwable $e) { $_reg_uid = 0; }
+if ($_reg_uid > 0) { header('Location: ' . $next); exit; }
 
 $s = site_defaults();
 $tgBot = telegram_login_bot_username();

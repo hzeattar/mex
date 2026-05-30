@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/site_bootstrap.php';
-if (session_user_id() <= 0) {
+$_v2_uid = 0;
+try { $_v2_uid = session_user_id(); } catch (Throwable $e) { $_v2_uid = 0; }
+if ($_v2_uid <= 0) {
   $next = rawurlencode('/app-v2.php#/home');
   header('Location: /login.php?next=' . $next);
   exit;

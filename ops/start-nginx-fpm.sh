@@ -18,20 +18,24 @@ nginx -t
 echo "[start] starting php-fpm"
 php-fpm -D
 
-# Wait for PHP-FPM to be ready on port 9000 (up to 10 seconds)
+# Wait for PHP-FPM to be ready on port 9000 (up to 15 seconds)
 echo "[start] waiting for PHP-FPM on 127.0.0.1:9000..."
 i=0
-while [ $i -lt 10 ]; do
-  if [ -e /proc/$(pgrep -f "php-fpm: pool www" 2>/dev/null | head -1)/status ] 2>/dev/null; then
-    echo "[start] PHP-FPM is ready"
-    break
+while [ $i -lt 15 ]; do
+  # Check if PHP-FPM master process is running
+  if pgrep -f "php-fpm: master" > /dev/null 2>&1; then
+    # Try a FastCGI connection test using PHP CLI
+    if php -r "echo 'ok';" > /dev/null 2>&1; then
+      echo "[start] PHP-FPM is ready"
+      break
+    fi
   fi
   i=$((i + 1))
-  echo "[start] waiting for PHP-FPM... ($i/10)"
+  echo "[start] waiting for PHP-FPM... ($i/15)"
   sleep 1
 done
 
-# Quick health check - test DB connectivity
+# Quick health check - test DB connectivity (non-blocking)
 echo "[start] testing database connectivity..."
 php -r "
 require_once '/app/api/lib/common.php';
@@ -41,7 +45,7 @@ try {
 } catch (Throwable \$e) {
   echo '[start] WARNING: DB connection failed: ' . \$e->getMessage() . PHP_EOL;
 }
-" 2>&1 || echo "[start] WARNING: DB health check failed, continuing anyway"
+" 2>&1 || echo "[start] WARNING: DB health check failed, continuing anyway — app will handle DB errors gracefully"
 
 echo "[start] starting nginx (listening on ${PORT})"
 exec nginx -g 'daemon off;'

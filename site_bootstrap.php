@@ -15,6 +15,7 @@ try {
   }
 } catch (Throwable $e) {
   // Public pages should stay reachable even if maintenance tasks fail.
+  error_log('[site_bootstrap] DB/migrate failed: ' . $e->getMessage());
 }
 
 function site_setting(string $key, string $default = ''): string {

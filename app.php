@@ -5,7 +5,18 @@ declare(strict_types=1);
  * The old app-lite.js is preserved as fallback at /legacy-app.php
  */
 require_once __DIR__ . '/site_bootstrap.php';
-if (session_user_id() <= 0) {
+
+// Gracefully handle DB failures — if DB is down, treat as not logged in
+// and redirect to login instead of crashing with a 502.
+$uid = 0;
+try {
+  $uid = session_user_id();
+} catch (Throwable $e) {
+  error_log('[app.php] session_user_id failed: ' . $e->getMessage());
+  $uid = 0;
+}
+
+if ($uid <= 0) {
   $next = rawurlencode('/app.php#/home');
   header('Location: /login.php?next=' . $next);
   exit;
