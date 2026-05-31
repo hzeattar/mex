@@ -1018,14 +1018,20 @@ function yahoo_quote_many(array $symbols): array {
 
   foreach ($chunks as $chunk) {
     $url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' . urlencode(implode(',', $chunk));
-    $d = http_get_json($url);
-    $rows = $d['quoteResponse']['result'] ?? [];
-    if (!is_array($rows)) continue;
+    try {
+      $d = http_get_json($url);
+      $rows = $d['quoteResponse']['result'] ?? [];
+    } catch (Throwable $e) {
+      $rows = [];
+    }
+    if (!is_array($rows)) $rows = [];
+    $resolved = [];
     foreach ($rows as $r) {
       if (!is_array($r)) continue;
       $sym = strtoupper((string)($r['symbol'] ?? ''));
       $p = $r['regularMarketPrice'] ?? null;
       if ($sym === '' || $p === null || !is_numeric($p)) continue;
+      $resolved[] = $sym;
       $chg = $r['regularMarketChangePercent'] ?? 0;
       $updatedAt = 0;
       foreach (['regularMarketTime','postMarketTime','preMarketTime'] as $tsKey) {
@@ -1041,6 +1047,16 @@ function yahoo_quote_many(array $symbols): array {
         'updated_at' => $updatedAt,
         'source' => 'yahoo',
       ];
+    }
+    // Fallback: use v8 chart API for symbols not resolved by v7
+    $missing = array_values(array_filter($chunk, fn($s) => !isset($out[$s])));
+    foreach ($missing as $sym) {
+      try {
+        $mq = yahoo_chart_meta_quote($sym, '1d');
+        if (is_array($mq) && (float)($mq['price'] ?? 0) > 0) {
+          $out[$sym] = $mq;
+        }
+      } catch (Throwable $ignored) {}
     }
   }
 
