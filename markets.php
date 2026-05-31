@@ -118,12 +118,13 @@ $markets = [
              data-name="<?php echo _h(strtolower($m[1])); ?>">
           <div class="mc-top">
             <span class="mc-symbol"><?php echo _h($m[0]); ?></span>
-            <span class="mc-badge"><?php echo _h(strtoupper($m[3])); ?></span>
+            <span class="mc-badge mc-badge-<?php echo _h($m[3]); ?>"><?php echo _h(strtoupper($m[3])); ?></span>
             <span class="mc-live-dot"></span>
           </div>
           <strong class="mc-price mex-skeleton" data-price-symbol="<?php echo _h($m[0]); ?>">--</strong>
           <span class="mc-change mex-skeleton" data-change-symbol="<?php echo _h($m[0]); ?>">0.00%</span>
           <span class="mc-name"><?php echo _h($m[1]); ?></span>
+          <div class="mc-spark"><?php for($i=0;$i<8;$i++): $h=18+((ord($m[0][$i%strlen($m[0])])+$i*7)%26); ?><i style="height:<?php echo $h; ?>px"></i><?php endfor; ?></div>
           <a class="mc-trade-btn"
              href="<?php echo $isLoggedIn?'/app.php#/trade?symbol='._h($m[0]):'/register.php?lang='._h($lang).'&next='.rawurlencode('/app.php#/trade?symbol='.$m[0]); ?>">
             Trade <?php echo _h($m[2]); ?> →

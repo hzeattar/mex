@@ -63,7 +63,10 @@ async function loadPortfolio(container) {
       api('/trade/portfolio.php', { timeout: 8000 }),
       api('/trade/orders.php', { timeout: 8000 }),
     ]);
-    if (portfolio) renderPortfolioData(container, portfolio);
+    if (portfolio) {
+      renderPortfolioData(container, portfolio);
+      positionTable(container, portfolio.positions || []);
+    }
     if (orders) renderOrders(container, orders.items || orders.orders || []);
   } catch (e) {
     container.querySelector('#positions-table').innerHTML = `<p class="text-red text-sm text-center py-4">${esc(e.message)}</p>`;
@@ -75,9 +78,37 @@ function renderPortfolioData(container, data) {
   const balance = Number(data.balance || data.equity || 0);
   const pnl = Number(data.open_pnl || data.unrealized_pnl || 0);
   const equity = Number(data.equity || balance + pnl);
+  const margin = Number(data.margin_used || data.margin || 0);
+  const free = Number(data.free_margin || (balance - margin));
 
   const metrics = container.querySelector('#portfolio-metrics');
   if (metrics) {
+    metrics.innerHTML = `
+      <div class="portfolio-metric is-${pnl >= 0 ? 'positive' : 'negative'}">
+        <div class="metric-icon">${icons.wallet}</div>
+        <span>Total Equity</span>
+        <strong>${money(equity)}</strong>
+        <small>Balance + open PnL</small>
+      </div>
+      <div class="portfolio-metric is-${pnl >= 0 ? 'positive' : 'negative'}">
+        <div class="metric-icon">${icons.earn}</div>
+        <span>Open PnL</span>
+        <strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${pnl >= 0 ? '+' : ''}${money(pnl)}</strong>
+        <small>Unrealized profit/loss</small>
+      </div>
+      <div class="portfolio-metric">
+        <div class="metric-icon">${icons.trade}</div>
+        <span>Margin Used</span>
+        <strong>${money(margin)}</strong>
+        <small>Locked as collateral</small>
+      </div>
+      <div class="portfolio-metric">
+        <div class="metric-icon">${icons.deposit}</div>
+        <span>Free Margin</span>
+        <strong>${money(Math.max(0, free))}</strong>
+        <small>Available to trade</small>
+      </div>
+    `;
     metrics.innerHTML = `
       ${metricCard('Equity', money(equity), 'Total value')}
       ${metricCard('Open PnL', money(pnl), pnl >= 0 ? 'Profit' : 'Loss', pnl >= 0 ? 'text-green' : 'text-red')}

@@ -1759,3 +1759,29 @@ html{scroll-behavior:smooth}
   .mex-market-filters{gap:6px}
   .mex-filter-btn{padding:7px 14px;font-size:12px}
 }
+
+
+/* ================================================================
+   PHASE 5 — fc-count badge + type-badge colors + trust strip
+   ================================================================ */
+.fc-count{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;border-radius:50%;background:rgba(93,124,255,.18);color:#7a9bc8;font-size:9px;font-weight:900;margin-left:4px;vertical-align:middle}
+.mex-filter-btn.is-active .fc-count{background:rgba(93,124,255,.32);color:#e2e8f0}
+/* Type-colored badges */
+.mc-badge[class*="CRYPTO"],.mc-badge-crypto{background:rgba(79,124,255,.18);color:#7aadff;border:1px solid rgba(79,124,255,.25)}
+.mc-badge[class*="FOREX"],.mc-badge-forex{background:rgba(139,92,246,.18);color:#c4b5fd;border:1px solid rgba(139,92,246,.25)}
+.mc-badge[class*="COMMODITIES"],.mc-badge-commodities{background:rgba(234,179,8,.14);color:#fde68a;border:1px solid rgba(234,179,8,.22)}
+.mc-badge[class*="STOCKS"],.mc-badge-stocks{background:rgba(24,201,143,.14);color:#6ee7b7;border:1px solid rgba(24,201,143,.22)}
+.mc-badge[class*="FUTURES"],.mc-badge-futures{background:rgba(249,115,22,.14);color:#fdba74;border:1px solid rgba(249,115,22,.22)}
+.mc-badge[class*="ARAB"],.mc-badge-arab{background:rgba(20,184,166,.14);color:#99f6e4;border:1px solid rgba(20,184,166,.22)}
+/* Mini sparkline on cards */
+.mc-spark{margin:4px 0 0;height:28px;display:flex;align-items:flex-end;gap:1.5px}
+.mc-spark i{flex-shrink:0;width:3px;border-radius:1px 1px 0 0;background:linear-gradient(180deg,rgba(93,124,255,.7),rgba(93,124,255,.2));display:block}
+/* Trust badges strip */
+.mex-trust-strip{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}
+.mex-trust-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:100px;border:1px solid rgba(135,166,220,.14);background:rgba(9,17,38,.7);color:#7a9bc8;font-size:11px;font-weight:700}
+.mex-trust-badge svg{width:12px;height:12px}
+/* Market card type colors */
+.mex-market-card-v2[data-type="crypto"] .mc-badge{background:rgba(79,124,255,.18);color:#7aadff;border:1px solid rgba(79,124,255,.25)}
+.mex-market-card-v2[data-type="forex"] .mc-badge{background:rgba(139,92,246,.18);color:#c4b5fd;border:1px solid rgba(139,92,246,.25)}
+.mex-market-card-v2[data-type="commodities"] .mc-badge{background:rgba(234,179,8,.14);color:#fde68a;border:1px solid rgba(234,179,8,.22)}
+.mex-market-card-v2[data-type="stocks"] .mc-badge{background:rgba(24,201,143,.14);color:#6ee7b7;border:1px solid rgba(24,201,143,.22)}

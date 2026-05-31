@@ -1171,3 +1171,278 @@
   /* Responsive helpers */
   .mobile-pad { @apply pb-[calc(56px+var(--safe-b))] lg:pb-0; }
 }
+
+
+/* ================================================================
+   MEX PLATFORM — PHASE 3 VISUAL IMPROVEMENTS
+   Added to main.css — no existing rules modified
+   ================================================================ */
+
+/* ── Animations ───────────────────────────────────────────────── */
+@keyframes balanceGlow {
+  0%,100% { opacity:.35; transform: scale(1); }
+  50%      { opacity:.55; transform: scale(1.15); }
+}
+@keyframes priceTickUp {
+  0%   { color: rgb(var(--buy)); background: rgba(24,201,143,.18); }
+  100% { color: inherit; background: transparent; }
+}
+@keyframes priceTickDown {
+  0%   { color: rgb(var(--sell)); background: rgba(255,77,109,.18); }
+  100% { color: inherit; background: transparent; }
+}
+@keyframes fadeSlideIn {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:none; }
+}
+@keyframes pulseRing {
+  0%   { box-shadow: 0 0 0 0 rgba(79,124,255,.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(79,124,255,0); }
+  100% { box-shadow: 0 0 0 0 rgba(79,124,255,0); }
+}
+
+.animate-price-up   { animation: priceTickUp   .7s ease forwards; border-radius: 3px; padding: 0 2px; }
+.animate-price-down { animation: priceTickDown .7s ease forwards; border-radius: 3px; padding: 0 2px; }
+.animate-fade-slide { animation: fadeSlideIn   .35s ease forwards; }
+
+/* ── Hero Balance Card — enhanced ─────────────────────────────── */
+.hero-balance-card {
+  @apply relative overflow-hidden rounded-lg border p-4;
+  background: linear-gradient(135deg, #0d1b38, #142849);
+  border-color: rgba(79,124,255,.28);
+}
+.hero-balance-card::before {
+  content: '';
+  position: absolute;
+  inset: -60px;
+  background: radial-gradient(circle at 30% 40%, rgba(79,124,255,.22), transparent 55%);
+  animation: balanceGlow 5s ease-in-out infinite;
+  pointer-events: none;
+}
+.hero-balance-card > * { position: relative; z-index: 1; }
+.hero-balance-card span {
+  @apply block text-[10px] uppercase tracking-wider text-muted;
+}
+.hero-balance-card strong {
+  @apply mt-1 block text-3xl font-black;
+  background: linear-gradient(135deg, #e2f0ff, #8db8ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-balance-card small {
+  @apply mt-1 block text-xs text-muted;
+}
+.hero-metric-card {
+  @apply relative rounded-lg border border-line bg-surface/65 p-3 overflow-hidden;
+  transition: border-color .2s;
+}
+.hero-metric-card:hover { border-color: rgba(79,124,255,.35); }
+.hero-metric-card .text-\[10px\] { @apply text-muted; }
+.hero-metric-card .text-base { @apply font-black; }
+
+/* ── Home Market Cards — enhanced ─────────────────────────────── */
+.home-market-card {
+  @apply relative flex items-center gap-3 rounded-lg border border-line bg-surface/65 p-3 text-left transition-all duration-200;
+  cursor: pointer;
+}
+.home-market-card:hover {
+  @apply border-accent/35 bg-panel/80;
+  box-shadow: 0 0 0 1px rgba(79,124,255,.2), 0 8px 24px rgba(0,0,0,.22);
+  transform: translateY(-1px);
+}
+.home-market-card:active { transform: translateY(0); }
+.home-market-icon {
+  @apply grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-line bg-panel-2 text-xs font-black;
+}
+.home-market-icon img {
+  @apply h-6 w-6 object-contain;
+}
+.mini-spark {
+  @apply mt-1 flex h-5 items-end gap-px overflow-hidden;
+}
+.mini-spark i {
+  @apply w-1 rounded-t-[1px] flex-shrink-0;
+  background: linear-gradient(180deg, rgba(79,124,255,.7), rgba(79,124,255,.2));
+  display: block;
+}
+
+/* ── Position Card — enhanced ─────────────────────────────────── */
+.position-card {
+  @apply relative overflow-hidden rounded-lg border border-line bg-surface/65 p-3;
+  transition: border-color .2s;
+}
+.position-card:hover { border-color: rgba(79,124,255,.3); }
+.position-card::before {
+  content: '';
+  @apply pointer-events-none absolute inset-x-0 top-0 h-px;
+  background: linear-gradient(90deg, transparent, rgba(79,124,255,.4), transparent);
+}
+.position-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+@media (max-width: 640px) {
+  .position-metrics { grid-template-columns: repeat(3, 1fr); }
+}
+.position-metrics span {
+  @apply flex flex-col rounded-md border border-line/60 bg-panel/40 p-2;
+}
+.position-metrics span small {
+  @apply text-[9px] uppercase tracking-wider text-muted;
+}
+.position-metrics span strong {
+  @apply mt-0.5 font-mono text-xs font-black;
+}
+
+/* ── Portfolio Metrics ─────────────────────────────────────────── */
+.portfolio-metric {
+  @apply relative overflow-hidden rounded-lg border border-line bg-panel p-4;
+}
+.portfolio-metric span {
+  @apply block text-[10px] uppercase tracking-wider text-muted;
+}
+.portfolio-metric strong {
+  @apply mt-1 block text-2xl font-black;
+}
+.portfolio-metric small {
+  @apply mt-1 block text-xs text-muted;
+}
+.portfolio-metric.is-positive { border-color: rgba(24,201,143,.25); }
+.portfolio-metric.is-positive strong { color: #18c98f; }
+.portfolio-metric.is-negative { border-color: rgba(255,77,109,.25); }
+.portfolio-metric.is-negative strong { color: #ff4d6d; }
+.portfolio-metric .metric-icon {
+  @apply absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-xl border border-line bg-panel-2;
+}
+.portfolio-metric .metric-icon svg {
+  @apply h-4 w-4 text-accent;
+}
+
+/* ── Portfolio Table ───────────────────────────────────────────── */
+.positions-table {
+  @apply w-full text-xs;
+  border-collapse: collapse;
+}
+.positions-table th {
+  @apply border-b border-line bg-surface/50 px-3 py-2 text-left font-bold uppercase tracking-wider text-muted;
+  font-size: 10px;
+}
+.positions-table td {
+  @apply border-b border-line/40 px-3 py-2.5;
+}
+.positions-table tbody tr:hover td {
+  @apply bg-panel/40;
+}
+.positions-table .col-pnl.pos { @apply font-black text-buy; }
+.positions-table .col-pnl.neg { @apply font-black text-sell; }
+.side-badge-buy  { @apply inline-flex items-center rounded-full bg-buy/15 px-2 py-0.5 text-[9px] font-black uppercase text-buy; }
+.side-badge-sell { @apply inline-flex items-center rounded-full bg-sell/15 px-2 py-0.5 text-[9px] font-black uppercase text-sell; }
+
+/* ── Invest / Earn — enhanced cards ───────────────────────────── */
+.copy-card {
+  @apply relative overflow-hidden rounded-lg border border-line bg-surface p-4 transition-colors hover:border-accent/40;
+}
+.copy-card__perf {
+  @apply mt-3 grid grid-cols-3 gap-2 rounded-lg border border-line bg-panel/45 p-2;
+}
+.copy-card__perf-item {
+  @apply flex flex-col text-center;
+}
+.copy-card__perf-item small {
+  @apply text-[9px] uppercase tracking-wider text-muted;
+}
+.copy-card__perf-item strong {
+  @apply mt-0.5 text-xs font-black;
+}
+.copy-card__perf-item.pos strong { @apply text-buy; }
+.copy-card__perf-item.neg strong { @apply text-sell; }
+
+/* Contract progress ring */
+.contract-progress-ring {
+  @apply relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full;
+}
+.contract-progress-ring svg { @apply absolute inset-0; }
+.contract-progress-ring span {
+  @apply relative z-10 text-center text-[10px] font-black;
+}
+
+/* ── Account Page — avatar ring ───────────────────────────────── */
+.account-avatar {
+  @apply relative grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent to-buy text-2xl font-black text-white;
+  box-shadow: 0 0 0 3px rgba(79,124,255,.35), 0 12px 32px rgba(79,124,255,.2);
+  animation: pulseRing 3s ease-in-out infinite;
+}
+
+/* ── Account Roadmap Timeline ──────────────────────────────────── */
+.account-roadmap {
+  @apply relative space-y-0;
+}
+.account-roadmap::before {
+  content: '';
+  @apply absolute left-3 top-3 bottom-3 w-px bg-gradient-to-b from-accent/60 via-line to-line;
+}
+.roadmap-step {
+  @apply relative flex items-start gap-4 py-3 pl-8;
+}
+.roadmap-step::before {
+  content: '';
+  @apply absolute left-0 top-4 h-6 w-6 rounded-full border-2 border-accent bg-surface grid place-items-center;
+  box-shadow: 0 0 0 3px rgba(79,124,255,.15);
+}
+.roadmap-step span {
+  @apply block text-[10px] uppercase tracking-wider text-muted;
+}
+.roadmap-step strong {
+  @apply mt-0.5 block text-sm font-black;
+}
+.roadmap-step small {
+  @apply mt-0.5 block text-xs text-muted;
+}
+
+/* ── Security Cards ────────────────────────────────────────────── */
+.security-grid {
+  @apply grid gap-3 sm:grid-cols-2;
+}
+.security-card {
+  @apply flex items-center gap-3 rounded-lg border border-line p-3 transition-colors;
+}
+.security-card.is-ok {
+  @apply border-buy/20 bg-buy/5;
+}
+.security-card.is-warn {
+  @apply border-spread/20 bg-spread/5;
+}
+.security-icon {
+  @apply grid h-10 w-10 shrink-0 place-items-center rounded-xl border;
+}
+.security-card.is-ok .security-icon {
+  @apply border-buy/25 bg-buy/10 text-buy;
+}
+.security-card.is-warn .security-icon {
+  @apply border-spread/25 bg-spread/10 text-spread;
+}
+.security-icon svg { @apply h-4 w-4; }
+.security-card div strong { @apply block text-xs font-black; }
+.security-card div span  { @apply block text-[10px] text-muted; }
+
+/* ── Blur gate — improved ─────────────────────────────────────── */
+.blur-gate {
+  @apply relative;
+}
+.blur-gate .blur-gate-content {
+  @apply transition-all duration-300;
+}
+.blur-gate.blur-active .blur-gate-content {
+  filter: blur(4px);
+  pointer-events: none;
+  user-select: none;
+}
+.blur-gate-overlay {
+  @apply absolute inset-0 z-10 flex items-center justify-center;
+}
+.card-glass {
+  @apply rounded-xl border border-line bg-panel/90 backdrop-blur-md;
+}

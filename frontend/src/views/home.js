@@ -214,10 +214,19 @@ function renderCopySignals(container, items) {
         <strong>${Number(sig.live_price || 0) > 0 ? '$' + money(sig.live_price, sig.type === 'forex' ? 5 : 2) : '--'}</strong>
         <span class="${Number(sig.live_change_pct || 0) >= 0 ? 'text-buy' : 'text-sell'}">${pct(sig.live_change_pct || 0)}</span>
       </div>
-      <div class="grid grid-cols-3 gap-1 text-[10px] mt-2">
-        <div><span class="text-muted">Entry</span><div class="font-mono">${signalLevel(sig.entry || sig.entry_price, sig.type)}</div></div>
-        <div><span class="text-muted">TP</span><div class="font-mono text-buy">${signalLevel(sig.tp1 || sig.take_profit_1 || sig.take_profit, sig.type)}</div></div>
-        <div><span class="text-muted">SL</span><div class="font-mono text-sell">${signalLevel(sig.sl || sig.stop_loss, sig.type)}</div></div>
+      <div class="copy-card__perf mt-2">
+        <div class="copy-card__perf-item">
+          <small>Entry</small>
+          <strong>${signalLevel(sig.entry || sig.entry_price, sig.type)}</strong>
+        </div>
+        <div class="copy-card__perf-item ${Number(sig.win_rate||0) >= 60 ? 'pos' : ''}">
+          <small>Win Rate</small>
+          <strong>${Number(sig.win_rate||0) > 0 ? Number(sig.win_rate).toFixed(0)+'%' : '--'}</strong>
+        </div>
+        <div class="copy-card__perf-item pos">
+          <small>TP</small>
+          <strong>${signalLevel(sig.tp1 || sig.take_profit_1 || sig.take_profit, sig.type)}</strong>
+        </div>
       </div>
       ${signalLevelsMissing(sig) ? `<p class="text-[10px] text-muted mt-2">Awaiting desk levels</p>` : signalLevelsSource(sig)}
       <a href="#/invest" class="btn-primary btn-sm w-full mt-3">Open copy desk</a>
@@ -322,7 +331,19 @@ function applyQuoteToMarketCard(container, q, fallbackType) {
   const priceEl = card.querySelector('[data-home-price]');
   const changeEl = card.querySelector('[data-home-change]');
   const sourceEl = card.querySelector('[data-home-source]');
-  if (priceEl && p > 0) priceEl.textContent = price(p, type);
+  if (priceEl && p > 0) {
+    const oldPrice = parseFloat(priceEl.dataset.price || '0');
+    priceEl.textContent = price(p, type);
+    priceEl.dataset.price = String(p);
+    if (oldPrice > 0 && p !== oldPrice) {
+      const cls = p > oldPrice ? 'animate-price-up' : 'animate-price-down';
+      priceEl.classList.remove('animate-price-up','animate-price-down');
+      requestAnimationFrame(() => {
+        priceEl.classList.add(cls);
+        setTimeout(() => priceEl.classList.remove(cls), 800);
+      });
+    }
+  }
   if (changeEl) {
     changeEl.textContent = pct(chg);
     changeEl.className = `text-[11px] ${chg >= 0 ? 'text-green' : 'text-red'}`;

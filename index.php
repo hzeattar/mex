@@ -311,6 +311,12 @@ $marketCards = [
     </a>
     <a class="mex-btn mex-btn-soft" href="/contact.php?lang=<?php echo _h($lang); ?>">Contact us</a>
   </div>
+  <div class="mex-trust-strip">
+    <span class="mex-trust-badge">KYC Secured</span>
+    <span class="mex-trust-badge">24/7 Support</span>
+    <span class="mex-trust-badge">No Hidden Fees</span>
+    <span class="mex-trust-badge">Institutional Security</span>
+  </div>
 </section>
 
 <!-- ══ FOOTER ═════════════════════════════════════════════════════ -->
