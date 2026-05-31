@@ -49,9 +49,40 @@ try {
   $bulkLive = 'ERROR: ' . $e->getMessage();
 }
 
-// Test full qa_quote_payload
+// Test full qa_quote_payload with error reporting
 $qaResult = 'NOT_TESTED';
+$qaErrors = [];
 try {
+  // Replicate qa_quote_payload internals manually
+  $typeAlias = vp_normalize_asset_type($type ?: '');
+  $metaRows = qa_market_meta_by_symbols([$sym]);
+  $resolvedTypeBySymbol = [];
+  $metaBySymbol = [];
+  $symbolsByType = [];
+  foreach ([$sym] as $s) {
+    $resolved = $typeAlias && $typeAlias !== 'all'
+      ? $typeAlias
+      : vp_normalize_asset_type((string)($metaRows[$s]['type'] ?? 'crypto'));
+    if ($resolved === '' || $resolved === 'all') $resolved = 'crypto';
+    $resolvedTypeBySymbol[$s] = $resolved;
+    $metaBySymbol[$s] = is_array($metaRows[$s]['meta'] ?? null) ? $metaRows[$s]['meta'] : [];
+    $symbolsByType[$resolved][] = $s;
+  }
+  $qaErrors['resolvedType'] = $resolvedTypeBySymbol[$sym] ?? 'NONE';
+  $qaErrors['metaBySymbol'] = $metaBySymbol[$sym] ?? [];
+  $qaErrors['symbolsByType_keys'] = array_keys($symbolsByType);
+
+  $liveBySymbol = qa_live_map_grouped($symbolsByType, $metaBySymbol, [
+    'allow_live' => true,
+    'direct_yahoo_budget' => 3,
+    'chart_budget' => 2,
+    'chart_budget_ms' => 5000,
+    'allow_direct_batch' => true,
+  ]);
+  $qaErrors['liveBySymbol'] = $liveBySymbol;
+  $qaErrors['liveBySymbol_keys'] = array_keys($liveBySymbol);
+
+  // Now call qa_quote_payload normally
   $qaResult = qa_quote_payload($type, [$sym], [
     'allow_live' => true,
     'allow_stale_display' => true,
@@ -63,6 +94,8 @@ try {
   ]);
 } catch (Throwable $e) {
   $qaResult = 'ERROR: ' . $e->getMessage();
+  $qaErrors['exception'] = $e->getMessage();
+  $qaErrors['trace'] = $e->getTraceAsString();
 }
 
 echo json_encode([
@@ -77,5 +110,6 @@ echo json_encode([
   'prefers_yahoo' => $prefersYahoo,
   'yahoo_cached_result' => $yahooCached,
   'quote_bulk_live' => $bulkLive,
+  'qa_errors' => $qaErrors,
   'qa_quote_payload' => $qaResult,
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
