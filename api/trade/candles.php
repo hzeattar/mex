@@ -101,8 +101,8 @@ function candles_default_market_meta(string $symbol, string $type): array {
       'USDCAD' => ['yahoo_ticker' => 'CAD=X', 'tv_symbol' => 'FX:USDCAD'],
     ],
     'commodities' => [
-      'XAUUSD' => ['yahoo_ticker' => 'GC=F', 'tv_symbol' => 'OANDA:XAUUSD'],
-      'XAGUSD' => ['yahoo_ticker' => 'SI=F', 'tv_symbol' => 'OANDA:XAGUSD'],
+      'XAUUSD' => ['tv_symbol' => 'OANDA:XAUUSD'],
+      'XAGUSD' => ['tv_symbol' => 'OANDA:XAGUSD'],
       'USOIL' => ['yahoo_ticker' => 'CL=F', 'tv_symbol' => 'TVC:USOIL'],
       'UKOIL' => ['yahoo_ticker' => 'BZ=F', 'tv_symbol' => 'TVC:UKOIL'],
       'NGAS' => ['yahoo_ticker' => 'NG=F', 'tv_symbol' => 'FX:NGAS'],

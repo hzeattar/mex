@@ -1393,7 +1393,7 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
     if ($poly !== '' && strpos($poly, ':') === false) return $poly;
 
     $map = [
-      'XAUUSD' => 'GC=F', 'XAGUSD' => 'SI=F', 'PLAT' => 'PL=F', 'PALL' => 'PA=F', 'COPPER' => 'HG=F',
+      'XAUUSD' => null, 'XAGUSD' => null, 'PLAT' => 'PL=F', 'PALL' => 'PA=F', 'COPPER' => 'HG=F',
       'USOIL' => 'CL=F', 'WTI' => 'CL=F', 'OIL' => 'CL=F', 'UKOIL' => 'BZ=F', 'BRENT' => 'BZ=F', 'NGAS' => 'NG=F',
       'CORN' => 'ZC=F', 'WHEAT' => 'ZW=F', 'SOY' => 'ZS=F', 'SUGAR' => 'SB=F', 'COFFEE' => 'KC=F',
       'COTTON' => 'CT=F', 'COCOA' => 'CC=F', 'RICE' => 'ZR=F', 'OAT' => 'ZO=F', 'ORANGE' => 'OJ=F',
