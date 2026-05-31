@@ -281,7 +281,7 @@ async function setup(container) {
     });
 
   loadTradeActivity(container, runId);
-  activityRefreshTimer = setInterval(() => loadTradeActivity(container, runId, true), 12000);
+  activityRefreshTimer = setInterval(() => loadTradeActivity(container, runId, true), 20000);
 
   api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=220`, { timeout: 18000 })
     .then(async candles => {
@@ -320,7 +320,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId) {
 
   const type = get('type');
   const active = get('symbol');
-  const max = type === 'crypto' ? 60 : 40;
+  const max = type === 'crypto' ? 40 : 25;
   const symbols = [...new Set(marketItems
     .slice(0, max)
     .map(m => String(m.symbol || '').toUpperCase())
@@ -338,12 +338,12 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId) {
       dot.classList.add('bg-buy');
       dot.title = 'Live';
     }
-  }, null, { interval: type === 'crypto' ? 5200 : 7200, maxSymbols: max });
+  }, null, { interval: type === 'crypto' ? 8000 : 12000, maxSymbols: max });
 }
 
 function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   stopActiveQuote();
-  const interval = type === 'crypto' ? 2200 : 3000;
+  const interval = type === 'crypto' ? 3500 : 5000;
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
     activeQuoteController = new AbortController();

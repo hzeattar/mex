@@ -105,6 +105,11 @@ export function render() {
           <h2 class="text-base font-semibold">Markets</h2>
           <a href="#/trade" class="btn-ghost btn-sm">Trade</a>
         </div>
+        <div class="flex gap-1 mb-3 overflow-x-auto" id="home-market-tabs">
+          ${['All','Crypto','Forex','Stocks','Commodities','Futures','Arab'].map((t,i) =>
+            `<button class="btn-xs ${i===0?'bg-accent/20 text-accent border-accent/40':'text-muted border-line'} border rounded-md whitespace-nowrap" data-home-tab="${t.toLowerCase()}">${t}</button>`
+          ).join('')}
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" id="home-markets">
           ${Array(4).fill(0).map(() => `<div class="skeleton h-16 rounded-lg"></div>`).join('')}
         </div>
@@ -151,6 +156,26 @@ export function mount(container) {
     });
   }, 50);
 
+  // Market tab clicks
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-home-tab]');
+    if (!btn) return;
+    const tab = btn.dataset.homeTab;
+    container.__homeMarketTab = tab;
+    container.querySelectorAll('[data-home-tab]').forEach(b => {
+      b.classList.toggle('bg-accent/20', b === btn);
+      b.classList.toggle('text-accent', b === btn);
+      b.classList.toggle('border-accent/40', b === btn);
+      if (b !== btn) {
+        b.classList.remove('bg-accent/20', 'text-accent', 'border-accent/40');
+        b.classList.add('text-muted', 'border-line');
+      } else {
+        b.classList.remove('text-muted', 'border-line');
+      }
+    });
+    renderMarketsByTab(container, tab);
+  });
+
   loadHomeData(container);
 }
 
@@ -177,10 +202,9 @@ async function loadHomeData(container) {
       mode === 'real' ? api('/signals.php?bot=1&home=1&lang=en', { timeout: 7000 }).catch(() => null) : Promise.resolve(null),
     ]);
     if (markets && markets.items) {
-      const visible = markets.items.slice(0, 12);
-      renderMarkets(container, visible);
-      const missingVisible = visible.filter((item) => Number(item.price || item.q_price || 0) <= 0);
-      if (missingVisible.length) hydrateMarketQuotes(container, missingVisible);
+      container.__homeAllMarkets = markets.items;
+      const tab = container.__homeMarketTab || 'all';
+      renderMarketsByTab(container, tab);
     }
     if (portfolio && portfolio.positions) {
       renderPositions(container, portfolio.positions.slice(0, 5));
@@ -190,6 +214,16 @@ async function loadHomeData(container) {
       renderCopySignals(container, signals.items);
     }
   } catch (e) { /* silent */ }
+}
+
+function renderMarketsByTab(container, tab) {
+  const all = container.__homeAllMarkets || [];
+  const filtered = tab === 'all' ? all : all.filter(m => (m.type || '').toLowerCase() === tab);
+  const visible = filtered.slice(0, 12);
+  renderMarkets(container, visible);
+  // Only hydrate if we have markets without prices
+  const missingVisible = visible.filter((item) => Number(item.price || item.q_price || 0) <= 0);
+  if (missingVisible.length) hydrateMarketQuotes(container, missingVisible);
 }
 
 function renderCopySignals(container, items) {
@@ -250,7 +284,7 @@ function renderMarkets(container, items) {
       </div>
       <div class="text-right">
         <div class="text-sm font-mono font-semibold" data-home-price>${formatMarketPrice(m.price || m.q_price, m.type)}</div>
-        <div class="text-[11px] ${Number(m.change_pct || m.q_change || 0) >= 0 ? 'text-green' : 'text-red'}" data-home-change>${pct(m.change_pct || m.q_change || 0)}</div>
+        <div class="text-[11px] ${Number(m.change_pct || m.q_change || 0) >= 0 ? 'text-buy' : 'text-sell'}" data-home-change>${pct(m.change_pct || m.q_change || 0)}</div>
         <div class="text-[9px] text-muted uppercase mt-1" data-home-source>${quoteStateText(m)}</div>
       </div>
     </button>
@@ -346,7 +380,7 @@ function applyQuoteToMarketCard(container, q, fallbackType) {
   }
   if (changeEl) {
     changeEl.textContent = pct(chg);
-    changeEl.className = `text-[11px] ${chg >= 0 ? 'text-green' : 'text-red'}`;
+    changeEl.className = `text-[11px] ${chg >= 0 ? 'text-buy' : 'text-sell'}`;
   }
   if (sourceEl && p > 0) sourceEl.textContent = quoteStateText(q);
   const chip = card.querySelector('[data-quote-chip]');
@@ -394,7 +428,7 @@ function positionRow(p) {
         </div>
       </div>
       <div class="text-right">
-        <div class="text-sm font-mono ${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</div>
+        <div class="text-sm font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</div>
         <div class="text-[10px] text-muted">PnL</div>
       </div>
     </div>

@@ -11,7 +11,7 @@ require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/quote_authority.php';
 require_once __DIR__ . '/lib/quote_frankfurter.php';
 
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: public, max-age=3, s-maxage=3');
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 

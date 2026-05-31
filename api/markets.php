@@ -27,7 +27,7 @@ $allowListRescue = $forceLive
   || ($supportedInteractive && !$disableSupportedRescue)
   || ((int)($_GET['rescue'] ?? env('MARKETS_RESCUE_LIVE_ON_MISS', '0')) === 1);
 
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: public, max-age=5, s-maxage=5');
 header('Pragma: no-cache');
 
 $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [

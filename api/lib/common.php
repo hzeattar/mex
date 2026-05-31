@@ -136,6 +136,20 @@ function json_response(array $data, int $code = 200): void {
 }
 
 /**
+ * Cacheable JSON response for public market data.
+ * Allows browser/CDN to cache for a few seconds, dramatically reducing
+ * API calls for repeated visits and back-navigation.
+ */
+function json_cacheable_response(array $data, int $maxAge = 5, int $code = 200): void {
+  http_response_code($code);
+  header('Content-Type: application/json; charset=utf-8');
+  header("Cache-Control: public, max-age={$maxAge}, s-maxage={$maxAge}");
+  header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $maxAge) . ' GMT');
+  echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+
+/**
  * Read environment variables safely.
  *
  * With strict_types=1, callers may pass ints/bools as defaults,

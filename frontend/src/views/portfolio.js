@@ -65,7 +65,6 @@ async function loadPortfolio(container) {
     ]);
     if (portfolio) {
       renderPortfolioData(container, portfolio);
-      positionTable(container, portfolio.positions || []);
     }
     if (orders) renderOrders(container, orders.items || orders.orders || []);
   } catch (e) {
@@ -111,7 +110,7 @@ function renderPortfolioData(container, data) {
     `;
     metrics.innerHTML = `
       ${metricCard('Equity', money(equity), 'Total value')}
-      ${metricCard('Open PnL', money(pnl), pnl >= 0 ? 'Profit' : 'Loss', pnl >= 0 ? 'text-green' : 'text-red')}
+      ${metricCard('Open PnL', money(pnl), pnl >= 0 ? 'Profit' : 'Loss', pnl >= 0 ? 'text-buy' : 'text-sell')}
       ${metricCard('Positions', String(positions.length), 'Open trades')}
       ${metricCard('Balance', money(balance), get('mode') === 'real' ? 'USDT' : 'USDT_DEMO')}`;
   }
@@ -166,7 +165,7 @@ function posRow(p) {
     <td class="py-2.5 text-right text-xs">${money(size)}</td>
     <td class="py-2.5 text-right font-mono text-xs">${esc(String(leverage || 1))}x</td>
     <td class="py-2.5 text-right text-xs">${money(margin)}</td>
-    <td class="py-2.5 text-right font-mono ${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</td>
+    <td class="py-2.5 text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
     <td class="py-2.5 text-right px-2">${id ? `<button class="btn-ghost btn-sm text-red" data-close-pos="${escAttr(id)}">Close</button>` : ''}</td>
   </tr>`;
 }
@@ -184,7 +183,7 @@ function posCard(p) {
       </div>
       <div class="text-right">
         <span class="text-[10px] text-muted">Open PnL</span>
-        <b class="${pnl >= 0 ? 'text-green' : 'text-red'}">${money(pnl)}</b>
+        <b class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</b>
       </div>
     </div>
     <div class="portfolio-position-metrics">
