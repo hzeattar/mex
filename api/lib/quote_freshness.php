@@ -27,8 +27,8 @@ function qa_quote_max_age(string $assetType, bool $strict = false): int {
   if ($assetType === 'forex') return $strict ? 7200 : 14400;
   if ($assetType === 'stocks') return $strict ? 129600 : 172800;
   if ($assetType === 'arab') return $strict ? 129600 : 172800;
-  if ($assetType === 'commodities') return $strict ? 43200 : 86400;
-  if ($assetType === 'futures') return $strict ? 43200 : 86400;
+  if ($assetType === 'commodities') return $strict ? 259200 : 604800;
+  if ($assetType === 'futures') return $strict ? 259200 : 604800;
   return $strict ? 180 : 360;
 }
 
