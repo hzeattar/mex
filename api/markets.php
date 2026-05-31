@@ -860,7 +860,7 @@ if ($fastSupported) {
   }
 
   @file_put_contents($cacheFile, json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX);
-  json_response($out);
+  json_cacheable_response($out, 5);
 }
 
 try {
@@ -1121,7 +1121,7 @@ try {
   }
 
   @file_put_contents($cacheFile, json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX);
-  json_response($out);
+  json_cacheable_response($out, 5);
 } catch (Throwable $e) {
   $fallbackScope = $scope ?: 'home';
   $fallbackDefs = vp_supported_defs_for($typeAlias, $fallbackScope);
@@ -1155,5 +1155,5 @@ try {
   }
 
   @file_put_contents($cacheFile, json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX);
-  json_response($out);
+  json_cacheable_response($out, 5);
 }
