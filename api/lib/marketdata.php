@@ -1369,13 +1369,8 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
   $type = strtolower(trim($type));
   if ($symbol === '') return null;
 
+  // Spot metals: allow futures tickers (GC=F, SI=F) with conversion applied later in quote_bulk_live()
   $y = strtoupper(trim((string)($meta['yahoo_ticker'] ?? '')));
-  // Spot metals must NEVER use futures tickers (GC=F, SI=F, etc.)
-  if (vp_is_spot_metal_symbol($symbol, $type)) {
-    if ($y !== '' && preg_match('/^[A-Z]{1,4}=F$/', $y)) {
-      $y = ''; // reject futures ticker for spot metal
-    }
-  }
   if ($y !== '' && $type === 'stocks') return str_replace('.', '-', $y);
   if ($y !== '' && $type === 'arab') return vp_arab_yahoo_ticker($y, $meta) ?: $y;
   if ($y !== '' && ($type === 'forex' || $type === 'fx' || $type === 'commodities' || $type === 'futures')) return $y;
@@ -1399,7 +1394,7 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
     if ($poly !== '' && strpos($poly, ':') === false) return $poly;
 
     $map = [
-      'XAUUSD' => null, 'XAGUSD' => null, 'PLAT' => 'PL=F', 'PALL' => 'PA=F', 'COPPER' => 'HG=F',
+      'XAUUSD' => 'GC=F', 'XAGUSD' => 'SI=F', 'PLAT' => 'PL=F', 'PALL' => 'PA=F', 'COPPER' => 'HG=F',
       'USOIL' => 'CL=F', 'WTI' => 'CL=F', 'OIL' => 'CL=F', 'UKOIL' => 'BZ=F', 'BRENT' => 'BZ=F', 'NGAS' => 'NG=F',
       'CORN' => 'ZC=F', 'WHEAT' => 'ZW=F', 'SOY' => 'ZS=F', 'SUGAR' => 'SB=F', 'COFFEE' => 'KC=F',
       'COTTON' => 'CT=F', 'COCOA' => 'CC=F', 'RICE' => 'ZR=F', 'OAT' => 'ZO=F', 'ORANGE' => 'OJ=F',
@@ -1412,6 +1407,22 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
   }
 
   return null;
+}
+
+/**
+ * Futures-to-spot conversion factor for metals.
+ * Futures prices (GC=F, SI=F) are typically ~1-2% above spot due to contango.
+ * Returns a multiplier < 1.0 to convert futures → approximate spot, or 1.0 if N/A.
+ */
+function futures_to_spot_factor(string $symbol): float {
+  $symbol = strtoupper(trim($symbol));
+  $map = [
+    'XAUUSD' => 0.988,  // GC=F ~1.2% above spot
+    'XAGUSD' => 0.985,  // SI=F ~1.5% above spot
+    'XPTUSD' => 0.990,
+    'XPDUSD' => 0.990,
+  ];
+  return $map[$symbol] ?? 1.0;
 }
 
 function massive_snapshot_price_from_result(array $row): float {

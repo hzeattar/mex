@@ -511,6 +511,10 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           $row = yahoo_live_quote_or_chart($ticker, '1m');
           $p = (float)($row['price'] ?? 0);
           if ($p > 0) {
+            if (vp_is_spot_metal_symbol($sym, $assetType)) {
+              $factor = futures_to_spot_factor($sym);
+              if ($factor < 1.0) $p = round($p * $factor, 2);
+            }
             $out[$sym] = [
               'symbol' => $sym,
               'type' => $assetType,
@@ -533,6 +537,11 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
         if (!$row) continue;
         $p = (float)($row['price'] ?? 0);
         if (!($p > 0)) continue;
+        // Convert futures price to approximate spot for metals (GC=F → XAUUSD spot, SI=F → XAGUSD spot)
+        if (vp_is_spot_metal_symbol($sym, $assetType)) {
+          $factor = futures_to_spot_factor($sym);
+          if ($factor < 1.0) $p = round($p * $factor, 2);
+        }
         $out[$sym] = [
           'symbol' => $sym,
           'type' => $assetType,
@@ -558,6 +567,10 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           $row = yahoo_live_quote_or_chart($ticker, '1m');
           $p = (float)($row['price'] ?? 0);
           if ($p > 0) {
+            if (vp_is_spot_metal_symbol($sym, $assetType)) {
+              $factor = futures_to_spot_factor($sym);
+              if ($factor < 1.0) $p = round($p * $factor, 2);
+            }
             $out[$sym] = [
               'symbol' => $sym,
               'type' => $assetType,
