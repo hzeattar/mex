@@ -1,6 +1,12 @@
 // Lightweight i18n service for the MEX Group client shell.
 // English and Arabic are polished; legacy locales fall back to English.
-const SUPPORTED = ['en', 'ar'];
+const SUPPORTED = ['en','ar','ru','tr','fr','de','es','it','pt','nl','pl','zh','ja','ko','vi']
+
+const LANG_NAMES = {
+  en:'English', ar:'العربية', ru:'Русский', tr:'Türkçe', fr:'Français',
+  de:'Deutsch', es:'Español', it:'Italiano', pt:'Português', nl:'Nederlands',
+  pl:'Polski', zh:'中文', ja:'日本語', ko:'한국어', vi:'Tiếng Việt'
+};
 const FALLBACK_LOCALE = 'en';
 
 const BUILT_INS = {
@@ -224,3 +230,5 @@ export function translateDom(root = document) {
     node.nodeValue = text.replace(trimmed, phraseMap[trimmed]);
   }
 }
+
+export { SUPPORTED, LANG_NAMES };

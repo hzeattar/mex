@@ -4,7 +4,7 @@ import { navigate, currentPath } from '../../router.js';
 import { esc, money } from '../../utils/format.js';
 import { $, $$, delegate } from '../../utils/dom.js';
 import { icons } from '../common/Icons.js';
-import { currentLocale, setLocale, t, translateDom } from '../../utils/i18n.js';
+import { currentLocale, setLocale, t, translateDom, LANG_NAMES, SUPPORTED } from '../../utils/i18n.js';
 import { api } from '../../services/api.js';
 
 const NAV = [
@@ -33,6 +33,9 @@ export function renderShell(app) {
   const mode = get('mode');
   const wallet = activeWallet();
 
+  const currentLangName = (LANG_NAMES[currentLocale()]||currentLocale().toUpperCase());
+  const langOptions = SUPPORTED.map(c => `<a class="vp-lang-opt${currentLocale()===c?' is-active':''}" href="#" data-set-locale="${c}">${LANG_NAMES[c]||c.toUpperCase()}</a>`).join('');
+
   app.innerHTML = `
     <div class="flex flex-col h-screen overflow-hidden" id="shell">
       <!-- Desktop Top Navigation Bar -->
@@ -55,10 +58,15 @@ export function renderShell(app) {
             <span class="mode-dot"></span>
             <span class="mode-label">${mode === 'real' ? t('mode.real', 'Real') : t('mode.demo', 'Demo')}</span>
           </button>
-          <select class="lang-select" id="lang-select">
-            <option value="en" ${currentLocale() === 'en' ? 'selected' : ''}>EN</option>
-            <option value="ar" ${currentLocale() === 'ar' ? 'selected' : ''}>AR</option>
-          </select>
+          <div class="vp-lang-wrap" style="position:relative">
+            <button class="vp-lang-btn" id="lang-trigger" style="height:30px;display:flex;align-items:center;gap:4px;padding:0 8px;border-radius:8px;border:1px solid rgba(135,166,220,.18);background:rgba(10,18,40,.6);color:#a9bce4;cursor:pointer;font-size:11px;font-weight:700;transition:.15s">
+              <span class="vp-lang-current">${currentLangName}</span>
+              <svg width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </button>
+            <div class="vp-lang-dropdown" id="lang-dropdown" style="position:absolute;top:calc(100%+4px);right:0;z-index:70;width:180px;max-height:260px;overflow:auto;border:1px solid rgba(135,166,220,.18);border-radius:10px;background:rgba(6,12,28,.96);backdrop-filter:blur(16px);box-shadow:0 16px 40px rgba(0,0,0,.35);padding:4px;opacity:0;visibility:hidden;transform:translateY(-4px);transition:.15s ease">
+              ${langOptions}
+            </div>
+          </div>
           <button class="icon-btn relative" id="notif-btn" title="Notifications">
             ${icons.bell}
             <span class="notif-badge hidden" id="notif-badge">0</span>
@@ -120,6 +128,14 @@ export function renderShell(app) {
       </div>
     </div>`;
 
+  // Inject lang dropdown styles
+  if (!document.getElementById('vp-lang-styles')) {
+    const style = document.createElement('style');
+    style.id = 'vp-lang-styles';
+    style.textContent = `.vp-lang-opt{display:block;padding:7px 10px;border-radius:6px;color:#a9bce4;font-size:12px;text-decoration:none;transition:.12s}.vp-lang-opt:hover{background:rgba(64,125,181,.15);color:#e2e8f0}.vp-lang-opt.is-active{color:#5d7cff;font-weight:700}`;
+    document.head.appendChild(style);
+  }
+
   bindShell(app);
   syncActive();
   translateDom(app);
@@ -135,7 +151,29 @@ export function renderShell(app) {
 function bindShell(app) {
   delegate(app, '[data-nav]', 'click', (e, el) => { e.preventDefault(); navigate(el.dataset.nav); });
   $$('#mode-toggle, #mode-toggle-m', app).forEach(b => b?.addEventListener('click', toggleMode));
-  $('#lang-select', app)?.addEventListener('change', e => setLocale(e.target.value));
+  // Language dropdown toggle
+  const langTrigger = $('#lang-trigger', app);
+  const langDropdown = $('#lang-dropdown', app);
+  if (langTrigger && langDropdown) {
+    langTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = langDropdown.style.visibility === 'visible';
+      langDropdown.style.visibility = isOpen ? 'hidden' : 'visible';
+      langDropdown.style.opacity = isOpen ? '0' : '1';
+      langDropdown.style.transform = isOpen ? 'translateY(-4px)' : 'translateY(0)';
+    });
+    document.addEventListener('click', () => {
+      langDropdown.style.visibility = 'hidden';
+      langDropdown.style.opacity = '0';
+      langDropdown.style.transform = 'translateY(-4px)';
+    });
+  }
+  // Language selection
+  delegate(app, '[data-set-locale]', 'click', (e, el) => {
+    e.preventDefault();
+    setLocale(el.dataset.setLocale);
+    window.location.reload();
+  });
   $$('#notif-btn, #notif-btn-m', app).forEach(b => b?.addEventListener('click', toggleNotifications));
   $('#notif-close', app)?.addEventListener('click', () => $('#notif-panel')?.classList.add('hidden'));
 
