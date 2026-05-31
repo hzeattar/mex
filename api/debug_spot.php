@@ -49,6 +49,22 @@ try {
   $bulkLive = 'ERROR: ' . $e->getMessage();
 }
 
+// Test full qa_quote_payload
+$qaResult = 'NOT_TESTED';
+try {
+  $qaResult = qa_quote_payload($type, [$sym], [
+    'allow_live' => true,
+    'allow_stale_display' => true,
+    'allow_noncrypto_seed' => false,
+    'direct_yahoo_budget' => 3,
+    'chart_budget' => 2,
+    'chart_budget_ms' => 5000,
+    'allow_direct_batch' => true,
+  ]);
+} catch (Throwable $e) {
+  $qaResult = 'ERROR: ' . $e->getMessage();
+}
+
 echo json_encode([
   'symbol' => $sym,
   'type' => $type,
@@ -61,4 +77,5 @@ echo json_encode([
   'prefers_yahoo' => $prefersYahoo,
   'yahoo_cached_result' => $yahooCached,
   'quote_bulk_live' => $bulkLive,
+  'qa_quote_payload' => $qaResult,
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
