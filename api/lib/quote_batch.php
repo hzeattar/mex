@@ -16,7 +16,7 @@ function qa_live_map(array $symbols, string $assetType, array $metaBySymbol = []
     ? (int)$opts['chart_budget']
     : (in_array($assetType, ['arab','futures'], true) ? max(8, min(count($symbols), 20)) : 6);
   try {
-    $result = quote_bulk_live($symbols, $assetType, $metaBySymbol, [
+    return quote_bulk_live($symbols, $assetType, $metaBySymbol, [
       'ttl' => (int)($opts['ttl'] ?? 1),
       'yahoo_ttl' => (int)($opts['yahoo_ttl'] ?? 1),
       'massive_ttl' => (int)($opts['massive_ttl'] ?? 1),
@@ -26,22 +26,7 @@ function qa_live_map(array $symbols, string $assetType, array $metaBySymbol = []
       'chart_budget_ms' => (int)($opts['chart_budget_ms'] ?? 3000),
       'allow_direct_batch' => !empty($opts['allow_direct_batch']),
     ]);
-    @file_put_contents(__DIR__ . '/../data/cache/qa_live_map_debug.json', json_encode([
-      'time' => date('c'),
-      'symbols' => $symbols,
-      'assetType' => $assetType,
-      'result_keys' => array_keys($result),
-      'result_sample' => array_slice($result, 0, 2, true),
-    ], JSON_PRETTY_PRINT), LOCK_EX);
-    return $result;
   } catch (Throwable $e) {
-    @file_put_contents(__DIR__ . '/../data/cache/qa_live_map_error.json', json_encode([
-      'time' => date('c'),
-      'symbols' => $symbols,
-      'assetType' => $assetType,
-      'error' => $e->getMessage(),
-      'trace' => $e->getTraceAsString(),
-    ], JSON_PRETTY_PRINT), LOCK_EX);
     return [];
   }
 }
