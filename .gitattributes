@@ -3,3 +3,4 @@ ops/*.sh text eol=lf
 ops/*.conf text eol=lf
 ops/*.conf.template text eol=lf
 Dockerfile text eol=lf
+ops/php-fpm-pool.conf text eol=lf
