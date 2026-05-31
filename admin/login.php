@@ -19,17 +19,30 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   $error = 'Invalid credentials';
 }
 
-$errHtml = $error ? "<div class='card'><span class='pill bad'>{$error}</span></div>" : '';
+$errHtml = $error ? "<div class='admin-login-error'><span class='pill bad'>" . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . "</span></div>" : '';
 $body = $errHtml . "
-<div class='card' style='max-width:520px;margin:40px auto'>
-  <h2 style='margin-top:0'>Admin login</h2>
-  <form method='post'>
-    <div style='display:grid;gap:10px'>
-      <input name='email' placeholder='Email' required>
-      <input name='password' placeholder='Password' type='password' required>
-      <button class='btn' type='submit'>Login</button>
-    </div>
-  </form>
-  <p style='opacity:.8;margin-bottom:0'>Tip: set ADMIN_EMAIL + ADMIN_PASSWORD in .env</p>
+<div class='admin-login-shell'>
+  <div class='admin-login-card'>
+    <section class='admin-login-hero'>
+      <div class='admin-login-mark'><span class='admin-login-logo'>M</span><span>MEX Group</span></div>
+      <h1>Operations console</h1>
+      <p>Review clients, KYC, deposits, withdrawals, markets, copy signals, contracts, support, and audit trails from one protected workspace.</p>
+      <div class='admin-login-points'>
+        <span>Ledger-first financial controls</span>
+        <span>Signals and contracts management</span>
+        <span>Funding, support, and compliance queues</span>
+      </div>
+    </section>
+    <section class='admin-login-form'>
+      <h2>Admin sign in</h2>
+      <p>Use the Railway environment credentials for this deployment. Do not expose admin access inside the client app.</p>
+      <form method='post' autocomplete='on'>
+        <input name='email' placeholder='Admin email' type='email' required>
+        <input name='password' placeholder='Password' type='password' required>
+        <button class='btn' type='submit'>Open console</button>
+      </form>
+      <p class='small muted'>Set ADMIN_EMAIL and ADMIN_PASSWORD in the Railway mex service variables.</p>
+    </section>
+  </div>
 </div>";
 admin_layout('Admin Login', $body);

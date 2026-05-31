@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../api/lib/affiliates.php';
 session_start();
 
 // Auto-upgrade schema (safe for shared hosting)
+$pdo = null;
 try {
   $pdo = db();
   schema_install($pdo, db_driver());
@@ -18,6 +19,7 @@ try {
 
 // Admin extras: lightweight audit trail + CSRF helpers
 try {
+  $pdo = $pdo instanceof PDO ? $pdo : db();
   $driver = db_driver();
   if ($driver === 'mysql') {
     $pdo->exec("CREATE TABLE IF NOT EXISTS admin_audit_logs (
@@ -173,7 +175,7 @@ function admin_status_pill(string $status): string {
 
 function admin_parse_json_pairs($raw, int $limit = 8): string {
   $txt = trim((string)$raw);
-  if ($txt === '') return '—';
+  if ($txt === '') return '&mdash;';
   $decoded = json_decode($txt, true);
   if (!is_array($decoded)) { $clip = strlen($txt) > 220 ? substr($txt, 0, 217) . '...' : $txt; return admin_h($clip); }
   $pairs = [];
@@ -182,12 +184,14 @@ function admin_parse_json_pairs($raw, int $limit = 8): string {
     $pairs[] = '<div><strong>' . admin_h(str_replace('_', ' ', (string)$k)) . ':</strong> ' . admin_h((string)$v) . '</div>';
     if (count($pairs) >= $limit) break;
   }
-  return $pairs ? implode('', $pairs) : '—';
+  if (!$pairs) return '&mdash;';
+  return implode('', $pairs);
 }
 
 function admin_format_ts($ts): string {
   $n = (int)$ts;
-  return $n > 0 ? date('Y-m-d H:i', $n) : '—';
+  if ($n <= 0) return '&mdash;';
+  return date('Y-m-d H:i', $n);
 }
 
 function admin_store_uploaded_image(string $field, string $subdir = 'misc', string $prefix = 'img_'): array {
@@ -499,6 +503,24 @@ function admin_layout(string $title, string $body): void {
     .admin-table-filter{min-width:180px;max-width:100%}
     .table-tools-left,.table-tools-right{width:100%}
   }
+  .admin-login-shell{min-height:calc(100vh - 80px);display:grid;place-items:center;padding:28px}
+  .admin-login-card{width:min(980px,100%);display:grid;grid-template-columns:1.05fr .95fr;overflow:hidden;border-radius:28px;background:linear-gradient(135deg,rgba(13,28,52,.98),rgba(6,12,24,.99));border:1px solid rgba(125,154,255,.18);box-shadow:0 30px 80px rgba(0,0,0,.36)}
+  .admin-login-hero{padding:34px;background:radial-gradient(circle at 20% 10%,rgba(31,208,146,.22),transparent 36%),linear-gradient(160deg,rgba(78,124,255,.18),rgba(12,24,45,.72));border-right:1px solid rgba(255,255,255,.08)}
+  .admin-login-mark{display:inline-flex;align-items:center;gap:10px;font-weight:900;color:#fff}
+  .admin-login-logo{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,#4f7cff,#18d1a4);box-shadow:0 14px 28px rgba(24,209,164,.18)}
+  .admin-login-hero h1{font-size:clamp(34px,5vw,58px);line-height:.95;margin:62px 0 16px;letter-spacing:-.05em}
+  .admin-login-hero p{max-width:460px;color:#b9c9e8;line-height:1.7;margin:0}
+  .admin-login-points{display:grid;gap:10px;margin-top:30px}
+  .admin-login-points span{display:inline-flex;align-items:center;gap:10px;color:#dce8ff}
+  .admin-login-points span::before{content:'';width:9px;height:9px;border-radius:99px;background:#18d1a4;box-shadow:0 0 0 5px rgba(24,209,164,.10)}
+  .admin-login-form{padding:34px;display:flex;flex-direction:column;justify-content:center;gap:16px}
+  .admin-login-form h2{margin:0;font-size:28px}
+  .admin-login-form p{margin:0;color:#94a3b8;line-height:1.6}
+  .admin-login-form form{display:grid;gap:12px;margin-top:10px}
+  .admin-login-form input{min-height:48px;border-radius:14px}
+  .admin-login-form .btn{min-height:50px;border-radius:15px;background:linear-gradient(135deg,#4f7cff,#2563eb);border-color:rgba(125,154,255,.44);box-shadow:0 18px 34px rgba(37,99,235,.20)}
+  .admin-login-error{width:min(980px,100%);margin:0 auto 14px}
+  @media(max-width:820px){.admin-login-card{grid-template-columns:1fr}.admin-login-hero{border-right:0;border-bottom:1px solid rgba(255,255,255,.08);padding:28px}.admin-login-hero h1{margin-top:36px}.admin-login-form{padding:26px}.admin-login-shell{padding:16px;place-items:start center}}
   </style></head><body>";
   if (admin_is_logged_in()) {
     echo "<div class='top'><div class='top-row'><div class='top-brand'><span class='top-badge'>MEX</span><div class='top-title'><span>MEX Group Admin</span><small>Operations console</small></div></div><span class='top-spacer'></span><a class='btn' href='/admin/logout.php'>Logout</a></div>";

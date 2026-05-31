@@ -1,4 +1,4 @@
-import{i as l,g as d,b as m,e as n,m as r}from"./main-D3HHwgsY.js";function h(){const e=d("level")||{},a=e.current||{},t=e.next||{},s=d("kyc")||{};return`
+import{i as l,h as d,b as m,e as n,m as r}from"./main-BvBtKEZ9.js";function b(){const e=d("level")||{},a=e.current||{},t=e.next||{},s=d("kyc")||{};return`
     <div class="space-y-5 animate-fade-in wallet-page">
       <section class="wallet-hero">
         <div>
@@ -99,4 +99,4 @@ import{i as l,g as d,b as m,e as n,m as r}from"./main-D3HHwgsY.js";function h(){
     <span>${n(e)}</span>
     <strong>${n(a)}</strong>
     <small>${n(t)}</small>
-  </article>`}export{w as mount,h as render};
+  </article>`}export{w as mount,b as render};

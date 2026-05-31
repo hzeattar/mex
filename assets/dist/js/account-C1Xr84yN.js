@@ -1,4 +1,4 @@
-import{g as v,e as t,m as l,i as s,c as x}from"./main-D3HHwgsY.js";function F(){const e=v("user")||{},a=v("kyc")||{},n=v("level")||{},o=v("wallet")||{},i=v("mode")==="real"?"real":"demo",c=n.current||e.user_level||{},r=n.next||e.next_level||null,f=Number(n.confirmed_deposit_total??e.confirmed_deposit_total??0),u=Number(r?.min_deposit_total||0),S=u>0?Math.min(100,Math.round(f/u*100)):100,w=e.live_account||e.accounts?.live||{},b=e.demo_account||e.accounts?.demo||{},T=i==="real"?w:b,L=i==="real"?o.real:o.demo,U=e.display_name||e.name||e.username||e.email||"Client",R=String(U).trim().charAt(0).toUpperCase()||"U",D=(a.status||"not submitted").replace(/_/g," "),k=u>0?Math.max(0,u-f):0,B=i==="real"?"Live internal execution":"Practice trading workspace",E=[a.status==="approved",!!(c?.level_code||c?.id),i==="real",!!e.email].filter(Boolean).length;return`
+import{h as v,e as t,m as l,i as s,f as x}from"./main-BvBtKEZ9.js";function F(){const e=v("user")||{},a=v("kyc")||{},n=v("level")||{},o=v("wallet")||{},i=v("mode")==="real"?"real":"demo",c=n.current||e.user_level||{},r=n.next||e.next_level||null,y=Number(n.confirmed_deposit_total??e.confirmed_deposit_total??0),u=Number(r?.min_deposit_total||0),S=u>0?Math.min(100,Math.round(y/u*100)):100,w=e.live_account||e.accounts?.live||{},b=e.demo_account||e.accounts?.demo||{},T=i==="real"?w:b,L=i==="real"?o.real:o.demo,U=e.display_name||e.name||e.username||e.email||"Client",R=String(U).trim().charAt(0).toUpperCase()||"U",D=(a.status||"not submitted").replace(/_/g," "),k=u>0?Math.max(0,u-y):0,B=i==="real"?"Live internal execution":"Practice trading workspace",E=[a.status==="approved",!!(c?.level_code||c?.id),i==="real",!!e.email].filter(Boolean).length;return`
     <div class="space-y-5 animate-fade-in account-page">
       <section class="account-hero">
         <div class="account-hero-main">
@@ -87,7 +87,7 @@ import{g as v,e as t,m as l,i as s,c as x}from"./main-D3HHwgsY.js";function F(){
           </div>
           <div class="account-roadmap">
             ${C("Current",c?.name||c?.name_en||"Starter","Enabled for your account today")}
-            ${C("Confirmed deposits",`${l(f)} USDT`,r?`${l(k)} USDT remaining`:"Target reached")}
+            ${C("Confirmed deposits",`${l(y)} USDT`,r?`${l(k)} USDT remaining`:"Target reached")}
             ${C("Next tier",r?.name||r?.name_en||"Top level",r?`${l(u)} USDT threshold`:"No higher tier available")}
           </div>
         </section>
@@ -98,10 +98,10 @@ import{g as v,e as t,m as l,i as s,c as x}from"./main-D3HHwgsY.js";function F(){
             <h2>Client workspace</h2>
           </div>
           <div class="account-preference-list">
-            ${y("Trading mode",i==="real"?"Real account selected":"Demo account selected")}
-            ${y("Funding workflow","Manual deposits and withdrawals with admin review")}
-            ${y("Copy desk access",a.status==="approved"&&i==="real"?"Eligible for real-only copy desk":"Locked until Real + KYC")}
-            ${y("Contract access",c?.name||c?.name_en?`Mapped to ${c?.name||c?.name_en}`:"Starter access")}
+            ${f("Trading mode",i==="real"?"Real account selected":"Demo account selected")}
+            ${f("Funding workflow","Manual deposits and withdrawals with admin review")}
+            ${f("Copy desk access",a.status==="approved"&&i==="real"?"Eligible for real-only copy desk":"Locked until Real + KYC")}
+            ${f("Contract access",c?.name||c?.name_en?`Mapped to ${c?.name||c?.name_en}`:"Starter access")}
           </div>
         </section>
       </div>
@@ -178,7 +178,7 @@ import{g as v,e as t,m as l,i as s,c as x}from"./main-D3HHwgsY.js";function F(){
     <span>${t(e)}</span>
     <strong>${t(a)}</strong>
     <small>${t(n)}</small>
-  </div>`}function y(e,a){return`<div class="preference-row">
+  </div>`}function f(e,a){return`<div class="preference-row">
     <span>${t(e)}</span>
     <strong>${t(a)}</strong>
   </div>`}export{K as mount,F as render};

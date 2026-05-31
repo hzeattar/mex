@@ -331,6 +331,12 @@ $langUrl = '/register.php?lang=' . rawurlencode($langSwitch) . '&next=' . rawurl
   var fair='<?php echo $lang==="ar"?"مقبولة":"Fair"; ?>';
   var good='<?php echo $lang==="ar"?"جيدة":"Good"; ?>';
   var strong='<?php echo $lang==="ar"?"قوية":"Strong"; ?>';
+  if (<?php echo $lang === 'ar' ? 'true' : 'false'; ?>) {
+    weak = 'ضعيفة';
+    fair = 'مقبولة';
+    good = 'جيدة';
+    strong = 'قوية';
+  }
   pw.addEventListener('input',function(){
     var v=pw.value,score=0;
     if(v.length>=6)score++;if(v.length>=10)score++;

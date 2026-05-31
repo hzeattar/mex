@@ -1,12 +1,13 @@
 {
   "brand.name": "MEX Group",
-  "brand.product": "VertexPluse",
+  "brand.product": "MEX Group",
   "brand.tagline": "مساحة تداول احترافية",
   "nav.home": "الرئيسية",
   "nav.trade": "التداول",
   "nav.portfolio": "المحفظة",
   "nav.wallet": "الأموال",
   "nav.earn": "العقود",
+  "nav.markets": "الأسواق",
   "nav.news": "الأخبار",
   "nav.support": "الدعم",
   "nav.account": "الحساب",
@@ -16,8 +17,16 @@
   "common.no_notifications": "لا توجد إشعارات",
   "common.failed_to_load": "تعذر التحميل",
   "common.notifications": "الإشعارات",
+  "common.refresh": "تحديث",
+  "common.close": "إغلاق",
   "mode.real": "حقيقي",
   "mode.demo": "تجريبي",
   "topbar.balance": "الرصيد",
-  "auth.service_reconnecting": "الخدمة تعيد الاتصال الآن، حاول مرة أخرى بعد لحظات."
+  "auth.service_reconnecting": "الخدمة تعيد الاتصال الآن، حاول مرة أخرى بعد لحظات.",
+  "news.badge": "موجز MEX Group",
+  "news.title": "الأخبار وتحديثات المنصة",
+  "news.subtitle": "تابع تحديثات التشغيل وملاحظات السوق والتنبيهات المالية وإعلانات مكتب النسخ من MEX Group.",
+  "news.empty": "لا توجد أخبار حتى الآن.",
+  "news.readMore": "اقرأ التحديث كاملًا",
+  "news.openSource": "فتح المصدر"
 }

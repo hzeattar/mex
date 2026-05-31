@@ -1,4 +1,4 @@
-import{d as $,s as u,g as i,m as l,b as h,e as s,h as L,i as x,p as I,c as _}from"./main-D3HHwgsY.js";import{marketIconPath as R,marketInitial as q}from"./marketIcon-D-Yq8Sis.js";function W(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=F(),o=e.current||{},n=e.next||{},r=i("mode");return`
+import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}from"./main-BvBtKEZ9.js";import{marketIconPath as R,marketInitial as q}from"./marketIcon-D-Yq8Sis.js";function W(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=F(),o=e.current||{},n=e.next||{},r=i("mode");return`
     <div class="space-y-5 animate-fade-in">
       <section class="feature-hero">
         <div class="relative z-10">
@@ -32,7 +32,7 @@ import{d as $,s as u,g as i,m as l,b as h,e as s,h as L,i as x,p as I,c as _}fro
           <div class="skeleton h-48 rounded-lg"></div>
         </div>
       </div>
-    </div>`}function X(t){C(t),$(t,"[data-earn-tab]","click",(e,a)=>{u("invest.tab",a.dataset.earnTab),localStorage.setItem("vp_earn_tab",a.dataset.earnTab),S(t)}),$(t,"[data-copy-signal]","click",(e,a)=>O(a.dataset.copySignal,t)),$(t,"[data-contract-subscribe]","click",(e,a)=>V(a.dataset.contractSubscribe,t)),$(t,"[data-switch-real]","click",()=>{localStorage.setItem("vp_mode","real"),u("mode","real"),location.reload()}),$(t,"[data-open-kyc]","click",()=>{location.hash="#/kyc"})}async function C(t){try{const[e,a,o,n]=await Promise.all([h("/signals.php?bot=1&home=1&lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/contracts.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/trading_bot/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]}))]);u("invest.signals",e.items||[]),u("invest.contracts",a.items||[]),u("invest.copies",o.items||[]),u("invest.mine",{contracts:(n.items||[]).filter(r=>String(r.product_kind||"").toLowerCase()==="contract")}),S(t)}catch{S(t)}}function S(t){const e=t.querySelector("#invest-content");if(!e)return;const a=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",o=w(),n=a==="copy"?A():U();e.innerHTML=o?j(n,o):n}function A(){const t=i("invest.signals")||[],e=i("invest.copies")||[];return`
+    </div>`}function X(t){C(t),$(t,"[data-earn-tab]","click",(e,a)=>{u("invest.tab",a.dataset.earnTab),localStorage.setItem("vp_earn_tab",a.dataset.earnTab),S(t)}),$(t,"[data-copy-signal]","click",(e,a)=>j(a.dataset.copySignal,t)),$(t,"[data-contract-subscribe]","click",(e,a)=>O(a.dataset.contractSubscribe,t)),$(t,"[data-switch-real]","click",()=>{localStorage.setItem("vp_mode","real"),u("mode","real"),location.reload()}),$(t,"[data-open-kyc]","click",()=>{location.hash="#/kyc"})}async function C(t){try{const[e,a,o,n]=await Promise.all([h("/signals.php?bot=1&home=1&lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/contracts.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/trading_bot/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]}))]);u("invest.signals",e.items||[]),u("invest.contracts",a.items||[]),u("invest.copies",o.items||[]),u("invest.mine",{contracts:(n.items||[]).filter(r=>String(r.product_kind||"").toLowerCase()==="contract")}),S(t)}catch{S(t)}}function S(t){const e=t.querySelector("#invest-content");if(!e)return;const a=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",o=w(),n=a==="copy"?A():U();e.innerHTML=o?V(n,o):n}function A(){const t=i("invest.signals")||[],e=i("invest.copies")||[];return`
     <section class="desk-panel">
       <div class="panel-head">
         <div>
@@ -153,7 +153,7 @@ import{d as $,s as u,g as i,m as l,b as h,e as s,h as L,i as x,p as I,c as _}fro
       ${c("Paid",`$${l(t.paid_total||0)}`)}
       ${c("ROI",`${Number(t.cycle_roi_percent||0)}%`)}
     </div>
-  </article>`}function O(t,e){const a=(i("invest.signals")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.copy_min_amount||100);N(`
+  </article>`}function j(t,e){const a=(i("invest.signals")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.copy_min_amount||100);N(`
     <form class="space-y-4" id="copy-form">
       <div>
         <span class="badge-green">Copy real</span>
@@ -174,7 +174,7 @@ import{d as $,s as u,g as i,m as l,b as h,e as s,h as L,i as x,p as I,c as _}fro
       <p class="dialog-error hidden" id="copy-error"></p>
       <button class="btn-primary w-full" type="submit">Confirm Copy</button>
     </form>
-  `),document.querySelector("#copy-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#copy-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/trading_bot/copy.php",{signal_id:Number(t),amount:b,mode:"real"},{timeout:12e3}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Copy failed",d.classList.remove("hidden"))}})}function V(t,e){const a=(i("invest.contracts")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.min_amount||0);N(`
+  `),document.querySelector("#copy-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#copy-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/trading_bot/copy.php",{signal_id:Number(t),amount:b,mode:"real"},{timeout:12e3}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Copy failed",d.classList.remove("hidden"))}})}function O(t,e){const a=(i("invest.contracts")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.min_amount||0);N(`
     <form class="space-y-4" id="contract-form">
       <div>
         <span class="badge-accent">Contract</span>
@@ -195,7 +195,7 @@ import{d as $,s as u,g as i,m as l,b as h,e as s,h as L,i as x,p as I,c as _}fro
       <p class="dialog-error hidden" id="contract-error"></p>
       <button class="btn-primary w-full" type="submit">Subscribe</button>
     </form>
-  `),document.querySelector("#contract-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#contract-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/invest/subscribe.php",{plan_id:String(t),amount:b},{timeout:12e3,headers:{"Idempotency-Key":G("contract")}}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Subscription failed",d.classList.remove("hidden"))}})}function w(){return i("mode")!=="real"?{title:"Real account required",body:"Copy trading and contracts are visible in Demo, but activation is Real-only.",action:"Switch to Real",attr:"data-switch-real"}:B()?null:{title:"KYC approval required",body:"Submit and approve KYC before copying signals or subscribing to contracts.",action:"Open KYC",attr:"data-open-kyc"}}function j(t,e){return`<div class="gate-wrap">
+  `),document.querySelector("#contract-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#contract-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/invest/subscribe.php",{plan_id:String(t),amount:b},{timeout:12e3,headers:{"Idempotency-Key":G("contract")}}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Subscription failed",d.classList.remove("hidden"))}})}function w(){return i("mode")!=="real"?{title:"Real account required",body:"Copy trading and contracts are visible in Demo, but activation is Real-only.",action:"Switch to Real",attr:"data-switch-real"}:B()?null:{title:"KYC approval required",body:"Submit and approve KYC before copying signals or subscribing to contracts.",action:"Open KYC",attr:"data-open-kyc"}}function V(t,e){return`<div class="gate-wrap">
     <div class="gate-blur">${t}</div>
     <div class="gate-overlay">
       <div class="gate-card">

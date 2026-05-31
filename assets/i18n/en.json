@@ -16,8 +16,16 @@
   "common.no_notifications": "No notifications",
   "common.failed_to_load": "Failed to load",
   "common.notifications": "Notifications",
+  "common.refresh": "Refresh",
+  "common.close": "Close",
   "mode.real": "Real",
   "mode.demo": "Demo",
   "topbar.balance": "Balance",
-  "auth.service_reconnecting": "Service reconnecting, please retry in a moment."
+  "auth.service_reconnecting": "Service reconnecting, please retry in a moment.",
+  "news.badge": "MEX Group Briefing",
+  "news.title": "Market News & Platform Updates",
+  "news.subtitle": "Follow operational updates, market notes, funding notices, and copy desk announcements from MEX Group.",
+  "news.empty": "No news articles yet.",
+  "news.readMore": "Read full update",
+  "news.openSource": "Open source"
 }

@@ -1,5 +1,5 @@
-// Lightweight i18n service for the Vite client shell.
-// EN and AR are first-class. Any stored legacy locale safely falls back to EN.
+// Lightweight i18n service for the MEX Group client shell.
+// English and Arabic are polished; any legacy locale falls back to English.
 const SUPPORTED = ['en', 'ar'];
 const FALLBACK_LOCALE = 'en';
 
@@ -23,10 +23,18 @@ const BUILT_INS = {
     'common.no_notifications': 'No notifications',
     'common.failed_to_load': 'Failed to load',
     'common.notifications': 'Notifications',
+    'common.refresh': 'Refresh',
+    'common.close': 'Close',
     'mode.real': 'Real',
     'mode.demo': 'Demo',
     'topbar.balance': 'Balance',
     'auth.service_reconnecting': 'Service reconnecting, please retry in a moment.',
+    'news.badge': 'MEX Group Briefing',
+    'news.title': 'Market News & Platform Updates',
+    'news.subtitle': 'Follow operational updates, market notes, funding notices, and copy desk announcements from MEX Group.',
+    'news.empty': 'No news articles yet.',
+    'news.readMore': 'Read full update',
+    'news.openSource': 'Open source',
   },
   ar: {
     'brand.name': 'MEX Group',
@@ -47,10 +55,18 @@ const BUILT_INS = {
     'common.no_notifications': 'لا توجد إشعارات',
     'common.failed_to_load': 'تعذر التحميل',
     'common.notifications': 'الإشعارات',
+    'common.refresh': 'تحديث',
+    'common.close': 'إغلاق',
     'mode.real': 'حقيقي',
     'mode.demo': 'تجريبي',
     'topbar.balance': 'الرصيد',
     'auth.service_reconnecting': 'الخدمة تعيد الاتصال الآن، حاول مرة أخرى بعد لحظات.',
+    'news.badge': 'موجز MEX Group',
+    'news.title': 'الأخبار وتحديثات المنصة',
+    'news.subtitle': 'تابع تحديثات التشغيل وملاحظات السوق والتنبيهات المالية وإعلانات مكتب النسخ من MEX Group.',
+    'news.empty': 'لا توجد أخبار حتى الآن.',
+    'news.readMore': 'اقرأ التحديث كاملًا',
+    'news.openSource': 'فتح المصدر',
   },
 };
 
@@ -126,6 +142,7 @@ const PHRASES = {
     'Request manual admin payout': 'اطلب سحب يدوي من الإدارة',
     'Verify account documents': 'وثق مستندات الحساب',
     'Client trading platform': 'منصة تداول العملاء',
+    'Service reconnecting, please retry in a moment.': 'الخدمة تعيد الاتصال الآن، حاول مرة أخرى بعد لحظات.',
   },
 };
 
@@ -155,8 +172,8 @@ export async function loadLocale(lang) {
 
   translations = {
     ...BUILT_INS.en,
-    ...(BUILT_INS[locale] || {}),
     ...(remote && typeof remote === 'object' ? remote : {}),
+    ...(BUILT_INS[locale] || {}),
   };
 
   localStorage.setItem('vp_lang', locale);

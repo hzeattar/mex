@@ -111,8 +111,8 @@ try {
         'currency' => $checkoutCurrency,
         'unit_amount' => $amountMinor,
         'product_data' => [
-          'name' => 'VertexPluse account funding',
-          'description' => $currency . ' live wallet deposit #' . $depositId,
+          'name' => 'MEX Group account funding',
+          'description' => 'MEX Group ' . $currency . ' live wallet deposit #' . $depositId,
         ],
       ],
     ]],
