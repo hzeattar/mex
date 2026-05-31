@@ -283,7 +283,7 @@ async function setup(container) {
   loadTradeActivity(container, runId);
   activityRefreshTimer = setInterval(() => loadTradeActivity(container, runId, true), 12000);
 
-  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=220`, { timeout: 10000 })
+  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=220`, { timeout: 18000 })
     .then(async candles => {
       await chartReady;
       if (!isCurrentRun(runId, symbol, type)) return;

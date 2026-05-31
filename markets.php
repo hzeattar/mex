@@ -8,28 +8,108 @@ try { $isLoggedIn = session_user_id() > 0; } catch (Throwable $e) {}
 function _h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
 $markets = [
-  // Crypto
-  ['BTCUSDT','Bitcoin','BTC','crypto'],['ETHUSDT','Ethereum','ETH','crypto'],
-  ['BNBUSDT','BNB','BNB','crypto'],['SOLUSDT','Solana','SOL','crypto'],
-  ['XRPUSDT','Ripple','XRP','crypto'],['ADAUSDT','Cardano','ADA','crypto'],
-  ['DOGEUSDT','Dogecoin','DOGE','crypto'],['LTCUSDT','Litecoin','LTC','crypto'],
-  ['DOTUSDT','Polkadot','DOT','crypto'],['LINKUSDT','Chainlink','LINK','crypto'],
-  ['MATICUSDT','Polygon','MATIC','crypto'],['AVAXUSDT','Avalanche','AVAX','crypto'],
-  // Forex
+  // Crypto (40)
+  ['BTCUSDT','Bitcoin','BTC','crypto'],['ETHUSDT','Ethereum','ETH','crypto'],['BNBUSDT','BNB','BNB','crypto'],
+  ['SOLUSDT','Solana','SOL','crypto'],['XRPUSDT','Ripple','XRP','crypto'],['ADAUSDT','Cardano','ADA','crypto'],
+  ['DOGEUSDT','Dogecoin','DOGE','crypto'],['LTCUSDT','Litecoin','LTC','crypto'],['DOTUSDT','Polkadot','DOT','crypto'],
+  ['LINKUSDT','Chainlink','LINK','crypto'],['MATICUSDT','Polygon','MATIC','crypto'],['AVAXUSDT','Avalanche','AVAX','crypto'],
+  ['UNIUSDT','Uniswap','UNI','crypto'],['ATOMUSDT','Cosmos','ATOM','crypto'],['ETCUSDT','Ethereum Classic','ETC','crypto'],
+  ['XLMUSDT','Stellar','XLM','crypto'],['TRXUSDT','TRON','TRX','crypto'],['SHIBUSDT','Shiba Inu','SHIB','crypto'],
+  ['NEARUSDT','NEAR Protocol','NEAR','crypto'],['VETUSDT','VeChain','VET','crypto'],['SANDUSDT','Sandbox','SAND','crypto'],
+  ['MANAUSDT','Decentraland','MANA','crypto'],['ALGOUSDT','Algorand','ALGO','crypto'],['AAVEUSDT','Aave','AAVE','crypto'],
+  ['APTUSDT','Aptos','APT','crypto'],['ARBUSDT','Arbitrum','ARB','crypto'],['OPUSDT','Optimism','OP','crypto'],
+  ['INJUSDT','Injective','INJ','crypto'],['SUIUSDT','Sui','SUI','crypto'],['GRTUSDT','The Graph','GRT','crypto'],
+  ['MKRUSDT','Maker','MKR','crypto'],['FETUSDT','Fetch.ai','FET','crypto'],['STXUSDT','Stacks','STX','crypto'],
+  ['COMPUSDT','Compound','COMP','crypto'],['ZECUSDT','Zcash','ZEC','crypto'],['DASHUSDT','Dash','DASH','crypto'],
+  ['SNXUSDT','Synthetix','SNX','crypto'],['FILUSDT','Filecoin','FIL','crypto'],['ICPUSDT','Internet Computer','ICP','crypto'],
+  ['CRVUSDT','Curve DAO','CRV','crypto'],
+  // Forex (44)
   ['EURUSD','Euro / US Dollar','EUR/USD','forex'],['GBPUSD','Pound / US Dollar','GBP/USD','forex'],
-  ['USDJPY','US Dollar / Yen','USD/JPY','forex'],['USDCHF','Dollar / Franc','USD/CHF','forex'],
+  ['USDJPY','Dollar / Yen','USD/JPY','forex'],['USDCHF','Dollar / Franc','USD/CHF','forex'],
   ['AUDUSD','Australian Dollar','AUD/USD','forex'],['USDCAD','Dollar / CAD','USD/CAD','forex'],
-  ['NZDUSD','NZ Dollar','NZD/USD','forex'],['EURGBP','Euro / Pound','EUR/GBP','forex'],
+  ['NZDUSD','NZD / USD','NZD/USD','forex'],['EURGBP','Euro / Pound','EUR/GBP','forex'],
   ['EURJPY','Euro / Yen','EUR/JPY','forex'],['GBPJPY','Pound / Yen','GBP/JPY','forex'],
-  // Commodities
+  ['EURCAD','Euro / CAD','EUR/CAD','forex'],['EURAUD','Euro / AUD','EUR/AUD','forex'],
+  ['EURCHF','Euro / Franc','EUR/CHF','forex'],['EURNZD','Euro / NZD','EUR/NZD','forex'],
+  ['GBPAUD','Pound / AUD','GBP/AUD','forex'],['GBPCAD','Pound / CAD','GBP/CAD','forex'],
+  ['GBPCHF','Pound / Franc','GBP/CHF','forex'],['GBPNZD','Pound / NZD','GBP/NZD','forex'],
+  ['AUDCAD','AUD / CAD','AUD/CAD','forex'],['AUDCHF','AUD / Franc','AUD/CHF','forex'],
+  ['AUDNZD','AUD / NZD','AUD/NZD','forex'],['AUDJPY','AUD / Yen','AUD/JPY','forex'],
+  ['CADJPY','CAD / Yen','CAD/JPY','forex'],['CHFJPY','Franc / Yen','CHF/JPY','forex'],
+  ['NZDJPY','NZD / Yen','NZD/JPY','forex'],['CADCHF','CAD / Franc','CAD/CHF','forex'],
+  ['USDMXN','Dollar / Peso','USD/MXN','forex'],['USDSEK','Dollar / Krona','USD/SEK','forex'],
+  ['USDNOK','Dollar / Krone','USD/NOK','forex'],['USDPLN','Dollar / Zloty','USD/PLN','forex'],
+  ['USDTRY','Dollar / Lira','USD/TRY','forex'],['USDSGD','Dollar / SGD','USD/SGD','forex'],
+  ['USDHKD','Dollar / HKD','USD/HKD','forex'],['USDBRL','Dollar / Real','USD/BRL','forex'],
+  ['USDZAR','Dollar / Rand','USD/ZAR','forex'],['USDCNH','Dollar / Yuan','USD/CNH','forex'],
+  ['USDINR','Dollar / Rupee','USD/INR','forex'],['EURHUF','Euro / Forint','EUR/HUF','forex'],
+  ['EURPLN','Euro / Zloty','EUR/PLN','forex'],['EURTRY','Euro / Lira','EUR/TRY','forex'],
+  ['GBPTRY','Pound / Lira','GBP/TRY','forex'],['USDDKK','Dollar / DKK','USD/DKK','forex'],
+  ['USDILS','Dollar / Shekel','USD/ILS','forex'],['USDTHB','Dollar / Baht','USD/THB','forex'],
+  // Commodities (25)
   ['XAUUSD','Gold Spot','GOLD','commodities'],['XAGUSD','Silver Spot','SILVER','commodities'],
-  ['USOIL','WTI Crude Oil','OIL','commodities'],['BRENT','Brent Crude','BRENT','commodities'],
-  ['NATGAS','Natural Gas','GAS','commodities'],
-  // Stocks
-  ['AAPL','Apple Inc.','AAPL','stocks'],['TSLA','Tesla Inc.','TSLA','stocks'],
-  ['NVDA','NVIDIA Corp.','NVDA','stocks'],['MSFT','Microsoft Corp.','MSFT','stocks'],
-  ['GOOGL','Alphabet Inc.','GOOGL','stocks'],['META','Meta Platforms','META','stocks'],
-  ['AMZN','Amazon.com','AMZN','stocks'],['NFLX','Netflix Inc.','NFLX','stocks'],
+  ['XPTUSD','Platinum Spot','PLAT','commodities'],['XPDUSD','Palladium Spot','PALL','commodities'],
+  ['USOIL','WTI Crude Oil','OIL','commodities'],['UKOIL','Brent Crude Oil','BRENT','commodities'],
+  ['NGAS','Natural Gas','GAS','commodities'],['COPPER','Copper','COPPER','commodities'],
+  ['WHEAT','Wheat','WHEAT','commodities'],['CORN','Corn','CORN','commodities'],
+  ['SOYBEAN','Soybeans','SOY','commodities'],['SUGAR','Sugar #11','SUGAR','commodities'],
+  ['COTTON','Cotton #2','COTTON','commodities'],['COFFEE','Coffee','COFFEE','commodities'],
+  ['COCOA','Cocoa','COCOA','commodities'],['LUMBER','Lumber','LUMBER','commodities'],
+  ['NICKEL','Nickel','NICKEL','commodities'],['ZINC','Zinc','ZINC','commodities'],
+  ['ALUMINIUM','Aluminium','ALU','commodities'],['LEAD','Lead','LEAD','commodities'],
+  ['TIN','Tin','TIN','commodities'],['OJ','Orange Juice','OJ','commodities'],
+  ['LEAN_HOGS','Lean Hogs','HOGS','commodities'],['LIVE_CATTLE','Live Cattle','CATTLE','commodities'],
+  ['HEATING_OIL','Heating Oil','HOIL','commodities'],
+  // Stocks (46)
+  ['AAPL','Apple Inc.','AAPL','stocks'],['TSLA','Tesla Inc.','TSLA','stocks'],['NVDA','NVIDIA Corp.','NVDA','stocks'],
+  ['MSFT','Microsoft Corp.','MSFT','stocks'],['GOOGL','Alphabet Inc.','GOOGL','stocks'],['META','Meta Platforms','META','stocks'],
+  ['AMZN','Amazon.com Inc.','AMZN','stocks'],['NFLX','Netflix Inc.','NFLX','stocks'],['AMD','AMD Inc.','AMD','stocks'],
+  ['INTC','Intel Corp.','INTC','stocks'],['ORCL','Oracle Corp.','ORCL','stocks'],['CRM','Salesforce Inc.','CRM','stocks'],
+  ['PYPL','PayPal Holdings','PYPL','stocks'],['V','Visa Inc.','V','stocks'],['MA','Mastercard Inc.','MA','stocks'],
+  ['JPM','JPMorgan Chase','JPM','stocks'],['BAC','Bank of America','BAC','stocks'],['UNH','UnitedHealth Grp','UNH','stocks'],
+  ['JNJ','Johnson & Johnson','JNJ','stocks'],['PFE','Pfizer Inc.','PFE','stocks'],['MRK','Merck & Co.','MRK','stocks'],
+  ['CVX','Chevron Corp.','CVX','stocks'],['XOM','ExxonMobil Corp.','XOM','stocks'],['WMT','Walmart Inc.','WMT','stocks'],
+  ['COST','Costco Wholesale','COST','stocks'],['HD','Home Depot Inc.','HD','stocks'],['DIS','Walt Disney Co.','DIS','stocks'],
+  ['BABA','Alibaba Group','BABA','stocks'],['NKE','Nike Inc.','NKE','stocks'],['SBUX','Starbucks Corp.','SBUX','stocks'],
+  ['GS','Goldman Sachs','GS','stocks'],['MS','Morgan Stanley','MS','stocks'],['PLTR','Palantir Tech.','PLTR','stocks'],
+  ['COIN','Coinbase Global','COIN','stocks'],['SQ','Block Inc.','SQ','stocks'],['ADBE','Adobe Inc.','ADBE','stocks'],
+  ['UBER','Uber Technologies','UBER','stocks'],['SNAP','Snap Inc.','SNAP','stocks'],['SHOP','Shopify Inc.','SHOP','stocks'],
+  ['RBLX','Roblox Corp.','RBLX','stocks'],['DKNG','DraftKings Inc.','DKNG','stocks'],['SOFI','SoFi Tech.','SOFI','stocks'],
+  ['RIVN','Rivian Automotive','RIVN','stocks'],['GME','GameStop Corp.','GME','stocks'],['HOOD','Robinhood Mkts','HOOD','stocks'],
+  ['AMD','AMD Inc.','AMD2','stocks'],
+  // Futures (27)
+  ['ES_F','E-mini S&P 500','ES','futures'],['NQ_F','E-mini Nasdaq 100','NQ','futures'],
+  ['YM_F','E-mini Dow','YM','futures'],['RTY_F','E-mini Russell 2000','RTY','futures'],
+  ['CL_F','WTI Crude Future','CL','futures'],['GC_F','Gold Future','GC','futures'],
+  ['ZN_F','10Y Note Future','ZN','futures'],['ZB_F','30Y Bond Future','ZB','futures'],
+  ['ZC_F','Corn Future','ZC','futures'],['ZS_F','Soybean Future','ZS','futures'],
+  ['ZW_F','Wheat Future','ZW','futures'],['SI_F','Silver Future','SI','futures'],
+  ['HG_F','Copper Future','HG','futures'],['NG_F','Nat Gas Future','NG','futures'],
+  ['RB_F','Gasoline Future','RB','futures'],['HO_F','Heating Oil Future','HO','futures'],
+  ['VX_F','VIX Future','VX','futures'],['BTC_F','Bitcoin CME Fut.','BTCF','futures'],
+  ['ETH_F','Ether CME Fut.','ETHF','futures'],['DX_F','Dollar Index Fut.','DX','futures'],
+  ['6E_F','Euro FX Future','6E','futures'],['6B_F','GBP Future','6B','futures'],
+  ['6J_F','JPY Future','6J','futures'],['PA_F','Palladium Future','PA','futures'],
+  ['PL_F','Platinum Future','PL','futures'],['LE_F','Live Cattle Future','LE','futures'],
+  ['HE_F','Lean Hog Future','HE','futures'],
+  // Arab Stocks (35)
+  ['2222','Saudi Aramco','ARAMCO','arab'],['1120','Al Rajhi Bank','ALRAJHI','arab'],
+  ['2010','SABIC','SABIC','arab'],['7010','STC','STC','arab'],['1211','Maaden','MAADEN','arab'],
+  ['1150','Alinma Bank','ALINMA','arab'],['1180','Saudi National Bank','SNB','arab'],
+  ['2280','Almarai','ALMARAI','arab'],['1010','Riyad Bank','RIYAD','arab'],
+  ['1020','Bank AlJazira','ALJAZIRA','arab'],['1030','Saudi Hollandi','HOLLANDI','arab'],
+  ['1050','Saudi British Bank','SABB','arab'],['2050','Savola Group','SAVOLA','arab'],
+  ['2080','Sisco','SISCO','arab'],['7020','Zain KSA','ZAIN','arab'],
+  ['7030','Etihad Etisalat','MOBILY','arab'],['2040','Saudi Cable','SCCO','arab'],
+  ['2060','Al Qassim Cement','ALQASSIM','arab'],['2090','National Cement','NATCEM','arab'],
+  ['2100','Yanbu Cement','YANBU','arab'],['4001','Kingdom Holding','KHC','arab'],
+  ['4002','MBC Group','MBC','arab'],['4190','Jarir Marketing','JARIR','arab'],
+  ['4200','Saudi Telecom','STCO','arab'],['4240','Saudi Food & Drug','SFDA','arab'],
+  ['4260','Dallah Healthcare','DALLAH','arab'],['4280','Al Moammar Info.','MOAMMAR','arab'],
+  ['4300','SABIC Agri-Nutrients','SABICAGR','arab'],['4321','Al Khaleej Training','ALKHALEEJ','arab'],
+  ['2150','Hail Cement','HAILCEM','arab'],['2160','Arabian Cement','ARCEM','arab'],
+  ['2170','Southern Cement','SCEM','arab'],['2180','Eastern Cement','ECEM','arab'],
+  ['1060','Arab National Bank','ANB','arab'],['1080','Banque Saudi Fransi','BSF','arab'],
 ];
 ?>
 <!doctype html>
@@ -102,11 +182,17 @@ $markets = [
 
     <!-- Filter tabs -->
     <div class="mex-market-filters" id="market-filters">
-      <button class="mex-filter-btn is-active" data-filter="all">All <span class="fc-count"><?php echo count($markets); ?></span></button>
-      <button class="mex-filter-btn" data-filter="crypto">Crypto <span class="fc-count"><?php echo count(array_filter($markets,fn($m)=>$m[3]==='crypto')); ?></span></button>
-      <button class="mex-filter-btn" data-filter="forex">Forex <span class="fc-count"><?php echo count(array_filter($markets,fn($m)=>$m[3]==='forex')); ?></span></button>
-      <button class="mex-filter-btn" data-filter="commodities">Commodities <span class="fc-count"><?php echo count(array_filter($markets,fn($m)=>$m[3]==='commodities')); ?></span></button>
-      <button class="mex-filter-btn" data-filter="stocks">Stocks <span class="fc-count"><?php echo count(array_filter($markets,fn($m)=>$m[3]==='stocks')); ?></span></button>
+      <?php
+      $counts = ['all'=>0,'crypto'=>0,'forex'=>0,'commodities'=>0,'stocks'=>0,'futures'=>0,'arab'=>0];
+      foreach($markets as $m) { $counts['all']++; $t=$m[3]; if(isset($counts[$t])) $counts[$t]++; }
+      ?>
+      <button class="mex-filter-btn is-active" data-filter="all">All <span class="fc-count"><?php echo $counts['all']; ?></span></button>
+      <button class="mex-filter-btn" data-filter="crypto">Crypto <span class="fc-count"><?php echo $counts['crypto']; ?></span></button>
+      <button class="mex-filter-btn" data-filter="forex">Forex <span class="fc-count"><?php echo $counts['forex']; ?></span></button>
+      <button class="mex-filter-btn" data-filter="commodities">Commodities <span class="fc-count"><?php echo $counts['commodities']; ?></span></button>
+      <button class="mex-filter-btn" data-filter="stocks">Stocks <span class="fc-count"><?php echo $counts['stocks']; ?></span></button>
+      <button class="mex-filter-btn" data-filter="futures">Futures <span class="fc-count"><?php echo $counts['futures']; ?></span></button>
+      <button class="mex-filter-btn" data-filter="arab">Arab <span class="fc-count"><?php echo $counts['arab']; ?></span></button>
     </div>
 
     <!-- Market grid -->

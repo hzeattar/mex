@@ -385,11 +385,11 @@ $marketCards = [
   // ── update single price element with flash ─────────────────────
   function updateEl(el, newPrice, sym) {
     var oldPrice = prevPrices[sym] || 0;
+    // Always remove skeleton even if price is 0/unchanged
+    el.classList.remove('mex-skeleton');
     var fmtd = fmt(newPrice);
     if (el.textContent === fmtd) return; // no change
     el.textContent = fmtd;
-    // Remove skeleton
-    el.classList.remove('mex-skeleton');
     if (oldPrice > 0 && newPrice > 0 && newPrice !== oldPrice) {
       var cls = newPrice > oldPrice ? 'flash-up' : 'flash-down';
       el.classList.remove('flash-up', 'flash-down');

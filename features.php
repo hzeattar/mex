@@ -6,6 +6,7 @@ $rtl  = $lang === 'ar';
 $isLoggedIn = false;
 try { $isLoggedIn = session_user_id() > 0; } catch (Throwable $e) {}
 function _h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+?>
 <!doctype html>
 <html lang="<?php echo _h($lang); ?>" dir="<?php echo $rtl?'rtl':'ltr'; ?>">
 <head>
