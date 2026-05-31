@@ -320,7 +320,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId) {
 
   const type = get('type');
   const active = get('symbol');
-  const max = type === 'crypto' ? 24 : 12;
+  const max = type === 'crypto' ? 60 : 40;
   const symbols = [...new Set(marketItems
     .slice(0, max)
     .map(m => String(m.symbol || '').toUpperCase())
@@ -444,7 +444,7 @@ function renderSymbolList(container, items) {
   if (!list) return;
 
   const active = get('symbol');
-  const visible = items.slice(0, 60);
+  const visible = items.slice(0, 120);
   list.innerHTML = visible.map(m => {
     const symbol = String(m.symbol || '').toUpperCase();
     const type = m.type || get('type');

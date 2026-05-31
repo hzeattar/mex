@@ -987,7 +987,7 @@ try {
   }
 
   if ($lite && !$grouped) {
-    $limit = $scope === 'home' ? 16 : 18;
+    $limit = $scope === 'home' ? 24 : 60;
     if ($typeAlias !== 'all' && $typeAlias !== 'favorites' && count($rows) > $limit) {
       $rows = array_slice($rows, 0, $limit);
     } elseif ($scope === 'home' && count($rows) > $limit) {
