@@ -1194,6 +1194,8 @@ function yahoo_chart_meta_quote(string $symbol, string $tf = '1m'): ?array {
     }
   }
   $changePct = ($prev > 0) ? (($price - $prev) / $prev) * 100.0 : 0.0;
+  // Cap unrealistic change_pct from futures contracts (rollover causes huge gaps)
+  if (abs($changePct) > 20.0) $changePct = 0.0;
   $updatedAt = isset($meta['regularMarketTime']) && is_numeric($meta['regularMarketTime'])
     ? (int)$meta['regularMarketTime']
     : time();
