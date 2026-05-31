@@ -336,7 +336,8 @@ function candles_fill_time_gaps(array $items, int $step, string $assetType = '')
   $kind = strtolower(trim($assetType));
   $maxFill = 8;
   if ($kind === 'crypto') $maxFill = 2;
-  elseif ($kind === 'forex' || $kind === 'commodities') $maxFill = 4;
+  elseif ($kind === 'forex') $maxFill = 6;
+  elseif ($kind === 'commodities') $maxFill = 6;
   elseif ($kind === 'stocks' || $kind === 'arab' || $kind === 'futures') $maxFill = 8;
 
   $out = [];

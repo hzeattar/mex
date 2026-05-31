@@ -179,7 +179,7 @@ $marketCards = [
 <!-- ══ STATS ROW ═══════════════════════════════════════════════ -->
 <div class="mex-stats-row">
   <div class="mex-stat-card">
-    <strong><span class="mex-stat-num" data-count="70">70</span>+</strong>
+    <strong><span class="mex-stat-num" data-count="217">217</span>+</strong>
     <small>Instruments</small>
   </div>
   <div class="mex-stat-card">

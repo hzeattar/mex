@@ -1370,6 +1370,12 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
   if ($symbol === '') return null;
 
   $y = strtoupper(trim((string)($meta['yahoo_ticker'] ?? '')));
+  // Spot metals must NEVER use futures tickers (GC=F, SI=F, etc.)
+  if (vp_is_spot_metal_symbol($symbol, $type)) {
+    if ($y !== '' && preg_match('/^[A-Z]{1,4}=F$/', $y)) {
+      $y = ''; // reject futures ticker for spot metal
+    }
+  }
   if ($y !== '' && $type === 'stocks') return str_replace('.', '-', $y);
   if ($y !== '' && $type === 'arab') return vp_arab_yahoo_ticker($y, $meta) ?: $y;
   if ($y !== '' && ($type === 'forex' || $type === 'fx' || $type === 'commodities' || $type === 'futures')) return $y;
