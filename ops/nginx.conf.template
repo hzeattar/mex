@@ -40,8 +40,8 @@ http {
   gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
 
   server {
-    listen 0.0.0.0:${PORT} default_server;
-    listen [::]:${PORT} default_server;
+    listen [::]:${PORT} ipv6only=off default_server;
+${EXTRA_LISTEN}
     server_name _;
     root /app;
     index index.php index.html;

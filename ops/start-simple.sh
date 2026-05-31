@@ -2,7 +2,7 @@
 # MEX Group — SIMPLE startup for Railway debugging
 # Uses PHP built-in server to rule out nginx issues
 
-: "${PORT:=8080}"
+: "${PORT:=9000}"
 export PORT
 
 cd /app

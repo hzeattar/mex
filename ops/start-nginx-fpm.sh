@@ -2,8 +2,14 @@
 # MEX Group nginx + PHP-FPM startup script for Railway.
 # Railway exposes the public PORT; PHP-FPM stays private on localhost.
 
-: "${PORT:=8080}"
+: "${PORT:=9000}"
 export PORT
+
+EXTRA_LISTEN=""
+if [ "$PORT" != "9000" ]; then
+  EXTRA_LISTEN="    listen [::]:9000 ipv6only=off;"
+fi
+export EXTRA_LISTEN
 
 cd /app
 mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx /tmp
@@ -12,7 +18,7 @@ chmod -R 775 api/data api/uploads 2>/dev/null || true
 rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf 2>/dev/null || true
 
 echo "[start] PORT=${PORT} - rendering nginx config"
-envsubst '$PORT' < /app/ops/nginx.conf.template > /tmp/nginx.conf
+envsubst '$PORT $EXTRA_LISTEN' < /app/ops/nginx.conf.template > /tmp/nginx.conf
 cp /tmp/nginx.conf /etc/nginx/nginx.conf 2>/dev/null || true
 
 echo "[start] validating nginx config"
