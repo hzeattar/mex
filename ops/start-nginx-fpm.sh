@@ -5,13 +5,23 @@
 : "${PORT:=8080}"
 export PORT
 
+# Railway can keep an existing generated domain pointed at an older target
+# port. Public users still open the normal HTTPS domain without a port; this
+# fallback keeps that domain healthy while Railway config catches up.
+EXTRA_LISTEN=""
+if [ "$PORT" != "9000" ]; then
+  EXTRA_LISTEN="    listen 0.0.0.0:9000;
+    listen [::]:9000;"
+fi
+export EXTRA_LISTEN
+
 cd /app
 mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx /tmp
 chown -R www-data:www-data api/data api/uploads 2>/dev/null || true
 chmod -R 775 api/data api/uploads 2>/dev/null || true
 
 echo "[start] PORT=${PORT} - rendering nginx config"
-envsubst '$PORT' < /app/ops/nginx.conf.template > /tmp/nginx.conf
+envsubst '$PORT $EXTRA_LISTEN' < /app/ops/nginx.conf.template > /tmp/nginx.conf
 
 echo "[start] validating nginx config"
 nginx -t -c /tmp/nginx.conf 2>&1 || { echo "[start] FATAL: nginx config invalid"; exit 1; }
@@ -28,5 +38,5 @@ if ! kill -0 "$FPM_PID" 2>/dev/null; then
   exit 1
 fi
 
-echo "[start] PHP-FPM started, nginx listening on ${PORT}"
+echo "[start] PHP-FPM started, nginx listening on ${PORT} with fallback 9000"
 exec nginx -c /tmp/nginx.conf -g 'daemon off;'

@@ -42,6 +42,7 @@ http {
   server {
     listen 0.0.0.0:${PORT} default_server;
     listen [::]:${PORT} default_server;
+${EXTRA_LISTEN}
     server_name _;
     root /app;
     index index.php index.html;
