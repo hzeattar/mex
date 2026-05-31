@@ -26,7 +26,7 @@ $txt = function(string $key) use ($lang): string {
     'hero_title_1'    =>['en'=>'Trade','ar'=>'تداول','ru'=>'Торгуйте','tr'=>'Ticaret','fr'=>'Tradez','de'=>'Handeln'],
     'hero_title_2'    =>['en'=>'Global Markets','ar'=>'الأسواق العالمية','ru'=>'Глобальными рынками','tr'=>'Küresel Piyasalar','fr'=>'Les Marchés Mondiaux','de'=>'Globale Märkte'],
     'hero_title_3'    =>['en'=>'From One Account','ar'=>'من حساب واحد','ru'=>'Из одного счёта','tr'=>'Tek Hesaptan','fr'=>'Depuis un Seul Compte','de'=>'Von einem Konto'],
-    'hero_subtitle'   =>['en'=>'Access 70+ instruments across crypto, forex, stocks, and commodities with professional charts, instant execution, and institutional-grade security. Start with a free demo.','ar'=>'وصول لأكثر من 70 أداة عبر الكريبتو والفوركس والأسهم والسلع مع شارت احترافي وتنفيذ فوري وأمان مؤسسي. ابدأ بحساب ديمو مجاني.','ru'=>'Доступ к 70+ инструментам — криптовалюта, форекс, акции, товары. Профессиональные графики, мгновенное исполнение. Начните с бесплатного демо.'],
+    'hero_subtitle'   =>['en'=>'Access 217+ instruments across crypto, forex, stocks, commodities, futures, and Arab equities with professional charts, instant execution, and institutional-grade security. Start with a free demo.','ar'=>'وصول لأكثر من 217 أداة عبر الكريبتو والفوركس والأسهم والسلع والعقود المستقبلية والأسواق العربية مع شارت احترافي وتنفيذ فوري وأمان مؤسسي. ابدأ بحساب ديمو مجاني.','ru'=>'Доступ к 217+ инструментам — криптовалюта, форекс, акции, товары, фьючерсы, арабские рынки. Профессиональные графики, мгновенное исполнение. Начните с бесплатного демо.'],
     'hero_cta_primary'=>['en'=>'Start trading','ar'=>'ابدأ التداول','ru'=>'Начать торговлю','tr'=>'Ticarete Başla','fr'=>'Commencer à trader','de'=>'Jetzt handeln'],
     'hero_cta_second' =>['en'=>'View features','ar'=>'شاهد المزايا','ru'=>'Посмотреть функции','tr'=>'Özellikleri Gör','fr'=>'Voir les fonctionnalités','de'=>'Funktionen ansehen'],
     'trust_title'     =>['en'=>'Why MEX Group','ar'=>'لماذا MEX Group','ru'=>'Почему MEX Group','tr'=>'Neden MEX Group','fr'=>'Pourquoi MEX Group','de'=>'Warum MEX Group'],
@@ -46,7 +46,7 @@ $txt = function(string $key) use ($lang): string {
     'step2_title'     =>['en'=>'Verify Identity','ar'=>'تحقق من هويتك','ru'=>'Подтвердите личность'],
     'step2_text'      =>['en'=>'Upload KYC documents online to unlock real trading, deposits, and withdrawals.','ar'=>'ارفع وثائق KYC عبر الإنترنت لتفعيل التداول الحقيقي والإيداع والسحب.','ru'=>'Загрузите документы KYC для доступа к реальной торговле.'],
     'step3_title'     =>['en'=>'Start Trading','ar'=>'ابدأ التداول','ru'=>'Начните торговлю'],
-    'step3_text'      =>['en'=>'Access 70+ markets with professional charts, real-time prices, and instant order execution.','ar'=>'وصّل لأكثر من 70 سوقاً بشارت احترافي وأسعار فورية وتنفيذ أوامر فوري.','ru'=>'70+ рынков, профессиональные графики, мгновенное исполнение.'],
+    'step3_text'      =>['en'=>'Access 217+ markets with professional charts, real-time prices, and instant order execution.','ar'=>'وصّل لأكثر من 217 سوقاً بشارت احترافي وأسعار فورية وتنفيذ أوامر فوري.','ru'=>'217+ рынков, профессиональные графики, мгновенное исполнение.'],
     'cta_title'       =>['en'=>'Ready to start?','ar'=>'مستعد للبدء؟','ru'=>'Готовы начать?'],
     'cta_sub'         =>['en'=>'Open your MEX Group account in minutes and access global markets today.','ar'=>'افتح حساب MEX Group في دقائق وادخل الأسواق العالمية اليوم.','ru'=>'Откройте счёт MEX Group за несколько минут.'],
     'cta_btn'         =>['en'=>'Create free account','ar'=>'إنشاء حساب مجاني','ru'=>'Создать аккаунт'],
@@ -150,10 +150,11 @@ $marketCards = [
     <div class="mex-hero-terminal" aria-label="Market terminal preview">
       <div class="mex-terminal-top"><span></span><span></span><span></span><strong>MEX Group Desk</strong></div>
       <div class="mex-terminal-chart">
-        <i style="height:38%"></i><i style="height:52%"></i><i style="height:46%"></i>
-        <i style="height:67%"></i><i style="height:58%"></i><i style="height:74%"></i>
-        <i style="height:61%"></i><i style="height:82%"></i><i style="height:78%"></i>
-        <i style="height:70%"></i><i style="height:84%"></i><i style="height:76%"></i>
+        <div class="mex-terminal-overlay" id="terminal-overlay"><span data-price-symbol="BTCUSDT">BTCUSDT $73,862.58</span></div>
+        <i style="height:124px"></i><i style="height:170px"></i><i style="height:150px"></i>
+        <i style="height:220px"></i><i style="height:190px"></i><i style="height:244px"></i>
+        <i style="height:200px"></i><i style="height:270px"></i><i style="height:257px"></i>
+        <i style="height:230px"></i><i style="height:277px"></i><i style="height:250px"></i>
       </div>
       <div class="mex-terminal-row"><span>BTCUSDT</span><strong data-price-symbol="BTCUSDT">--</strong><em>LIVE</em></div>
       <div class="mex-terminal-row"><span>EURUSD</span><strong data-price-symbol="EURUSD">--</strong><em>FX</em></div>

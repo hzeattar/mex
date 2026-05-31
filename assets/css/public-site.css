@@ -958,6 +958,7 @@ html{scroll-behavior:smooth}
 .mex-terminal-top span:nth-child(3){background:#00c087}
 .mex-terminal-top strong{margin-inline-start:auto}
 .mex-terminal-chart{
+  height:330px;
   min-height:330px;
   display:flex;
   align-items:end;
@@ -968,6 +969,8 @@ html{scroll-behavior:smooth}
   background:
     linear-gradient(180deg,rgba(7,17,38,.52),rgba(2,7,16,.78)),
     repeating-linear-gradient(90deg,rgba(135,166,220,.045) 0 1px,transparent 1px 58px);
+  position:relative;
+  overflow:hidden;
 }
 .mex-terminal-chart i{
   flex:1;
@@ -975,7 +978,25 @@ html{scroll-behavior:smooth}
   border-radius:9px 9px 2px 2px;
   background:linear-gradient(180deg,#00e49b,#2775ff);
   box-shadow:0 0 22px rgba(0,228,155,.22);
+  transition:height 1.2s cubic-bezier(.4,0,.2,1),box-shadow .4s;
 }
+.mex-terminal-overlay{
+  position:absolute;
+  top:12px;left:14px;right:14px;
+  display:flex;justify-content:center;
+  z-index:2;
+}
+.mex-terminal-overlay span{
+  font-size:11px;font-weight:900;
+  letter-spacing:.06em;text-transform:uppercase;
+  color:#b7c9ef;
+  background:rgba(7,17,38,.65);
+  border:1px solid rgba(135,166,220,.14);
+  border-radius:999px;padding:4px 12px;
+  backdrop-filter:blur(8px);
+}
+@keyframes slideprice{0%,100%{opacity:1}50%{opacity:.8}}
+.mex-terminal-overlay span{animation:slideprice 3s infinite}
 .mex-terminal-row{
   display:grid;
   grid-template-columns:1fr auto auto;
