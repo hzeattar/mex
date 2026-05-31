@@ -117,7 +117,7 @@ $markets = [
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="MEX Group Markets — 70+ live prices across crypto, forex, stocks and commodities.">
+  <meta name="description" content="MEX Group Markets — 217 live instruments across crypto, forex, stocks, commodities, futures, and Arab equities.">
   <title>Markets — MEX Group</title>
   <link rel="stylesheet" href="/assets/css/public-site.css?v=<?php echo @filemtime(__DIR__.'/assets/css/public-site.css')?: time(); ?>">
 </head>
@@ -167,7 +167,7 @@ $markets = [
   <section class="mex-section">
     <div class="mex-section-head">
       <span class="mex-kicker">Trading Instruments</span>
-      <h2>70+ Global Markets</h2>
+      <h2>217 Global Instruments</h2>
       <p>Live and delayed quotes across crypto, forex, commodities and stocks — all tradeable from one account.</p>
     </div>
 

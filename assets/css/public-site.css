@@ -1785,3 +1785,16 @@ html{scroll-behavior:smooth}
 .mex-market-card-v2[data-type="forex"] .mc-badge{background:rgba(139,92,246,.18);color:#c4b5fd;border:1px solid rgba(139,92,246,.25)}
 .mex-market-card-v2[data-type="commodities"] .mc-badge{background:rgba(234,179,8,.14);color:#fde68a;border:1px solid rgba(234,179,8,.22)}
 .mex-market-card-v2[data-type="stocks"] .mc-badge{background:rgba(24,201,143,.14);color:#6ee7b7;border:1px solid rgba(24,201,143,.22)}
+
+/* STEP 7: Guarantee price visibility once a card is no longer loading */
+.mex-market-card-v2:not(.is-loading) .mc-price,
+.mex-market-card-v2:not(.is-loading) .mc-change{
+  animation:none !important;background:none !important;color:inherit !important;
+}
+.mex-market-card-v2:not(.is-loading) .mc-price{color:#fff !important;font-size:20px;font-weight:900;line-height:1.2}
+.mc-price.mex-skeleton,.mc-change.mex-skeleton{}
+.mc-price:not(.mex-skeleton){color:#fff}
+.mc-change:not(.mex-skeleton).down{color:#ff4d6d}
+.mc-change:not(.mex-skeleton):not(.down){color:#18c98f}
+@media (min-width:1101px){.mex-market-grid-v2{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:1100px){.mex-market-grid-v2{grid-template-columns:repeat(2,1fr)}}

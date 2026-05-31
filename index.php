@@ -67,7 +67,8 @@ $allTickerSymbols = array_merge($tickerSymbols, $tickerSymbols, $tickerSymbols);
 $marketCards = [
   ['BTCUSDT','Bitcoin','crypto'],['ETHUSDT','Ethereum','crypto'],
   ['EURUSD','Euro / Dollar','forex'],['GBPUSD','Pound / Dollar','forex'],
-  ['XAUUSD','Gold Spot','commodities'],['AAPL','Apple Inc.','stocks'],
+  ['XAUUSD','Gold Spot','commodities'],['USOIL','Crude Oil WTI','commodities'],
+  ['AAPL','Apple Inc.','stocks'],['TSLA','Tesla Inc.','stocks'],
 ];
 ?>
 <!doctype html>
@@ -278,7 +279,7 @@ $marketCards = [
       <div class="mex-market-card-v2 is-loading" data-type="<?php echo _h($m[2]); ?>">
         <div class="mc-top">
           <span class="mc-symbol"><?php echo _h($m[0]); ?></span>
-          <span class="mc-badge"><?php echo _h(strtoupper($m[2])); ?></span>
+          <span class="mc-badge mc-badge-<?php echo _h($m[2]); ?>"><?php echo _h(strtoupper($m[2])); ?></span>
           <span class="mc-live-dot" title="Live price feed"></span>
         </div>
         <strong class="mc-price mex-skeleton" data-price-symbol="<?php echo _h($m[0]); ?>">--</strong>
@@ -294,7 +295,7 @@ $marketCards = [
   <p style="text-align:center;margin-top:20px">
     <small style="color:#4d6a8f;font-size:12px">
       Last update: <span id="price-age-sec">0</span>s ago •
-      <a href="/markets.php?lang=<?php echo _h($lang); ?>" style="color:#5d7cff;text-decoration:none">View all 70+ markets →</a>
+      <a href="/markets.php?lang=<?php echo _h($lang); ?>" style="color:#5d7cff;text-decoration:none">View all 217 markets →</a>
     </small>
   </p>
 </section>
@@ -448,12 +449,13 @@ $marketCards = [
           }
         });
 
-        // Remove loading skeletons from card
-        var card = document.querySelector('[data-price-symbol="' + sym + '"]');
-        if (card) {
-          var parent = card.closest('.mex-market-card-v2');
-          if (parent) parent.classList.remove('is-loading');
-        }
+        // Remove loading skeletons from card (scoped to the market grid so we
+        // never match the ticker-strip element first, whose closest() is null)
+        document.querySelectorAll('.mex-market-grid-v2 [data-price-symbol="' + sym + '"]')
+          .forEach(function(el){
+            var parent = el.closest('.mex-market-card-v2');
+            if (parent) parent.classList.remove('is-loading');
+          });
 
         prevPrices[sym] = price;
       });
@@ -463,6 +465,16 @@ $marketCards = [
 
   fetchPrices();
   setInterval(fetchPrices, 15000);
+
+  // Fallback: never leave a card stuck in the skeleton/loading state
+  setTimeout(function(){
+    document.querySelectorAll('.mex-market-card-v2.is-loading').forEach(function(c){
+      c.classList.remove('is-loading');
+    });
+    document.querySelectorAll('.mex-skeleton').forEach(function(s){
+      s.classList.remove('mex-skeleton');
+    });
+  }, 3000);
 
   // ── scroll reveal ─────────────────────────────────────────────
   if ('IntersectionObserver' in window) {
