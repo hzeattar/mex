@@ -37,6 +37,10 @@ try {
   $qaResult = 'ERROR: ' . $e->getMessage();
 }
 
+// Read debug log files
+$debugLog = @file_get_contents(__DIR__ . '/data/cache/qa_live_map_debug.json');
+$errorLog = @file_get_contents(__DIR__ . '/data/cache/qa_live_map_error.json');
+
 echo json_encode([
   'symbol' => $sym,
   'type' => $type,
@@ -46,4 +50,6 @@ echo json_encode([
   'is_spot_metal' => $spot,
   'futures_to_spot_factor' => $factor,
   'qa_quote_payload' => $qaResult,
+  'debug_log' => $debugLog ? json_decode($debugLog, true) : null,
+  'error_log' => $errorLog ? json_decode($errorLog, true) : null,
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
