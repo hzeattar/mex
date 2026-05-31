@@ -234,15 +234,24 @@ function http_get_raw(string $url, array $headers = []): string {
 }
 
 function binance_spot_api_bases(): array {
-  $configured = trim((string)env('BINANCE_SPOT_API_BASE', env('BINANCE_API_BASE', 'https://api.binance.com')));
-  $bases = [$configured, 'https://api.binance.com', 'https://api.binance.us'];
+  $configured = trim((string)env('BINANCE_SPOT_API_BASE', env('BINANCE_API_BASE', '')));
+  // data-api.binance.vision is Binance's public market-data domain. It serves the
+  // same /api/v3/* spot endpoints but is NOT geo-blocked on cloud/datacenter IPs
+  // (Railway, etc.), unlike api.binance.com / api.binance.us which return HTTP 451.
+  $bases = [
+    $configured,
+    'https://data-api.binance.vision',
+    'https://api.binance.com',
+    'https://api-gcp.binance.com',
+    'https://api.binance.us',
+  ];
   $out = [];
   foreach ($bases as $base) {
     $base = rtrim(trim((string)$base), '/');
     if ($base === '' || !preg_match('~^https://~i', $base)) continue;
     if (!in_array($base, $out, true)) $out[] = $base;
   }
-  return $out ?: ['https://api.binance.com', 'https://api.binance.us'];
+  return $out ?: ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api.binance.us'];
 }
 
 function binance_spot_json(string $path, array $query = []): array {
