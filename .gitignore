@@ -2,6 +2,11 @@
 .env.*
 !.env.example
 
+frontend/node_modules/
+node_modules/
+mex.zip
+*.zip
+
 api/data/*
 !api/data/.htaccess
 !api/data/cache/

@@ -24,10 +24,10 @@ $mainEntry = $manifest['src/main.js'] ?? null;
 $cssFile = $manifest['style.css']['file'] ?? null;
 $jsFile = $mainEntry['file'] ?? null;
 
-$productName = site_setting('site.brand', 'VertexPluse');
+$productName = site_setting('site.brand', 'MEX Group');
 $brandName = htmlspecialchars('MEX Group', ENT_QUOTES);
 $brandTagline = htmlspecialchars(site_setting('site.tagline', 'Professional trading & investment platform'), ENT_QUOTES);
-$supportEmail = json_encode(site_setting('site.support_email', 'support@vertexpluse.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+$supportEmail = json_encode(site_setting('site.support_email', 'support@mexgroup.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 ?>
 <!doctype html>
 <html lang="en" class="dark">

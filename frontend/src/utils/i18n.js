@@ -1,5 +1,5 @@
 // Lightweight i18n service for the MEX Group client shell.
-// English and Arabic are polished; any legacy locale falls back to English.
+// English and Arabic are polished; legacy locales fall back to English.
 const SUPPORTED = ['en', 'ar'];
 const FALLBACK_LOCALE = 'en';
 
@@ -139,7 +139,7 @@ const PHRASES = {
     'Quick actions': 'إجراءات سريعة',
     'Copy signals and level contracts': 'نسخ صفقات وعقود مرتبطة بالمستوى',
     'Start a real funding request': 'ابدأ طلب تمويل حقيقي',
-    'Request manual admin payout': 'اطلب سحب يدوي من الإدارة',
+    'Request manual admin payout': 'اطلب سحبًا يدويًا من الإدارة',
     'Verify account documents': 'وثق مستندات الحساب',
     'Client trading platform': 'منصة تداول العملاء',
     'Service reconnecting, please retry in a moment.': 'الخدمة تعيد الاتصال الآن، حاول مرة أخرى بعد لحظات.',

@@ -20,7 +20,9 @@ RUN set -eux; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-install -j"$(nproc)" curl gd mbstring mysqli pdo_mysql zip; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
+    rm -rf /var/lib/apt/lists/* \
+      /etc/nginx/sites-enabled/default \
+      /etc/nginx/conf.d/default.conf
 
 COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
 

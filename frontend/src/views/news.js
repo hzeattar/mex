@@ -47,10 +47,26 @@ async function loadNews(container) {
       return;
     }
     grid.innerHTML = items.map((item, index) => newsCard(item, index)).join('');
+    bindNewsCards(grid);
   } catch (e) {
     const grid = container.querySelector('#news-grid');
     if (grid) grid.innerHTML = `<p class="text-red text-sm col-span-full text-center py-8">${esc(e.message)}</p>`;
   }
+}
+
+function bindNewsCards(grid) {
+  grid.querySelectorAll('[data-news-index]').forEach((card) => {
+    const open = (event) => {
+      event.stopPropagation();
+      openNewsDialog(Number(card.dataset.newsIndex || 0));
+    };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      open(event);
+    });
+  });
 }
 
 function newsCard(item, index) {
