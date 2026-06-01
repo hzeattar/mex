@@ -81,7 +81,24 @@ try {
   // IMPORTANT: price source depends on market type (spot vs perp)
   $mark = quote_price($symbolUi, $marketType ?: 'spot', $assetType ?: 'crypto');
 } catch (Throwable $e) {
-  json_response(['ok'=>false,'error'=>'Price unavailable: '.$e->getMessage()], 502);
+  $mark = 0.0;
+}
+
+if (!($mark > 0)) {
+  // Fallback chain so a user can always EXIT a position even when the live feed
+  // is momentarily unavailable (e.g. stock/arab markets closed):
+  // last seed/reference price -> entry price (neutral close, pnl=0).
+  $seedPx = 0.0;
+  try {
+    $seedSt = $pdo->prepare('SELECT seed_price FROM markets WHERE symbol=? LIMIT 1');
+    $seedSt->execute([$symbolUi]);
+    $seedPx = (float)($seedSt->fetchColumn() ?: 0);
+  } catch (Throwable $e) { $seedPx = 0.0; }
+  if ($seedPx > 0) {
+    $mark = $seedPx;
+  } elseif ($entry > 0) {
+    $mark = $entry;
+  }
 }
 
 if (!($mark > 0)) json_response(['ok'=>false,'error'=>'Price unavailable'], 502);
