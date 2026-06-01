@@ -61,23 +61,53 @@ defineRoute('account', () => import('./views/account.js'));
 // Bootstrap
 async function boot() {
   const app = document.getElementById('app');
+  let bootTimedOut = false;
+
+  // Safety timeout: force shell render after 12s even if bootstrap API hangs
+  const safetyTimer = setTimeout(() => {
+    if (!get('booted')) {
+      console.warn('[boot] Bootstrap took too long, forcing shell render');
+      bootTimedOut = true;
+      set('booted', true);
+      try { renderShell(app); translateDom(app); const view = app.querySelector('#view'); if (view) startRouter(view); } catch(e) { console.error('[boot] Safety render failed:', e); }
+    }
+  }, 12000);
+
   try {
     await initI18n();
-    const data = await api('/bootstrap.php', { timeout: 9000 });
-    if (!data || data.ok === false) throw new Error(data?.error || 'Bootstrap failed');
 
-    set('user', data.user || null);
-    const remoteBrand = data.brand || {};
-    set('brand', {
-      ...get('brand'),
-      product: window.__BRAND_PRODUCT || remoteBrand.name || get('brand').product || 'Trading Platform',
-      tagline: remoteBrand.tagline || get('brand').tagline,
-      name: window.__BRAND_NAME || 'MEX Group',
-    });
-    set('wallet', data.wallet || null);
-    set('level', data.level || null);
-    set('kyc', data.kyc || null);
-    if (data.markets) set('markets', data.markets);
+    let data = null;
+    try {
+      data = await api('/bootstrap.php', { timeout: 9000, retry: 2 });
+    } catch (apiErr) {
+      console.error('[boot] Bootstrap API failed:', apiErr.message);
+      try {
+        data = await api('/bootstrap.php', { timeout: 15000 });
+      } catch (retryErr) {
+        console.error('[boot] Bootstrap retry failed:', retryErr.message);
+      }
+    }
+
+    if (bootTimedOut) return;
+    clearTimeout(safetyTimer);
+
+    if (data && data.ok !== false) {
+      set('user', data.user || null);
+      const remoteBrand = data.brand || {};
+      set('brand', {
+        ...get('brand'),
+        product: window.__BRAND_PRODUCT || remoteBrand.name || get('brand').product || 'Trading Platform',
+        tagline: remoteBrand.tagline || get('brand').tagline,
+        name: window.__BRAND_NAME || remoteBrand.name || 'MEX Group',
+      });
+      set('wallet', data.wallet || null);
+      set('level', data.level || null);
+      set('kyc', data.kyc || null);
+      if (data.markets) set('markets', data.markets);
+    } else if (data && data.ok === false) {
+      console.warn('[boot] Bootstrap returned error:', data.error);
+    }
+
     set('booted', true);
 
     // Render shell
@@ -88,14 +118,10 @@ async function boot() {
     const view = app.querySelector('#view');
     await startRouter(view);
   } catch (err) {
-    app.innerHTML = `
-      <div class="min-h-screen flex items-center justify-center p-8">
-        <div class="card max-w-md text-center space-y-4">
-          <h1 class="text-xl font-bold text-red">${t('common.connection_failed', 'Connection failed')}</h1>
-          <p class="text-muted text-sm">${err.message}</p>
-          <button class="btn-primary" onclick="location.reload()">${t('common.retry', 'Retry')}</button>
-        </div>
-      </div>`;
+    if (bootTimedOut) return;
+    clearTimeout(safetyTimer);
+    console.error('[boot] Fatal error:', err);
+    app.innerHTML = `      <div class="min-h-screen flex items-center justify-center p-8">        <div class="card max-w-md text-center space-y-4">          <h1 class="text-xl font-bold text-red">${t('common.connection_failed', 'Connection failed')}</h1>          <p class="text-muted text-sm">${err.message}</p>          <button class="btn-primary" onclick="location.reload()">${t('common.retry', 'Retry')}</button>        </div>      </div>`;
     translateDom(app);
   }
 }
