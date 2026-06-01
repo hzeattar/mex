@@ -634,16 +634,6 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
     $src = (string)($quote['source'] ?? 'unavailable');
     $isStale = !empty($quote['is_stale']);
     $timingClass = (string)($quote['timing_class'] ?? ($isStale ? 'stale' : ($price > 0 ? 'live' : 'unavailable')));
-    $seedPrice = (float)($r['seed_price'] ?? 0);
-
-    // Fallback to seed_price when no live quote available
-    if ($price <= 0 && $seedPrice > 0) {
-      $price = $seedPrice;
-      $src = 'seed';
-      $timingClass = 'delayed';
-      $isStale = false;
-      $upd = 0;
-    }
 
     $metaRow = market_meta($r['meta'] ?? null);
     $metaVolume = (float)($metaRow['quote_volume'] ?? $metaRow['quoteVolume'] ?? $metaRow['volume'] ?? $metaRow['turnover'] ?? $metaRow['qv'] ?? 0);
@@ -668,6 +658,7 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
       'source' => $src,
       'is_stale' => $isStale,
       'timing_class' => $timingClass,
+      'seed_price' => (float)($r['seed_price'] ?? 0),
       'signal_count' => (int)($sigMap[$sym] ?? 0),
       'sort_order' => (int)($r['sort_order'] ?? 0),
       'market_rank' => $metaRank,
@@ -680,6 +671,20 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
   if ($allowRescue && $supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
+
+  // Apply seed_price fallback AFTER rescue so rescue can still fetch live quotes
+  foreach ($items as &$it) {
+    $price = (float)($it['price'] ?? 0);
+    $seedPrice = (float)($it['seed_price'] ?? 0);
+    if ($price <= 0 && $seedPrice > 0) {
+      $it['price'] = $seedPrice;
+      $it['source'] = 'seed';
+      $it['timing_class'] = 'delayed';
+      $it['is_stale'] = false;
+      $it['updated_at'] = 0;
+    }
+  }
+  unset($it);
 
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
 
@@ -1080,16 +1085,6 @@ try {
     $src = (string)($quote['source'] ?? 'unavailable');
     $isStale = !empty($quote['is_stale']);
     $timingClass = (string)($quote['timing_class'] ?? ($isStale ? 'stale' : 'live'));
-    $seedPrice = (float)($r['seed_price'] ?? 0);
-
-    // Fallback to seed_price when no live quote available
-    if ($price <= 0 && $seedPrice > 0) {
-      $price = $seedPrice;
-      $src = 'seed';
-      $timingClass = 'delayed';
-      $isStale = false;
-      $upd = 0;
-    }
 
     $metaRow = market_meta($r['meta'] ?? null);
     $metaVolume = (float)($metaRow['quote_volume'] ?? $metaRow['quoteVolume'] ?? $metaRow['volume'] ?? $metaRow['turnover'] ?? $metaRow['qv'] ?? 0);
@@ -1114,6 +1109,7 @@ try {
       'source' => $src,
       'is_stale' => $isStale,
       'timing_class' => $timingClass,
+      'seed_price' => (float)($r['seed_price'] ?? 0),
       'signal_count' => (int)($sigMap[$sym] ?? 0),
       'sort_order' => (int)($r['sort_order'] ?? 0),
       'market_rank' => $metaRank,
@@ -1125,6 +1121,21 @@ try {
 
   if ($allowListRescue && $supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
+  }
+
+  // Apply seed_price fallback AFTER rescue so rescue can still fetch live quotes
+  foreach ($items as &$it) {
+    $price = (float)($it['price'] ?? 0);
+    $seedPrice = (float)($it['seed_price'] ?? 0);
+    if ($price <= 0 && $seedPrice > 0) {
+      $it['price'] = $seedPrice;
+      $it['source'] = 'seed';
+      $it['timing_class'] = 'delayed';
+      $it['is_stale'] = false;
+      $it['updated_at'] = 0;
+    }
+  }
+  unset($it);
   }
 
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
