@@ -89,10 +89,17 @@
   .notif-item.unread { @apply border-l-2 border-l-accent; }
 
   /* Markets Side Drawer */
-  .markets-drawer { @apply fixed inset-0 z-[90]; }
-  .markets-drawer-overlay { @apply absolute inset-0 bg-black/60; }
-  .markets-drawer-panel { @apply absolute left-0 top-0 bottom-0 w-[280px] max-w-[85vw] bg-surface border-r border-line flex flex-col; }
+  .markets-drawer { @apply fixed inset-0 z-[90] invisible; }
+  .markets-drawer.open { @apply visible; }
+  .markets-drawer-overlay { @apply absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-300; }
+  .markets-drawer.open .markets-drawer-overlay { @apply opacity-100; }
+  .markets-drawer-panel { @apply absolute left-0 top-0 bottom-0 w-[290px] max-w-[86vw] bg-surface border-r border-line flex flex-col -translate-x-full transition-transform duration-300 ease-out; }
+  .markets-drawer.open .markets-drawer-panel { @apply translate-x-0; }
   .markets-drawer-header { @apply flex items-center gap-3 px-4 py-3 border-b border-line; }
+  .drawer-nav { @apply grid grid-cols-2 gap-1.5 p-3 border-b border-line; }
+  .drawer-nav-item { @apply flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-text/80 bg-panel/40 transition-colors hover:bg-panel hover:text-accent; }
+  .drawer-nav-item.active { @apply bg-accent/15 text-accent; }
+  .markets-drawer-subtitle { @apply px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted; }
   .markets-drawer-search { @apply px-4 py-2 border-b border-line; }
   .markets-drawer-search input { @apply w-full bg-panel border border-line rounded-md px-3 py-1.5 text-xs text-text placeholder-muted outline-none focus:border-accent; }
   .markets-drawer-body { @apply flex-1 overflow-auto; }
@@ -208,7 +215,7 @@
 
   /* Earn desk */
   .feature-hero {
-    @apply relative overflow-hidden rounded-lg border border-line bg-gradient-to-br from-panel-2 to-panel p-5 lg:p-6;
+    @apply relative overflow-hidden rounded-lg border border-line bg-gradient-to-br from-panel-2 to-panel p-4 sm:p-5 lg:p-6;
   }
   .feature-hero::before {
     content: '';
@@ -239,7 +246,12 @@
     @apply mt-1 block text-[11px] text-muted;
   }
   .level-strip {
-    @apply grid gap-3 sm:grid-cols-2 xl:grid-cols-5;
+    @apply flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-5;
+    scroll-snap-type: x mandatory;
+  }
+  .level-strip > .level-pill {
+    @apply min-w-[160px] flex-shrink-0 sm:min-w-0;
+    scroll-snap-align: start;
   }
   .segmented {
     @apply grid grid-cols-2 gap-2 rounded-lg border border-line bg-surface p-1;

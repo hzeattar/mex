@@ -104,14 +104,21 @@ export function renderShell(app) {
         ${MOBILE_NAV.map(n => `<a href="#/${n.route}" class="mobile-tab" data-nav="${n.route}"><span class="w-5 h-5">${icons[n.icon]}</span><span class="mobile-tab-label">${t(n.key, n.label)}</span></a>`).join('')}
       </nav>
 
-      <!-- Markets Side Drawer (Hamburger) -->
-      <div class="markets-drawer hidden" id="markets-drawer">
+      <!-- App Side Drawer (Hamburger): navigation + markets -->
+      <div class="markets-drawer" id="markets-drawer">
         <div class="markets-drawer-overlay" id="markets-drawer-overlay"></div>
         <div class="markets-drawer-panel" id="markets-drawer-panel">
           <div class="markets-drawer-header">
-            <button class="icon-btn icon-btn-sm" id="markets-drawer-close">${icons.back || icons.close}</button>
-            <strong>${t('nav.markets', 'Markets')}</strong>
+            <a href="#/home" class="mex-shell-brand mex-shell-brand-sm" data-nav="home" data-drawer-nav="home">
+              <img class="brand-logo" src="/assets/img/mexgroup_logo.svg" alt="MEX Group">
+              <span><strong>${esc(brand.name || t('brand.name', 'MEX Group'))}</strong></span>
+            </a>
+            <button class="icon-btn icon-btn-sm ml-auto" id="markets-drawer-close">${icons.close}</button>
           </div>
+          <nav class="drawer-nav">
+            ${[...NAV, ...NAV_MORE].map(n => `<a href="#/${n.route}" class="drawer-nav-item" data-nav="${n.route}" data-drawer-nav="${n.route}"><span class="w-4 h-4">${icons[n.icon] || ''}</span>${t(n.key, n.label)}</a>`).join('')}
+          </nav>
+          <div class="markets-drawer-subtitle">${t('nav.markets', 'Markets')}</div>
           <div class="markets-drawer-search">
             <input type="text" id="markets-search-input" placeholder="${t('common.search', 'Search...')}" class="w-full">
           </div>
@@ -182,6 +189,8 @@ function bindShell(app) {
   $('#markets-drawer-close', app)?.addEventListener('click', closeMarketsDrawer);
   $('#markets-drawer-overlay', app)?.addEventListener('click', closeMarketsDrawer);
   $('#markets-search-input', app)?.addEventListener('input', filterMarketsDrawer);
+  // Close drawer after navigating to a page from inside it
+  delegate(app, '[data-drawer-nav]', 'click', () => closeMarketsDrawer());
 }
 
 function toggleMode() {
@@ -224,12 +233,16 @@ async function openMarketsDrawer() {
   const drawer = $('#markets-drawer');
   if (!drawer) return;
   drawer.classList.remove('hidden');
+  // next frame so the transition runs
+  requestAnimationFrame(() => drawer.classList.add('open'));
+  document.body.style.overflow = 'hidden';
   await loadMarketsList();
 }
 
 function closeMarketsDrawer() {
   const drawer = $('#markets-drawer');
-  if (drawer) drawer.classList.add('hidden');
+  if (drawer) drawer.classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 async function loadMarketsList() {
@@ -237,8 +250,12 @@ async function loadMarketsList() {
   if (!list) return;
   try {
     if (!_marketsCache) {
-      const data = await api('/markets.php', { timeout: 8000 });
-      _marketsCache = data?.items || data?.markets || data || [];
+      const data = await api('/markets.php?scope=home&supported=1&with_quotes=1', { timeout: 9000 });
+      let items = data?.items;
+      if (!Array.isArray(items) && data?.groups) {
+        items = Object.values(data.groups).flat();
+      }
+      _marketsCache = Array.isArray(items) ? items : (Array.isArray(data) ? data : []);
     }
     renderMarketsList(_marketsCache, '');
   } catch (e) {

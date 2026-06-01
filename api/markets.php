@@ -480,6 +480,22 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   return $items;
 }
 
+function vp_apply_seed_fallback(array $items): array {
+  foreach ($items as &$it) {
+    $price = (float)($it['price'] ?? 0);
+    $seedPrice = (float)($it['seed_price'] ?? 0);
+    if ($price <= 0 && $seedPrice > 0) {
+      $it['price'] = $seedPrice;
+      $it['source'] = 'seed';
+      $it['timing_class'] = 'delayed';
+      $it['is_stale'] = false;
+      $it['updated_at'] = 0;
+    }
+  }
+  unset($it);
+  return $items;
+}
+
 function vp_filter_priced_supported_items(array $items, string $scope, bool $withQuotes, bool $supportedOnly): array {
   if (!$supportedOnly || !$withQuotes || !in_array($scope, ['home', 'trade'], true)) return $items;
   if ((int)env('MARKETS_HIDE_UNPRICED_SUPPORTED', '1') !== 1) return $items;
@@ -672,20 +688,6 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
 
-  // Apply seed_price fallback AFTER rescue so rescue can still fetch live quotes
-  foreach ($items as &$it) {
-    $price = (float)($it['price'] ?? 0);
-    $seedPrice = (float)($it['seed_price'] ?? 0);
-    if ($price <= 0 && $seedPrice > 0) {
-      $it['price'] = $seedPrice;
-      $it['source'] = 'seed';
-      $it['timing_class'] = 'delayed';
-      $it['is_stale'] = false;
-      $it['updated_at'] = 0;
-    }
-  }
-  unset($it);
-
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
 
   return $items;
@@ -861,6 +863,7 @@ if ($fastSupported) {
   if ($withQuotes && $allowListRescue) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
+  $items = vp_apply_seed_fallback($items);
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, true);
 
   if ($grouped) {
@@ -1123,20 +1126,7 @@ try {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
 
-  // Apply seed_price fallback AFTER rescue so rescue can still fetch live quotes
-  foreach ($items as &$it) {
-    $price = (float)($it['price'] ?? 0);
-    $seedPrice = (float)($it['seed_price'] ?? 0);
-    if ($price <= 0 && $seedPrice > 0) {
-      $it['price'] = $seedPrice;
-      $it['source'] = 'seed';
-      $it['timing_class'] = 'delayed';
-      $it['is_stale'] = false;
-      $it['updated_at'] = 0;
-    }
-  }
-  unset($it);
-  }
+  $items = vp_apply_seed_fallback($items);
 
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
 
@@ -1173,6 +1163,7 @@ try {
   if ($withQuotes && $allowListRescue && in_array($fallbackScope, ['home', 'trade'], true)) {
     $items = vp_rescue_supported_market_quotes($items, $fallbackScope);
   }
+  $items = vp_apply_seed_fallback($items);
   $items = vp_filter_priced_supported_items($items, $fallbackScope, $withQuotes, true);
   if ($grouped) {
     $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];

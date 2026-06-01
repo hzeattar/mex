@@ -15,7 +15,8 @@ $pdo = db();
 $body = read_json_body();
 
 // Accept id from query OR JSON body (frontend can POST without ?id=)
-$id = (int)($_GET['id'] ?? ($body['id'] ?? 0));
+// Frontend sends `position_id`; older callers use `id`. Accept all of them.
+$id = (int)($_GET['id'] ?? $_GET['position_id'] ?? ($body['id'] ?? ($body['position_id'] ?? 0)));
 if ($id <= 0) json_response(['ok'=>false,'error'=>'Invalid position id'], 422);
 
 // demo/real (affects wallet currency). default demo for safety.

@@ -14,7 +14,7 @@ export function render() {
   const currentLevel = level.current || {};
 
   return `
-    <div class="space-y-6 animate-fade-in">
+    <div class="space-y-4 sm:space-y-6 animate-fade-in">
       <!-- Hero -->
       <section class="card feature-hero relative overflow-hidden">
         <div class="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.95fr)] lg:items-end">
