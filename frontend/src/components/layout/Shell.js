@@ -95,7 +95,7 @@ export function renderShell(app) {
       </header>
 
       <!-- Main View -->
-      <main class="flex-1 overflow-auto" id="view">
+      <main class="flex-1 overflow-auto pb-[calc(56px+var(--safe-b))]" id="view">
         <div class="flex items-center justify-center h-full"><div class="loading-spinner"></div></div>
       </main>
 
@@ -238,7 +238,7 @@ async function loadMarketsList() {
   try {
     if (!_marketsCache) {
       const data = await api('/markets.php', { timeout: 8000 });
-      _marketsCache = data?.markets || data || [];
+      _marketsCache = data?.items || data?.markets || data || [];
     }
     renderMarketsList(_marketsCache, '');
   } catch (e) {
