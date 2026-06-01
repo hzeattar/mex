@@ -1080,6 +1080,16 @@ try {
     $src = (string)($quote['source'] ?? 'unavailable');
     $isStale = !empty($quote['is_stale']);
     $timingClass = (string)($quote['timing_class'] ?? ($isStale ? 'stale' : 'live'));
+    $seedPrice = (float)($r['seed_price'] ?? 0);
+
+    // Fallback to seed_price when no live quote available
+    if ($price <= 0 && $seedPrice > 0) {
+      $price = $seedPrice;
+      $src = 'seed';
+      $timingClass = 'delayed';
+      $isStale = false;
+      $upd = 0;
+    }
 
     $metaRow = market_meta($r['meta'] ?? null);
     $metaVolume = (float)($metaRow['quote_volume'] ?? $metaRow['quoteVolume'] ?? $metaRow['volume'] ?? $metaRow['turnover'] ?? $metaRow['qv'] ?? 0);
