@@ -3,6 +3,42 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
 
+function wallet_cache_key(int $userId, string $currency): string {
+  return $userId . '|' . strtoupper(trim($currency ?: 'USDT'));
+}
+
+function wallet_cache_get(int $userId, string $currency): ?array {
+  $key = wallet_cache_key($userId, $currency);
+  $cache = $GLOBALS['__wallet_cache'] ?? [];
+  return isset($cache[$key]) && is_array($cache[$key]) ? $cache[$key] : null;
+}
+
+function wallet_cache_store(int $userId, string $currency, array $row): array {
+  $key = wallet_cache_key($userId, $currency);
+  if (!isset($GLOBALS['__wallet_cache']) || !is_array($GLOBALS['__wallet_cache'])) {
+    $GLOBALS['__wallet_cache'] = [];
+  }
+  $GLOBALS['__wallet_cache'][$key] = $row;
+  return $row;
+}
+
+function wallet_cache_balance_set(int $userId, string $currency, float $balance): void {
+  $key = wallet_cache_key($userId, $currency);
+  if (!isset($GLOBALS['__wallet_cache'][$key]) || !is_array($GLOBALS['__wallet_cache'][$key])) return;
+  $GLOBALS['__wallet_cache'][$key]['balance_cache'] = $balance;
+  $GLOBALS['__wallet_cache'][$key]['updated_at'] = time();
+}
+
+function wallet_cache_balance_add(int $userId, string $currency, float $amount): void {
+  $key = wallet_cache_key($userId, $currency);
+  if (!isset($GLOBALS['__wallet_cache'][$key]) || !is_array($GLOBALS['__wallet_cache'][$key])) return;
+  $current = $GLOBALS['__wallet_cache'][$key]['balance_cache'] ?? null;
+  if (is_numeric($current)) {
+    $GLOBALS['__wallet_cache'][$key]['balance_cache'] = (float)$current + $amount;
+    $GLOBALS['__wallet_cache'][$key]['updated_at'] = time();
+  }
+}
+
 function ensure_wallet(int $userId, string $currency = 'USDT'): array {
   $pdo = db();
   $drv = db_driver();
@@ -12,6 +48,8 @@ function ensure_wallet(int $userId, string $currency = 'USDT'): array {
   }
 
   $currency = strtoupper(trim($currency ?: 'USDT'));
+  $cached = wallet_cache_get($userId, $currency);
+  if ($cached) return $cached;
   $now = time();
 
   // Column-detection (support legacy DBs that used `asset` instead of `currency`)
@@ -57,7 +95,7 @@ function ensure_wallet(int $userId, string $currency = 'USDT'): array {
   $st = $pdo->prepare("SELECT * FROM wallets WHERE user_id=? AND {$keyCol}=? LIMIT 1");
   $st->execute([$userId, $currency]);
   $row = $st->fetch(PDO::FETCH_ASSOC);
-  if ($row) return $row;
+  if ($row) return wallet_cache_store($userId, $currency, $row);
 
   // 2) insert idempotent (sqlite/mysql)
   $cols = ['user_id'];
@@ -86,7 +124,7 @@ function ensure_wallet(int $userId, string $currency = 'USDT'): array {
   $row = $st->fetch(PDO::FETCH_ASSOC);
 
   if (!$row) throw new RuntimeException('Failed to ensure wallet');
-  return $row;
+  return wallet_cache_store($userId, $currency, $row);
 }
 
 
@@ -122,6 +160,7 @@ function ledger_balance(int $user_id, string $currency): float {
   try {
     $upd = $pdo->prepare('UPDATE wallets SET balance_cache=?, updated_at=? WHERE id=?');
     $upd->execute([$sum, time(), $wid]);
+    wallet_cache_balance_set($user_id, $currency, $sum);
   } catch (Throwable $e) {
     // ignore cache write failures
   }
@@ -222,6 +261,7 @@ function ledger_add(int $user_id, ...$args): int {
   try {
     $pdo->prepare('UPDATE wallets SET balance_cache = COALESCE(balance_cache,0) + ?, updated_at=? WHERE id=?')
         ->execute([$amount, time(), (int)$w['id']]);
+    wallet_cache_balance_add($user_id, $currency, $amount);
   } catch (Throwable $e) {
     // If cache update fails, fall back to a one-time recompute.
     try {
@@ -230,6 +270,7 @@ function ledger_add(int $user_id, ...$args): int {
       $sum = (float)($stmt2->fetchColumn() ?: 0);
       $pdo->prepare('UPDATE wallets SET balance_cache=?, updated_at=? WHERE id=?')
           ->execute([$sum, time(), (int)$w['id']]);
+      wallet_cache_balance_set($user_id, $currency, $sum);
     } catch (Throwable $e2) {
       // ignore
     }

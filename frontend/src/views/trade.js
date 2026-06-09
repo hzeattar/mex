@@ -1,11 +1,12 @@
 ﻿import { get, set } from '../state/store.js';
-import { money, pct, price, esc, escAttr } from '../utils/format.js';
+import { money, qty, pct, price, esc, escAttr } from '../utils/format.js';
 import { $, $$, delegate } from '../utils/dom.js';
 import { api } from '../services/api.js';
 import { connectSSE, disconnect } from '../services/sse.js';
 import { icons } from '../components/common/Icons.js';
 import { navigate } from '../router.js';
 import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
+import { t } from '../utils/i18n.js';
 
 let chart = null;
 let candleSeries = null;
@@ -20,6 +21,8 @@ let resizeObserver = null;
 let chartLibPromise = null;
 let lastCandle = null;
 let tradeRunId = 0;
+const marketListCache = new Map();
+const closingPositions = new Set();
 
 const TYPES = [
   { key: 'favorites', label: 'Favorites' },
@@ -96,14 +99,16 @@ export function render(params) {
 
       <div class="border-t border-line bg-surface max-h-[320px] lg:max-h-[220px] overflow-auto shrink-0 trade-activity-panel" id="positions-section">
         <div class="trade-activity-head">
-          <div>
+          <div class="trade-activity-title">
             <span class="text-[10px] font-semibold text-muted uppercase">Trading activity</span>
             <span class="text-[10px] text-muted ml-2" id="activity-summary">Loading...</span>
           </div>
-          <div class="activity-tabs" role="tablist">
-            <button class="active" data-activity-tab="positions">Positions <b id="pos-count">0</b></button>
-            <button data-activity-tab="orders">Orders <b id="orders-count">0</b></button>
-            <button data-activity-tab="history">History <b id="history-count">0</b></button>
+          <div class="trade-activity-actions">
+            <div class="activity-tabs" role="tablist">
+              <button class="active" data-activity-tab="active">Active trades <b id="active-count">0</b></button>
+              <button data-activity-tab="closed">Closed trades <b id="closed-count">0</b></button>
+            </div>
+            <button class="activity-expand-btn" data-toggle-activity-expand title="Expand trading activity" aria-label="Expand trading activity">${icons.fullscreen || icons.expand || '⛶'}</button>
           </div>
         </div>
         <div id="activity-body"><p class="text-muted text-[11px] text-center py-4">Loading...</p></div>
@@ -265,13 +270,16 @@ async function setup(container) {
   updateOrderInfo(container);
   startActiveQuote(container, symbol, type, runId);
 
-  api(marketListUrl(type), { timeout: 6500 })
+  loadMarketItems(type, runId)
     .then(mkts => {
       if (!isCurrentRun(runId, symbol, type)) return;
       if (mkts?.items) {
+        container.__marketItems = mkts.items;
         renderSymbolList(container, mkts.items);
-        warmVisibleQuotes(container, mkts.items, runId);
-        startLiveQuotes(container, mkts.items, runId);
+        hydrateActiveFromMarketList(container, mkts.items, runId);
+        warmVisibleQuotes(container, mkts.items, runId).finally(() => {
+          if (isCurrentRun(runId, symbol, type)) setTimeout(() => startLiveQuotes(container, mkts.items, runId), 1200);
+        });
       }
     })
     .catch(() => {
@@ -283,18 +291,7 @@ async function setup(container) {
   loadTradeActivity(container, runId);
   activityRefreshTimer = setInterval(() => loadTradeActivity(container, runId, true), 20000);
 
-  api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=220`, { timeout: 18000 })
-    .then(async candles => {
-      await chartReady;
-      if (!isCurrentRun(runId, symbol, type)) return;
-      if (candles?.items?.length) await initChart(container, candles.items, runId);
-      else $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart data unavailable</p>';
-    })
-    .catch(e => {
-      if (!isCurrentRun(runId, symbol, type)) return;
-      console.error('Chart:', e);
-      $('#chart-box', container).innerHTML = '<p class="text-muted text-center p-8 text-xs">Chart unavailable</p>';
-    });
+  loadChartData(container, symbol, type, tf, runId, chartReady);
 }
 
 function isCurrentRun(runId, symbol = get('symbol'), type = get('type')) {
@@ -320,7 +317,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId) {
 
   const type = get('type');
   const active = get('symbol');
-  const max = type === 'crypto' ? 40 : 25;
+  const max = type === 'crypto' ? 36 : 18;
   const symbols = [...new Set(marketItems
     .slice(0, max)
     .map(m => String(m.symbol || '').toUpperCase())
@@ -338,18 +335,18 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId) {
       dot.classList.add('bg-buy');
       dot.title = 'Live';
     }
-  }, null, { interval: type === 'crypto' ? 8000 : 12000, maxSymbols: max });
+  }, null, { interval: type === 'crypto' ? 12000 : 18000, initialDelay: 1800, fallbackAfter: 3500, maxSymbols: max });
 }
 
 function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   stopActiveQuote();
-  const interval = type === 'crypto' ? 3500 : 5000;
+  const interval = type === 'crypto' ? 4500 : 7000;
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
     activeQuoteController = new AbortController();
     try {
-      const url = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus`;
-      const data = await api(url, { timeout: 4500, signal: activeQuoteController.signal });
+      const url = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus&_=${Date.now()}`;
+      const data = await api(url, { timeout: type === 'crypto' ? 2400 : 2600, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
       if (!isCurrentRun(runId, symbol, type)) return;
       if (data?.items?.[0]) updatePrice(container, data.items[0], runId);
     } catch (_e) {
@@ -483,7 +480,11 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId) {
   const unresolved = [];
   for (let i = 0; i < unique.length; i += chunkSize) {
     const chunk = unique.slice(i, i + chunkSize);
-    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&cache_only=1&purpose=watchlist`, { timeout: 3500 }).catch(() => null);
+    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
+      timeout: type === 'crypto' ? 2600 : 3400,
+      cacheTtl: 0,
+      cache: 'no-store',
+    }).catch(() => null);
     if (!isCurrentRun(runId)) return;
     if (data?.items?.length) updateSymbolListPrices(container, data.items);
     chunk.forEach((symbol) => {
@@ -496,7 +497,11 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId) {
   const rescueList = [...new Set(unresolved)].slice(0, type === 'crypto' ? 8 : 3);
   for (let i = 0; i < rescueList.length; i += rescueChunkSize) {
     const chunk = rescueList.slice(i, i + rescueChunkSize);
-    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&purpose=focus`, { timeout: 4200 }).catch(() => null);
+    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
+      timeout: type === 'crypto' ? 2600 : 3400,
+      cacheTtl: 0,
+      cache: 'no-store',
+    }).catch(() => null);
     if (!isCurrentRun(runId)) return;
     if (data?.items?.length) updateSymbolListPrices(container, data.items);
   }
@@ -524,48 +529,78 @@ function updateSymbolListPrices(container, items) {
 
 async function loadTradeActivity(container, runId = tradeRunId, silent = false) {
   if (!isCurrentRun(runId)) return;
+  if (container.__tradeActivityLoading) return;
+  container.__tradeActivityLoading = true;
   const body = $('#activity-body', container);
   if (body && !silent && !container.__tradeActivityLoaded) {
     body.innerHTML = '<p class="text-muted text-[11px] text-center py-4">Loading trading activity...</p>';
   }
 
-  const [portfolioRes, ordersRes] = await Promise.allSettled([
-    api('/trade/portfolio.php', { timeout: 6500 }),
-    api('/trade/orders.php?limit=90', { timeout: 6500 }),
-  ]);
-  if (!isCurrentRun(runId)) return;
+  try {
+    const mode = get('mode');
+    const [portfolioRes, ordersRes] = await Promise.allSettled([
+      api(`/trade/portfolio.php?fast=1&mode=${mode}`, { timeout: 12000, retry: 1, cacheTtl: 4000 }),
+      api(`/trade/orders.php?limit=90&mode=${mode}`, { timeout: 12000, retry: 1, cacheTtl: 4000 }),
+    ]);
+    if (!isCurrentRun(runId)) return;
 
-  const portfolio = portfolioRes.status === 'fulfilled' ? portfolioRes.value : null;
-  const orders = ordersRes.status === 'fulfilled' ? ordersRes.value : null;
-  if (portfolio?.positions) container.__tradePositions = portfolio.positions;
-  if (orders?.items || orders?.orders) container.__tradeOrders = orders.items || orders.orders || [];
-  container.__tradeActivityLoaded = true;
-  renderActivity(container);
+    const portfolio = portfolioRes.status === 'fulfilled' ? portfolioRes.value : null;
+    const orders = ordersRes.status === 'fulfilled' ? ordersRes.value : null;
+    if (portfolio?.positions) {
+      container.__tradePositions = portfolio.positions;
+      set('portfolio', portfolio);
+    }
+    if (orders?.items || orders?.orders) container.__tradeOrders = orders.items || orders.orders || [];
+    if (!portfolio && !orders && !container.__tradeActivityLoaded) {
+      if (body) body.innerHTML = '<p class="text-muted text-[11px] text-center py-4">Trading activity is reconnecting...</p>';
+      return;
+    }
+    container.__tradeActivityLoaded = true;
+    renderActivity(container);
+  } finally {
+    container.__tradeActivityLoading = false;
+  }
 }
 
 function renderActivity(container) {
-  const positions = container.__tradePositions || [];
-  const orders = container.__tradeOrders || [];
-  const openOrders = orders.filter(o => !isHistoryOrder(o));
+  const positions = (container.__tradePositions || []).filter(item => !isCopyTradeItem(item));
+  const orders = (container.__tradeOrders || []).filter(item => !isCopyTradeItem(item));
+  const openOrders = orders.filter(isPendingOrder);
   const history = orders.filter(isHistoryOrder);
-  const tab = container.__tradeActivityTab || 'positions';
+  let tab = container.__tradeActivityTab || 'active';
+  if (tab === 'positions' || tab === 'orders') tab = 'active';
+  if (tab === 'history') tab = 'closed';
+  container.__tradeActivityTab = tab;
 
-  const count = $('#pos-count', container);
-  const ordersCount = $('#orders-count', container);
-  const historyCount = $('#history-count', container);
+  const activeCount = $('#active-count', container);
+  const closedCount = $('#closed-count', container);
   const summary = $('#activity-summary', container);
-  if (count) count.textContent = String(positions.length);
-  if (ordersCount) ordersCount.textContent = String(openOrders.length);
-  if (historyCount) historyCount.textContent = String(history.length);
+  if (activeCount) activeCount.textContent = String(positions.length + openOrders.length);
+  if (closedCount) closedCount.textContent = String(history.length);
   if (summary) summary.textContent = `${positions.length} open / ${openOrders.length} pending / ${history.length} closed`;
 
   $$('[data-activity-tab]', container).forEach(btn => {
     btn.classList.toggle('active', btn.dataset.activityTab === tab);
   });
 
-  if (tab === 'orders') return renderOrdersActivity(container, openOrders);
-  if (tab === 'history') return renderHistoryActivity(container, history);
-  return renderPositions(container, positions);
+  if (tab === 'closed') return renderHistoryActivity(container, history);
+  return renderActiveActivity(container, positions, openOrders);
+}
+
+function renderActiveActivity(container, positions, orders) {
+  const body = $('#activity-body', container);
+  if (!body) return;
+  if (!positions.length && !orders.length) {
+    body.innerHTML = '<p class="text-muted text-[11px] text-center py-4">No active trades yet</p>';
+    return;
+  }
+
+  body.innerHTML = `
+    ${positions.length ? renderPositionsMarkup(positions) : '<p class="text-muted text-[11px] text-center py-3">No open positions</p>'}
+    ${orders.length ? `<div class="trade-pending-block">
+      <div class="trade-subhead"><span>Pending orders</span><b>${orders.length}</b></div>
+      ${renderOrdersMarkup(orders)}
+    </div>` : ''}`;
 }
 
 function renderPositions(container, positions) {
@@ -577,7 +612,11 @@ function renderPositions(container, positions) {
     return;
   }
 
-  body.innerHTML = `
+  body.innerHTML = renderPositionsMarkup(positions);
+}
+
+function renderPositionsMarkup(positions) {
+  return `
     <div class="trade-position-cards lg:hidden">
       ${positions.slice(0, 12).map(tradePositionCard).join('')}
     </div>
@@ -597,13 +636,17 @@ function renderOrdersActivity(container, orders) {
     return;
   }
 
-  body.innerHTML = `
+  body.innerHTML = renderOrdersMarkup(orders);
+}
+
+function renderOrdersMarkup(orders) {
+  return `
     <div class="trade-position-cards lg:hidden">
       ${orders.slice(0, 16).map(tradeOrderCard).join('')}
     </div>
-    <div class="hidden lg:block overflow-x-auto"><table class="min-w-[720px] lg:min-w-0 w-full text-[11px]">
+    <div class="hidden lg:block overflow-x-auto"><table class="min-w-[820px] lg:min-w-0 w-full text-[11px]">
       <thead class="text-[9px] text-muted uppercase"><tr>
-        <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Amount</th><th class="text-right py-1">Lev</th><th class="text-right py-1">Status</th><th class="text-right px-3 py-1">Created</th>
+        <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">TP / SL</th><th class="text-right py-1">Amount</th><th class="text-right py-1">Lev</th><th class="text-right py-1">Status</th><th class="text-right px-3 py-1">Actions</th>
       </tr></thead>
       <tbody>${orders.slice(0, 16).map(tradeOrderRow).join('')}</tbody>
     </table></div>`;
@@ -623,7 +666,7 @@ function renderHistoryActivity(container, history) {
     </div>
     <div class="hidden lg:block overflow-x-auto"><table class="min-w-[820px] lg:min-w-0 w-full text-[11px]">
       <thead class="text-[9px] text-muted uppercase"><tr>
-        <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Entry</th><th class="text-right py-1">Exit</th><th class="text-right py-1">Used</th><th class="text-right py-1">Fee</th><th class="text-right py-1">PnL</th><th class="text-right px-3 py-1">Closed</th>
+        <th class="text-left px-3 py-1">Symbol</th><th class="text-left py-1">Side</th><th class="text-left py-1">Type</th><th class="text-right py-1">Exit</th><th class="text-right py-1">Used</th><th class="text-right py-1">Fee</th><th class="text-right py-1">PnL</th><th class="text-right py-1">Opened</th><th class="text-right px-3 py-1">Closed</th>
       </tr></thead>
       <tbody>${history.slice(0, 18).map(tradeHistoryRow).join('')}</tbody>
     </table></div>`;
@@ -643,11 +686,11 @@ function tradePositionRow(pos) {
   const { pnl, cleanSymbol, posType, mark, id, side } = tradePositionInfo(pos);
   return `<tr class="border-t border-line/50 hover:bg-panel/50">
     <td class="px-3 py-1.5 font-semibold">${esc(cleanSymbol)}</td>
-    <td><span class="badge-${side === 'BUY' ? 'buy' : 'sell'}">${esc(side)}</span></td>
+    <td>${sideBadge(side)}</td>
     <td class="text-muted">${esc(pos.market_type || 'spot')}</td>
     <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
     <td class="text-right font-mono">${mark > 0 ? price(mark, posType) : '--'}</td>
-    <td class="text-right font-mono">${money(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
+    <td class="text-right font-mono">${qty(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
     <td class="text-right font-mono">${esc(String(pos.leverage || 1))}x</td>
     <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
     <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">Close</button>` : ''}</td>
@@ -662,12 +705,12 @@ function tradePositionCard(pos) {
         <strong>${esc(cleanSymbol)}</strong>
         <small>${esc(pos.market_type || 'spot')} - ${esc(pos.created_at || pos.opened_at || '')}</small>
       </div>
-      <span class="badge-${side === 'BUY' ? 'buy' : 'sell'}">${esc(side)}</span>
+      ${sideBadge(side)}
     </div>
     <div class="trade-position-metrics">
       <span><small>Entry</small><strong>${price(pos.entry_price || pos.open_price, posType)}</strong></span>
       <span><small>Mark</small><strong>${mark > 0 ? price(mark, posType) : '--'}</strong></span>
-      <span><small>Size</small><strong>${money(pos.qty || pos.amount || pos.size || pos.units || 0)}</strong></span>
+      <span><small>Size</small><strong>${qty(pos.qty || pos.amount || pos.size || pos.units || 0)}</strong></span>
       <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
       <span><small>Margin</small><strong>${money(pos.margin_initial || pos.margin || 0)}</strong></span>
       <span><small>Leverage</small><strong>${esc(String(pos.leverage || 1))}x</strong></span>
@@ -681,6 +724,42 @@ function isHistoryOrder(o) {
   return status === 'closed' || status === 'canceled' || status === 'cancelled' || status === 'rejected' || Number(o.closed_at || 0) > 0 || Number(o.exit_price || 0) > 0;
 }
 
+function isPendingOrder(o = {}) {
+  if (o.is_pending === true || o.is_pending === 1 || o.is_pending === '1') return !isHistoryOrder(o);
+  if (isHistoryOrder(o)) return false;
+  const status = String(o.raw_status || o.order_status || o.status || '').toLowerCase();
+  const pendingStatus = ['open', 'pending', 'armed', 'submitted', 'new'].includes(status);
+  const hasFill = Number(o.fill_price || o.entry_price || 0) > 0;
+  const hasPosition = Number(o.position_id || 0) > 0 && !(o.can_cancel || o.can_edit);
+  return pendingStatus && !hasFill && !hasPosition;
+}
+
+function isCopyTradeItem(item = {}) {
+  const directKeys = [
+    'copy_subscription_id',
+    'copy_signal_id',
+    'copy_trade_id',
+    'copy_id',
+    'trading_bot_subscription_id',
+    'bot_subscription_id',
+    'avalon_subscription_id',
+  ];
+  if (directKeys.some(key => item[key] !== undefined && item[key] !== null && String(item[key]) !== '' && String(item[key]) !== '0')) {
+    return true;
+  }
+  const sourceText = [
+    item.source,
+    item.origin,
+    item.order_source,
+    item.position_source,
+    item.product_kind,
+    item.strategy_kind,
+    item.category,
+    item.group,
+  ].map(v => String(v || '').toLowerCase()).join(' ');
+  return /\b(copy|copied|copy-trading|trading_bot|bot|avalon)\b/.test(sourceText);
+}
+
 function orderSymbol(o) {
   return String(o.symbol || '').replace('@R@', '').replace('@D@', '');
 }
@@ -691,6 +770,10 @@ function orderSide(o) {
 
 function orderAssetType(o) {
   return o.asset_type || o.type || get('type');
+}
+
+function orderId(o) {
+  return String(o.order_id || o.id || '');
 }
 
 function orderDate(value) {
@@ -706,38 +789,53 @@ function orderDate(value) {
 function tradeOrderRow(o) {
   const side = orderSide(o);
   const type = orderAssetType(o);
+  const id = orderId(o);
   return `<tr class="border-t border-line/50 hover:bg-panel/50">
     <td class="px-3 py-1.5 font-semibold">${esc(orderSymbol(o))}</td>
-    <td><span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span></td>
+    <td>${sideBadge(side)}</td>
     <td class="text-muted">${esc(o.order_type || o.market_type || 'market')}</td>
     <td class="text-right font-mono">${price(o.entry_price || o.fill_price || o.limit_price, type)}</td>
+    <td class="text-right font-mono"><span class="text-buy">${o.tp_price ? price(o.tp_price, type) : '--'}</span> / <span class="text-sell">${o.sl_price ? price(o.sl_price, type) : '--'}</span></td>
     <td class="text-right font-mono">${money(o.used_usdt || o.usd_amount || o.amount || 0)}</td>
     <td class="text-right font-mono">${esc(String(o.leverage || 1))}x</td>
     <td class="text-right"><span class="status-chip status-chip-derived">${esc(o.status || 'open')}</span></td>
-    <td class="text-right px-3 text-muted">${esc(orderDate(o.created_at))}</td>
+    <td class="text-right px-3">${pendingOrderActions(id, o)}</td>
   </tr>`;
 }
 
 function tradeOrderCard(o) {
   const side = orderSide(o);
   const type = orderAssetType(o);
+  const id = orderId(o);
   return `<article class="trade-position-card trade-activity-card">
     <div class="flex items-start justify-between gap-2">
       <div>
         <strong>${esc(orderSymbol(o))}</strong>
         <small>${esc(o.order_type || 'market')} - ${esc(orderDate(o.created_at))}</small>
       </div>
-      <span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span>
+      ${sideBadge(side)}
     </div>
     <div class="trade-position-metrics">
       <span><small>Entry</small><strong>${price(o.entry_price || o.fill_price || o.limit_price, type)}</strong></span>
+      <span><small>Take profit</small><strong class="text-buy">${o.tp_price ? price(o.tp_price, type) : '--'}</strong></span>
+      <span><small>Stop loss</small><strong class="text-sell">${o.sl_price ? price(o.sl_price, type) : '--'}</strong></span>
       <span><small>Amount</small><strong>${money(o.used_usdt || o.usd_amount || o.amount || 0)}</strong></span>
       <span><small>Lev</small><strong>${esc(String(o.leverage || 1))}x</strong></span>
       <span><small>Status</small><strong>${esc(o.status || 'open')}</strong></span>
       <span><small>Mode</small><strong>${esc(o.mode || get('mode') || 'demo')}</strong></span>
       <span><small>Symbol</small><strong>${esc(orderSymbol(o))}</strong></span>
     </div>
+    ${pendingOrderActions(id, o, true)}
   </article>`;
+}
+
+function pendingOrderActions(id, order, block = false) {
+  if (!id || !isPendingOrder(order)) return '<span class="text-muted text-[10px]">--</span>';
+  const cls = block ? 'trade-pending-actions is-card' : 'trade-pending-actions';
+  return `<div class="${cls}">
+    <button class="btn-xs btn-ghost" data-edit-order="${escAttr(id)}">Edit</button>
+    <button class="btn-xs btn-danger" data-cancel-order="${escAttr(id)}">Cancel</button>
+  </div>`;
 }
 
 function tradeHistoryRow(o) {
@@ -746,13 +844,13 @@ function tradeHistoryRow(o) {
   const pnl = Number(o.pnl_usd || o.pnl || 0);
   return `<tr class="border-t border-line/50 hover:bg-panel/50">
     <td class="px-3 py-1.5 font-semibold">${esc(orderSymbol(o))}</td>
-    <td><span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span></td>
+    <td>${sideBadge(side)}</td>
     <td class="text-muted">${esc(o.market_type || o.order_type || 'spot')}</td>
-    <td class="text-right font-mono">${price(o.entry_price || o.fill_price, type)}</td>
     <td class="text-right font-mono">${price(o.exit_price || o.limit_price, type)}</td>
     <td class="text-right font-mono">${money(o.used_usdt || o.usd_amount || 0)}</td>
     <td class="text-right font-mono">${money(o.fee_paid || 0)}</td>
     <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
+    <td class="text-right text-muted">${esc(orderDate(o.created_at))}</td>
     <td class="text-right px-3 text-muted">${esc(orderDate(o.closed_at || o.created_at))}</td>
   </tr>`;
 }
@@ -767,17 +865,22 @@ function tradeHistoryCard(o) {
         <strong>${esc(orderSymbol(o))}</strong>
         <small>${esc(o.close_reason || o.status || 'closed')} - ${esc(orderDate(o.closed_at || o.created_at))}</small>
       </div>
-      <span class="badge-${side === 'SELL' ? 'sell' : 'buy'}">${esc(side)}</span>
+      ${sideBadge(side)}
     </div>
     <div class="trade-position-metrics">
-      <span><small>Entry</small><strong>${price(o.entry_price || o.fill_price, type)}</strong></span>
       <span><small>Exit</small><strong>${price(o.exit_price || o.limit_price, type)}</strong></span>
-      <span><small>Used</small><strong>${money(o.used_usdt || o.usd_amount || 0)}</strong></span>
+      <span><small>Opened</small><strong>${esc(orderDate(o.created_at))}</strong></span>
+      <span><small>Closed</small><strong>${esc(orderDate(o.closed_at || o.created_at))}</strong></span>
       <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
+      <span><small>Used</small><strong>${money(o.used_usdt || o.usd_amount || 0)}</strong></span>
       <span><small>Fee</small><strong>${money(o.fee_paid || 0)}</strong></span>
-      <span><small>Type</small><strong>${esc(o.market_type || o.order_type || '--')}</strong></span>
     </div>
   </article>`;
+}
+
+function sideBadge(side) {
+  const normalized = String(side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+  return `<span class="trade-side-chip is-${normalized.toLowerCase()}">${esc(normalized)}</span>`;
 }
 
 async function initChart(container, candles, runId = tradeRunId) {
@@ -865,7 +968,7 @@ function bindEvents(container) {
   delegate(container, '[data-type-tab]', 'click', async (e, el) => {
     set('type', el.dataset.typeTab);
     localStorage.setItem('vp_type', el.dataset.typeTab);
-    const data = await api(marketListUrl(el.dataset.typeTab), { timeout: 6000 }).catch(() => null);
+    const data = await loadMarketItems(el.dataset.typeTab, tradeRunId, true).catch(() => null);
     if (data?.items) {
       const first = data.items.find((item) => item?.symbol);
       if (first?.symbol && normalizeType(el.dataset.typeTab) !== 'favorites') {
@@ -924,8 +1027,17 @@ function bindEvents(container) {
     updateOrderInfo(container);
   });
   delegate(container, '[data-close]', 'click', async (e, el) => {
-    await api('/trade/close_position.php', { method: 'POST', body: { position_id: el.dataset.close }, timeout: 8000 }).catch(() => null);
-    await loadTradeActivity(container, tradeRunId);
+    await closePosition(container, el);
+  });
+  delegate(container, '[data-cancel-order]', 'click', async (e, el) => {
+    await cancelPendingOrder(container, el);
+  });
+  delegate(container, '[data-edit-order]', 'click', (e, el) => {
+    openEditOrderModal(container, el.dataset.editOrder);
+  });
+  delegate(container, '[data-toggle-activity-expand]', 'click', () => toggleActivityExpand(container));
+  delegate(container, '[data-retry-chart]', 'click', () => {
+    loadChartData(container, get('symbol'), get('type'), get('tf'), tradeRunId, loadChartLib());
   });
   delegate(container, '[data-activity-tab]', 'click', (_e, el) => {
     container.__tradeActivityTab = el.dataset.activityTab || 'positions';
@@ -945,6 +1057,288 @@ function bindEvents(container) {
       row.style.display = row.dataset.sym.toLowerCase().includes(term) ? '' : 'none';
     });
   });
+}
+
+
+async function loadChartData(container, symbol, type, tf, runId = tradeRunId, chartReady = loadChartLib()) {
+  const chartBox = $('#chart-box', container);
+  if (chartBox) chartBox.innerHTML = '<div class="absolute inset-0 flex items-center justify-center"><div class="text-center"><div class="loading-spinner mx-auto"></div><p class="text-[10px] text-muted mt-2">Loading chart...</p></div></div>';
+  try {
+    const candles = await api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=220&fast=1`, { timeout: 3500, cacheTtl: 3000 });
+    await chartReady;
+    if (!isCurrentRun(runId, symbol, type)) return;
+    if (candles?.items?.length) await initChart(container, candles.items, runId);
+    else renderChartFallback(container, 'Chart data is still loading from the market provider.');
+  } catch (e) {
+    if (!isCurrentRun(runId, symbol, type)) return;
+    console.error('Chart:', e);
+    renderChartFallback(container, 'Chart stream is delayed. Live price and order ticket remain active.');
+  }
+}
+
+function renderChartFallback(container, message) {
+  const box = $('#chart-box', container);
+  if (!box) return;
+  box.innerHTML = `<div class="chart-fallback-state">
+    <div class="chart-fallback-card">
+      <strong>Chart loading</strong>
+      <span>${esc(message || 'Chart provider is delayed.')}</span>
+      <button class="btn-ghost btn-sm" data-retry-chart>Retry chart</button>
+    </div>
+  </div>`;
+}
+
+function toggleActivityExpand(container) {
+  const panel = $('#positions-section', container);
+  if (!panel) return;
+  const open = !panel.classList.contains('is-expanded');
+  panel.classList.toggle('is-expanded', open);
+  document.body.classList.toggle('trade-activity-expanded-open', open);
+  const btn = $('[data-toggle-activity-expand]', container);
+  if (btn) {
+    btn.setAttribute('aria-label', open ? 'Close trading activity' : 'Expand trading activity');
+    btn.setAttribute('title', open ? 'Close trading activity' : 'Expand trading activity');
+    btn.innerHTML = open ? icons.close : (icons.fullscreen || icons.expand || '⛶');
+  }
+  if (chart && !open) setTimeout(() => chart.timeScale?.().fitContent?.(), 80);
+}
+
+async function closePosition(container, trigger) {
+  const id = String(trigger?.dataset?.close || '');
+  if (!id || closingPositions.has(id)) return;
+  const confirmed = await showCloseConfirmation(id);
+  if (!confirmed) return;
+
+  closingPositions.add(id);
+  const related = $$(`[data-close="${escapeCssValue(id)}"]`, container);
+  related.forEach((btn) => {
+    btn.disabled = true;
+    btn.classList.add('opacity-60');
+    btn.dataset.prevText = btn.textContent;
+    btn.textContent = 'Closing...';
+  });
+  try {
+    const res = await api('/trade/close_position.php', { method: 'POST', body: { id, position_id: id, mode: get('mode') }, timeout: 14000 });
+    if (res && res.ok === false) throw new Error(res.error || 'Close failed');
+    await Promise.allSettled([
+      loadTradeActivity(container, tradeRunId),
+      api('/wallet/summary.php', { timeout: 0, retry: 1, cacheTtl: 0 }).then((w) => { if (w?.real || w?.demo) set('wallet', { real: w.real || {}, demo: w.demo || {} }); }).catch(() => null),
+    ]);
+    showTradeToast('Position closed successfully', 'success');
+  } catch (e) {
+    showTradeToast(e.message || 'Could not close this position now.', 'error');
+    related.forEach((btn) => {
+      btn.disabled = false;
+      btn.classList.remove('opacity-60');
+      btn.textContent = btn.dataset.prevText || 'Close';
+    });
+  } finally {
+    closingPositions.delete(id);
+  }
+}
+
+function findTradeOrder(container, id) {
+  const target = String(id || '');
+  return (container.__tradeOrders || []).find((order) => orderId(order) === target) || null;
+}
+
+async function cancelPendingOrder(container, trigger) {
+  const id = String(trigger?.dataset?.cancelOrder || '');
+  if (!id) return;
+  const confirmed = await showCancelOrderConfirmation(id);
+  if (!confirmed) return;
+
+  const related = $$(`[data-cancel-order="${escapeCssValue(id)}"]`, container);
+  related.forEach((btn) => {
+    btn.disabled = true;
+    btn.classList.add('opacity-60');
+    btn.dataset.prevText = btn.textContent;
+    btn.textContent = 'Canceling...';
+  });
+
+  try {
+    const res = await api('/trade/cancel.php', {
+      method: 'POST',
+      body: { order_id: id, id, mode: get('mode') },
+      timeout: 10000,
+    });
+    if (res && res.ok === false) throw new Error(res.error || 'Cancel failed');
+    await loadTradeActivity(container, tradeRunId);
+    showTradeToast('Pending order canceled', 'success');
+  } catch (e) {
+    showTradeToast(e.message || 'Could not cancel this order.', 'error');
+    related.forEach((btn) => {
+      btn.disabled = false;
+      btn.classList.remove('opacity-60');
+      btn.textContent = btn.dataset.prevText || 'Cancel';
+    });
+  }
+}
+
+function showCancelOrderConfirmation(id) {
+  return new Promise((resolve) => {
+    const existing = document.getElementById('cancel-order-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'cancel-order-modal';
+    modal.className = 'fixed inset-0 z-[320] flex items-end sm:items-center justify-center';
+    modal.innerHTML = `<div class="absolute inset-0 bg-black/70" data-cancel-order-backdrop></div>
+      <div class="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-2xl border border-line bg-surface shadow-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-line">
+          <h3 class="text-base font-black">Cancel pending order</h3>
+          <p class="mt-1 text-xs text-muted">This only cancels orders that have not executed yet. Open positions must be closed from the position card.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3 px-5 py-4">
+          <button class="btn-ghost" data-cancel-order-no>Keep order</button>
+          <button class="btn-danger" data-cancel-order-yes>Cancel order</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const done = (value) => { modal.remove(); resolve(value); };
+    modal.querySelector('[data-cancel-order-backdrop]').addEventListener('click', () => done(false));
+    modal.querySelector('[data-cancel-order-no]').addEventListener('click', () => done(false));
+    modal.querySelector('[data-cancel-order-yes]').addEventListener('click', () => done(true));
+  });
+}
+
+function openEditOrderModal(container, id) {
+  const order = findTradeOrder(container, id);
+  if (!order || !isPendingOrder(order)) {
+    showTradeToast('This order is no longer pending.', 'error');
+    loadTradeActivity(container, tradeRunId, true);
+    return;
+  }
+  const type = orderAssetType(order);
+  const existing = document.getElementById('edit-order-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'edit-order-modal';
+  modal.className = 'fixed inset-0 z-[320] flex items-end sm:items-center justify-center';
+  modal.innerHTML = `<div class="absolute inset-0 bg-black/70" data-edit-order-backdrop></div>
+    <div class="relative w-full max-w-md mx-4 mb-4 sm:mb-0 rounded-2xl border border-line bg-surface shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-line">
+        <h3 class="text-base font-black">Edit pending order</h3>
+        <p class="mt-1 text-xs text-muted">${esc(orderSymbol(order))} ${esc(orderSide(order))} - changes apply before execution only.</p>
+      </div>
+      <form class="grid gap-3 px-5 py-4" data-edit-order-form>
+        <label class="grid gap-1">
+          <span class="text-[10px] uppercase font-black text-muted">Entry price</span>
+          <input class="input" name="entry" inputmode="decimal" value="${escAttr(Number(order.limit_price || order.entry_price || 0) || '')}" placeholder="${escAttr(price(order.limit_price || order.entry_price || 0, type))}">
+        </label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="grid gap-1">
+            <span class="text-[10px] uppercase font-black text-muted">Take profit</span>
+            <input class="input" name="tp" inputmode="decimal" value="${escAttr(Number(order.tp_price || 0) || '')}" placeholder="Optional">
+          </label>
+          <label class="grid gap-1">
+            <span class="text-[10px] uppercase font-black text-muted">Stop loss</span>
+            <input class="input" name="sl" inputmode="decimal" value="${escAttr(Number(order.sl_price || 0) || '')}" placeholder="Optional">
+          </label>
+        </div>
+        <p class="order-form-status is-info" data-edit-order-status hidden></p>
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <button type="button" class="btn-ghost" data-edit-order-close>Cancel</button>
+          <button type="submit" class="btn-primary" data-edit-order-save>Save changes</button>
+        </div>
+      </form>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector('[data-edit-order-backdrop]').addEventListener('click', close);
+  modal.querySelector('[data-edit-order-close]').addEventListener('click', close);
+  modal.querySelector('[data-edit-order-form]').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const status = $('[data-edit-order-status]', form);
+    const save = $('[data-edit-order-save]', form);
+    const entry = Number(form.entry.value || 0);
+    const tp = form.tp.value === '' ? null : Number(form.tp.value || 0);
+    const sl = form.sl.value === '' ? null : Number(form.sl.value || 0);
+    if (!(entry > 0)) {
+      if (status) {
+        status.textContent = 'Entry price is required.';
+        status.hidden = false;
+        status.className = 'order-form-status is-warning';
+      }
+      return;
+    }
+    try {
+      if (save) {
+        save.disabled = true;
+        save.textContent = 'Saving...';
+      }
+      if (status) {
+        status.textContent = 'Saving order changes...';
+        status.hidden = false;
+        status.className = 'order-form-status is-info';
+      }
+      const res = await api('/trade/update_order.php', {
+        method: 'POST',
+        body: { order_id: id, limit_price: entry, tp_price: tp, sl_price: sl, mode: get('mode') },
+        timeout: 10000,
+      });
+      if (res && res.ok === false) throw new Error(res.error || 'Update failed');
+      close();
+      await loadTradeActivity(container, tradeRunId);
+      showTradeToast('Pending order updated', 'success');
+    } catch (e) {
+      if (status) {
+        status.textContent = e.message || 'Could not update this order.';
+        status.hidden = false;
+        status.className = 'order-form-status is-error';
+      }
+      if (save) {
+        save.disabled = false;
+        save.textContent = 'Save changes';
+      }
+    }
+  });
+}
+
+function escapeCssValue(value) {
+  if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function showCloseConfirmation(id) {
+  return new Promise((resolve) => {
+    const existing = document.getElementById('close-position-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'close-position-modal';
+    modal.className = 'fixed inset-0 z-[320] flex items-end sm:items-center justify-center';
+    modal.innerHTML = `<div class="absolute inset-0 bg-black/70" data-close-modal-backdrop></div>
+      <div class="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-2xl border border-line bg-surface shadow-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-line">
+          <h3 class="text-base font-black">Close position</h3>
+          <p class="mt-1 text-xs text-muted">The position will be closed at the current market price.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3 px-5 py-4">
+          <button class="btn-ghost" data-close-cancel>Cancel</button>
+          <button class="btn-danger" data-close-confirm>Close now</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const done = (value) => { modal.remove(); resolve(value); };
+    modal.querySelector('[data-close-modal-backdrop]').addEventListener('click', () => done(false));
+    modal.querySelector('[data-close-cancel]').addEventListener('click', () => done(false));
+    modal.querySelector('[data-close-confirm]').addEventListener('click', () => done(true));
+  });
+}
+
+function showTradeToast(message, type = 'success') {
+  let toast = document.getElementById('trade-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'trade-toast';
+    toast.className = 'trade-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.className = `trade-toast is-${type}`;
+  clearTimeout(toast.__timer);
+  toast.__timer = setTimeout(() => toast.classList.remove('is-success', 'is-error'), 2500);
 }
 
 async function placeOrder(side, container, formRoot) {
@@ -1005,7 +1399,8 @@ async function placeOrder(side, container, formRoot) {
         price: orderType === 'LIMIT' ? (limitInput || currentPrice) : currentPrice,
         mode: get('mode'),
       },
-      timeout: 10000,
+      timeout: 15000,
+      retry: 1,
     });
     if (res && res.ok === false) {
       showOrderStatus(root, res.error || 'Order failed', 'error');
@@ -1013,6 +1408,10 @@ async function placeOrder(side, container, formRoot) {
     }
     showOrderStatus(root, `${side === 'BUY' ? 'Buy' : 'Sell'} order opened successfully.`, 'success');
     await loadTradeActivity(container, tradeRunId);
+    // Refresh wallet balance immediately after opening trade
+    api('/wallet/summary.php', { timeout: 0, retry: 1, cacheTtl: 0 })
+      .then((w) => { if (w?.real || w?.demo) set('wallet', { real: w.real || {}, demo: w.demo || {} }); })
+      .catch(() => null);
     setTimeout(() => {
       if (root.closest?.('#mobile-order-sheet')) closeOrderSheet(container);
       else showOrderStatus(root, '', 'info');
@@ -1044,26 +1443,26 @@ function showOrderConfirmation({ side, symbol, type, amount, leverage, tp, sl, m
       <div class="absolute inset-0 bg-black/70" id="confirm-backdrop"></div>
       <div class="relative w-full max-w-md mx-4 mb-4 sm:mb-0 bg-surface border border-line rounded-2xl shadow-2xl overflow-hidden">
         <div class="px-5 py-4 border-b border-line text-center">
-          <h3 class="text-lg font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}">${isBuy ? 'Buy' : 'Sell'} Order</h3>
-          <p class="text-xs text-muted mt-1">Review and confirm your order</p>
+          <h3 class="text-lg font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}">${isBuy ? t('trade.side.buy', 'Buy') : t('trade.side.sell', 'Sell')} ${t('trade.order', 'Order')}</h3>
+          <p class="text-xs text-muted mt-1">${t('trade.review_confirm', 'Review and confirm your order')}</p>
         </div>
         <div class="px-5 py-4 space-y-3">
-          <div class="flex justify-between text-sm"><span class="text-muted">Symbol</span><strong>${esc(symbol)}</strong></div>
-          <div class="flex justify-between text-sm"><span class="text-muted">Type</span><strong>${esc(orderType)} / ${esc(marketType)}</strong></div>
-          <div class="flex justify-between text-sm"><span class="text-muted">Side</span><strong class="${isBuy ? 'text-green-400' : 'text-red-400'}">${side}</strong></div>
-          <div class="flex justify-between text-sm"><span class="text-muted">Amount</span><strong>$${amount.toFixed(2)}</strong></div>
-          <div class="flex justify-between text-sm"><span class="text-muted">Leverage</span><strong>${leverage}x</strong></div>
-          <div class="flex justify-between text-sm"><span class="text-muted">Notional</span><strong>$${notional.toFixed(2)}</strong></div>
-          <div class="flex justify-between text-sm"><span class="text-muted">Price</span><strong class="font-mono">${parseFloat(execPrice).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>
-          ${tp > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Take Profit</span><strong class="font-mono text-green-400">${parseFloat(tp).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>` : ''}
-          ${sl > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Stop Loss</span><strong class="font-mono text-red-400">${parseFloat(sl).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>` : ''}
-          ${pnl !== null ? `<div class="flex justify-between text-sm"><span class="text-muted">Est. Profit</span><strong class="text-green-400">$${pnl.toFixed(2)}</strong></div>` : ''}
-          ${loss !== null ? `<div class="flex justify-between text-sm"><span class="text-muted">Est. Loss</span><strong class="text-red-400">$${loss.toFixed(2)}</strong></div>` : ''}
-          <div class="flex justify-between text-sm"><span class="text-muted">Mode</span><strong>${mode === 'real' ? 'Real' : 'Demo'}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.symbol', 'Symbol')}</span><strong>${esc(symbol)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.type', 'Type')}</span><strong>${esc(orderType)} / ${esc(marketType)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.side', 'Side')}</span><strong class="${isBuy ? 'text-green-400' : 'text-red-400'}">${side}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.amount', 'Amount')}</span><strong>$${amount.toFixed(2)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.leverage', 'Leverage')}</span><strong>${leverage}x</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.notional', 'Notional')}</span><strong>$${notional.toFixed(2)}</strong></div>
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.price', 'Price')}</span><strong class="font-mono">${parseFloat(execPrice).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>
+          ${tp > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">${t('trade.take_profit', 'Take Profit')}</span><strong class="font-mono text-green-400">${parseFloat(tp).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>` : ''}
+          ${sl > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">${t('trade.stop_loss', 'Stop Loss')}</span><strong class="font-mono text-red-400">${parseFloat(sl).toFixed(type === 'crypto' ? 2 : 4)}</strong></div>` : ''}
+          ${pnl !== null ? `<div class="flex justify-between text-sm"><span class="text-muted">${t('trade.est_profit', 'Est. Profit')}</span><strong class="text-green-400">$${pnl.toFixed(2)}</strong></div>` : ''}
+          ${loss !== null ? `<div class="flex justify-between text-sm"><span class="text-muted">${t('trade.est_loss', 'Est. Loss')}</span><strong class="text-red-400">$${loss.toFixed(2)}</strong></div>` : ''}
+          <div class="flex justify-between text-sm"><span class="text-muted">${t('trade.mode', 'Mode')}</span><strong>${mode === 'real' ? t('mode.real', 'Real') : t('mode.demo', 'Demo')}</strong></div>
         </div>
         <div class="grid grid-cols-2 gap-3 px-5 py-4 border-t border-line">
-          <button class="btn-ghost py-2.5" id="confirm-cancel">Cancel</button>
-          <button class="${isBuy ? 'btn-buy' : 'btn-sell'} py-2.5 text-white font-bold" id="confirm-execute">Confirm ${side}</button>
+          <button class="btn-ghost py-2.5" id="confirm-cancel">${t('common.cancel', 'Cancel')}</button>
+          <button class="${isBuy ? 'btn-buy' : 'btn-sell'} py-2.5 text-white font-bold" id="confirm-execute">${t('trade.confirm', 'Confirm')} ${side}</button>
         </div>
       </div>`;
 
@@ -1107,6 +1506,21 @@ function openMarketDrawer(container) {
   drawer.classList.add('mobile-market-open');
   drawer.classList.remove('hidden');
   document.body.classList.add('trade-modal-open');
+  const list = $('#symbol-list', container);
+  if (list && !list.querySelector('.symbol-row') && !container.__marketDrawerLoading) {
+    container.__marketDrawerLoading = true;
+    loadMarketItems(get('type'), tradeRunId)
+      .then((mkts) => {
+        if (mkts?.items) {
+          container.__marketItems = mkts.items;
+          renderSymbolList(container, mkts.items);
+          hydrateActiveFromMarketList(container, mkts.items, tradeRunId);
+          warmVisibleQuotes(container, mkts.items, tradeRunId);
+        }
+      })
+      .catch(() => { if (list) list.innerHTML = '<p class="text-muted text-[11px] text-center py-4">Markets unavailable</p>'; })
+      .finally(() => { container.__marketDrawerLoading = false; });
+  }
 }
 
 function closeMarketDrawer(container) {
@@ -1190,13 +1604,33 @@ function calcMA(closes, period) {
 function marketListUrl(type) {
   const resolved = normalizeType(type || 'crypto');
   const actual = resolved === 'favorites' ? 'crypto' : resolved;
-  return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1`;
+  return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=36`;
+}
+
+async function loadMarketItems(type, runId = tradeRunId, force = false) {
+  const resolved = normalizeType(type || 'crypto');
+  const key = resolved || 'crypto';
+  const cached = marketListCache.get(key);
+  const now = Date.now();
+  if (!force && cached && cached.expires > now) return cached.data;
+  const data = await api(marketListUrl(resolved), { timeout: 12000, cacheTtl: 15000 });
+  if (!isCurrentRun(runId)) return data;
+  if (data?.items) marketListCache.set(key, { data, expires: Date.now() + 15000 });
+  return data;
+}
+
+function hydrateActiveFromMarketList(container, items, runId = tradeRunId) {
+  const active = String(get('symbol') || '').toUpperCase();
+  const item = (items || []).find((m) => String(m.symbol || '').toUpperCase() === active);
+  if (!item) return;
+  const p = Number(item.price || item.q_price || 0);
+  if (p > 0) updatePrice(container, item, runId);
 }
 
 function quoteClass(market) {
   const source = String(market?.source || '').toLowerCase();
   const timing = String(market?.timing_class || '').toLowerCase();
-  if (timing === 'stale' || market?.is_stale || source.includes('yahoo')) return 'bg-spread';
+  if (timing === 'stale' || timing === 'seed' || market?.is_stale || source.includes('yahoo') || source.includes('seed')) return 'bg-spread';
   return 'bg-buy';
 }
 
@@ -1204,6 +1638,7 @@ function quoteStateLabel(q) {
   const timing = String(q?.timing_class || '').toLowerCase();
   const source = String(q?.source || '').toLowerCase();
   if (Number(q?.price || 0) <= 0) return 'Unavailable';
+  if (timing === 'seed' || source.includes('seed')) return 'Reference';
   if (timing === 'stale' || q?.is_stale) return 'Stale';
   if (timing === 'delayed' || source.includes('yahoo') || ['stocks', 'arab'].includes(normalizeType(q?.type || get('type')))) return 'Delayed';
   if (timing === 'candle_fallback') return 'Chart quote';
@@ -1223,4 +1658,3 @@ function marketLogo(symbol, type, className) {
     <b class="hidden h-full w-full place-items-center bg-accent/20 text-[9px] font-black">${esc(marketInitial(symbol))}</b>
   </span>`;
 }
-

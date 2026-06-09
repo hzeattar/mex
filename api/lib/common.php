@@ -458,6 +458,23 @@ function db(): PDO {
       $bootstrapped = true;
       require_once __DIR__ . '/schema.php';
 
+      // Fast path: when the DB already records the current schema version, skip the
+      // expensive install/upgrade scan. The upgrade issues hundreds of
+      // information_schema round-trips, which over the Railway DB proxy can take
+      // tens of seconds. Without this gate every cold PHP-FPM worker pays that cost
+      // on its first DB request (very slow immediately after a deploy/restart).
+      // Mirrors the version-marker gating already used by the SQLite branch below.
+      if (!defined('FORCE_MIGRATE') && function_exists('schema_setting_get')) {
+        try {
+          $dbSchemaVer = (string)(schema_setting_get($pdo, 'mysql', 'META_SCHEMA_VER', '') ?: '');
+        } catch (Throwable $e) {
+          $dbSchemaVer = '';
+        }
+        if ($dbSchemaVer !== '' && $dbSchemaVer === $schemaVer) {
+          return $pdo;
+        }
+      }
+
       $driver = 'mysql';
       try { $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) ?: 'mysql'; } catch (Throwable $e) {}
 

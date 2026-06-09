@@ -19,6 +19,8 @@ $withQuotes = (int)($_GET['with_quotes'] ?? 0) === 1;
 $lite = (int)($_GET['lite'] ?? 0) === 1;
 $forceLive = ((int)($_GET['force_live'] ?? 0) === 1);
 $scope = strtolower((string)($_GET['scope'] ?? ''));
+$requestLimit = (int)($_GET['limit'] ?? 0);
+$requestLimit = $requestLimit > 0 ? max(6, min(80, $requestLimit)) : 0;
 $supportedOnly = ((int)($_GET['supported'] ?? 0) === 1) || in_array($scope, ['home', 'trade'], true);
 $supportedInteractive = $withQuotes && $supportedOnly && in_array($scope, ['home', 'trade'], true);
 $disableSupportedRescue = ((int)($_GET['no_rescue'] ?? 0) === 1)
@@ -29,6 +31,7 @@ $allowListRescue = $forceLive
 
 header('Cache-Control: public, max-age=5, s-maxage=5');
 header('Pragma: no-cache');
+header('X-MEX-Markets-Build: price-ref-v20');
 
 $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
   'connect_timeout' => max(1, min(2, (int)env('MARKETS_UPSTREAM_CONNECT_TIMEOUT', '1'))),
@@ -161,7 +164,7 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'MS',   'name'=>'Morgan Stanley',     'type'=>'stocks','tv_symbol'=>'NYSE:MS',     'yahoo_ticker'=>'MS',   'sort_order'=>262,'seed_price'=>98, 'icon'=>'stock'],
     ['symbol'=>'PLTR', 'name'=>'Palantir Tech.',     'type'=>'stocks','tv_symbol'=>'NYSE:PLTR',   'yahoo_ticker'=>'PLTR', 'sort_order'=>264,'seed_price'=>22, 'icon'=>'stock'],
     ['symbol'=>'COIN', 'name'=>'Coinbase Global',    'type'=>'stocks','tv_symbol'=>'NASDAQ:COIN', 'yahoo_ticker'=>'COIN', 'sort_order'=>266,'seed_price'=>230,'icon'=>'stock'],
-    ['symbol'=>'SQ',   'name'=>'Block Inc. (SQ)',    'type'=>'stocks','tv_symbol'=>'NYSE:SQ',     'yahoo_ticker'=>'SQ',   'sort_order'=>268,'seed_price'=>72, 'icon'=>'stock'],
+    ['symbol'=>'SQ',   'name'=>'Block Inc.',         'type'=>'stocks','tv_symbol'=>'NYSE:XYZ',    'yahoo_ticker'=>'XYZ',  'sort_order'=>268,'seed_price'=>72, 'icon'=>'stock'],
     ['symbol'=>'ADBE', 'name'=>'Adobe Inc.',         'type'=>'stocks','tv_symbol'=>'NASDAQ:ADBE', 'yahoo_ticker'=>'ADBE', 'sort_order'=>270,'seed_price'=>475,'icon'=>'stock'],
     ['symbol'=>'UBER', 'name'=>'Uber Technologies',  'type'=>'stocks','tv_symbol'=>'NYSE:UBER',   'yahoo_ticker'=>'UBER', 'sort_order'=>272,'seed_price'=>74, 'icon'=>'stock'],
     ['symbol'=>'SNAP', 'name'=>'Snap Inc.',          'type'=>'stocks','tv_symbol'=>'NYSE:SNAP',   'yahoo_ticker'=>'SNAP', 'sort_order'=>274,'seed_price'=>17, 'icon'=>'stock'],
@@ -188,16 +191,21 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'COTTON','name'=>'Cotton #2',           'type'=>'commodities','tv_symbol'=>'ICEUS:CT1!','yahoo_ticker'=>'CT=F', 'sort_order'=>328,'seed_price'=>77,  'icon'=>'commodity'],
     ['symbol'=>'COFFEE','name'=>'Coffee "C"',          'type'=>'commodities','tv_symbol'=>'ICEUS:KC1!','yahoo_ticker'=>'KC=F', 'sort_order'=>330,'seed_price'=>185, 'icon'=>'commodity'],
     ['symbol'=>'COCOA', 'name'=>'Cocoa',               'type'=>'commodities','tv_symbol'=>'ICEUS:CC1!','yahoo_ticker'=>'CC=F', 'sort_order'=>332,'seed_price'=>9200,'icon'=>'commodity'],
-    ['symbol'=>'LUMBER','name'=>'Lumber',              'type'=>'commodities','tv_symbol'=>'CME:LBS1!', 'yahoo_ticker'=>'LBS=F','sort_order'=>334,'seed_price'=>540, 'icon'=>'commodity'],
+    ['symbol'=>'LUMBER','name'=>'Lumber',              'type'=>'commodities','tv_symbol'=>'CME:LBS1!', 'yahoo_ticker'=>'LB=F', 'sort_order'=>334,'seed_price'=>540, 'icon'=>'commodity'],
     ['symbol'=>'NICKEL','name'=>'Nickel',              'type'=>'commodities','tv_symbol'=>'LME:NICKEL','yahoo_ticker'=>'NI=F', 'sort_order'=>336,'seed_price'=>17800,'icon'=>'metal'],
     ['symbol'=>'ZINC',  'name'=>'Zinc',                'type'=>'commodities','tv_symbol'=>'LME:ZINC',  'yahoo_ticker'=>'ZI=F', 'sort_order'=>338,'seed_price'=>2800,'icon'=>'metal'],
     ['symbol'=>'ALUMINIUM','name'=>'Aluminium',        'type'=>'commodities','tv_symbol'=>'LME:ALUMINUM','yahoo_ticker'=>'ALI=F','sort_order'=>340,'seed_price'=>2680,'icon'=>'metal'],
-    ['symbol'=>'LEAD',  'name'=>'Lead',                'type'=>'commodities','tv_symbol'=>'LME:LEAD',  'yahoo_ticker'=>'LE=F', 'sort_order'=>342,'seed_price'=>2100,'icon'=>'metal'],
+    ['symbol'=>'LEAD',  'name'=>'Lead',                'type'=>'commodities','tv_symbol'=>'LME:LEAD',  'yahoo_ticker'=>'',     'sort_order'=>342,'seed_price'=>2100,'icon'=>'metal'],
     ['symbol'=>'TIN',   'name'=>'Tin',                 'type'=>'commodities','tv_symbol'=>'LME:TIN',   'yahoo_ticker'=>'',     'sort_order'=>344,'seed_price'=>29500,'icon'=>'metal'],
     ['symbol'=>'OJ',    'name'=>'Orange Juice',        'type'=>'commodities','tv_symbol'=>'ICEUS:OJ1!','yahoo_ticker'=>'OJ=F', 'sort_order'=>346,'seed_price'=>430, 'icon'=>'commodity'],
     ['symbol'=>'LEAN_HOGS','name'=>'Lean Hogs',        'type'=>'commodities','tv_symbol'=>'CME:HE1!',  'yahoo_ticker'=>'HE=F', 'sort_order'=>348,'seed_price'=>90,  'icon'=>'commodity'],
     ['symbol'=>'LIVE_CATTLE','name'=>'Live Cattle',    'type'=>'commodities','tv_symbol'=>'CME:LE1!',  'yahoo_ticker'=>'LE=F', 'sort_order'=>350,'seed_price'=>192, 'icon'=>'commodity'],
     ['symbol'=>'HEATING_OIL','name'=>'Heating Oil',    'type'=>'commodities','tv_symbol'=>'NYMEX:HO1!','yahoo_ticker'=>'HO=F','sort_order'=>352,'seed_price'=>2.45,'icon'=>'oil'],
+    ['symbol'=>'RBOB', 'name'=>'RBOB Gasoline',          'type'=>'commodities','tv_symbol'=>'NYMEX:RB1!','yahoo_ticker'=>'RB=F','sort_order'=>354,'seed_price'=>2.35,'icon'=>'oil'],
+    ['symbol'=>'OATS', 'name'=>'Oats',                   'type'=>'commodities','tv_symbol'=>'CBOT:ZO1!','yahoo_ticker'=>'ZO=F','sort_order'=>356,'seed_price'=>360,'icon'=>'commodity'],
+    ['symbol'=>'RICE', 'name'=>'Rough Rice',             'type'=>'commodities','tv_symbol'=>'CBOT:ZR1!','yahoo_ticker'=>'ZR=F','sort_order'=>358,'seed_price'=>18.5,'icon'=>'commodity'],
+    ['symbol'=>'MILK', 'name'=>'Class III Milk',         'type'=>'commodities','tv_symbol'=>'CME:DC1!', 'yahoo_ticker'=>'DC=F','sort_order'=>360,'seed_price'=>18.0,'icon'=>'commodity'],
+    ['symbol'=>'FEEDER_CATTLE','name'=>'Feeder Cattle',  'type'=>'commodities','tv_symbol'=>'CME:GF1!', 'yahoo_ticker'=>'GF=F','sort_order'=>362,'seed_price'=>255,'icon'=>'commodity'],
 
     // ── FUTURES (30+) ───────────────────────────────────────────────────────
     ['symbol'=>'ES_F', 'name'=>'E-mini S&P 500 Future',      'type'=>'futures','tv_symbol'=>'CME_MINI:ES1!', 'yahoo_ticker'=>'ES=F', 'sort_order'=>400,'seed_price'=>5200, 'icon'=>'future'],
@@ -227,6 +235,9 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'PL_F', 'name'=>'Platinum Future',            'type'=>'futures','tv_symbol'=>'COMEX:PL1!',   'yahoo_ticker'=>'PL=F', 'sort_order'=>448,'seed_price'=>950,  'icon'=>'metal'],
     ['symbol'=>'LE_F', 'name'=>'Live Cattle Future',         'type'=>'futures','tv_symbol'=>'CME:LE1!',     'yahoo_ticker'=>'LE=F', 'sort_order'=>450,'seed_price'=>192,  'icon'=>'future'],
     ['symbol'=>'HE_F', 'name'=>'Lean Hog Future',            'type'=>'futures','tv_symbol'=>'CME:HE1!',     'yahoo_ticker'=>'HE=F', 'sort_order'=>452,'seed_price'=>90,   'icon'=>'future'],
+    ['symbol'=>'NKD_F','name'=>'Nikkei 225 Future',          'type'=>'futures','tv_symbol'=>'OSE:NK2251!',   'yahoo_ticker'=>'NKD=F','sort_order'=>454,'seed_price'=>38750,'icon'=>'future'],
+    ['symbol'=>'BZ_F', 'name'=>'Brent Crude Future',         'type'=>'futures','tv_symbol'=>'ICEEUR:BRN1!',  'yahoo_ticker'=>'BZ=F', 'sort_order'=>456,'seed_price'=>83.2, 'icon'=>'oil'],
+    ['symbol'=>'EMD_F','name'=>'E-mini MidCap 400 Future',   'type'=>'futures','tv_symbol'=>'CME_MINI:EMD1!','yahoo_ticker'=>'EMD=F','sort_order'=>458,'seed_price'=>2950, 'icon'=>'future'],
 
     // ── ARAB (40+) ──────────────────────────────────────────────────────────
     ['symbol'=>'2222','name'=>'Saudi Aramco',       'type'=>'arab','tv_symbol'=>'TADAWUL:2222','yahoo_ticker'=>'2222.SR','sort_order'=>500,'seed_price'=>30,'icon'=>'arab'],
@@ -337,7 +348,7 @@ function vp_curated_supported_rows(array $rows, string $typeAlias, string $scope
     $row = $rowByKey[$key] ?? vp_build_supported_market_row($def);
     $row['sort_order'] = (int)($def['sort_order'] ?? ($row['sort_order'] ?? 0));
     if (empty($row['tv_symbol']) && !empty($def['tv_symbol'])) $row['tv_symbol'] = (string)$def['tv_symbol'];
-    if (empty($row['seed_price']) && !empty($def['seed_price'])) $row['seed_price'] = (float)$def['seed_price'];
+    if (!empty($def['seed_price'])) $row['seed_price'] = (float)$def['seed_price'];
     $out[] = $row;
   }
   return $out;
@@ -464,10 +475,12 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
       if (!$row) continue;
       $price = (float)($row['price'] ?? 0);
       if (!($price > 0)) continue;
+      $src = (string)($row['source'] ?? 'provider_live');
+      if (vp_market_quote_source_blocked($symbol, $type, $src)) continue;
       $items[$entry['index']]['price'] = $price;
       $items[$entry['index']]['change_pct'] = (float)($row['change_pct'] ?? 0);
       $items[$entry['index']]['updated_at'] = (int)($row['updated_at'] ?? time());
-      $items[$entry['index']]['source'] = (string)($row['source'] ?? 'provider_live');
+      $items[$entry['index']]['source'] = $src;
       $items[$entry['index']]['is_stale'] = !empty($row['is_stale']);
       $items[$entry['index']]['timing_class'] = function_exists('qa_quote_timing_class')
         ? qa_quote_timing_class($row, $type)
@@ -480,30 +493,75 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   return $items;
 }
 
-function vp_apply_seed_fallback(array $items): array {
-  foreach ($items as &$it) {
-    $price = (float)($it['price'] ?? 0);
-    $seedPrice = (float)($it['seed_price'] ?? 0);
-    if ($price <= 0 && $seedPrice > 0) {
-      $it['price'] = $seedPrice;
-      $it['source'] = 'seed';
-      $it['timing_class'] = 'delayed';
-      $it['is_stale'] = false;
-      $it['updated_at'] = 0;
-    }
+
+function vp_overlay_cached_quotes_fast(array $items): array {
+  if (!$items) return $items;
+  $symbols = [];
+  foreach ($items as $item) {
+    $sym = strtoupper(trim((string)($item['symbol'] ?? '')));
+    if ($sym !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $sym)) $symbols[$sym] = true;
   }
-  unset($it);
+  if (!$symbols) return $items;
+  try {
+    $pdo = db();
+    $driver = db_driver();
+    if (function_exists('schema_table_exists') && !schema_table_exists($pdo, 'market_quotes', $driver)) return $items;
+    $hasSource = function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'source', $driver) : true;
+    $hasTiming = function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'timing_class', $driver) : false;
+    $hasStale = function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'is_stale', $driver) : false;
+    $marks = implode(',', array_fill(0, count($symbols), '?'));
+    $sel = 'symbol,type,price,change_pct,updated_at';
+    $sel .= $hasSource ? ',source' : ",'' AS source";
+    $sel .= $hasTiming ? ',timing_class' : ",'' AS timing_class";
+    $sel .= $hasStale ? ',is_stale' : ',0 AS is_stale';
+    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol IN ($marks)");
+    $st->execute(array_keys($symbols));
+    $by = [];
+    foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+      $sym = strtoupper((string)($row['symbol'] ?? ''));
+      $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
+      if ($sym === '' || $type === '') continue;
+      $key = $type . ':' . $sym;
+      $price = (float)($row['price'] ?? 0);
+      if (!($price > 0)) continue;
+      $by[$key] = $row;
+    }
+    foreach ($items as &$item) {
+      $sym = strtoupper((string)($item['symbol'] ?? ''));
+      $type = vp_normalize_asset_type((string)($item['type'] ?? ''));
+      $row = $by[$type . ':' . $sym] ?? null;
+      if (!$row && $type === 'arab') $row = $by['stocks:' . $sym] ?? null;
+      if (!$row) continue;
+      $price = (float)($row['price'] ?? 0);
+      if (!($price > 0)) continue;
+      $source = (string)($row['source'] ?? 'cache');
+      if (vp_market_quote_source_blocked($sym, $type, $source)) continue;
+      $item['price'] = $price;
+      $item['change_pct'] = (float)($row['change_pct'] ?? 0);
+      $item['updated_at'] = (int)($row['updated_at'] ?? 0);
+      $item['source'] = $source;
+      $item['is_stale'] = !empty($row['is_stale']);
+      $timing = (string)($row['timing_class'] ?? '');
+      if ($timing === '') $timing = (in_array($type, ['stocks','arab'], true) ? 'delayed' : 'live');
+      $item['timing_class'] = $timing;
+      $item['delayed'] = ($timing === 'delayed');
+    }
+    unset($item);
+  } catch (Throwable $e) {}
   return $items;
 }
 
 function vp_filter_priced_supported_items(array $items, string $scope, bool $withQuotes, bool $supportedOnly): array {
   if (!$supportedOnly || !$withQuotes || !in_array($scope, ['home', 'trade'], true)) return $items;
-  if ((int)env('MARKETS_HIDE_UNPRICED_SUPPORTED', '1') !== 1) return $items;
+  $defaultHide = $scope === 'trade' ? '1' : '0';
+  if ((int)env('MARKETS_HIDE_UNPRICED_SUPPORTED', $defaultHide) !== 1) return $items;
   $pricedItems = array_values(array_filter($items, static function(array $it): bool {
     $price = (float)($it['price'] ?? 0);
     $source = strtolower(trim((string)($it['source'] ?? '')));
     $timing = strtolower(trim((string)($it['timing_class'] ?? '')));
-    return $price > 0 && $source !== '' && $source !== 'unavailable' && $timing !== 'unavailable';
+    if ($price <= 0 || $source === '' || $source === 'unavailable' || $timing === 'unavailable' || $timing === 'seed') return false;
+    if (function_exists('quote_source_is_untrusted') && quote_source_is_untrusted($source)) return false;
+    return true;
   }));
   return $pricedItems ?: $items;
 }
@@ -520,6 +578,72 @@ function vp_markets_quote_is_usable(string $assetType, float $price, int $update
     ? qa_quote_max_age($assetType, false)
     : (in_array($assetType, ['stocks','arab'], true) ? 7200 : (in_array($assetType, ['commodities','futures'], true) ? 1800 : 360));
   return $age <= $maxAge;
+}
+
+function vp_reference_quote_from_market_row(array $row, string $assetType): ?array {
+  $assetType = vp_normalize_asset_type($assetType);
+  if ($assetType === 'crypto') return null;
+  if ((int)env('MARKETS_REFERENCE_SEED_FALLBACK', '1') !== 1) return null;
+  $seed = (float)($row['seed_price'] ?? 0);
+  if (!($seed > 0)) return null;
+  return [
+    'price' => $seed,
+    'change_pct' => 0.0,
+    'updated_at' => time(),
+    'source' => 'seed_price',
+    'is_stale' => false,
+    'timing_class' => 'seed',
+  ];
+}
+
+function vp_market_quote_source_blocked(string $symbol, string $assetType, string $source): bool {
+  return function_exists('quote_source_blocked_for_symbol')
+    && quote_source_blocked_for_symbol($symbol, $assetType, $source);
+}
+
+function vp_apply_reference_quotes_to_items(array $items, array $rows, string $scope, bool $withQuotes, bool $supportedOnly): array {
+  if (!$items || !$rows || !$withQuotes || !$supportedOnly || !in_array($scope, ['home', 'trade'], true)) return $items;
+
+  $rowsByKey = [];
+  foreach ($rows as $row) {
+    $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
+    if ($sym === '' || $type === '') continue;
+    $rowsByKey[$type . ':' . $sym] = $row;
+    $rowsByKey[$sym] = $row;
+  }
+
+  foreach ($items as &$item) {
+    $sym = strtoupper(trim((string)($item['symbol'] ?? '')));
+    $assetType = vp_normalize_asset_type((string)($item['type'] ?? ''));
+    if ($sym === '' || $assetType === '') continue;
+
+    $price = (float)($item['price'] ?? 0);
+    $source = (string)($item['source'] ?? '');
+    $needsReference = $price <= 0
+      || $source === ''
+      || strtolower($source) === 'unavailable'
+      || vp_market_quote_source_blocked($sym, $assetType, $source);
+
+    if (!$needsReference) continue;
+
+    $row = $rowsByKey[$assetType . ':' . $sym] ?? $rowsByKey[$sym] ?? null;
+    if (!is_array($row)) continue;
+
+    $reference = vp_reference_quote_from_market_row($row, $assetType);
+    if (!is_array($reference)) continue;
+
+    $item['price'] = (float)$reference['price'];
+    $item['change_pct'] = (float)$reference['change_pct'];
+    $item['updated_at'] = (int)$reference['updated_at'];
+    $item['source'] = (string)$reference['source'];
+    $item['is_stale'] = !empty($reference['is_stale']);
+    $item['timing_class'] = (string)$reference['timing_class'];
+    $item['delayed'] = false;
+  }
+  unset($item);
+
+  return $items;
 }
 
 function normalize_tv_symbol(string $symbol, string $type, string $tvSymbol=''): string {
@@ -650,6 +774,25 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
     $src = (string)($quote['source'] ?? 'unavailable');
     $isStale = !empty($quote['is_stale']);
     $timingClass = (string)($quote['timing_class'] ?? ($isStale ? 'stale' : ($price > 0 ? 'live' : 'unavailable')));
+    if ($price > 0 && vp_market_quote_source_blocked($sym, $assetType, $src)) {
+      $price = 0.0;
+      $chg = 0.0;
+      $upd = 0;
+      $src = 'unavailable';
+      $isStale = false;
+      $timingClass = 'unavailable';
+    }
+    if ($price <= 0 && $withQuotes && $supportedOnly && in_array($scope, ['home', 'trade'], true)) {
+      $reference = vp_reference_quote_from_market_row($r, $assetType);
+      if (is_array($reference)) {
+        $price = (float)$reference['price'];
+        $chg = (float)$reference['change_pct'];
+        $upd = (int)$reference['updated_at'];
+        $src = (string)$reference['source'];
+        $isStale = !empty($reference['is_stale']);
+        $timingClass = (string)$reference['timing_class'];
+      }
+    }
 
     $metaRow = market_meta($r['meta'] ?? null);
     $metaVolume = (float)($metaRow['quote_volume'] ?? $metaRow['quoteVolume'] ?? $metaRow['volume'] ?? $metaRow['turnover'] ?? $metaRow['qv'] ?? 0);
@@ -674,7 +817,6 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
       'source' => $src,
       'is_stale' => $isStale,
       'timing_class' => $timingClass,
-      'seed_price' => (float)($r['seed_price'] ?? 0),
       'signal_count' => (int)($sigMap[$sym] ?? 0),
       'sort_order' => (int)($r['sort_order'] ?? 0),
       'market_rank' => $metaRank,
@@ -820,7 +962,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v16_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
+$cacheKey = 'markets_v20_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '18') : (int)env('MARKETS_CACHE_TTL', '60');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -851,8 +993,9 @@ if ($fastSupported) {
     $rows[] = vp_build_supported_market_row($def, 970000);
   }
 
-  if ($lite && !$grouped) {
-    $limit = $scope === 'home' ? 16 : 18;
+  $fastLiteLimit = $requestLimit > 0 ? $requestLimit : ($scope === 'home' ? 16 : 18);
+  if ($lite && !$grouped && !$withQuotes) {
+    $limit = $requestLimit > 0 ? $requestLimit : ($scope === 'home' ? 16 : 18);
     if (count($rows) > $limit) $rows = array_slice($rows, 0, $limit);
   }
 
@@ -860,11 +1003,15 @@ if ($fastSupported) {
   // the UI hydrates missing rows through quotes.php batch requests, while
   // this endpoint always returns a stable curated list immediately.
   $items = vp_market_items_from_rows($rows, $typeAlias, $scope, false, true, [], false);
+  if ($withQuotes) $items = vp_overlay_cached_quotes_fast($items);
   if ($withQuotes && $allowListRescue) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
-  $items = vp_apply_seed_fallback($items);
+  $items = vp_apply_reference_quotes_to_items($items, $rows, $scope, $withQuotes, true);
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, true);
+  if ($lite && !$grouped && count($items) > $fastLiteLimit) {
+    $items = array_slice($items, 0, $fastLiteLimit);
+  }
 
   if ($grouped) {
     $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];
@@ -1088,6 +1235,25 @@ try {
     $src = (string)($quote['source'] ?? 'unavailable');
     $isStale = !empty($quote['is_stale']);
     $timingClass = (string)($quote['timing_class'] ?? ($isStale ? 'stale' : 'live'));
+    if ($price > 0 && vp_market_quote_source_blocked($sym, $assetType, $src)) {
+      $price = 0.0;
+      $chg = 0.0;
+      $upd = 0;
+      $src = 'unavailable';
+      $isStale = false;
+      $timingClass = 'unavailable';
+    }
+    if ($price <= 0 && $withQuotes && $supportedOnly && in_array($scope, ['home', 'trade'], true)) {
+      $reference = vp_reference_quote_from_market_row($r, $assetType);
+      if (is_array($reference)) {
+        $price = (float)$reference['price'];
+        $chg = (float)$reference['change_pct'];
+        $upd = (int)$reference['updated_at'];
+        $src = (string)$reference['source'];
+        $isStale = !empty($reference['is_stale']);
+        $timingClass = (string)$reference['timing_class'];
+      }
+    }
 
     $metaRow = market_meta($r['meta'] ?? null);
     $metaVolume = (float)($metaRow['quote_volume'] ?? $metaRow['quoteVolume'] ?? $metaRow['volume'] ?? $metaRow['turnover'] ?? $metaRow['qv'] ?? 0);
@@ -1112,7 +1278,6 @@ try {
       'source' => $src,
       'is_stale' => $isStale,
       'timing_class' => $timingClass,
-      'seed_price' => (float)($r['seed_price'] ?? 0),
       'signal_count' => (int)($sigMap[$sym] ?? 0),
       'sort_order' => (int)($r['sort_order'] ?? 0),
       'market_rank' => $metaRank,
@@ -1125,8 +1290,6 @@ try {
   if ($allowListRescue && $supportedOnly && $withQuotes && in_array($scope, ['home', 'trade'], true)) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
-
-  $items = vp_apply_seed_fallback($items);
 
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
 
@@ -1155,7 +1318,7 @@ try {
   }
 
   if ($lite && !$grouped) {
-    $limit = $fallbackScope === 'home' ? 16 : 18;
+    $limit = $requestLimit > 0 ? $requestLimit : ($fallbackScope === 'home' ? 16 : 18);
     if (count($rows) > $limit) $rows = array_slice($rows, 0, $limit);
   }
 
@@ -1163,7 +1326,6 @@ try {
   if ($withQuotes && $allowListRescue && in_array($fallbackScope, ['home', 'trade'], true)) {
     $items = vp_rescue_supported_market_quotes($items, $fallbackScope);
   }
-  $items = vp_apply_seed_fallback($items);
   $items = vp_filter_priced_supported_items($items, $fallbackScope, $withQuotes, true);
   if ($grouped) {
     $groups = ['crypto' => [], 'forex' => [], 'stocks' => [], 'commodities' => [], 'futures' => [], 'arab' => []];

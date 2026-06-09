@@ -171,6 +171,38 @@ if ($isUiFastPath) {
   $fastPayload = quotes_degraded_payload($typeAlias, $list, $fastAllowLive);
   $fastPayload['mode'] = $fastAllowLive ? 'focus_fast' : 'cache_fast';
   $fastPayload['cache_first'] = true;
+  // Live escalation for the actively-focused symbol: the non-crypto fast path relies
+  // on a pre-warmed cache and otherwise returns price=0 (common for stocks/commodities
+  // that have not been warmed yet). When the focused symbol has no real priced quote,
+  // fetch a real live quote from the configured provider (same reliable path as fresh=1)
+  // so the trade page never shows a zero/unavailable price for a tradable symbol.
+  if ($fastAllowLive && $typeAlias !== 'crypto' && count($list) <= 3
+      && !qa_payload_has_coverage($fastPayload, $typeAlias, count($list))) {
+    try {
+      $liveCount = count($list);
+      $livePayload = qa_quote_payload($typeAlias, $list, [
+        'allow_live' => true,
+        'allow_crypto_seed' => false,
+        'allow_noncrypto_seed' => false,
+        'allow_stale_display' => true,
+        'direct_budget' => max(1, min($liveCount, 3)),
+        'direct_yahoo_budget' => max(1, min($liveCount, 3)),
+        'chart_budget' => min(1, $liveCount),
+        'chart_budget_ms' => 3000,
+        'yahoo_ttl' => 2,
+      ]);
+      if (qa_payload_has_coverage($livePayload, $typeAlias, $liveCount)) {
+        $livePayload['mode'] = 'focus_live';
+        $livePayload['cache_first'] = false;
+        if ($cacheTtl > 0) {
+          qa_cache_write($cacheFile, $livePayload);
+        }
+        json_response($livePayload);
+      }
+    } catch (Throwable $e) {
+      // fall through to the fast (cache-first) payload below
+    }
+  }
   if ($cacheTtl > 0 && qa_payload_has_coverage($fastPayload, $typeAlias, count($list))) {
     qa_cache_write($cacheFile, $fastPayload);
   }

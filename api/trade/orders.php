@@ -22,7 +22,7 @@ $where  = 'user_id=?';
 $params = [$uid];
 
 // Symbol filtering: UI passes clean symbols (BTCUSDT) while DB stores prefixed symbols.
-if ($symbol !== '' && preg_match('/^[A-Z0-9:._-]{2,32}$/', $symbol)) {
+if ($symbol !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $symbol)) {
   $where .= ' AND (symbol=? OR symbol=? OR symbol=?)';
   $params[] = $symbol;
   $params[] = '@R@' . $symbol;
@@ -136,6 +136,13 @@ foreach ($byPos as $pid => $pack) {
 
   $stt = strtolower((string)(($close['status'] ?? null) ?: ($open['status'] ?? '')));
   $isClosed = ($stt === 'closed' || ($close && (int)($close['closed_at'] ?? 0) > 0));
+  $rawStatus = strtolower(trim((string)($open['status'] ?? '')));
+  $rawPositionId = (int)($open['position_id'] ?? 0);
+  $rawFillPrice = (float)($open['fill_price'] ?? 0);
+  $isPending = !$isClosed
+    && in_array($rawStatus, ['open', 'pending', 'armed', 'submitted', 'new'], true)
+    && $rawPositionId <= 0
+    && $rawFillPrice <= 0;
   $closedAt = null;
   if ($isClosed) {
     $ca = (int)(($close['closed_at'] ?? null) ?: ($open['closed_at'] ?? null) ?: 0);
@@ -143,6 +150,7 @@ foreach ($byPos as $pid => $pack) {
   }
 
   $items[] = [
+    'order_id'         => (int)($open['id'] ?? 0),
     'position_id'      => (int)$pid,
     'account_mode'     => $accountMode,
     'symbol'           => $cleanSymbol,
@@ -153,6 +161,9 @@ foreach ($byPos as $pid => $pack) {
     'order_type'       => (string)($open['order_type'] ?? ''),
     'qty'              => (float)($open['qty'] ?? 0),
     'leverage'         => $lev,
+    'limit_price'      => (float)($open['limit_price'] ?? 0),
+    'tp_price'         => (float)($open['tp_price'] ?? 0),
+    'sl_price'         => (float)($open['sl_price'] ?? 0),
     // usd_amount is notional (qty*entry). For PERP, the "money you entered with" is margin (notional/leverage).
     'usd_amount'       => $usdAmount,
     'used_usdt'        => $usedUsdt,
@@ -162,7 +173,11 @@ foreach ($byPos as $pid => $pack) {
     'total_value_usd'  => ($usdAmount > 0 ? ($usdAmount + $pnl) : null),
     'final_value_usdt' => ($isClosed && $marketType === 'perp') ? ($usedUsdt + $pnl - $feeTotal) : null,
     'fee_paid'         => $feeTotal,
-    'status'           => $isClosed ? 'closed' : 'open',
+    'status'           => $isClosed ? 'closed' : ($isPending ? ($rawStatus !== '' ? $rawStatus : 'pending') : 'open'),
+    'raw_status'       => $rawStatus,
+    'is_pending'       => $isPending,
+    'can_edit'         => $isPending,
+    'can_cancel'       => $isPending,
     'created_at'       => (int)($open['created_at'] ?? 0),
     'closed_at'        => $closedAt,
     'close_reason'     => (string)(($close['close_reason'] ?? null) ?: ($open['close_reason'] ?? '')),

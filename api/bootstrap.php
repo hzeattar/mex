@@ -32,6 +32,7 @@ auth_ensure_platform_user($uid, [
   'email' => (string)($row['email'] ?? ''),
   'telegram_id' => (string)($row['tg_id'] ?? ''),
   'username' => (string)($row['username'] ?? ''),
+  'sync_identity' => false,
 ]);
 $row = auth_find_user($pdo, $uid) ?: $row;
 
@@ -44,16 +45,38 @@ function vp_boot_setting(string $key, string $default = ''): string {
   }
 }
 
+function vp_boot_whatsapp_support_url(): string {
+  $envUrl = trim((string)env('WHATSAPP_SUPPORT_URL', ''));
+  if ($envUrl !== '') return $envUrl;
+  return vp_boot_setting('support.whatsapp_url', '');
+}
+
+function vp_boot_logo_url(): string {
+  $url = trim(vp_boot_setting('site.app_logo_url', ''));
+  if ($url === '' || str_contains($url, 'mexgroup_logo.svg')) {
+    return '/assets/img/mex_global_logo.png';
+  }
+  return $url;
+}
+
+function vp_boot_avalon_stats(): array {
+  return [
+    'profit_label' => vp_boot_setting('avalon.profit_label', '$122M'),
+    'clients_label' => vp_boot_setting('avalon.clients_label', '212K'),
+    'trades_label' => vp_boot_setting('avalon.trades_label', '923K+'),
+  ];
+}
+
 function vp_boot_wallet(int $uid): array {
   $realCur = strtoupper((string)env('REAL_CURRENCY', 'USDT'));
   $demoCur = strtoupper((string)env('DEMO_CURRENCY', 'USDT_DEMO'));
   ensure_wallet($uid, $realCur);
   ensure_wallet($uid, $demoCur);
 
-  $realBal = wallet_balance($uid, $realCur);
   $realAvail = wallet_available($uid, $realCur);
-  $demoBal = wallet_balance($uid, $demoCur);
   $demoAvail = wallet_available($uid, $demoCur);
+  $realBal = (float)($realAvail['balance'] ?? 0);
+  $demoBal = (float)($demoAvail['balance'] ?? 0);
 
   return [
     'real' => [
@@ -190,18 +213,26 @@ function vp_boot_market_groups(PDO $pdo): array {
   return $groups;
 }
 
+$bootLevel = vp_boot_level($pdo, $uid);
+$whatsappSupportUrl = vp_boot_whatsapp_support_url();
+
 json_response([
   'ok' => true,
-  'user' => auth_user_payload($row),
+  'user' => auth_user_payload($row, $bootLevel),
   'brand' => [
     'name' => vp_boot_setting('site.brand', 'MEX Group'),
     'tagline' => vp_boot_setting('site.tagline', 'Professional trading & investment platform'),
     'support_email' => vp_boot_setting('site.support_email', 'support@mexgroup.com'),
-    'logo_url' => vp_boot_setting('site.app_logo_url', './assets/img/mexgroup_logo.svg'),
+    'whatsapp_support_url' => $whatsappSupportUrl,
+    'logo_url' => vp_boot_logo_url(),
+    'avalon_stats' => vp_boot_avalon_stats(),
+  ],
+  'support' => [
+    'whatsapp_url' => $whatsappSupportUrl,
   ],
   'wallet' => vp_boot_wallet($uid),
   'kyc' => vp_boot_kyc($pdo, $uid),
-  'level' => vp_boot_level($pdo, $uid),
+  'level' => $bootLevel,
   'markets' => vp_boot_market_groups($pdo),
   'forced_mode' => in_array(strtolower((string)($row['force_mode'] ?? '')), ['demo','real'], true) ? strtolower((string)$row['force_mode']) : null,
   'feature_flags' => feature_all(),

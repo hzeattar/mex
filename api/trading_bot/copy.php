@@ -13,15 +13,22 @@ $body = read_json_body();
 $signalId = (int)($body['signal_id'] ?? 0);
 $subscriptionId = (int)($body['subscription_id'] ?? 0);
 $amount = (float)($body['amount'] ?? 0);
-$mode = strtolower(trim((string)($body['mode'] ?? 'real')));
-$mode = $mode === 'demo' ? 'demo' : 'real';
-if ($mode !== 'real') json_response(['ok'=>false,'error'=>'demo_mode_locked'], 403);
+$mode = strtolower(trim((string)($body['mode'] ?? 'demo')));
+$mode = ($mode === 'real' || $mode === 'demo') ? $mode : 'demo';
 if ($signalId <= 0) json_response(['ok'=>false,'error'=>'Invalid signal'], 422);
 
 $st = $pdo->prepare("SELECT * FROM trading_signals WHERE id=? AND status='active' AND COALESCE(bot_enabled,0)=1 AND (valid_until IS NULL OR valid_until=0 OR valid_until>=?) LIMIT 1");
 $st->execute([$signalId, time()]);
 $signal = $st->fetch(PDO::FETCH_ASSOC);
 if (!$signal) json_response(['ok'=>false,'error'=>'Trading bot not found'], 404);
+$direction = strtoupper(trim((string)($signal['direction'] ?? 'BUY')));
+if ($direction === 'NEUTRAL') {
+  json_response([
+    'ok' => false,
+    'error' => 'neutral_bot_watch_only',
+    'message' => 'This Avalon bot is neutral right now. Copy opens only after admin publishes BUY or SELL direction.',
+  ], 422);
+}
 
 $sub = null;
 if ($subscriptionId > 0) {
@@ -58,7 +65,13 @@ if (!$sub) {
 }
 if (!$sub) json_response(['ok'=>false,'error'=>'Subscription unavailable'], 400);
 if (in_array((string)$sub['status'], ['copied'], true) && (int)($sub['copied_position_id'] ?? 0) > 0) {
-  json_response(['ok'=>false,'error'=>'This signal has already been copied for the selected wallet'], 409);
+  json_response([
+    'ok'=>true,
+    'already_copied'=>true,
+    'subscription_id'=>(int)$sub['id'],
+    'position_id'=>(int)$sub['copied_position_id'],
+    'message'=>'This signal is already active in your copy desk',
+  ]);
 }
 
 try {

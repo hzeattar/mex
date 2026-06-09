@@ -447,5 +447,14 @@
   "markets.perpetual": "Бессрочные",
   "signals.platform_desk": "Сигнальный стол платформы",
   "levels.current": "Текущий уровень",
-  "levels.next_unlock": "Следующий уровень"
+  "levels.next_unlock": "Следующий уровень",
+  "trade.review_confirm": "Проверьте и подтвердите ордер",
+  "trade.amount": "Сумма",
+  "trade.notional": "Номинал",
+  "trade.est_profit": "Ожид. прибыль",
+  "trade.est_loss": "Ожид. убыток",
+  "trade.confirm": "Подтвердить",
+  "mode.real": "Реальный",
+  "mode.demo": "Демо",
+  "portfolio.close_confirm": "Закрыть эту позицию сейчас?"
 }

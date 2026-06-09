@@ -560,14 +560,17 @@ html{scroll-behavior:smooth}
   text-decoration:none;
 }
 .mex-auth-brand img{
-  width:42px;
-  height:42px;
-  border-radius:12px;
-  object-fit:contain;
-  background:linear-gradient(135deg,#5d7cff,#00c087);
-  padding:7px;
-  box-shadow:0 18px 38px rgba(0,0,0,.26);
+  width:132px;
+  height:36px;
+  border-radius:6px;
+  object-fit:cover;
+  object-position:center;
+  background:#000;
+  padding:0;
+  box-shadow:none;
+  flex-shrink:0;
 }
+.mex-auth-brand img + .mex-logo-fallback + span{display:none}
 .mex-auth-brand strong{display:block;font-size:16px;letter-spacing:.01em}
 .mex-auth-brand small{display:block;margin-top:2px;color:#8da5d5;font-size:12px}
 .mex-auth-links{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
@@ -790,7 +793,7 @@ html{scroll-behavior:smooth}
 }
 @media (max-width:640px){
   .mex-auth-top{width:min(100% - 24px,1180px);padding:16px 0;align-items:flex-start}
-  .mex-auth-brand img{width:36px;height:36px}
+  .mex-auth-brand img{width:112px;height:32px}
   .mex-auth-links a{padding:8px 10px;font-size:12px}
   .mex-auth-shell{width:min(100% - 24px,1180px);gap:14px;padding-bottom:28px}
   .mex-auth-hero,.mex-auth-card{border-radius:18px;padding:20px}
@@ -806,6 +809,7 @@ html{scroll-behavior:smooth}
 .mex-landing-page{
   min-height:100vh;
   margin:0;
+  overflow-x:hidden;
   color:#edf4ff;
   background:
     radial-gradient(circle at 14% 8%,rgba(93,124,255,.24),transparent 30%),
@@ -1268,6 +1272,8 @@ html{scroll-behavior:smooth}
   .mex-landing-nav{display:none}
   .mex-landing-actions{gap:7px;flex-wrap:wrap}
   .mex-btn,.mex-lang-pill{min-height:38px;padding:0 11px;font-size:12px}
+  .mex-logo img{width:112px;height:32px}
+  .mex-footer-logo img{width:124px;height:34px}
   .mex-hero,.mex-section,.mex-landing-footer-full{width:min(100% - 20px,1280px);border-radius:18px}
   .mex-hero-copy,.mex-section{padding:18px}
   .mex-hero h1{font-size:34px;line-height:1.08}
@@ -1298,17 +1304,17 @@ html{scroll-behavior:smooth}
   min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px;
 }
 .mex-logo{
-  display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;flex-shrink:0;
+  display:flex;align-items:center;text-decoration:none;color:#fff;flex-shrink:0;
 }
 .mex-logo img{
-  width:36px;height:36px;border-radius:10px;object-fit:contain;
-  background:linear-gradient(135deg,#5d7cff,#00c087);padding:6px;box-shadow:0 12px 24px rgba(0,0,0,.22);
+  width:156px;height:42px;border-radius:0;object-fit:contain;object-position:center;
+  background:transparent;padding:0;box-shadow:none;
 }
 .mex-logo-fallback{
   display:none;height:36px;width:36px;place-items:center;border-radius:10px;
   background:linear-gradient(135deg,#5d7cff,#00c087);color:#fff;font-size:12px;font-weight:950;
 }
-.mex-logo strong{font-size:16px;font-weight:900;letter-spacing:.01em}
+.mex-logo strong{display:none;font-size:16px;font-weight:900;letter-spacing:.01em}
 
 /* --- Nav --- */
 .mex-header-nav{display:flex;align-items:center;gap:6px;flex:1;justify-content:center}
@@ -1378,13 +1384,9 @@ html{scroll-behavior:smooth}
 .mex-footer-main{
   display:grid;grid-template-columns:1.4fr repeat(3,minmax(0,1fr));gap:32px;padding-bottom:32px;border-bottom:1px solid rgba(135,166,220,.10);
 }
-.mex-footer-logo{display:flex;align-items:center;gap:10px;text-decoration:none;margin-bottom:14px}
-.mex-footer-logo img{width:32px;height:32px;border-radius:9px;padding:5px;background:linear-gradient(135deg,#5d7cff,#00c087);object-fit:contain}
-.mex-footer-logo strong{
-  font-size:18px;font-weight:900;
-  background:linear-gradient(135deg,#5d7cff,#00c087);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-}
+.mex-footer-logo{display:inline-flex;align-items:center;text-decoration:none;margin-bottom:14px}
+.mex-footer-logo img{width:156px;height:42px;border-radius:0;padding:0;background:transparent;object-fit:contain;object-position:center}
+.mex-footer-logo strong{display:none}
 .mex-footer-brand p{color:#7a94c2;font-size:13px;line-height:1.8;max-width:300px;margin:0}
 .mex-footer-col h4{margin:0 0 16px;color:#e0ecff;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
 .mex-footer-col a{display:block;color:#8ea9d8;font-size:13px;line-height:2.2;text-decoration:none;transition:.12s}
@@ -1525,6 +1527,7 @@ html{scroll-behavior:smooth}
 }
 @media (max-width:560px){
   .mex-header-inner{padding:0 12px}
+  .mex-logo img{width:132px;height:36px}
   .mex-logo strong{font-size:14px}
   .mex-trust-grid-v2{grid-template-columns:1fr}
   .mex-market-grid-v2{grid-template-columns:1fr}
@@ -1819,3 +1822,169 @@ html{scroll-behavior:smooth}
 .mc-change:not(.mex-skeleton):not(.down){color:#18c98f}
 @media (min-width:1101px){.mex-market-grid-v2{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:1100px){.mex-market-grid-v2{grid-template-columns:repeat(2,1fr)}}
+
+/* Public license card and certificate modal */
+.mex-public-license-section{
+  width:min(1280px,calc(100% - 32px));
+  margin:28px auto 0;
+}
+.mex-license-card{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:18px;
+  align-items:center;
+  border:1px solid rgba(135,166,220,.16);
+  border-radius:18px;
+  padding:22px;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(0,192,135,.13),transparent 34%),
+    linear-gradient(180deg,rgba(10,20,42,.94),rgba(5,12,26,.96));
+  box-shadow:0 24px 70px rgba(0,0,0,.22);
+}
+.mex-license-card.compact{
+  grid-template-columns:1fr;
+  gap:10px;
+  padding:14px;
+  border-radius:14px;
+  box-shadow:none;
+}
+.mex-license-flag{
+  width:54px;
+  height:54px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:linear-gradient(90deg,#f44336 0 28%,#fff 28% 52%,#0b8f52 52% 76%,#050505 76%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.12),0 12px 30px rgba(0,0,0,.24);
+}
+.mex-license-flag span{
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:rgba(255,255,255,.25);
+  border:1px solid rgba(255,255,255,.25);
+}
+.mex-license-kicker{
+  display:block;
+  margin-bottom:6px;
+  color:#6ee7ff;
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+.mex-license-card strong{
+  display:block;
+  color:#fff;
+  font-size:clamp(18px,2.4vw,28px);
+  line-height:1.12;
+  font-weight:900;
+}
+.mex-license-card.compact strong{font-size:14px}
+.mex-license-card p{
+  margin:8px 0 0;
+  max-width:760px;
+  color:#9fb2dc;
+  font-size:14px;
+  line-height:1.7;
+}
+.mex-license-card.compact p{font-size:12px;line-height:1.55}
+.mex-license-btn{
+  min-height:42px;
+  padding:0 18px;
+  border-radius:12px;
+  border:1px solid rgba(93,124,255,.42);
+  background:linear-gradient(135deg,rgba(93,124,255,.22),rgba(0,192,135,.12));
+  color:#eaf2ff;
+  font-size:13px;
+  font-weight:900;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.mex-license-btn:hover{border-color:rgba(110,231,255,.55)}
+.mex-mobile-license-slot{display:none}
+.mex-license-modal{
+  position:fixed;
+  inset:0;
+  z-index:200;
+  display:none;
+  place-items:center;
+  padding:18px;
+}
+.mex-license-modal.is-open{display:grid}
+.mex-license-backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.78);
+  backdrop-filter:blur(8px);
+}
+.mex-license-panel{
+  position:relative;
+  z-index:1;
+  width:min(980px,100%);
+  height:min(86vh,820px);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border-radius:16px;
+  border:1px solid rgba(135,166,220,.18);
+  background:#071127;
+  box-shadow:0 32px 90px rgba(0,0,0,.45);
+}
+.mex-license-panel-head{
+  min-height:58px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:12px 14px;
+  border-bottom:1px solid rgba(135,166,220,.14);
+}
+.mex-license-panel-head span,
+.mex-license-panel-head strong{display:block}
+.mex-license-panel-head span{
+  color:#6ee7ff;
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+.mex-license-panel-head strong{color:#fff;font-size:15px}
+.mex-license-close{
+  width:34px;
+  height:34px;
+  border-radius:10px;
+  border:1px solid rgba(135,166,220,.18);
+  background:rgba(12,23,43,.72);
+  color:#fff;
+  cursor:pointer;
+  font-size:18px;
+  line-height:1;
+}
+.mex-license-panel iframe{
+  flex:1;
+  width:100%;
+  border:0;
+  background:#fff;
+}
+.mex-license-modal-open{overflow:hidden}
+@media (max-width:900px){
+  .mex-header-nav .mex-mobile-license-slot{
+    display:block;
+    margin-top:8px;
+    padding-top:10px;
+    border-top:1px solid rgba(135,166,220,.12);
+  }
+  .mex-public-license-section{width:min(100% - 20px,1280px)}
+  .mex-license-card{
+    grid-template-columns:1fr;
+    text-align:left;
+    align-items:start;
+  }
+  .mex-license-btn{width:100%}
+}
+@media (max-width:560px){
+  .mex-license-modal{padding:10px}
+  .mex-license-panel{height:82vh;border-radius:12px}
+  .mex-license-card{padding:16px}
+}

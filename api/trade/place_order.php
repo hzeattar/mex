@@ -14,7 +14,8 @@ $pdo = db();
 $body = read_json_body();
 
 $symbol = strtoupper(trim((string)($body['symbol'] ?? '')));
-$assetType = (string)($body['asset_type'] ?? 'crypto');
+$assetType = vp_normalize_asset_type((string)($body['asset_type'] ?? 'crypto'));
+if ($assetType === '') $assetType = 'crypto';
 $marketType = strtolower((string)($body['market_type'] ?? 'spot'));
 $marginMode = strtolower((string)($body['margin_mode'] ?? 'isolated'));
 $leverage = (int)($body['leverage'] ?? 1);
@@ -25,6 +26,7 @@ $orderType = strtoupper((string)($body['order_type'] ?? 'MARKET'));
 $qty = (float)($body['qty'] ?? 0);
 $usdReq = (float)($body['usd'] ?? ($body['usd_amount'] ?? ($body['amount'] ?? 0)));
 $limit = (float)($body['price'] ?? 0);
+$clientPrice = (float)($body['price'] ?? $body['client_price'] ?? 0);
 // Demo/Real mode affects: which wallet currency is used + symbol prefix storage.
 // Portfolio endpoint filters Real positions by @R@ prefix.
 $mode = trade_mode_for_user($pdo, $uid, $body);
@@ -60,31 +62,49 @@ if ($sl <= 0) $sl = 0.0;
 $mergePositions = false;
 
 $mark = 0.0;
-// Fast-path: use latest cached quote (avoids slow upstream call on VPS).
+$cachedPriceForSanity = 0.0;
+// Fast-path: use latest cached quote (avoids slow upstream calls during order placement).
+// Non-crypto providers are delayed/polled and can be slower than the order timeout, so
+// a safe stale window is better than aborting the trade request after the UI already has a quote.
 $maxAge = (int)(env('ENTRY_QUOTE_MAX_AGE','3') ?? '3');
-$maxAge = max(0, min(30, $maxAge));
+$maxAgeByType = [
+  'crypto' => max(3, min(30, (int)env('ENTRY_QUOTE_MAX_AGE_CRYPTO', (string)$maxAge))),
+  'forex' => max(60, min(7200, (int)env('ENTRY_QUOTE_MAX_AGE_FOREX', '1800'))),
+  'commodities' => max(60, min(14400, (int)env('ENTRY_QUOTE_MAX_AGE_COMMODITIES', '3600'))),
+  'futures' => max(60, min(14400, (int)env('ENTRY_QUOTE_MAX_AGE_FUTURES', '3600'))),
+  'stocks' => max(300, min(86400, (int)env('ENTRY_QUOTE_MAX_AGE_STOCKS', '21600'))),
+  'arab' => max(300, min(86400, (int)env('ENTRY_QUOTE_MAX_AGE_ARAB', '21600'))),
+];
+$maxAge = $maxAgeByType[$assetType] ?? max(3, min(120, $maxAge));
 try {
   $q0 = quote_get($symbol, $assetType);
   if ($q0) {
     $upd0 = (int)($q0['updated_at'] ?? 0);
     $age0 = ($upd0 > 0) ? (time() - $upd0) : 999999;
+    $cachedPriceForSanity = (float)($q0['price'] ?? 0);
     if ($age0 <= $maxAge) {
       if ($marketType === 'perp') {
         $mp0 = (float)($q0['mark_price'] ?? 0);
-        $mark = ($mp0 > 0) ? $mp0 : (float)($q0['price'] ?? 0);
+        $mark = ($mp0 > 0) ? $mp0 : $cachedPriceForSanity;
       } else {
-        $mark = (float)($q0['price'] ?? 0);
+        $mark = $cachedPriceForSanity;
       }
     }
   }
 } catch (Throwable $e) { /* ignore */ }
+
+if ($mark <= 0 && $clientPrice > 0) {
+  $allowedDrift = in_array($assetType, ['forex'], true) ? 0.03 : 0.08;
+  $driftOk = $cachedPriceForSanity <= 0 || abs($clientPrice - $cachedPriceForSanity) / max($cachedPriceForSanity, 0.00000001) <= $allowedDrift;
+  if ($driftOk) $mark = $clientPrice;
+}
 
 try {
   if ($mark <= 0) {
     $mark = quote_price($symbol, (string)$marketType ?: 'spot', (string)$assetType ?: 'crypto');
   }
 } catch (Throwable $e) {
-  json_response(['ok'=>false,'error'=>'Price unavailable: '.$e->getMessage()], 500);
+  json_response(['ok'=>false,'error'=>'Price unavailable. Please wait for the live quote to refresh and try again.'], 503);
 }
 
 $fill = $mark;

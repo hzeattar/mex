@@ -1,4 +1,4 @@
-import{e as n,h as o,b as l,j as p}from"./main-CnlpsQTw.js";function u(){return`
+import{f as n,i as o,c as l,k as p}from"./main-CtUO7_w3.js";function u(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">
@@ -30,11 +30,11 @@ import{e as n,h as o,b as l,j as p}from"./main-CnlpsQTw.js";function u(){return`
           <div id="tickets-list"><p class="text-muted text-sm text-center py-8">Loading...</p></div>
         </section>
       </div>
-    </div>`}function x(s){c(s),s.querySelector("#support-form")?.addEventListener("submit",a=>d(a,s))}async function c(s){try{const a=await l("/support/list.php",{timeout:6e3}),i=s.querySelector("#tickets-list");if(!i||!a)return;const t=a.items||[];if(!t.length){i.innerHTML='<p class="text-muted text-sm text-center py-4">No tickets yet.</p>';return}i.innerHTML=`<div class="space-y-2">${t.map(e=>`
+    </div>`}function x(s){r(s),s.querySelector("#support-form")?.addEventListener("submit",a=>d(a,s))}async function r(s){try{const a=await l("/support/list.php",{timeout:6e3}),i=s.querySelector("#tickets-list");if(!i||!a)return;const t=a.items||[];if(!t.length){i.innerHTML='<p class="text-muted text-sm text-center py-4">No tickets yet.</p>';return}i.innerHTML=`<div class="space-y-2">${t.map(e=>`
       <div class="p-3 rounded-lg bg-panel-2/50 border border-line/50">
         <div class="flex justify-between items-start">
           <strong class="text-sm">${n(e.subject||"--")}</strong>
           <span class="badge ${e.status==="open"?"badge-green":"badge-accent"}">${n(e.status||"open")}</span>
         </div>
         <div class="text-[11px] text-muted mt-1">${n(e.priority||"normal")} - ${n(e.updated_at||e.created_at||"")}</div>
-      </div>`).join("")}</div>`}catch{}}async function d(s,a){s.preventDefault();const i=s.target,t=a.querySelector("#support-status");try{t&&(t.textContent="Submitting...");const e=Object.fromEntries(new FormData(i)),r=await p("/support/create.php",e);r&&r.ok!==!1?(t&&(t.textContent="Ticket created!",t.className="text-xs text-center text-green"),i.reset(),c(a)):t&&(t.textContent=r?.error||"Failed",t.className="text-xs text-center text-red")}catch(e){t&&(t.textContent=e.message,t.className="text-xs text-center text-red")}}export{x as mount,u as render};
+      </div>`).join("")}</div>`}catch{}}async function d(s,a){s.preventDefault();const i=s.target,t=a.querySelector("#support-status");try{t&&(t.textContent="Submitting...");const e=Object.fromEntries(new FormData(i)),c=await p("/support/create.php",e);c&&c.ok!==!1?(t&&(t.textContent="Ticket created!",t.className="text-xs text-center text-green"),i.reset(),r(a)):t&&(t.textContent=c?.error||"Failed",t.className="text-xs text-center text-red")}catch(e){t&&(t.textContent=e.message,t.className="text-xs text-center text-red")}}export{x as mount,u as render};

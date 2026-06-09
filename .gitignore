@@ -42,3 +42,33 @@ mex.zip
 
 _*.py
 
+# Temporary/working files from previous agents
+_*.png
+_*.jpg
+_*.html
+_*.json
+_*.css
+_*.js
+_*.txt
+_*.php
+_*.cjs
+_*.ps1
+_i18n_backup/
+ar_*.png
+audit_*.png
+mobile_*.png
+index_*_desktop.png
+spa_*.png
+_pub_*.png
+_qa_*.png
+_served_*
+_ssh_*
+--full-page
+patch_tf_url.cjs
+prices.js
+HANDOFF*.md
+COMPREHENSIVE_CHECKLIST.md
+NEXT_AGENT_PROMPT.md
+PROJECT_REQUIREMENTS_AND_CONTEXT.md
+ADMIN_SETUP_README.md
+

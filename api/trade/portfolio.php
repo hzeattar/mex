@@ -12,6 +12,8 @@ $pdo = db();
 
 $mode = trade_mode_for_user($pdo, $uid);
 $realPrefix = '@R@';
+$fast = ((int)($_GET['fast'] ?? 1) === 1);
+$allowLiveFetch = !$fast && ((int)($_GET['live'] ?? 0) === 1);
 
 // Backward-compatible timestamp column for positions.
 // New schema uses opened_at; older installs may still have created_at.
@@ -79,7 +81,7 @@ $positions = $ps->fetchAll(PDO::FETCH_ASSOC) ?: [];
 $posSymbols = [];
 foreach ($positions as $p) {
   $symUi = strtoupper(sym_strip_prefix((string)($p['symbol'] ?? '')));
-  if ($symUi !== '' && preg_match('/^[A-Z0-9:._-]{2,32}$/', $symUi)) $posSymbols[] = $symUi;
+  if ($symUi !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $symUi)) $posSymbols[] = $symUi;
 }
 $posSymbols = array_values(array_unique($posSymbols));
 
@@ -103,6 +105,7 @@ if ($posSymbols) {
 }
 
 $unreal = 0.0;
+$openMargin = 0.0;
 $outPos = [];
 foreach ($positions as $p) {
   $symbolRaw = (string)($p['symbol'] ?? '');
@@ -121,17 +124,24 @@ foreach ($positions as $p) {
       $mark = (float)$q['price'];
     }
   }
-  if ($mark <= 0) {
-    try { $mark = (float)quote_price($symUi, $marketType, $assetType); } catch (Throwable $e) { $mark = 0.0; }
-  }
-
   $qty = (float)($p['qty'] ?? 0);
   $entry = (float)($p['entry_price'] ?? 0);
+  if ($mark <= 0 && $allowLiveFetch) {
+    try { $mark = (float)quote_price($symUi, $marketType, $assetType); } catch (Throwable $e) { $mark = 0.0; }
+  }
+  if ($mark <= 0 && $entry > 0) {
+    // Fast dashboard/portfolio reads must never block on upstream prices.
+    // Use entry as neutral mark until quotes.php/quote_active.php hydrates cache.
+    $mark = $entry;
+  }
+
   $side = strtolower((string)($p['side'] ?? 'buy'));
   $status = strtolower(trim((string)($p['status'] ?? 'open')));
   $lev = (int)($p['leverage'] ?? 1);
   $margin = (float)($p['margin_initial'] ?? 0);
   $liq = isset($p['liquidation_price']) ? (float)$p['liquidation_price'] : null;
+  $positionMargin = $margin > 0 ? $margin : (($qty > 0 && $entry > 0) ? ($qty * $entry) : 0.0);
+  $openMargin += $positionMargin;
 
   $pnl = perp_calc_pnl($entry, $mark, $qty, $side);
   $unreal += $pnl;
@@ -181,6 +191,16 @@ if ($mode === 'real') {
 }
 $realized = (float)($stP->fetchColumn() ?: 0);
 
+$since24 = time() - 86400;
+if ($mode === 'real') {
+  $stP24 = $pdo->prepare("SELECT COALESCE(SUM(pnl_usd),0) FROM orders WHERE user_id=? AND status='closed' AND pnl_usd IS NOT NULL AND COALESCE(closed_at,created_at,0)>=? AND symbol LIKE ?");
+  $stP24->execute([$uid, $since24, $realPrefix.'%']);
+} else {
+  $stP24 = $pdo->prepare("SELECT COALESCE(SUM(pnl_usd),0) FROM orders WHERE user_id=? AND status='closed' AND pnl_usd IS NOT NULL AND COALESCE(closed_at,created_at,0)>=? AND symbol NOT LIKE ?");
+  $stP24->execute([$uid, $since24, $realPrefix.'%']);
+}
+$realized24 = (float)($stP24->fetchColumn() ?: 0);
+
 $bal = ($mode === 'real') ? (float)($wallet[$realCur]['balance'] ?? 0.0) : (float)($wallet[$demoCur]['balance'] ?? 0.0);
 $equity = $bal + $unreal;
 
@@ -194,6 +214,15 @@ try {
   $investInUse = 0.0;
 }
 
+$activeWallet = ($mode === 'real') ? ($wallet[$realCur] ?? []) : ($wallet[$demoCur] ?? []);
+$availableBalance = (float)($activeWallet['available'] ?? $bal);
+$walletHolds = (float)($activeWallet['holds'] ?? 0.0);
+$activeContractAmount = $mode === 'real' ? $investInUse : 0.0;
+$inUseBalance = $walletHolds + $openMargin + $activeContractAmount;
+$pnlTotalLive = $realized + $unreal;
+$pnl24Live = $realized24 + $unreal;
+$totalBalance = $availableBalance + $inUseBalance + $unreal;
+
 $plans = $pdo->query('SELECT id,name,term_days,roi_percent,min_amount,max_amount,risk FROM invest_plans ORDER BY roi_percent DESC LIMIT 2')->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 json_response([
@@ -206,5 +235,16 @@ json_response([
   'realized_pnl'=>$realized,
   'equity'=>$equity,
   'invest_in_use'=>$investInUse,
+  'metrics'=>[
+    'total_balance'=>$totalBalance,
+    'pnl_24_live'=>$pnl24Live,
+    'pnl_total_live'=>$pnlTotalLive,
+    'available_balance'=>$availableBalance,
+    'in_use_balance'=>$inUseBalance,
+    'open_margin'=>$openMargin,
+    'realized_pnl_24h'=>$realized24,
+    'wallet_holds'=>$walletHolds,
+    'active_contract_amount'=>$activeContractAmount,
+  ],
   'top_plans'=>$plans
 ]);

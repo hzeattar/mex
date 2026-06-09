@@ -1,10 +1,10 @@
-import{i as l,h as d,b as m,e as n,m as r}from"./main-CnlpsQTw.js";function b(){const e=d("level")||{},a=e.current||{},t=e.next||{},s=d("kyc")||{};return`
+import{j as l,i,c as m,f as n,m as r}from"./main-CtUO7_w3.js";function b(){const e=i("level")||{},a=e.current||{},t=e.next||{},s=i("kyc")||{};return`
     <div class="space-y-5 animate-fade-in wallet-page">
       <section class="wallet-hero">
         <div>
           <span class="badge-accent">Assets desk</span>
           <h1>Wallet & ledger</h1>
-          <p>Track live funds, demo balance, ledger movements, deposits, withdrawals, and admin review state.</p>
+          <p>Track live funds, demo balance, ledger movements, deposits, withdrawals, and processing status.</p>
         </div>
         <div class="wallet-actions">
           <button id="toggle-balance" class="btn-ghost btn-sm" data-hidden="0">${l.eye}</button>
@@ -16,7 +16,7 @@ import{i as l,h as d,b as m,e as n,m as r}from"./main-CnlpsQTw.js";function b(){
       <section class="wallet-summary-strip">
         ${o("Customer level",a.name||a.name_en||"Starter",t?.name?`Next: ${t.name}`:"Top tier active")}
         ${o("Funding status",s.status==="approved"?"Approved":"Review needed",s.status==="approved"?"Deposits and withdrawals are enabled":"Complete KYC for live funding")}
-        ${o("Execution mode",d("mode")==="real"?"Real":"Demo",d("mode")==="real"?"Manual review active":"Practice wallet preview")}
+        ${o("Execution mode",i("mode")==="real"?"Real":"Demo",i("mode")==="real"?"Live wallet tracking":"Practice wallet preview")}
       </section>
 
       <div class="wallet-balance-grid">
@@ -31,10 +31,10 @@ import{i as l,h as d,b as m,e as n,m as r}from"./main-CnlpsQTw.js";function b(){
       <section class="card">
         <div class="panel-headline">
           <span class="badge-green">Funding controls</span>
-          <h2>Manual requests</h2>
+          <h2>Funding requests</h2>
         </div>
         <div class="wallet-control-grid">
-          ${c("#/deposit",l.deposit,"New deposit","Submit proof and wait for admin confirmation.")}
+          ${c("#/deposit",l.deposit,"New deposit","Transfer funds and upload proof securely.")}
           ${c("#/withdraw",l.withdraw,"New withdrawal","Request payout review from your real wallet.")}
           ${c("#/kyc",l.kyc,"KYC status","Verification unlocks real funding workflows.")}
           ${c("#/invest",l.earn,"Level contracts","Use confirmed deposits to unlock customer tiers.")}
@@ -53,7 +53,7 @@ import{i as l,h as d,b as m,e as n,m as r}from"./main-CnlpsQTw.js";function b(){
           <p class="text-muted text-sm text-center py-8">Loading transactions...</p>
         </div>
       </section>
-    </div>`}function w(e){u(e),e.querySelector("#refresh-wallet")?.addEventListener("click",()=>u(e)),e.addEventListener("click",a=>{const t=a.target.closest("#toggle-balance");if(!t)return;const s=t.dataset.hidden==="1";t.dataset.hidden=s?"0":"1",t.innerHTML=s?l.eye:l.eyeOff,e.querySelectorAll("[data-balance-value]").forEach(i=>{i.style.filter=s?"":"blur(6px)",i.style.userSelect=s?"":"none"})})}async function u(e){try{const a=await m("/wallet/summary.php",{timeout:8e3});if(!a)return;const t=a.real||{},s=a.demo||{};e.querySelector("#real-wallet").innerHTML=p(t,"real"),e.querySelector("#demo-wallet").innerHTML=p(s,"demo");const i=await m("/wallet/ledger.php?limit=30",{timeout:7e3}).catch(()=>null);i&&i.items?v(e,i.items):e.querySelector("#ledger-table").innerHTML='<div class="empty-state !m-0">No transactions yet.</div>'}catch{const t=e.querySelector("#ledger-table");t&&(t.innerHTML='<p class="text-red text-sm text-center py-4">Wallet data unavailable.</p>')}}function p(e,a){const t=a==="real";return`
+    </div>`}function w(e){u(e),e.querySelector("#refresh-wallet")?.addEventListener("click",()=>u(e)),e.addEventListener("click",a=>{const t=a.target.closest("#toggle-balance");if(!t)return;const s=t.dataset.hidden==="1";t.dataset.hidden=s?"0":"1",t.innerHTML=s?l.eye:l.eyeOff,e.querySelectorAll("[data-balance-value]").forEach(d=>{d.style.filter=s?"":"blur(6px)",d.style.userSelect=s?"":"none"})})}async function u(e){try{const a=await m("/wallet/summary.php",{timeout:0,retry:1,cacheTtl:6e3});if(!a)return;const t=a.real||{},s=a.demo||{};e.querySelector("#real-wallet").innerHTML=p(t,"real"),e.querySelector("#demo-wallet").innerHTML=p(s,"demo");const d=await m("/wallet/ledger.php?limit=30",{timeout:0,retry:1,cacheTtl:1e4}).catch(()=>null);d&&d.items?g(e,d.items):e.querySelector("#ledger-table").innerHTML='<div class="empty-state !m-0">No transactions yet.</div>'}catch{const t=e.querySelector("#ledger-table");t&&(t.innerHTML='<p class="text-red text-sm text-center py-4">Wallet data unavailable.</p>')}}function p(e,a){const t=a==="real";return`
     <div class="wallet-balance-head">
       <div>
         <span>${t?"Real wallet":"Demo wallet"}</span>
@@ -65,10 +65,10 @@ import{i as l,h as d,b as m,e as n,m as r}from"./main-CnlpsQTw.js";function b(){
     <div class="wallet-balance-metrics">
       <span><small>Available</small><strong>${r(e.available||0)}</strong></span>
       <span><small>Holds</small><strong>${r(e.holds||0)}</strong></span>
-      <span><small>Status</small><strong>${t?"Manual review":"Practice funds"}</strong></span>
-    </div>`}function v(e,a){const t=e.querySelector("#ledger-table");if(t){if(!a.length){t.innerHTML='<div class="empty-state !m-0">No ledger entries yet.</div>';return}t.innerHTML=`
+      <span><small>Status</small><strong>${t?"Processing tracker":"Practice funds"}</strong></span>
+    </div>`}function g(e,a){const t=e.querySelector("#ledger-table");if(t){if(!a.length){t.innerHTML='<div class="empty-state !m-0">No ledger entries yet.</div>';return}t.innerHTML=`
     <div class="ledger-mobile-list md:hidden">
-      ${a.slice(0,20).map(g).join("")}
+      ${a.slice(0,20).map(v).join("")}
     </div>
     <div class="hidden md:block overflow-x-auto">
       <table class="w-full text-sm">
@@ -82,7 +82,7 @@ import{i as l,h as d,b as m,e as n,m as r}from"./main-CnlpsQTw.js";function b(){
           <td class="py-2 text-right text-xs text-muted">${n(s.created_at||"--")}</td>
         </tr>`).join("")}</tbody>
       </table>
-    </div>`}}function g(e){const a=Number(e.amount||0);return`<article class="ledger-card">
+    </div>`}}function v(e){const a=Number(e.amount||0);return`<article class="ledger-card">
     <div>
       <strong>${n(e.type||e.description||"--")}</strong>
       <small>${n(e.created_at||"--")}</small>

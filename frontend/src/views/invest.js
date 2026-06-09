@@ -30,7 +30,7 @@ export function render() {
       </section>
 
       <section class="level-strip">
-        ${levelPill('Current level', current.name || current.name_en || 'Level 1', 'Customer tier')}
+        ${levelPill('Current level', current.name || current.name_en || 'Level 1', 'Customer tier', true)}
         ${levelPill('Next level', next?.name || next?.name_en || 'Level 2', next?.min_deposit_total ? `$${money(next.min_deposit_total)} deposits` : 'Deposit progression')}
         ${levelPill('Real available', '$' + money(wallet.available), wallet.currency || 'USDT')}
         ${levelPill('Active copies', String((get('invest.copies') || []).length || 0), 'Real copy desk')}
@@ -53,6 +53,14 @@ export function render() {
 
 export function mount(container) {
   loadInvest(container);
+  // Auto-scroll level strip to current level
+  setTimeout(() => {
+    const strip = container.querySelector('.level-strip');
+    const currentPill = strip?.querySelector('.level-pill.is-current');
+    if (strip && currentPill) {
+      currentPill.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+    }
+  }, 100);
   delegate(container, '[data-earn-tab]', 'click', (_e, el) => {
     set('invest.tab', el.dataset.earnTab);
     localStorage.setItem('vp_earn_tab', el.dataset.earnTab);
@@ -447,8 +455,8 @@ function heroStat(label, value, sub) {
   return `<div class="hero-stat"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub || '')}</small></div>`;
 }
 
-function levelPill(label, value, sub) {
-  return `<div class="level-pill"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub || '')}</small></div>`;
+function levelPill(label, value, sub, isCurrent = false) {
+  return `<div class="level-pill ${isCurrent ? 'is-current' : ''}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub || '')}</small></div>`;
 }
 
 function emptyState(text) {

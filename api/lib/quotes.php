@@ -160,6 +160,17 @@ function quote_source_is_untrusted(?string $source): bool {
   ], true);
 }
 
+function quote_source_blocked_for_symbol(string $symbol, string $assetType, ?string $source): bool {
+  $symbol = strtoupper(trim($symbol));
+  $assetType = vp_normalize_asset_type($assetType);
+  $src = strtolower(trim((string)$source));
+  if ($symbol === '' || $src === '') return false;
+  if ($assetType === 'commodities' && $symbol === 'LEAD' && !quote_source_is_untrusted($src)) {
+    return true;
+  }
+  return false;
+}
+
 function quote_frankfurter_enabled(): bool {
   return (string)env('FRANKFURTER_ENABLED', '1') !== '0';
 }
@@ -378,7 +389,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   $persistQuotes = array_key_exists('persist', $opts) ? (bool)$opts['persist'] : true;
   $symbols = array_values(array_unique(array_filter(array_map(static function($s){
     $s = strtoupper(trim((string)$s));
-    return ($s !== '' && preg_match('/^[A-Z0-9:._\-]{2,32}$/', $s)) ? $s : '';
+    return ($s !== '' && preg_match('/^[A-Z0-9:._\-]{1,32}$/', $s)) ? $s : '';
   }, $symbols))));
   if (!$symbols) return [];
   $now = time();
@@ -553,9 +564,10 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       }
     } catch (Throwable $e) {}
 
+    $chartBudgetCap = $allowDirectBatch ? max(1, min(60, (int)($opts['chart_budget_cap'] ?? 10))) : 0;
     $chartBudget = $singleSymbolOnly
       ? max(0, min(2, (int)($opts['chart_budget'] ?? 1)))
-      : ($allowDirectBatch ? max(0, min(10, (int)($opts['chart_budget'] ?? 0))) : 0);
+      : ($allowDirectBatch ? max(0, min($chartBudgetCap, (int)($opts['chart_budget'] ?? 0))) : 0);
     if ($chartBudget > 0) {
       $chartBudgetStarted = microtime(true);
       $chartBudgetMs = max(0, min(10000, (int)($opts['chart_budget_ms'] ?? 0)));
@@ -659,6 +671,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   foreach ($symbols as $sym) {
     if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
     if ($directBudget <= 0) break;
+    if (quote_source_blocked_for_symbol($sym, $assetType, 'provider_live')) continue;
     try {
       $meta = is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [];
       $p = (float)quote_fetch_external($sym, $assetType, $meta);
@@ -666,7 +679,14 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
         $chg = 0.0;
         try {
           $prevRow = quote_get($sym, $assetType);
-          if (is_array($prevRow)) $chg = (float)($prevRow['change_pct'] ?? 0.0);
+          if (is_array($prevRow)) {
+            $prevPrice = (float)($prevRow['price'] ?? 0.0);
+            if ($prevPrice > 0 && abs($p - $prevPrice) > 0.0000001) {
+              $chg = (($p / $prevPrice) - 1.0) * 100.0;
+            } else {
+              $chg = (float)($prevRow['change_pct'] ?? 0.0);
+            }
+          }
         } catch (Throwable $ignoredPrev) {}
         $out[$sym] = [
           'symbol' => $sym,
@@ -787,6 +807,7 @@ function quote_price_fresh(string $symbol, string $assetType): float {
   $isFresh = $q
     && !$isChartSeed
     && !quote_source_is_untrusted($qSource)
+    && !quote_source_blocked_for_symbol($symbol, $assetType, $qSource)
     && $isTrustedSpotMetalSource
     && $isTrustedFreshSource
     && ((int)$q['updated_at'] > 0)
@@ -951,6 +972,7 @@ function quote_price_fresh(string $symbol, string $assetType): float {
   // Those are exactly the cases where the UI was showing an old price as if it were live.
   $allowStaleCacheRow = $q && (float)($q['price'] ?? 0) > 0;
   if ($allowStaleCacheRow) {
+    if (quote_source_blocked_for_symbol($symbol, $assetType, $qSource)) $allowStaleCacheRow = false;
     if (in_array($assetType, ['stocks','arab','futures'], true)) {
       $allowStaleCacheRow = false;
     } elseif ($spotMetal) {
@@ -963,7 +985,9 @@ function quote_price_fresh(string $symbol, string $assetType): float {
   if ($allowStaleCacheRow) {
     $rowUpdatedAt = (int)($q['updated_at'] ?? 0);
     $rowAge = $rowUpdatedAt > 0 ? max(0, $now - $rowUpdatedAt) : 999999;
-    $maxStaleFallbackAge = ($providerType === 'commodities') ? 3 : max(4, (int)ceil($staleSec));
+    $maxStaleFallbackAge = ($providerType === 'forex') ? max(60, (int)env('FOREX_STALE_FALLBACK_SECONDS','60'))
+      : (($providerType === 'commodities') ? max(15, (int)env('COMMODITIES_STALE_FALLBACK_SECONDS','15'))
+      : max(4, (int)ceil($staleSec)));
     if ($rowUpdatedAt <= 0 || $rowAge > $maxStaleFallbackAge) {
       $allowStaleCacheRow = false;
     }
@@ -1016,6 +1040,7 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
   $existing = null;
   try { $existing = quote_get($symbol, $type, $market); } catch (Throwable $ignoredExisting) { $existing = null; }
   $source = array_key_exists('source', $extras) ? (string)($extras['source'] ?? '') : null;
+  if ($source !== null && quote_source_blocked_for_symbol($symbol, $type, $source)) return;
   if (is_array($existing) && (float)($existing['price'] ?? 0) > 0) {
     $prevTs = (int)($existing['updated_at'] ?? 0);
     $prevSrc = strtolower(trim((string)($existing['source'] ?? '')));

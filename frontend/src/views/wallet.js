@@ -15,7 +15,7 @@ export function render() {
         <div>
           <span class="badge-accent">Assets desk</span>
           <h1>Wallet & ledger</h1>
-          <p>Track live funds, demo balance, ledger movements, deposits, withdrawals, and admin review state.</p>
+          <p>Track live funds, demo balance, ledger movements, deposits, withdrawals, and processing status.</p>
         </div>
         <div class="wallet-actions">
           <button id="toggle-balance" class="btn-ghost btn-sm" data-hidden="0">${icons.eye}</button>
@@ -27,7 +27,7 @@ export function render() {
       <section class="wallet-summary-strip">
         ${walletSummaryTile('Customer level', current.name || current.name_en || 'Starter', next?.name ? `Next: ${next.name}` : 'Top tier active')}
         ${walletSummaryTile('Funding status', kyc.status === 'approved' ? 'Approved' : 'Review needed', kyc.status === 'approved' ? 'Deposits and withdrawals are enabled' : 'Complete KYC for live funding')}
-        ${walletSummaryTile('Execution mode', get('mode') === 'real' ? 'Real' : 'Demo', get('mode') === 'real' ? 'Manual review active' : 'Practice wallet preview')}
+        ${walletSummaryTile('Execution mode', get('mode') === 'real' ? 'Real' : 'Demo', get('mode') === 'real' ? 'Live wallet tracking' : 'Practice wallet preview')}
       </section>
 
       <div class="wallet-balance-grid">
@@ -42,10 +42,10 @@ export function render() {
       <section class="card">
         <div class="panel-headline">
           <span class="badge-green">Funding controls</span>
-          <h2>Manual requests</h2>
+          <h2>Funding requests</h2>
         </div>
         <div class="wallet-control-grid">
-          ${controlCard('#/deposit', icons.deposit, 'New deposit', 'Submit proof and wait for admin confirmation.')}
+          ${controlCard('#/deposit', icons.deposit, 'New deposit', 'Transfer funds and upload proof securely.')}
           ${controlCard('#/withdraw', icons.withdraw, 'New withdrawal', 'Request payout review from your real wallet.')}
           ${controlCard('#/kyc', icons.kyc, 'KYC status', 'Verification unlocks real funding workflows.')}
           ${controlCard('#/invest', icons.earn, 'Level contracts', 'Use confirmed deposits to unlock customer tiers.')}
@@ -86,14 +86,14 @@ export function mount(container) {
 
 async function loadWallet(container) {
   try {
-    const data = await api('/wallet/summary.php', { timeout: 8000 });
+    const data = await api('/wallet/summary.php', { timeout: 0, retry: 1, cacheTtl: 6000 });
     if (!data) return;
     const real = data.real || {};
     const demo = data.demo || {};
     container.querySelector('#real-wallet').innerHTML = walletBlock(real, 'real');
     container.querySelector('#demo-wallet').innerHTML = walletBlock(demo, 'demo');
 
-    const ledger = await api('/wallet/ledger.php?limit=30', { timeout: 7000 }).catch(() => null);
+    const ledger = await api('/wallet/ledger.php?limit=30', { timeout: 0, retry: 1, cacheTtl: 10000 }).catch(() => null);
     if (ledger && ledger.items) renderLedger(container, ledger.items);
     else container.querySelector('#ledger-table').innerHTML = `<div class="empty-state !m-0">No transactions yet.</div>`;
   } catch (_e) {
@@ -116,7 +116,7 @@ function walletBlock(w, type) {
     <div class="wallet-balance-metrics">
       <span><small>Available</small><strong>${money(w.available || 0)}</strong></span>
       <span><small>Holds</small><strong>${money(w.holds || 0)}</strong></span>
-      <span><small>Status</small><strong>${real ? 'Manual review' : 'Practice funds'}</strong></span>
+      <span><small>Status</small><strong>${real ? 'Processing tracker' : 'Practice funds'}</strong></span>
     </div>`;
 }
 

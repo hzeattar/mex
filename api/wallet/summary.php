@@ -12,11 +12,10 @@ $demoCur = strtoupper((string)env('DEMO_CURRENCY', 'USDT_DEMO'));
 ensure_wallet($uid, $realCur);
 ensure_wallet($uid, $demoCur);
 
-$realBal = wallet_balance($uid, $realCur);
 $realAvail = wallet_available($uid, $realCur);
-
-$demoBal = wallet_balance($uid, $demoCur);
 $demoAvail = wallet_available($uid, $demoCur);
+$realBal = (float)($realAvail['balance'] ?? 0);
+$demoBal = (float)($demoAvail['balance'] ?? 0);
 
 json_response([
   'ok' => true,

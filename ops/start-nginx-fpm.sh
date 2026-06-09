@@ -36,5 +36,23 @@ if ! kill -0 "$FPM_PID" 2>/dev/null; then
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Background market-quote warmer.
+# Railway runs a single web container without a cron daemon, so stored market
+# quotes would go stale and the markets list would fall back to seed prices for
+# a large share of symbols. This loop refreshes ALL supported quotes (crypto,
+# forex, stocks, commodities, futures, arab) roughly every minute by calling
+# the CLI cron entrypoints, which read CRON_KEY from the environment.
+# ---------------------------------------------------------------------------
+(
+  sleep 12
+  while true; do
+    php /app/api/cron/quotes_warm.php per_type=150 >/dev/null 2>&1 || true
+    php /app/api/cron/quotes_tick.php crypto=1 >/dev/null 2>&1 || true
+    sleep 55
+  done
+) &
+echo "[start] background quote warmer started (pid $!)"
+
 echo "[start] PHP-FPM started, nginx listening on ${PORT} with internal PHP-FPM upstream 127.0.0.1:9070"
 exec nginx -c /tmp/nginx.conf -g 'daemon off;'

@@ -1,54 +1,60 @@
 // Portfolio View - Open positions, orders, PnL
 import { get } from '../state/store.js';
-import { money, price, esc, escAttr } from '../utils/format.js';
+import { money, qty, price, esc, escAttr } from '../utils/format.js';
 import { delegate } from '../utils/dom.js';
 import { api, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
+import { t } from '../utils/i18n.js';
 
 export function render() {
   const mode = get('mode');
   return `
-    <div class="space-y-6 animate-fade-in">
-      <section class="card portfolio-hero">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div class="portfolio-page-pro animate-fade-in">
+      <section class="portfolio-hero portfolio-pro-hero">
+        <div class="portfolio-hero-content">
           <div>
             <span class="badge-accent">Portfolio</span>
-            <h1 class="text-xl font-bold mt-1">Positions & Orders</h1>
-            <p class="text-muted text-sm">Monitor live exposure, review order history, and manage open trades with a mobile-friendly activity ledger.</p>
+            <h1>Positions & Orders</h1>
+            <p>Monitor live exposure, margin usage, pending orders, and close trades from a cleaner asset desk.</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="portfolio-hero-actions">
             <span class="status-chip ${mode === 'real' ? 'status-chip-live' : 'status-chip-derived'}">${mode === 'real' ? 'Real workspace' : 'Demo workspace'}</span>
             <button class="btn-ghost btn-sm" id="refresh-portfolio">${icons.refresh} Refresh</button>
           </div>
         </div>
       </section>
 
-      <!-- Summary Cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="portfolio-metrics">
+      <section class="portfolio-metric-grid" id="portfolio-metrics">
         ${metricSkeleton()}${metricSkeleton()}${metricSkeleton()}${metricSkeleton()}
-      </div>
+      </section>
 
-      <!-- Positions -->
-      <section class="card">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-semibold">Open Positions</h2>
+      <div class="portfolio-workspace-grid">
+      <section class="portfolio-pro-panel portfolio-positions-panel">
+        <div class="portfolio-panel-head">
+          <div>
+            <span>Exposure</span>
+            <h2>Open Positions</h2>
+          </div>
           <span class="badge-green" id="pos-count">0 open</span>
         </div>
-        <div class="overflow-x-auto" id="positions-table">
+        <div class="portfolio-table-shell" id="positions-table">
           <p class="text-muted text-sm text-center py-8">Loading positions...</p>
         </div>
       </section>
 
-      <!-- Orders -->
-      <section class="card">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-semibold">Pending Orders</h2>
+      <section class="portfolio-pro-panel portfolio-orders-panel">
+        <div class="portfolio-panel-head">
+          <div>
+            <span>Execution</span>
+            <h2>Pending Orders</h2>
+          </div>
           <span class="text-xs text-muted" id="orders-count">0</span>
         </div>
-        <div class="overflow-x-auto" id="orders-table">
+        <div class="portfolio-table-shell" id="orders-table">
           <p class="text-muted text-sm text-center py-8">Loading orders...</p>
         </div>
       </section>
+      </div>
     </div>`;
 }
 
@@ -59,9 +65,10 @@ export function mount(container) {
 
 async function loadPortfolio(container) {
   try {
+    const mode = get('mode');
     const [portfolio, orders] = await Promise.all([
-      api('/trade/portfolio.php', { timeout: 8000 }),
-      api('/trade/orders.php', { timeout: 8000 }),
+      api(`/trade/portfolio.php?fast=1&mode=${mode}`, { timeout: 0, retry: 1, cacheTtl: 5000 }),
+      api(`/trade/orders.php?mode=${mode}`, { timeout: 0, retry: 1, cacheTtl: 5000 }),
     ]);
     if (portfolio) {
       renderPortfolioData(container, portfolio);
@@ -83,36 +90,11 @@ function renderPortfolioData(container, data) {
   const metrics = container.querySelector('#portfolio-metrics');
   if (metrics) {
     metrics.innerHTML = `
-      <div class="portfolio-metric is-${pnl >= 0 ? 'positive' : 'negative'}">
-        <div class="metric-icon">${icons.wallet}</div>
-        <span>Total Equity</span>
-        <strong>${money(equity)}</strong>
-        <small>Balance + open PnL</small>
-      </div>
-      <div class="portfolio-metric is-${pnl >= 0 ? 'positive' : 'negative'}">
-        <div class="metric-icon">${icons.earn}</div>
-        <span>Open PnL</span>
-        <strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${pnl >= 0 ? '+' : ''}${money(pnl)}</strong>
-        <small>Unrealized profit/loss</small>
-      </div>
-      <div class="portfolio-metric">
-        <div class="metric-icon">${icons.trade}</div>
-        <span>Margin Used</span>
-        <strong>${money(margin)}</strong>
-        <small>Locked as collateral</small>
-      </div>
-      <div class="portfolio-metric">
-        <div class="metric-icon">${icons.deposit}</div>
-        <span>Free Margin</span>
-        <strong>${money(Math.max(0, free))}</strong>
-        <small>Available to trade</small>
-      </div>
+      ${metricCard('Equity', money(equity), 'Balance + open PnL', icons.wallet)}
+      ${metricCard('Open PnL', `${pnl >= 0 ? '+' : ''}${money(pnl)}`, 'Unrealized profit/loss', icons.earn, pnl >= 0 ? 'is-positive' : 'is-negative')}
+      ${metricCard('Margin Used', money(margin), 'Locked as collateral', icons.trade)}
+      ${metricCard('Free Margin', money(Math.max(0, free)), 'Available to trade', icons.deposit)}
     `;
-    metrics.innerHTML = `
-      ${metricCard('Equity', money(equity), 'Total value')}
-      ${metricCard('Open PnL', money(pnl), pnl >= 0 ? 'Profit' : 'Loss', pnl >= 0 ? 'text-buy' : 'text-sell')}
-      ${metricCard('Positions', String(positions.length), 'Open trades')}
-      ${metricCard('Balance', money(balance), get('mode') === 'real' ? 'USDT' : 'USDT_DEMO')}`;
   }
 
   const count = container.querySelector('#pos-count');
@@ -136,7 +118,7 @@ function renderPortfolioData(container, data) {
         <tbody>${positions.map(posRow).join('')}</tbody>
       </table>
     </div>`;
-  delegate(table, '[data-close-pos]', 'click', (e, el) => closePosition(el.dataset.closePos, container));
+  delegate(table, '[data-close-pos]', 'click', (e, el) => closePosition(el.dataset.closePos, container, el));
 }
 
 function posData(p) {
@@ -162,7 +144,7 @@ function posRow(p) {
     <td class="py-2.5 text-xs text-muted">${esc(p.market_type || p.order_type || 'spot')}</td>
     <td class="py-2.5 text-right font-mono text-xs">${entry > 0 ? price(entry, type) : '--'}</td>
     <td class="py-2.5 text-right font-mono text-xs">${mark > 0 ? price(mark, type) : '--'}</td>
-    <td class="py-2.5 text-right text-xs">${money(size)}</td>
+    <td class="py-2.5 text-right text-xs">${qty(size)}</td>
     <td class="py-2.5 text-right font-mono text-xs">${esc(String(leverage || 1))}x</td>
     <td class="py-2.5 text-right text-xs">${money(margin)}</td>
     <td class="py-2.5 text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
@@ -189,7 +171,7 @@ function posCard(p) {
     <div class="portfolio-position-metrics">
       ${mobileMetric('Entry', entry > 0 ? price(entry, type) : '--')}
       ${mobileMetric('Mark', mark > 0 ? price(mark, type) : '--')}
-      ${mobileMetric('Size', money(size))}
+      ${mobileMetric('Size', qty(size))}
       ${mobileMetric('Lev', `${esc(String(leverage || 1))}x`)}
       ${mobileMetric('Margin', money(margin))}
       ${mobileMetric('Mode', esc(p.mode || get('mode') || 'demo'))}
@@ -253,19 +235,32 @@ function mobileMetric(label, value) {
   return `<span><small>${esc(label)}</small><strong>${value}</strong></span>`;
 }
 
-async function closePosition(id, container) {
+async function closePosition(id, container, trigger = null) {
   if (!id) return;
+  if (!confirm(t('portfolio.close_confirm', 'Close this position now?'))) return;
+  const oldText = trigger?.textContent || '';
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.textContent = 'Closing...';
+  }
   try {
     await postApi('/trade/close_position.php', { position_id: id });
-    loadPortfolio(container);
-  } catch (e) { /* toast */ }
+    await loadPortfolio(container);
+  } catch (e) {
+    if (trigger) {
+      trigger.disabled = false;
+      trigger.textContent = oldText || 'Close position';
+    }
+    alert(e?.message || 'Close position failed');
+  }
 }
 
-function metricCard(label, value, sub, colorClass = '') {
-  return `<div class="p-3 rounded-lg bg-panel-2/60 border border-line/50">
-    <div class="text-[10px] uppercase text-muted tracking-wide">${label}</div>
-    <div class="text-lg font-bold mt-1 ${colorClass}">${value}</div>
-    <div class="text-[10px] text-muted">${sub}</div>
-  </div>`;
+function metricCard(label, value, sub, icon, state = '') {
+  return `<article class="portfolio-metric ${state}">
+    <div class="metric-icon">${icon}</div>
+    <span>${esc(label)}</span>
+    <strong>${esc(value)}</strong>
+    <small>${esc(sub)}</small>
+  </article>`;
 }
-function metricSkeleton() { return `<div class="skeleton h-20 rounded-lg"></div>`; }
+function metricSkeleton() { return `<div class="skeleton h-24 rounded-lg"></div>`; }

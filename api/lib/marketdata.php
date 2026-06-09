@@ -1032,7 +1032,22 @@ function yahoo_quote_many(array $symbols): array {
       $p = $r['regularMarketPrice'] ?? null;
       if ($sym === '' || $p === null || !is_numeric($p)) continue;
       $resolved[] = $sym;
-      $chg = $r['regularMarketChangePercent'] ?? 0;
+      $chg = $r['regularMarketChangePercent'] ?? null;
+      if (!is_numeric($chg)) {
+        $chg = null;
+      }
+      if ($chg === null || (float)$chg == 0.0) {
+        $prev = null;
+        foreach (['regularMarketPreviousClose', 'previousClose', 'regularMarketOpen'] as $prevKey) {
+          if (isset($r[$prevKey]) && is_numeric($r[$prevKey]) && (float)$r[$prevKey] > 0) {
+            $prev = (float)$r[$prevKey];
+            break;
+          }
+        }
+        if ($prev !== null && $prev > 0) {
+          $chg = (((float)$p - $prev) / $prev) * 100.0;
+        }
+      }
       $updatedAt = 0;
       foreach (['regularMarketTime','postMarketTime','preMarketTime'] as $tsKey) {
         if (isset($r[$tsKey]) && is_numeric($r[$tsKey])) {
@@ -1151,6 +1166,30 @@ function yahoo_live_quote_or_chart(string $symbol, string $tf = '1m'): array {
   }
   $prevClose = is_array($prev) ? (float)($prev['close'] ?? 0) : 0.0;
   $chg = ($prevClose > 0) ? (($price - $prevClose) / $prevClose) * 100.0 : 0.0;
+  if (abs($chg) < 0.0000001) {
+    try {
+      $metaQuote = yahoo_chart_meta_quote($symbol, $tf);
+      if (is_array($metaQuote) && (float)($metaQuote['price'] ?? 0) > 0) {
+        $metaChange = (float)($metaQuote['change_pct'] ?? 0.0);
+        if (abs($metaChange) > 0.0000001) {
+          $price = (float)$metaQuote['price'];
+          $chg = $metaChange;
+        }
+      }
+    } catch (Throwable $ignoredMetaChange) {}
+    if (abs($chg) < 0.0000001 && $tf !== '1d') {
+      try {
+        $dailyQuote = yahoo_chart_meta_quote($symbol, '1d');
+        if (is_array($dailyQuote) && (float)($dailyQuote['price'] ?? 0) > 0) {
+          $dailyChange = (float)($dailyQuote['change_pct'] ?? 0.0);
+          if (abs($dailyChange) > 0.0000001) {
+            $price = (float)$dailyQuote['price'];
+            $chg = $dailyChange;
+          }
+        }
+      } catch (Throwable $ignoredDailyChange) {}
+    }
+  }
   return [
     'price' => $price,
     'change_pct' => $chg,
@@ -1194,6 +1233,10 @@ function yahoo_chart_meta_quote(string $symbol, string $tf = '1m'): ?array {
     }
   }
   $changePct = ($prev > 0) ? (($price - $prev) / $prev) * 100.0 : 0.0;
+  if (abs($changePct) < 0.0000001) {
+    $seriesChange = yahoo_change_pct_from_chart_result($result, $price);
+    if ($seriesChange !== null) $changePct = $seriesChange;
+  }
   // Cap unrealistic change_pct from futures contracts (rollover causes huge gaps)
   if (abs($changePct) > 20.0) $changePct = 0.0;
   $updatedAt = isset($meta['regularMarketTime']) && is_numeric($meta['regularMarketTime'])
@@ -1207,6 +1250,27 @@ function yahoo_chart_meta_quote(string $symbol, string $tf = '1m'): ?array {
     'updated_at' => $updatedAt,
     'source' => 'yahoo_chart_live',
   ];
+}
+
+function yahoo_change_pct_from_chart_result(array $result, float $price = 0.0): ?float {
+  $quotes = $result['indicators']['quote'][0] ?? null;
+  if (!is_array($quotes)) return null;
+  $closes = $quotes['close'] ?? [];
+  if (!is_array($closes)) return null;
+  $valid = [];
+  foreach ($closes as $close) {
+    if (is_numeric($close) && (float)$close > 0) $valid[] = (float)$close;
+  }
+  if (count($valid) < 2) return null;
+  $last = $price > 0 ? $price : (float)end($valid);
+  for ($i = count($valid) - 2; $i >= 0; $i--) {
+    $prev = (float)$valid[$i];
+    if ($prev > 0) {
+      $change = (($last - $prev) / $prev) * 100.0;
+      return abs($change) > 20.0 ? null : $change;
+    }
+  }
+  return null;
 }
 
 
@@ -1370,7 +1434,7 @@ function massive_market_ticker(string $symbol, string $type, array $meta = []): 
     $proxyMap = [
       'USOIL' => 'USO', 'WTI' => 'USO', 'OIL' => 'USO',
       'UKOIL' => 'BNO', 'BRENT' => 'BNO',
-      'NGAS' => 'UNG', 'GASOLINE' => 'UGA', 'HEATOIL' => 'UHN',
+      'NGAS' => 'UNG', 'NATGAS' => 'UNG', 'GASOLINE' => 'UGA', 'HEATOIL' => 'UHN',
       'COPPER' => 'CPER', 'CORN' => 'CORN', 'WHEAT' => 'WEAT', 'SOY' => 'SOYB',
       'SUGAR' => 'CANE', 'COFFEE' => 'JO', 'COTTON' => 'BAL', 'COCOA' => 'NIB',
       'PLAT' => 'PPLT', 'PALL' => 'PALL',
@@ -1389,12 +1453,20 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
 
   // Spot metals: allow futures tickers (GC=F, SI=F) with conversion applied later in quote_bulk_live()
   $y = strtoupper(trim((string)($meta['yahoo_ticker'] ?? '')));
-  if ($y !== '' && $type === 'stocks') return str_replace('.', '-', $y);
+  $stockAliases = [
+    'SQ' => 'XYZ',
+  ];
+  if ($y !== '' && $type === 'stocks') {
+    $ticker = $stockAliases[$y] ?? $stockAliases[$symbol] ?? $y;
+    return str_replace('.', '-', $ticker);
+  }
   if ($y !== '' && $type === 'arab') return vp_arab_yahoo_ticker($y, $meta) ?: $y;
+  if ($symbol === 'LEAD' && $type === 'commodities' && $y === 'LE=F') $y = '';
   if ($y !== '' && ($type === 'forex' || $type === 'fx' || $type === 'commodities' || $type === 'futures')) return $y;
 
   if ($type === 'stocks') {
-    return preg_match('/^[A-Z0-9.\-]{1,15}$/', $symbol) ? str_replace('.', '-', $symbol) : null;
+    $ticker = $stockAliases[$symbol] ?? $symbol;
+    return preg_match('/^[A-Z0-9.\-]{1,15}$/', $ticker) ? str_replace('.', '-', $ticker) : null;
   }
 
   if ($type === 'arab') {
@@ -1413,15 +1485,23 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
 
     $map = [
       'XAUUSD' => 'GC=F', 'XAGUSD' => 'SI=F', 'PLAT' => 'PL=F', 'PALL' => 'PA=F', 'COPPER' => 'HG=F',
-      'USOIL' => 'CL=F', 'WTI' => 'CL=F', 'OIL' => 'CL=F', 'UKOIL' => 'BZ=F', 'BRENT' => 'BZ=F', 'NGAS' => 'NG=F',
-      'CORN' => 'ZC=F', 'WHEAT' => 'ZW=F', 'SOY' => 'ZS=F', 'SUGAR' => 'SB=F', 'COFFEE' => 'KC=F',
-      'COTTON' => 'CT=F', 'COCOA' => 'CC=F', 'RICE' => 'ZR=F', 'OAT' => 'ZO=F', 'ORANGE' => 'OJ=F',
-      'GASOLINE' => 'RB=F', 'HEATOIL' => 'HO=F', 'LUMBER' => 'LB=F', 'CATTLE' => 'LE=F', 'HOGS' => 'HE=F',
+      'USOIL' => 'CL=F', 'WTI' => 'CL=F', 'OIL' => 'CL=F', 'UKOIL' => 'BZ=F', 'BRENT' => 'BZ=F', 'NGAS' => 'NG=F', 'NATGAS' => 'NG=F',
+      'CORN' => 'ZC=F', 'WHEAT' => 'ZW=F', 'SOY' => 'ZS=F', 'SOYBEAN' => 'ZS=F', 'SUGAR' => 'SB=F', 'COFFEE' => 'KC=F',
+      'COTTON' => 'CT=F', 'COCOA' => 'CC=F', 'RICE' => 'ZR=F', 'OAT' => 'ZO=F', 'OATS' => 'ZO=F', 'ORANGE' => 'OJ=F', 'OJ' => 'OJ=F',
+      'GASOLINE' => 'RB=F', 'RBOB' => 'RB=F', 'HEATOIL' => 'HO=F', 'HEATING_OIL' => 'HO=F', 'LUMBER' => 'LB=F',
+      'CATTLE' => 'LE=F', 'LIVE_CATTLE' => 'LE=F', 'FEEDER_CATTLE' => 'GF=F', 'HOGS' => 'HE=F', 'LEAN_HOGS' => 'HE=F',
+      'NICKEL' => 'NI=F', 'ZINC' => 'ZI=F', 'TIN' => 'TIN=F',
       'ES_F' => 'ES=F', 'NQ_F' => 'NQ=F', 'YM_F' => 'YM=F', 'RTY_F' => 'RTY=F',
       'ZN_F' => 'ZN=F', 'ZB_F' => 'ZB=F', 'GC_F' => 'GC=F', 'SI_F' => 'SI=F', 'CL_F' => 'CL=F', 'NG_F' => 'NG=F',
-      'HG_F' => 'HG=F', '6E_F' => 'EURUSD=X', '6J_F' => 'JPY=X', 'DX_F' => 'DX-Y.NYB',
+      'HG_F' => 'HG=F', 'ZC_F' => 'ZC=F', 'ZS_F' => 'ZS=F', 'ZW_F' => 'ZW=F', 'RB_F' => 'RB=F', 'HO_F' => 'HO=F',
+      'VX_F' => '^VIX', 'BTC_F' => 'BTC=F', 'ETH_F' => 'ETH=F', '6B_F' => '6B=F',
+      'PA_F' => 'PA=F', 'PL_F' => 'PL=F', 'LE_F' => 'LE=F', 'HE_F' => 'HE=F',
+      '6E_F' => 'EURUSD=X', '6J_F' => 'JPY=X', 'DX_F' => 'DX-Y.NYB',
     ];
-    return $map[$symbol] ?? (preg_match('/^[A-Z0-9.=\-]{1,15}$/', $symbol) ? $symbol : null);
+    if (isset($map[$symbol])) return $map[$symbol];
+    if (isset(['LEAD' => true][$symbol])) return null;
+    if ($type === 'futures' && preg_match('/^([A-Z0-9]+)_F$/', $symbol, $m)) return $m[1] . '=F';
+    return preg_match('/^[A-Z0-9.=\-]{1,15}$/', $symbol) ? $symbol : null;
   }
 
   return null;

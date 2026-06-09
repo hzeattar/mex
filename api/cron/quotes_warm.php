@@ -50,48 +50,72 @@ function cron_supported_quote_defs_qw(): array {
     ],
     'arab' => [
       ['symbol'=>'2222','yahoo_ticker'=>'2222.SR'], ['symbol'=>'1120','yahoo_ticker'=>'1120.SR'], ['symbol'=>'2010','yahoo_ticker'=>'2010.SR'], ['symbol'=>'7010','yahoo_ticker'=>'7010.SR'], ['symbol'=>'1211','yahoo_ticker'=>'1211.SR'], ['symbol'=>'1150','yahoo_ticker'=>'1150.SR'], ['symbol'=>'1180','yahoo_ticker'=>'1180.SR'], ['symbol'=>'2280','yahoo_ticker'=>'2280.SR'],
+      ['symbol'=>'1010','yahoo_ticker'=>'1010.SR'], ['symbol'=>'1020','yahoo_ticker'=>'1020.SR'], ['symbol'=>'1030','yahoo_ticker'=>'1030.SR'], ['symbol'=>'1050','yahoo_ticker'=>'1050.SR'], ['symbol'=>'2050','yahoo_ticker'=>'2050.SR'], ['symbol'=>'2080','yahoo_ticker'=>'2080.SR'], ['symbol'=>'7020','yahoo_ticker'=>'7020.SR'], ['symbol'=>'7030','yahoo_ticker'=>'7030.SR'],
+      ['symbol'=>'2040','yahoo_ticker'=>'2040.SR'], ['symbol'=>'2060','yahoo_ticker'=>'2060.SR'], ['symbol'=>'2090','yahoo_ticker'=>'2090.SR'], ['symbol'=>'2100','yahoo_ticker'=>'2100.SR'], ['symbol'=>'4001','yahoo_ticker'=>'4001.SR'], ['symbol'=>'4002','yahoo_ticker'=>'4002.SR'], ['symbol'=>'4190','yahoo_ticker'=>'4190.SR'], ['symbol'=>'4200','yahoo_ticker'=>'4200.SR'],
+      ['symbol'=>'4210','yahoo_ticker'=>'4210.SR'], ['symbol'=>'4240','yahoo_ticker'=>'4240.SR'], ['symbol'=>'4260','yahoo_ticker'=>'4260.SR'], ['symbol'=>'4280','yahoo_ticker'=>'4280.SR'], ['symbol'=>'4300','yahoo_ticker'=>'4300.SR'], ['symbol'=>'4321','yahoo_ticker'=>'4321.SR'], ['symbol'=>'2150','yahoo_ticker'=>'2150.SR'], ['symbol'=>'2160','yahoo_ticker'=>'2160.SR'],
+      ['symbol'=>'2170','yahoo_ticker'=>'2170.SR'], ['symbol'=>'2180','yahoo_ticker'=>'2180.SR'],
     ],
   ];
 }
 
 $types = ['crypto','forex','stocks','arab','commodities','futures'];
-$perType = max(6, min(30, (int)($_GET['per_type'] ?? 18)));
+$perType = max(6, min(250, (int)($_GET['per_type'] ?? 120)));
 $results = [];
 $totalUpserts = 0;
 $now = time();
-$supportedDefs = cron_supported_quote_defs_qw();
 
+// Pull ALL active supported symbols straight from the markets table so the
+// warm cache covers the full tradable universe (not just a hardcoded subset).
+// quote_bulk_live() resolves the right provider per symbol (Binance for
+// crypto, Frankfurter/Yahoo for forex, Yahoo for stocks/commodities/futures/
+// arab), so secondary cryptos, minor/exotic FX pairs and Saudi equities all
+// receive real prices instead of seed placeholders.
+$symbolsByType = [];
+$metaByTypeSymbol = [];
+try {
+  $allStmt = $pdo->query("SELECT symbol, type, meta FROM markets WHERE status='active'");
+  foreach (($allStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+    $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+    if ($sym === '') continue;
+    $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
+    if (!in_array($type, $types, true)) continue;
+    if (!isset($symbolsByType[$type])) { $symbolsByType[$type] = []; $metaByTypeSymbol[$type] = []; }
+    if (isset($metaByTypeSymbol[$type][$sym])) continue;
+    $symbolsByType[$type][] = $sym;
+    $metaByTypeSymbol[$type][$sym] = market_meta($row['meta'] ?? null);
+  }
+} catch (Throwable $e) {}
+
+// Supplement with the static catalog (cron_supported_quote_defs_qw): some
+// markets (notably the Saudi/arab equities) are served by markets.php from a
+// hardcoded catalog and are not stored in the `markets` table, so the DB pass
+// above misses them. Merge any catalog symbol not already collected so the
+// warm cache covers them too.
+$staticDefs = cron_supported_quote_defs_qw();
 foreach ($types as $type) {
-  $defs = array_slice($supportedDefs[$type] ?? [], 0, $perType);
-  $wantedSymbols = array_values(array_unique(array_map(static fn($d) => strtoupper((string)($d['symbol'] ?? '')), $defs)));
-  $rows = [];
-  if ($wantedSymbols) {
-    $placeholders = implode(',', array_fill(0, count($wantedSymbols), '?'));
-    $sql = "SELECT symbol, type, meta FROM markets WHERE status='active' AND UPPER(symbol) IN ($placeholders)";
-    $st = $pdo->prepare($sql);
-    $st->execute($wantedSymbols);
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-  }
-  $rowMetaBySymbol = [];
-  foreach ($rows as $row) {
-    $rowMetaBySymbol[strtoupper((string)($row['symbol'] ?? ''))] = market_meta($row['meta'] ?? null);
-  }
-  $symbols = [];
-  $metaBySymbol = [];
-  foreach ($defs as $def) {
+  foreach (($staticDefs[$type] ?? []) as $def) {
     $sym = strtoupper(trim((string)($def['symbol'] ?? '')));
     if ($sym === '') continue;
-    $symbols[] = $sym;
-    $metaBySymbol[$sym] = array_merge($def, $rowMetaBySymbol[$sym] ?? []);
+    if (!isset($symbolsByType[$type])) { $symbolsByType[$type] = []; $metaByTypeSymbol[$type] = []; }
+    if (isset($metaByTypeSymbol[$type][$sym])) continue;
+    $symbolsByType[$type][] = $sym;
+    $metaByTypeSymbol[$type][$sym] = $def;
   }
+}
+
+foreach ($types as $type) {
+  $symbols = array_slice($symbolsByType[$type] ?? [], 0, $perType);
   if (!$symbols) { $results[$type] = ['count'=>0,'upserts'=>0]; continue; }
+  $metaBySymbol = [];
+  foreach ($symbols as $sym) { $metaBySymbol[$sym] = $metaByTypeSymbol[$type][$sym] ?? []; }
+  $count = count($symbols);
   $opts = [
     'ttl' => 1,
     'yahoo_ttl' => 1,
     'massive_ttl' => 1,
-    'direct_budget' => count($symbols),
-    'direct_yahoo_budget' => count($symbols),
-    'chart_budget' => in_array($type, ['arab','forex','commodities','futures'], true) ? max(8, count($symbols)) : 8,
+    'direct_budget' => $count,
+    'direct_yahoo_budget' => $count,
+    'chart_budget' => in_array($type, ['arab','forex','commodities','futures'], true) ? min($count, 16) : 8,
   ];
   $live = [];
   try { $live = quote_bulk_live(array_values(array_unique($symbols)), $type, $metaBySymbol, $opts); } catch (Throwable $e) { $live = []; }
@@ -109,7 +133,7 @@ foreach ($types as $type) {
       $totalUpserts++;
     } catch (Throwable $e) {}
   }
-  $results[$type] = ['count'=>count($symbols),'upserts'=>$upserts];
+  $results[$type] = ['count'=>$count,'upserts'=>$upserts];
 }
 
 $payload = [

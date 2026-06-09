@@ -1,4 +1,4 @@
-import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}from"./main-CnlpsQTw.js";import{marketIconPath as R,marketInitial as q}from"./marketIcon-D-Yq8Sis.js";function W(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=F(),o=e.current||{},n=e.next||{},r=i("mode");return`
+import{e as $,s as u,i,m as l,c as h,f as s,k as L,j as x,p as I,g as _}from"./main-CtUO7_w3.js";import{marketIconPath as q,marketInitial as R}from"./marketIcon-D-Yq8Sis.js";function W(){const t=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",e=i("level")||{},a=F(),o=e.current||{},n=e.next||{},r=i("mode");return`
     <div class="space-y-5 animate-fade-in">
       <section class="feature-hero">
         <div class="relative z-10">
@@ -14,7 +14,7 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
       </section>
 
       <section class="level-strip">
-        ${g("Current level",o.name||o.name_en||"Level 1","Customer tier")}
+        ${g("Current level",o.name||o.name_en||"Level 1","Customer tier",!0)}
         ${g("Next level",n?.name||n?.name_en||"Level 2",n?.min_deposit_total?`$${l(n.min_deposit_total)} deposits`:"Deposit progression")}
         ${g("Real available","$"+l(a.available),a.currency||"USDT")}
         ${g("Active copies",String((i("invest.copies")||[]).length||0),"Real copy desk")}
@@ -32,7 +32,7 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
           <div class="skeleton h-48 rounded-lg"></div>
         </div>
       </div>
-    </div>`}function X(t){C(t),$(t,"[data-earn-tab]","click",(e,a)=>{u("invest.tab",a.dataset.earnTab),localStorage.setItem("vp_earn_tab",a.dataset.earnTab),S(t)}),$(t,"[data-copy-signal]","click",(e,a)=>j(a.dataset.copySignal,t)),$(t,"[data-contract-subscribe]","click",(e,a)=>O(a.dataset.contractSubscribe,t)),$(t,"[data-switch-real]","click",()=>{localStorage.setItem("vp_mode","real"),u("mode","real"),location.reload()}),$(t,"[data-open-kyc]","click",()=>{location.hash="#/kyc"})}async function C(t){try{const[e,a,o,n]=await Promise.all([h("/signals.php?bot=1&home=1&lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/contracts.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/trading_bot/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]}))]);u("invest.signals",e.items||[]),u("invest.contracts",a.items||[]),u("invest.copies",o.items||[]),u("invest.mine",{contracts:(n.items||[]).filter(r=>String(r.product_kind||"").toLowerCase()==="contract")}),S(t)}catch{S(t)}}function S(t){const e=t.querySelector("#invest-content");if(!e)return;const a=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",o=w(),n=a==="copy"?A():U();e.innerHTML=o?V(n,o):n}function A(){const t=i("invest.signals")||[],e=i("invest.copies")||[];return`
+    </div>`}function X(t){C(t),setTimeout(()=>{const e=t.querySelector(".level-strip"),a=e?.querySelector(".level-pill.is-current");e&&a&&a.scrollIntoView({inline:"center",behavior:"smooth",block:"nearest"})},100),$(t,"[data-earn-tab]","click",(e,a)=>{u("invest.tab",a.dataset.earnTab),localStorage.setItem("vp_earn_tab",a.dataset.earnTab),S(t)}),$(t,"[data-copy-signal]","click",(e,a)=>Y(a.dataset.copySignal,t)),$(t,"[data-contract-subscribe]","click",(e,a)=>j(a.dataset.contractSubscribe,t)),$(t,"[data-switch-real]","click",()=>{localStorage.setItem("vp_mode","real"),u("mode","real"),location.reload()}),$(t,"[data-open-kyc]","click",()=>{location.hash="#/kyc"})}async function C(t){try{const[e,a,o,n]=await Promise.all([h("/signals.php?bot=1&home=1&lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/contracts.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/trading_bot/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]})),h("/invest/my.php?lang=en",{timeout:8e3}).catch(()=>({items:[]}))]);u("invest.signals",e.items||[]),u("invest.contracts",a.items||[]),u("invest.copies",o.items||[]),u("invest.mine",{contracts:(n.items||[]).filter(r=>String(r.product_kind||"").toLowerCase()==="contract")}),S(t)}catch{S(t)}}function S(t){const e=t.querySelector("#invest-content");if(!e)return;const a=i("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",o=w(),n=a==="copy"?A():U();e.innerHTML=o?O(n,o):n}function A(){const t=i("invest.signals")||[],e=i("invest.copies")||[];return`
     <section class="desk-panel">
       <div class="panel-head">
         <div>
@@ -71,7 +71,7 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
           <p>Subscriptions funded from the Real wallet ledger.</p>
         </div>
       </div>
-      ${e.length?`<div class="history-grid">${e.map(Y).join("")}</div>`:f("No active contracts yet.")}
+      ${e.length?`<div class="history-grid">${e.map(V).join("")}</div>`:f("No active contracts yet.")}
     </section>`}function M(t){const e=t.symbol||t.market_symbol||"--",a=String(t.direction||"BUY").toUpperCase(),o=t.type||t.market_type||"crypto",n=Number(t.live_price||0),r=n>0?"LIVE":"UNAVAILABLE",p=n>0?"status-chip-live":"status-chip-locked",d=n>0?`$${l(n,o==="forex"?5:2)}`:"--",b=n>0?I(t.live_change_pct||0):"0.00%",y=Number(t.copy_min_amount||100),E=t.levels_source==="live_derived"?'<span class="status-chip status-chip-derived">Live derived levels</span>':"";return`<article class="copy-card">
     <div class="copy-card__top">
       <div class="flex items-center gap-3 min-w-0">
@@ -139,7 +139,7 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
       ${c("Share",`${Number(t.profit_share_pct||0)}%`)}
       ${c("Leverage",`${Number(t.leverage||1)}x`)}
     </div>
-  </article>`}function Y(t){return`<article class="history-card">
+  </article>`}function V(t){return`<article class="history-card">
     <div class="flex items-center justify-between gap-3">
       <div>
         <h3>${s(t.plan_name||"Contract")}</h3>
@@ -153,7 +153,7 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
       ${c("Paid",`$${l(t.paid_total||0)}`)}
       ${c("ROI",`${Number(t.cycle_roi_percent||0)}%`)}
     </div>
-  </article>`}function j(t,e){const a=(i("invest.signals")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.copy_min_amount||100);N(`
+  </article>`}function Y(t,e){const a=(i("invest.signals")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.copy_min_amount||100);N(`
     <form class="space-y-4" id="copy-form">
       <div>
         <span class="badge-green">Copy real</span>
@@ -174,7 +174,7 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
       <p class="dialog-error hidden" id="copy-error"></p>
       <button class="btn-primary w-full" type="submit">Confirm Copy</button>
     </form>
-  `),document.querySelector("#copy-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#copy-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/trading_bot/copy.php",{signal_id:Number(t),amount:b,mode:"real"},{timeout:12e3}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Copy failed",d.classList.remove("hidden"))}})}function O(t,e){const a=(i("invest.contracts")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.min_amount||0);N(`
+  `),document.querySelector("#copy-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#copy-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/trading_bot/copy.php",{signal_id:Number(t),amount:b,mode:"real"},{timeout:12e3}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Copy failed",d.classList.remove("hidden"))}})}function j(t,e){const a=(i("invest.contracts")||[]).find(r=>String(r.id)===String(t));if(!a)return;const o=w();if(o){D(o);return}const n=Number(a.min_amount||0);N(`
     <form class="space-y-4" id="contract-form">
       <div>
         <span class="badge-accent">Contract</span>
@@ -195,7 +195,7 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
       <p class="dialog-error hidden" id="contract-error"></p>
       <button class="btn-primary w-full" type="submit">Subscribe</button>
     </form>
-  `),document.querySelector("#contract-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#contract-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/invest/subscribe.php",{plan_id:String(t),amount:b},{timeout:12e3,headers:{"Idempotency-Key":G("contract")}}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Subscription failed",d.classList.remove("hidden"))}})}function w(){return i("mode")!=="real"?{title:"Real account required",body:"Copy trading and contracts are visible in Demo, but activation is Real-only.",action:"Switch to Real",attr:"data-switch-real"}:B()?null:{title:"KYC approval required",body:"Submit and approve KYC before copying signals or subscribing to contracts.",action:"Open KYC",attr:"data-open-kyc"}}function V(t,e){return`<div class="gate-wrap">
+  `),document.querySelector("#contract-form")?.addEventListener("submit",async r=>{r.preventDefault();const p=r.currentTarget,d=p.querySelector("#contract-error"),b=Number(new FormData(p).get("amount")||0);try{await L("/invest/subscribe.php",{plan_id:String(t),amount:b},{timeout:12e3,headers:{"Idempotency-Key":G("contract")}}),m(),await C(e)}catch(y){d&&(d.textContent=y?.message||"Subscription failed",d.classList.remove("hidden"))}})}function w(){return i("mode")!=="real"?{title:"Real account required",body:"Copy trading and contracts are visible in Demo, but activation is Real-only.",action:"Switch to Real",attr:"data-switch-real"}:B()?null:{title:"KYC approval required",body:"Submit and approve KYC before copying signals or subscribing to contracts.",action:"Open KYC",attr:"data-open-kyc"}}function O(t,e){return`<div class="gate-wrap">
     <div class="gate-blur">${t}</div>
     <div class="gate-overlay">
       <div class="gate-card">
@@ -214,6 +214,6 @@ import{d as $,s as u,h as i,m as l,b as h,e as s,j as L,i as x,p as I,f as _}fro
     <button class="dialog-close" aria-label="Close dialog">${x.close}</button>
     ${t}
   </div>`,document.body.appendChild(e),e.querySelector(".dialog-close")?.addEventListener("click",m),e.addEventListener("click",a=>{a.target===e&&m()})}function m(){document.querySelector(".dialog-backdrop")?.remove()}function T(t,e){const a=t.symbol||t.market_symbol||"--";return`<span class="${e}">
-    <img src="${_(R(t,t.type||t.market_type||"crypto"))}" alt="${_(a)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';" />
-    <b>${s(q(a))}</b>
-  </span>`}function c(t,e){return`<div class="mini-metric"><span>${s(t)}</span><strong>${s(e??"--")}</strong></div>`}function k(t,e,a){return`<div class="hero-stat"><span>${s(t)}</span><strong>${s(e)}</strong><small>${s(a||"")}</small></div>`}function g(t,e,a){return`<div class="level-pill"><span>${s(t)}</span><strong>${s(e)}</strong><small>${s(a||"")}</small></div>`}function f(t){return`<div class="empty-state">${s(t)}</div>`}function v(t){const e=Number(t||0);return e>0?`$${l(e,e<10?4:2)}`:"--"}function B(){const t=String(i("kyc")?.status||"").toLowerCase();return["approved","verified","accepted"].includes(t)}function F(){const t=i("wallet")||{};return i("mode")==="real"?t.real||{balance:0,available:0,currency:"USDT"}:t.demo||{balance:1e4,available:1e4,currency:"USDT_DEMO"}}function G(t){return globalThis.crypto?.randomUUID?`${t}:${globalThis.crypto.randomUUID()}`:`${t}:${Date.now()}:${Math.random().toString(16).slice(2)}`}export{X as mount,W as render};
+    <img src="${_(q(t,t.type||t.market_type||"crypto"))}" alt="${_(a)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';" />
+    <b>${s(R(a))}</b>
+  </span>`}function c(t,e){return`<div class="mini-metric"><span>${s(t)}</span><strong>${s(e??"--")}</strong></div>`}function k(t,e,a){return`<div class="hero-stat"><span>${s(t)}</span><strong>${s(e)}</strong><small>${s(a||"")}</small></div>`}function g(t,e,a,o=!1){return`<div class="level-pill ${o?"is-current":""}"><span>${s(t)}</span><strong>${s(e)}</strong><small>${s(a||"")}</small></div>`}function f(t){return`<div class="empty-state">${s(t)}</div>`}function v(t){const e=Number(t||0);return e>0?`$${l(e,e<10?4:2)}`:"--"}function B(){const t=String(i("kyc")?.status||"").toLowerCase();return["approved","verified","accepted"].includes(t)}function F(){const t=i("wallet")||{};return i("mode")==="real"?t.real||{balance:0,available:0,currency:"USDT"}:t.demo||{balance:1e4,available:1e4,currency:"USDT_DEMO"}}function G(t){return globalThis.crypto?.randomUUID?`${t}:${globalThis.crypto.randomUUID()}`:`${t}:${Date.now()}:${Math.random().toString(16).slice(2)}`}export{X as mount,W as render};
