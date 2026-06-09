@@ -1972,11 +1972,11 @@ function schema_seed_defaults(PDO $pdo, string $driver): void {
       } catch (Throwable $e) { $mcount = 0; }
       if ($mcount === 0) {
         $insm = $pdo->prepare('INSERT INTO markets(symbol,name,type,status,sort_order,tv_symbol,seed_price,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)');
-        $insm->execute(['BTCUSDT','Bitcoin / USDT','crypto','active',10,'BINANCE:BTCUSDT',45000,$now,$now]);
-        $insm->execute(['ETHUSDT','Ethereum / USDT','crypto','active',20,'BINANCE:ETHUSDT',2500,$now,$now]);
-        $insm->execute(['EURUSD','Euro / US Dollar','forex','active',10,'FX:EURUSD',1.09,$now,$now]);
-        $insm->execute(['AAPL','Apple Inc.','stocks','active',10,'NASDAQ:AAPL',185,$now,$now]);
-        $insm->execute(['XAUUSD','Gold Spot','commodities','active',10,'OANDA:XAUUSD',2050,$now,$now]);
+        $insm->execute(['BTCUSDT','Bitcoin / USDT','crypto','active',10,'BINANCE:BTCUSDT',69500,$now,$now]);
+        $insm->execute(['ETHUSDT','Ethereum / USDT','crypto','active',20,'BINANCE:ETHUSDT',2600,$now,$now]);
+        $insm->execute(['EURUSD','Euro / US Dollar','forex','active',10,'FX:EURUSD',1.154,$now,$now]);
+        $insm->execute(['AAPL','Apple Inc.','stocks','active',10,'NASDAQ:AAPL',205,$now,$now]);
+        $insm->execute(['XAUUSD','Gold Spot','commodities','active',10,'OANDA:XAUUSD',4330,$now,$now]);
       }
 
       // ✅ Safe upsert defaults list
@@ -2215,18 +2215,18 @@ function schema_seed_defaults(PDO $pdo, string $driver): void {
       // Ensure futures/perpetual rows exist on upgraded installs too
       try {
         $defaultsFutures = [
-          ['ES_F','E-mini S&P 500 Future',108,'CME_MINI:ES1!',5200.0,'ES=F'],
-          ['NQ_F','E-mini Nasdaq 100 Future',110,'CME_MINI:NQ1!',18250.0,'NQ=F'],
-          ['YM_F','E-mini Dow Future',112,'CBOT_MINI:YM1!',39280.0,'YM=F'],
-          ['RTY_F','E-mini Russell 2000 Future',114,'CME_MINI:RTY1!',2055.0,'RTY=F'],
+          ['ES_F','E-mini S&P 500 Future',108,'CME_MINI:ES1!',5950.0,'ES=F'],
+          ['NQ_F','E-mini Nasdaq 100 Future',110,'CME_MINI:NQ1!',21500.0,'NQ=F'],
+          ['YM_F','E-mini Dow Future',112,'CBOT_MINI:YM1!',43000.0,'YM=F'],
+          ['RTY_F','E-mini Russell 2000 Future',114,'CME_MINI:RTY1!',2100.0,'RTY=F'],
           ['NKD_F','Nikkei 225 Future',116,'OSE:NK2251!',38750.0,'NKD=F'],
-          ['CL_F','WTI Crude Future',118,'NYMEX:CL1!',81.2,'CL=F'],
-          ['BZ_F','Brent Crude Future',120,'ICEEUR:BRN1!',84.4,'BZ=F'],
-          ['GC_F','Gold Future',122,'COMEX:GC1!',2350.0,'GC=F'],
-          ['SI_F','Silver Future',124,'COMEX:SI1!',27.0,'SI=F'],
-          ['NG_F','Natural Gas Future',126,'NYMEX:NG1!',2.1,'NG=F'],
-          ['ZN_F','10Y Treasury Note Future',128,'CBOT:ZN1!',110.0,'ZN=F'],
-          ['ZB_F','30Y Treasury Bond Future',130,'CBOT:ZB1!',120.0,'ZB=F'],
+          ['CL_F','WTI Crude Future',118,'NYMEX:CL1!',62.5,'CL=F'],
+          ['BZ_F','Brent Crude Future',120,'ICEEUR:BRN1!',65.2,'BZ=F'],
+          ['GC_F','Gold Future',122,'COMEX:GC1!',4380.0,'GC=F'],
+          ['SI_F','Silver Future',124,'COMEX:SI1!',39.0,'SI=F'],
+          ['NG_F','Natural Gas Future',126,'NYMEX:NG1!',2.85,'NG=F'],
+          ['ZN_F','10Y Treasury Note Future',128,'CBOT:ZN1!',112.0,'ZN=F'],
+          ['ZB_F','30Y Treasury Bond Future',130,'CBOT:ZB1!',122.0,'ZB=F'],
         ];
         $selFuture = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE symbol=? LIMIT 1");
         $insFuture = $pdo->prepare("INSERT INTO markets(symbol,name,type,status,sort_order,tv_symbol,seed_price,meta,created_at,updated_at) VALUES(?,?,'futures','active',?,?,?,?,?,?)");

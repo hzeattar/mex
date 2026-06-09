@@ -731,9 +731,10 @@ export async function loadLocale(lang) {
   localStorage.setItem('vp_lang', locale);
   document.cookie = `vp_lang=${encodeURIComponent(locale)}; path=/; max-age=31536000; SameSite=Lax`;
   document.documentElement.lang = locale;
-  document.documentElement.dir = 'ltr';
-  document.body?.classList.remove('rtl');
-  document.body?.classList.add('ltr');
+  const rtl = locale === 'ar';
+  document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+  document.body?.classList.remove('rtl', 'ltr');
+  document.body?.classList.add(rtl ? 'rtl' : 'ltr');
   return translations;
 }
 
@@ -746,7 +747,7 @@ export function currentLocale() {
 }
 
 export function isRTL() {
-  return false;
+  return locale === 'ar';
 }
 
 export function setLocale(lang) {

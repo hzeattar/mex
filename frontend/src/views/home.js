@@ -377,6 +377,10 @@ function updateLevelOverview(container) {
       levelProgress,
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
+    requestAnimationFrame(() => {
+      const currentCard = rail.querySelector('.is-current');
+      if (currentCard) currentCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
   }
 }
 

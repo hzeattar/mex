@@ -2175,6 +2175,11 @@
   .account-popover-panel {
     @apply absolute right-3 top-14 w-[320px] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-line bg-surface shadow-2xl;
   }
+  @media (max-width: 640px) {
+    .account-popover-panel {
+      @apply right-1/2 translate-x-1/2 w-[min(360px,calc(100vw-24px))];
+    }
+  }
   .account-popover-head {
     @apply flex items-center gap-3 border-b border-line p-3;
   }

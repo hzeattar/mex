@@ -1,4 +1,4 @@
-import{f as n,i as o,c as l,k as p}from"./main-CtUO7_w3.js";function u(){return`
+import{f as n,i as o,c as l,k as p}from"./main-DDPzbuB0.js";function u(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="card">
         <div class="flex items-center justify-between">
