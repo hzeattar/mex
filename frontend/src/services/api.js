@@ -10,14 +10,14 @@ function cacheKeyFor(path) {
 
 function defaultCacheTtl(path) {
   const p = String(path || '');
-  if (p.includes('/markets.php')) return 12000;
-  if (p.includes('/wallet/summary.php')) return 6000;
-  if (p.includes('/trade/portfolio.php')) return 5000;
-  if (p.includes('/trade/orders.php')) return 5000;
-  if (p.includes('/invest/contracts.php') || p.includes('/signals.php')) return 12000;
+  if (p.includes('/markets.php')) return 15000;
+  if (p.includes('/wallet/summary.php')) return 10000;
+  if (p.includes('/trade/portfolio.php')) return 8000;
+  if (p.includes('/trade/orders.php')) return 8000;
+  if (p.includes('/invest/contracts.php') || p.includes('/signals.php')) return 15000;
   if (p.includes('/quotes.php')) {
-    if (p.includes('cache_only=1')) return 2500;
-    if (p.includes('purpose=watchlist')) return 1200;
+    if (p.includes('cache_only=1')) return 3000;
+    if (p.includes('purpose=watchlist')) return 1500;
   }
   return 0;
 }

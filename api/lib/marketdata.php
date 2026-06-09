@@ -144,8 +144,8 @@ function http_get_json(string $url, array $headers = []): array {
       $connectTimeout = min($connectTimeout, 2);
       $requestTimeout = min($requestTimeout, 4);
     } elseif (str_contains($host, 'eodhd.com') && !is_array($timeoutOverride)) {
-      $connectTimeout = max($connectTimeout, 3);
-      $requestTimeout = max($requestTimeout, 8);
+      $connectTimeout = min($connectTimeout, 2);
+      $requestTimeout = min($requestTimeout, 4);
     }
     $connectTimeout = max(1, $connectTimeout);
     $requestTimeout = max($connectTimeout + 1, $requestTimeout);

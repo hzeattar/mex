@@ -5,6 +5,8 @@ require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
 require_once __DIR__ . '/../lib/trade_mode.php';
 
+header('Cache-Control: private, max-age=5, no-store');
+
 $uid = require_auth();
 $realCur = strtoupper((string)env('REAL_CURRENCY', 'USDT'));
 $demoCur = strtoupper((string)env('DEMO_CURRENCY', 'USDT_DEMO'));

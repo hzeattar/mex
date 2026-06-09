@@ -13,7 +13,7 @@ require_once __DIR__ . '/../lib/common.php';
 
 // Keep this cron responsive on shared hosting
 @ignore_user_abort(true);
-@set_time_limit((int)env('QUOTES_TICK_MAX_EXEC', '25'));
+@set_time_limit((int)env('QUOTES_TICK_MAX_EXEC', '15'));
 
 
 // Single-instance lock (prevents overlapping cron runs causing SQLite "database is locked")

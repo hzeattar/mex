@@ -1220,7 +1220,7 @@ function quotes_tick(bool $refreshCrypto = true): array {
   $t0 = microtime(true);
 
   // Keep cron fast and avoid overlapping locks on shared hosting.
-  $budget = (float)env('QUOTES_TICK_BUDGET_SEC', '18');
+  $budget = (float)env('QUOTES_TICK_BUDGET_SEC', '12');
   $budget = max(5.0, min(60.0, $budget));
   $maxMarkets = (int)env('QUOTES_TICK_MAX_MARKETS', '1200');
   $maxMarkets = max(50, min(5000, $maxMarkets));
