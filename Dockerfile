@@ -32,7 +32,7 @@ RUN set -eux; \
     if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi; \
     if [ -f php.ini ]; then cp php.ini /usr/local/etc/php/conf.d/mexgroup.ini; fi; \
     if [ -f ops/php-fpm-pool.conf ]; then cp ops/php-fpm-pool.conf /usr/local/etc/php-fpm.d/zz-mexgroup.conf; fi; \
-    mkdir -p api/data/cache api/data/locks api/data/logs api/data/status api/uploads /run/nginx /var/log/nginx; \
+    mkdir -p api/data/cache api/data/central api/data/locks api/data/logs api/data/status api/uploads /run/nginx /var/log/nginx; \
     chown -R www-data:www-data api/data api/uploads; \
     chmod -R 775 api/data api/uploads; \
     chmod +x ops/start-nginx-fpm.sh
@@ -45,4 +45,4 @@ EXPOSE 9000
 
 # If WORKER_MODE=feed, run the price feed worker daemon instead of nginx.
 # Otherwise, run the standard nginx + php-fpm web server.
-CMD ["sh", "-c", "if [ \"$WORKER_MODE\" = 'feed' ]; then echo '[feed-worker] Starting prices_feed_worker daemon...'; exec php /app/api/cron/prices_feed_worker.php --daemon; else exec sh /app/ops/start-nginx-fpm.sh; fi"]
+CMD ["sh", "-c", "if [ \"$WORKER_MODE\" = 'feed' ]; then echo '[feed-worker] Starting prices_feed_worker daemon...'; exec php -d error_reporting=E_ALL -d display_errors=1 /app/api/cron/prices_feed_worker.php --daemon; else exec sh /app/ops/start-nginx-fpm.sh; fi"]
