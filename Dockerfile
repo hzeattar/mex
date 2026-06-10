@@ -39,7 +39,10 @@ RUN set -eux; \
 
 ENV PORT=9000
 ENV BUILD_REV=20260601c
+ENV WORKER_MODE=web
 
 EXPOSE 9000
 
-CMD ["sh", "/app/ops/start-nginx-fpm.sh"]
+# If WORKER_MODE=feed, run the price feed worker daemon instead of nginx.
+# Otherwise, run the standard nginx + php-fpm web server.
+CMD ["sh", "-c", "if [ \"$WORKER_MODE\" = 'feed' ]; then echo '[feed-worker] Starting prices_feed_worker daemon...'; exec php /app/api/cron/prices_feed_worker.php --daemon; else exec sh /app/ops/start-nginx-fpm.sh; fi"]
