@@ -96,10 +96,11 @@
     return { '1m':60, '3m':180, '5m':300, '15m':900, '30m':1800, '1h':3600, '4h':14400, '1d':86400 }[tf] || 60;
   }
   function pollMs(type){
-    if(document.hidden) return 15000;
-    if(type === 'crypto') return 1000;
-    if(type === 'forex' || type === 'commodities' || type === 'futures') return 2400;
-    return 12000;
+    if(document.hidden) return 10000;
+    // Central cache is fast — poll more aggressively
+    if(type === 'crypto') return 800;
+    if(type === 'forex' || type === 'commodities' || type === 'futures') return 1500;
+    return 5000;
   }
   function apiUrl(path){
     if(/^https?:\/\//i.test(path)) return path;
@@ -506,7 +507,7 @@
     marketHydrateBusy = true;
     try{
       for(const sym of wanted){
-        const data = await api(`/quotes.php?purpose=focus&fresh=1&direct=1&symbol=${encodeURIComponent(sym)}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`, { timeoutMs:4200 });
+        const data = await api(`/quotes.php?symbol=${encodeURIComponent(sym)}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`, { timeoutMs:4200 });
         const q = Array.isArray(data.items) ? data.items.find(item => cleanSymbol(item.symbol) === sym) : null;
         if(!q || !(Number(q.price || 0) > 0)) continue;
         marketItems = marketItems.map(row => {
@@ -535,8 +536,9 @@
     activeBusy = true;
     const myRun = runId;
     try{
-      const path = `/quotes.php?purpose=focus&fresh=1&direct=1&symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`;
-      const data = await api(path, { timeoutMs: state.type === 'crypto' ? 5000 : 8500 });
+      // Use central cache (no fresh/direct) — the feed worker provides live prices
+      const path = `/quotes.php?purpose=focus&symbol=${encodeURIComponent(state.symbol)}&type=${encodeURIComponent(state.type)}&_=${Date.now()}`;
+      const data = await api(path, { timeoutMs: state.type === 'crypto' ? 3000 : 5000 });
       if(myRun !== runId) return;
       const q = Array.isArray(data.items) ? data.items[0] : data.item;
       if(q && Number(q.price || 0) > 0){

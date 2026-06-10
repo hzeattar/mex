@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/quotes.php';
+require_once __DIR__ . '/lib/quote_central.php';
 require_once __DIR__ . '/lib/quote_authority.php';
 require_once __DIR__ . '/lib/market_resolver.php';
 
@@ -118,10 +119,22 @@ try {
       $symbols[] = $sym;
       $metaBySymbol[$sym] = market_meta($row['meta'] ?? null);
     }
+    $authoritativeQuotes = [];
+    // ── Central cache path: read from feed worker's cache, no upstream ──
+    $centralWarmSnapshot = quote_central_is_warm($type);
+    if ($centralWarmSnapshot && !$forceLive) {
+      $centralBundle = quote_central_bundle_read($type, 60);
+      foreach ($symbols as $sym) {
+        if (isset($centralBundle[$sym])) {
+          $authoritativeQuotes[$sym] = $centralBundle[$sym];
+        }
+      }
+    }
+    if (!$authoritativeQuotes) {
     $authoritativeQuotes = qa_overlay_market_rows($rows, [
-      // Snapshot is a hydration/read path. Keep non-crypto provider refreshes out of
-      // page bootstrap so dashboards render from the DB immediately; focus quotes own live refresh.
-      'with_live' => ($type === 'crypto') || ($forceLive && $type === $preferred),
+      // Snapshot is a hydration/read path. Keep it cache-first for all groups;
+      // the focus quote endpoints own live escalation and provider churn.
+      'with_live' => false,
       'allow_crypto_seed' => false,
       'allow_noncrypto_seed' => false,
       'allow_stale_display' => $type !== 'crypto',
@@ -129,6 +142,7 @@ try {
       'direct_yahoo_budget' => ($type === 'crypto') ? (($route === 'trade') ? 18 : 12) : ((in_array($type, ['stocks','arab'], true) && $route === 'trade') ? 2 : (($route === 'trade') ? 1 : 0)),
       'chart_budget' => ($type === 'crypto') ? (($route === 'trade') ? 6 : 4) : (in_array($type, ['stocks','arab'], true) ? 0 : 1),
     ]);
+    } // end else (central cache miss)
 
     $items = [];
     foreach ($rows as $row) {

@@ -1,0 +1,320 @@
+<?php
+/**
+ * Central Price Feed Worker — SINGLE SOURCE OF TRUTH for upstream access.
+ *
+ * This is the ONLY process that should hit upstream providers (Binance, EODHD,
+ * Yahoo, TwelveData, etc.). All user-facing endpoints read from the central
+ * cache that this worker writes to.
+ *
+ * Run modes:
+ *   1. Long-running daemon:  php api/cron/prices_feed_worker.php --daemon
+ *   2. Single cycle (cron):  php api/cron/prices_feed_worker.php --token=CRON_KEY
+ *   3. Web-triggered cycle:  GET /api/cron/prices_feed_worker.php?token=CRON_KEY
+ *
+ * Scheduling:
+ *   - Daemon mode: runs continuously, cycling through asset types
+ *   - Cron mode: run every 30-60 seconds via Railway cron or external scheduler
+ */
+declare(strict_types=1);
+
+@ignore_user_abort(true);
+@set_time_limit((int)max(30, (int)(getenv('FEED_WORKER_MAX_EXEC') ?: '120')));
+
+require_once __DIR__ . '/../lib/common.php';
+require_once __DIR__ . '/../lib/quotes.php';
+require_once __DIR__ . '/../lib/quote_central.php';
+require_once __DIR__ . '/../lib/market_resolver.php';
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+function feed_worker_input_token(): string {
+  $web = trim((string)($_GET['token'] ?? ''));
+  if ($web !== '') return $web;
+  if (PHP_SAPI === 'cli') {
+    global $argv;
+    foreach ((array)($argv ?? []) as $idx => $arg) {
+      if ((int)$idx === 0) continue;
+      $arg = trim((string)$arg);
+      if ($arg === '') continue;
+      if (str_starts_with($arg, 'token=')) return trim(substr($arg, 6));
+      if (str_starts_with($arg, '--token=')) return trim(substr($arg, 8));
+      if ($arg === '--daemon') continue;
+      return $arg;
+    }
+    $envTok = trim((string)(getenv('CRON_KEY') ?: ''));
+    if ($envTok !== '') return $envTok;
+  }
+  return '';
+}
+
+$isDaemon = false;
+if (PHP_SAPI === 'cli') {
+  global $argv;
+  foreach ((array)($argv ?? []) as $arg) {
+    if (trim((string)$arg) === '--daemon') { $isDaemon = true; break; }
+  }
+}
+
+// Single-instance lock (prevents overlapping runs)
+$locksDir = __DIR__ . '/../data/locks';
+if (!is_dir($locksDir)) @mkdir($locksDir, 0775, true);
+$lockFp = @fopen($locksDir . '/feed_worker.lock', 'c+');
+if ($lockFp) {
+  if (!flock($lockFp, LOCK_EX | LOCK_NB)) {
+    $out = ['ok' => true, 'locked' => true, 'busy' => true, 'ts' => time()];
+    if (!$isDaemon) {
+      try { tp_status_write('feed_worker', $out); } catch (Throwable $e) {}
+      json_response($out);
+    }
+    // In daemon mode, wait for the lock
+    flock($lockFp, LOCK_EX);
+  }
+}
+
+// ── Cycle intervals (seconds) ─────────────────────────────────────────────
+$intervals = [
+  'crypto'      => max(2, min(10, (int)env('FEED_INTERVAL_CRYPTO', '3'))),
+  'forex'       => max(5, min(60, (int)env('FEED_INTERVAL_FOREX', '15'))),
+  'stocks'      => max(10, min(120, (int)env('FEED_INTERVAL_STOCKS', '30'))),
+  'arab'        => max(10, min(120, (int)env('FEED_INTERVAL_ARAB', '30'))),
+  'commodities' => max(5, min(60, (int)env('FEED_INTERVAL_COMMODITIES', '15'))),
+  'futures'     => max(5, min(60, (int)env('FEED_INTERVAL_FUTURES', '15'))),
+];
+
+$types = ['crypto', 'forex', 'commodities', 'futures', 'stocks', 'arab'];
+
+// ── Collect all active symbols ────────────────────────────────────────────
+function feed_worker_collect_symbols(): array {
+  $pdo = db();
+  $symbolsByType = [];
+  $metaByTypeSymbol = [];
+
+  $st = $pdo->query("SELECT symbol, type, meta, seed_price FROM markets WHERE status='active'");
+  $rows = $st ? $st->fetchAll(PDO::FETCH_ASSOC) : [];
+
+  foreach ($rows as $row) {
+    $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
+    if ($sym === '' || $type === '') continue;
+    if (!isset($symbolsByType[$type])) { $symbolsByType[$type] = []; $metaByTypeSymbol[$type] = []; }
+    if (isset($metaByTypeSymbol[$type][$sym])) continue;
+    $symbolsByType[$type][] = $sym;
+    $metaByTypeSymbol[$type][$sym] = [
+      'meta' => market_meta($row['meta'] ?? null),
+      'seed_price' => (float)($row['seed_price'] ?? 0),
+    ];
+  }
+
+  return [$symbolsByType, $metaByTypeSymbol];
+}
+
+// ── Fetch prices for one type and write to central cache ──────────────────
+function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbol): array {
+  $type = vp_normalize_asset_type($type);
+  $symbols = array_values(array_unique(array_filter(array_map('strtoupper', $symbols))));
+  if (!$symbols) return ['count' => 0, 'written' => 0, 'upserted' => 0];
+
+  $now = time();
+  $perType = max(6, min(250, (int)env('FEED_PER_TYPE_LIMIT', '120')));
+  $symbols = array_slice($symbols, 0, $perType);
+
+  $metaForProvider = [];
+  foreach ($symbols as $sym) {
+    $metaForProvider[$sym] = is_array($metaBySymbol[$sym]['meta'] ?? null) ? $metaBySymbol[$sym]['meta'] : [];
+  }
+
+  $live = [];
+  try {
+    $isCrypto = ($type === 'crypto');
+    $count = count($symbols);
+    $live = quote_bulk_live($symbols, $type, $metaForProvider, [
+      'ttl' => 1,
+      'yahoo_ttl' => 1,
+      'massive_ttl' => 1,
+      'eodhd_ttl' => 1,
+      'persist' => true,
+      'direct_budget' => $count,
+      'direct_yahoo_budget' => $count,
+      'chart_budget' => $isCrypto ? 8 : min($count, 16),
+    ]);
+  } catch (Throwable $e) {
+    $live = [];
+  }
+
+  $written = 0;
+  $upserted = 0;
+  $bySymbol = [];
+
+  foreach ($symbols as $sym) {
+    $row = is_array($live[$sym] ?? null) ? $live[$sym] : null;
+    $price = (float)($row['price'] ?? 0);
+
+    if ($price > 0) {
+      $entry = [
+        'symbol' => $sym,
+        'type' => $type,
+        'price' => $price,
+        'change_pct' => (float)($row['change_pct'] ?? 0),
+        'updated_at' => (int)($row['updated_at'] ?? $now),
+        'source' => (string)($row['source'] ?? 'provider_live'),
+        'central_ts' => $now,
+        'received_at' => (int)($row['received_at'] ?? $now),
+        'ingested_at' => (int)($row['ingested_at'] ?? $now),
+      ];
+
+      // Write to central cache (per-symbol file)
+      quote_central_write($sym, $type, $entry);
+      $bySymbol[$sym] = $entry;
+      $written++;
+
+      // Also persist to DB for durability
+      try {
+        quote_upsert($sym, $type, $price, (float)($row['change_pct'] ?? 0), (int)($row['updated_at'] ?? $now), [
+          'source' => (string)($row['source'] ?? 'provider_live'),
+          'as_of' => (int)($row['updated_at'] ?? $now),
+          'ingested_at' => $now,
+        ]);
+        $upserted++;
+      } catch (Throwable $e) {}
+    } else {
+      // If no live price, try to carry forward the last known central price
+      $lastCentral = quote_central_get($sym, $type, 300);
+      if ($lastCentral && (float)($lastCentral['price'] ?? 0) > 0) {
+        $lastCentral['central_ts'] = $now;
+        $lastCentral['source'] = (string)($lastCentral['source'] ?? 'central_carry');
+        quote_central_write($sym, $type, $lastCentral);
+        $bySymbol[$sym] = $lastCentral;
+      }
+    }
+  }
+
+  // Write bundle for bulk reads
+  if ($bySymbol) {
+    quote_central_bundle_write($type, $bySymbol);
+  }
+
+  return ['count' => count($symbols), 'written' => $written, 'upserted' => $upserted];
+}
+
+// ── Single cycle ──────────────────────────────────────────────────────────
+function feed_worker_cycle(): array {
+  $now = time();
+  [$symbolsByType, $metaByTypeSymbol] = feed_worker_collect_symbols();
+
+  $results = [];
+  $totalWritten = 0;
+  $totalUpserted = 0;
+  $typeCounts = [];
+
+  global $types;
+  foreach ($types as $type) {
+    $symbols = $symbolsByType[$type] ?? [];
+    $meta = $metaByTypeSymbol[$type] ?? [];
+    $res = feed_worker_fetch_type($type, $symbols, $meta);
+    $results[$type] = $res;
+    $totalWritten += $res['written'];
+    $totalUpserted += $res['upserted'];
+    $typeCounts[$type] = $res['written'];
+  }
+
+  // Update manifest
+  quote_central_manifest_write([
+    'type_counts' => $typeCounts,
+    'total_written' => $totalWritten,
+    'total_upserted' => $totalUpserted,
+  ]);
+
+  $payload = [
+    'ok' => true,
+    'cycle_at' => $now,
+    'total_written' => $totalWritten,
+    'total_upserted' => $totalUpserted,
+    'results' => $results,
+  ];
+
+  try { tp_status_write('feed_worker', $payload); } catch (Throwable $e) {}
+  try { tp_log('cron', 'INFO', 'feed_worker_cycle', $payload); } catch (Throwable $e) {}
+
+  return $payload;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────
+if ($isDaemon) {
+  // Daemon mode: run cycles continuously
+  $cycleCount = 0;
+  $maxCycles = (int)env('FEED_WORKER_MAX_CYCLES', '0'); // 0 = unlimited
+  $lastCycleByType = [];
+
+  while (true) {
+    if ($maxCycles > 0 && $cycleCount >= $maxCycles) break;
+
+    // Check memory
+    $mem = memory_get_usage(true);
+    $memLimit = (int)env('FEED_WORKER_MEM_LIMIT', '134217728'); // 128MB
+    if ($mem > $memLimit) break;
+
+    $now = time();
+
+    // Only fetch types whose interval has elapsed
+    [$symbolsByType, $metaByTypeSymbol] = feed_worker_collect_symbols();
+    $typesToFetch = [];
+
+    foreach ($types as $type) {
+      $lastCycle = $lastCycleByType[$type] ?? 0;
+      $interval = $intervals[$type] ?? 15;
+      if (($now - $lastCycle) >= $interval) {
+        $typesToFetch[] = $type;
+        $lastCycleByType[$type] = $now;
+      }
+    }
+
+    if ($typesToFetch) {
+      $cycleResults = [];
+      $totalWritten = 0;
+      $totalUpserted = 0;
+      $typeCounts = [];
+
+      foreach ($typesToFetch as $type) {
+        $symbols = $symbolsByType[$type] ?? [];
+        $meta = $metaByTypeSymbol[$type] ?? [];
+        $res = feed_worker_fetch_type($type, $symbols, $meta);
+        $cycleResults[$type] = $res;
+        $totalWritten += $res['written'];
+        $totalUpserted += $res['upserted'];
+        $typeCounts[$type] = $res['written'];
+      }
+
+      quote_central_manifest_write([
+        'type_counts' => $typeCounts,
+        'total_written' => $totalWritten,
+        'total_upserted' => $totalUpserted,
+        'daemon' => true,
+      ]);
+
+      try {
+        tp_status_write('feed_worker', [
+          'ok' => true, 'daemon' => true, 'cycle' => $cycleCount,
+          'types_fetched' => $typesToFetch,
+          'total_written' => $totalWritten, 'ts' => time(),
+        ]);
+      } catch (Throwable $e) {}
+    }
+
+    $cycleCount++;
+    sleep(1); // Base tick: 1 second
+  }
+
+} else {
+  // Single-cycle mode (cron or web trigger)
+  $token = feed_worker_input_token();
+  if ($token === '' || !hash_equals((string)env('CRON_KEY', ''), $token)) {
+    http_response_code(403);
+    echo 'Forbidden';
+    if ($lockFp) { @flock($lockFp, LOCK_UN); @fclose($lockFp); }
+    exit;
+  }
+
+  $payload = feed_worker_cycle();
+  json_response($payload);
+}
+
+if ($lockFp) { @flock($lockFp, LOCK_UN); @fclose($lockFp); }

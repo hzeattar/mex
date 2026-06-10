@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/lib/common.php';
+require_once __DIR__ . '/lib/quote_central.php';
 require_once __DIR__ . '/lib/quote_authority.php';
 require_once __DIR__ . '/lib/quote_cache_policy.php';
 
@@ -22,6 +23,28 @@ $direct = ((int)($_GET['direct'] ?? 0) === 1);
 $visible = ((int)($_GET['visible'] ?? 0) === 1);
 $strictLive = ((int)($_GET['strict_live'] ?? 0) === 1);
 $list = qa_parse_symbols($symbolsRaw);
+
+// ── Central cache fast path ──────────────────────────────────────────────
+// When the feed worker is running and the central cache is warm, serve ALL
+// standard quote requests directly from cache — never hit upstream.
+// This is the default path for 99% of requests.
+$centralWarm = quote_central_is_warm($typeAlias);
+$bypassCentral = $fresh || $direct || $strictLive; // explicit upstream request
+
+if ($centralWarm && !$bypassCentral && $list) {
+  $items = quote_central_items($list, $typeAlias, 60);
+  $hasCoverage = qa_payload_has_coverage(['items' => $items], $typeAlias, count($list));
+  if ($hasCoverage) {
+    json_response([
+      'ok' => true,
+      'items' => $items,
+      'authority' => 'central',
+      'mode' => 'cache_only',
+      'source' => 'central',
+    ]);
+  }
+  // If central cache has insufficient coverage, fall through to legacy path
+}
 
 function quotes_focus_cache_max_age(string $assetType): int {
   $assetType = vp_normalize_asset_type($assetType);

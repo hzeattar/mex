@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
+require_once __DIR__ . '/../lib/quote_central.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
 require_once __DIR__ . '/../lib/quote_authority.php';
 require_once __DIR__ . '/../lib/risk.php';
@@ -179,6 +180,11 @@ $streamRowTs = static function($row, int $fallback = 0): int {
   return $fallback;
 };
 if ($quoteSymbols) {
+  // ── Central cache fast path ──────────────────────────────────────────────
+  // If the feed worker is running and central cache is warm, read prices from
+  // there first. This avoids ALL upstream hits from this per-user endpoint.
+  $centralWarmForStream = quote_central_is_warm($reqType);
+
   $in = implode(',', array_fill(0, count($quoteSymbols), '?'));
   try {
     $metaSt = $pdo->prepare("SELECT symbol,type,meta FROM markets WHERE symbol IN ($in)");
@@ -193,7 +199,8 @@ if ($quoteSymbols) {
     $marketInfoBySymbol = [];
   }
   $bulkLiteLive = [];
-  if ($lite && $providerType !== 'crypto' && $quoteSymbols) {
+  // Skip upstream bulk live when central cache is warm — the feed worker handles it
+  if ($lite && $providerType !== 'crypto' && $quoteSymbols && !$centralWarmForStream) {
     $metaBySymbol = [];
     foreach ($quoteSymbols as $qsym) {
       $metaBySymbol[$qsym] = is_array($marketInfoBySymbol[$qsym]['meta'] ?? null) ? $marketInfoBySymbol[$qsym]['meta'] : [];
@@ -271,7 +278,7 @@ if ($quoteSymbols) {
     }
   }
 
-  // Fill missing symbols with a fresh quote so UI always has a price.
+  // Fill missing symbols with a quote from central cache or fallback.
   foreach ($quoteSymbols as $sym) {
     if (isset($quotes[$sym]) && (float)($quotes[$sym]['price'] ?? 0) > 0) continue;
     $ctxForSym = $resolveStreamContext($sym);
@@ -281,6 +288,20 @@ if ($quoteSymbols) {
     $chg = 0.0;
     $src = '';
     $updTs = $now;
+
+    // ── Try central cache first ──
+    $centralRow = null;
+    if ($centralWarmForStream) {
+      try {
+        $centralRow = quote_central_get($sym, $assetTypeForSym, 60);
+      } catch (Throwable $e) { $centralRow = null; }
+    }
+    if (is_array($centralRow) && (float)($centralRow['price'] ?? 0) > 0) {
+      $p = (float)$centralRow['price'];
+      $chg = (float)($centralRow['change_pct'] ?? 0);
+      $src = (string)($centralRow['source'] ?? 'central');
+      $updTs = (int)($centralRow['central_ts'] ?? $centralRow['updated_at'] ?? $now) ?: $now;
+    } else {
     try {
       if ($lite && $assetTypeForSym !== 'crypto') {
         $p = 0.0;
@@ -336,6 +357,7 @@ if ($quoteSymbols) {
         }
       } catch (Throwable $ignored) {}
     }
+    } // end else (central cache miss)
     $quotes[$sym] = [
       'symbol' => $sym,
       'type' => $resolveStreamReturnType($sym) ?: ($marketInfoBySymbol[$sym]['type'] ?? $returnType ?: $assetTypeForSym ?: 'crypto'),
@@ -350,9 +372,21 @@ if ($quoteSymbols) {
     ];
   }
 
-  // Ultra-fast path: for CRYPTO SPOT, fetch symbols from Binance in bulk (cached).
-  // This makes price updates feel realtime and avoids slow upstreams on shared hosting.
+  // Ultra-fast path: for CRYPTO SPOT, use central cache or Binance bulk.
   if (strtolower($providerType) === 'crypto' && strtolower($reqMarket) === 'spot' && count($quoteSymbols) >= 1) {
+    if ($centralWarmForStream) {
+      // Central cache path — read from feed worker's cache, no upstream
+      foreach ($quoteSymbols as $sym) {
+        try {
+          $cr = quote_central_get($sym, 'crypto', 60);
+          if (is_array($cr) && (float)($cr['price'] ?? 0) > 0) {
+            $quotes[$sym]['price'] = (float)$cr['price'];
+            $quotes[$sym]['change_pct'] = (float)($cr['change_pct'] ?? $quotes[$sym]['change_pct']);
+            $quotes[$sym]['updated_at'] = (int)($cr['central_ts'] ?? $now);
+          }
+        } catch (Throwable $e) {}
+      }
+    } else {
     try {
       $b = binance_ticker_24hr_many_cached($quoteSymbols, (int)(env('CRYPTO_PRICE_TTL', '1') ?? '1'));
       foreach ($quoteSymbols as $sym) {
@@ -364,10 +398,24 @@ if ($quoteSymbols) {
     } catch (Throwable $e) {
       // ignore
     }
+    }
   }
 
-  // For CRYPTO PERP, prefer Binance futures mark price (cached) for smoother UI.
+  // For CRYPTO PERP, prefer central cache or Binance futures mark price.
   if (strtolower($providerType) === 'crypto' && strtolower($reqMarket) === 'perp' && $quoteSymbols) {
+    if ($centralWarmForStream) {
+      // Central cache path — read from feed worker's cache, no upstream
+      foreach ($quoteSymbols as $sym) {
+        try {
+          $cr = quote_central_get($sym, 'crypto', 60);
+          if (is_array($cr) && (float)($cr['price'] ?? 0) > 0) {
+            $quotes[$sym]['price'] = (float)$cr['price'];
+            $quotes[$sym]['mark_price'] = (float)$cr['price'];
+            $quotes[$sym]['updated_at'] = (int)($cr['central_ts'] ?? $now);
+          }
+        } catch (Throwable $e) {}
+      }
+    } else {
     $ttl = (int)(env('STREAM_PERP_TTL', '1') ?? '1');
     $ttl = max(1, min(10, $ttl));
     foreach ($quoteSymbols as $sym) {
@@ -392,11 +440,25 @@ if ($quoteSymbols) {
         // ignore
       }
     }
+    } // end else (central cache miss for perp)
   }
 
-  // Fast non-crypto path: bulk Yahoo quotes for stocks/commodity proxies.
-  // This fixes 403 upstream issues and enables change% for non-crypto in the trade header.
+  // Fast non-crypto path: bulk Yahoo quotes or central cache.
   if (in_array(strtolower($providerType), ['stocks','commodities','futures'], true) && $quoteSymbols) {
+    // Try central cache first
+    if ($centralWarmForStream) {
+      foreach ($quoteSymbols as $sym) {
+        try {
+          $cr = quote_central_get($sym, $providerType, 60);
+          if (is_array($cr) && (float)($cr['price'] ?? 0) > 0) {
+            $quotes[$sym]['price'] = (float)$cr['price'];
+            $quotes[$sym]['change_pct'] = (float)($cr['change_pct'] ?? $quotes[$sym]['change_pct']);
+            $quotes[$sym]['updated_at'] = (int)($cr['central_ts'] ?? $quotes[$sym]['updated_at'] ?? $now);
+            $quotes[$sym]['source'] = (string)($cr['source'] ?? $quotes[$sym]['source'] ?? 'central');
+          }
+        } catch (Throwable $e) {}
+      }
+    } else {
     try {
       $in2 = implode(',', array_fill(0, count($quoteSymbols), '?'));
       $st2 = $pdo->prepare("SELECT symbol,type,meta FROM markets WHERE symbol IN ($in2)");
@@ -459,6 +521,7 @@ if ($quoteSymbols) {
     } catch (Throwable $e) {
       // ignore
     }
+    } // end else (central cache miss for non-crypto)
   }
 
   if ($quoteSymbols) {
@@ -474,6 +537,8 @@ if ($quoteSymbols) {
       foreach ($authorityGroups as $assetTypeForGroup => $groupSymbols) {
         $groupSymbols = array_values(array_unique(array_filter(array_map('strtoupper', (array)$groupSymbols))));
         if (!$groupSymbols) continue;
+        // Skip authority payload call when central cache is warm — prices already filled
+        if ($centralWarmForStream) continue;
         $payload = qa_quote_payload($assetTypeForGroup, $groupSymbols, [
           'allow_live' => true,
           'allow_noncrypto_seed' => false,
@@ -509,6 +574,8 @@ if ($quoteSymbols) {
   $budget = (int)(env('STREAM_REFRESH_BUDGET', $lite ? '10' : '16') ?? ($lite ? '10' : '16'));
   $budget = max(0, min(30, $budget));
   if ($lite && strtolower($providerType) !== 'crypto') $budget = $streamLiteLargeNonCrypto ? 0 : max(0, min(1, $budget));
+  // Skip upstream refresh budget when central cache is warm — feed worker handles it
+  if ($centralWarmForStream) $budget = 0;
 
   $forceFreshSymbols = [];
   if ($lite && count($quoteSymbols) > 0 && count($quoteSymbols) <= 3) {

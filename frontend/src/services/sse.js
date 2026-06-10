@@ -1,8 +1,10 @@
+import { api } from './api.js';
+
 let pollTimer = null;
 let pollController = null;
 let pollSeq = 0;
 let eventSource = null;
-const DEFAULT_POLL_MS = 6500;
+const DEFAULT_POLL_MS = 3000;
 
 export function connectSSE(symbols, type, onUpdate, onError, options = {}) {
   disconnect();
@@ -65,22 +67,21 @@ function startEventSource(symbols, type, onUpdate, onError, seq, options) {
 
 function startPolling(symbols, type, onUpdate, onError, seq, options) {
   stopPolling();
-  const interval = Math.max(4000, Number(options.interval || DEFAULT_POLL_MS));
+  const interval = Math.max(1500, Number(options.interval || DEFAULT_POLL_MS));
   const list = normalizedSymbols(symbols, options.maxSymbols || 18);
   const poll = async () => {
     if (seq !== pollSeq) return;
     pollController = new AbortController();
+    const timeoutMs = Math.max(3000, Number(options.timeout || 15000));
+    const timeout = setTimeout(() => pollController?.abort(), timeoutMs);
     try {
       const url = '/api/quotes.php?symbols=' + encodeURIComponent(list.join(',')) + '&type=' + encodeURIComponent(type) + '&visible=1&purpose=watchlist&_=' + Date.now();
-      const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: pollController.signal });
-      if (seq !== pollSeq) return;
-      if (res.ok) {
-        const data = await res.json();
-        if (seq === pollSeq && data && data.items && onUpdate) onUpdate(data.items);
-      }
+      const data = await api(url, { timeout: timeoutMs, retry: 0, cacheTtl: 500, cache: 'no-store', signal: pollController.signal });
+      if (seq === pollSeq && data && data.items && onUpdate) onUpdate(data.items);
     } catch (e) {
       if (e.name !== 'AbortError' && onError) onError(e);
     } finally {
+      clearTimeout(timeout);
       if (seq === pollSeq) pollTimer = setTimeout(poll, interval);
     }
   };
