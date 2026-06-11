@@ -3,6 +3,7 @@ require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/quotes.php';
 require_once __DIR__ . '/lib/market_resolver.php';
 require_once __DIR__ . '/lib/quote_authority.php';
+require_once __DIR__ . '/lib/quote_store.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -14,6 +15,12 @@ $market = strtolower(trim((string)($_GET['market'] ?? '')));
 $visible = (int)($_GET['visible'] ?? 0) === 1;
 $scope = strtolower(trim((string)($_GET['scope'] ?? 'active')));
 $focus = (int)($_GET['focus'] ?? 0) === 1;
+$fresh = ((int)($_GET['fresh'] ?? $_GET['force_fresh'] ?? 0) === 1);
+$direct = ((int)($_GET['direct'] ?? 0) === 1);
+$strictLive = ((int)($_GET['strict_live'] ?? 0) === 1);
+$cacheOnly = ((int)($_GET['cache_only'] ?? 0) === 1);
+$allowUiLive = (int)env('QUOTE_ACTIVE_ALLOW_UI_LIVE', '0') === 1;
+$allowLive = $fresh || $direct || $strictLive || ($allowUiLive && !$cacheOnly && !$visible && $focus);
 
 if ($type === '' || $type === 'all') {
   json_response(['ok' => false, 'error' => 'type_required'], 400);
@@ -23,7 +30,7 @@ $list = [];
 if ($symbolsRaw !== '') {
   foreach (preg_split('/\s*,\s*/', $symbolsRaw) as $s) {
     $s = strtoupper(trim((string)$s));
-    if ($s !== '' && preg_match('/^[A-Z0-9:._\-]{2,32}$/', $s)) $list[] = $s;
+    if ($s !== '' && preg_match('/^[A-Z0-9:._\-]{1,32}$/', $s)) $list[] = $s;
   }
 }
 $list = array_values(array_unique($list));
@@ -40,7 +47,7 @@ $cacheKeyList = $list;
 sort($cacheKeyList);
 $cacheKey = sha1(json_encode(['quote_active', $type, $market, $scope, $visible ? 1 : 0, $focus ? 1 : 0, $cacheKeyList], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 $cacheFile = $cacheDir . '/quote_active_' . $cacheKey . '.json';
-$cacheTtl = $single ? 0 : 1;
+$cacheTtl = $allowLive ? 0 : ($single ? 2 : 2);
 if ($cacheTtl > 0 && is_file($cacheFile)) {
   $age = time() - (int)@filemtime($cacheFile);
   if ($age >= 0 && $age <= $cacheTtl) {
@@ -53,17 +60,11 @@ if ($cacheTtl > 0 && is_file($cacheFile)) {
   }
 }
 
+$marketRowsBySymbol = function_exists('qa_market_meta_by_symbols') ? qa_market_meta_by_symbols($list) : [];
 $metaBySymbol = [];
-try {
-  $marks = implode(',', array_fill(0, count($list), '?'));
-  $st = db()->prepare("SELECT symbol, meta FROM markets WHERE symbol IN ($marks)");
-  $st->execute($list);
-  foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
-    $sym = strtoupper((string)($row['symbol'] ?? ''));
-    if ($sym === '') continue;
-    $metaBySymbol[$sym] = market_meta($row['meta'] ?? null);
-  }
-} catch (Throwable $e) {}
+foreach ($list as $sym) {
+  $metaBySymbol[$sym] = is_array($marketRowsBySymbol[$sym]['meta'] ?? null) ? $marketRowsBySymbol[$sym]['meta'] : [];
+}
 
 $warmBySymbol = [];
 foreach ($list as $sym) {
@@ -91,6 +92,11 @@ $buildItem = static function(string $sym, ?array $row, string $type, string $mar
   if (!($price > 0)) return null;
   $updatedAt = (int)($row['updated_at'] ?? $row['ts'] ?? $row['time'] ?? 0);
   if ($updatedAt <= 0) $updatedAt = $nowTs;
+  $timingClass = (string)($row['timing_class'] ?? '');
+  if ($timingClass === '') {
+    $source = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
+    $timingClass = str_contains($source, 'seed') ? 'seed' : (in_array($type, ['stocks','arab'], true) ? 'delayed' : 'live');
+  }
   return [
     'symbol' => $sym,
     'type' => $type,
@@ -99,28 +105,93 @@ $buildItem = static function(string $sym, ?array $row, string $type, string $mar
     'change_pct' => (float)($row['change_pct'] ?? $row['changePct'] ?? 0),
     'updated_at' => $updatedAt,
     'source' => (string)($row['source'] ?? $row['provider'] ?? ''),
+    'timing_class' => $timingClass,
   ];
 };
 
-$warmUsable = static function(?array $row, string $assetType, int $nowTs): bool {
+$referenceRow = static function(string $sym) use (&$marketRowsBySymbol, $type, $nowTs): ?array {
+  if ((int)env('QUOTE_ACTIVE_ALLOW_REFERENCE_QUOTES', '1') !== 1) return null;
+  if ($type === 'crypto') return null;
+  $seed = (float)($marketRowsBySymbol[$sym]['seed_price'] ?? 0);
+  if (!($seed > 0)) return null;
+  return [
+    'symbol' => $sym,
+    'type' => $type,
+    'price' => $seed,
+    'change_pct' => 0.0,
+    'updated_at' => $nowTs,
+    'source' => 'seed_price',
+    'timing_class' => 'seed',
+  ];
+};
+
+$warmUsable = static function(?array $row, string $assetType, int $nowTs, string $symbol = ''): bool {
   if (!is_array($row)) return false;
   $price = (float)($row['price'] ?? 0);
   if (!($price > 0)) return false;
   if ($assetType === 'crypto') return true;
   $src = strtolower(trim((string)($row['source'] ?? '')));
+  if (function_exists('quote_source_blocked_for_symbol') && quote_source_blocked_for_symbol($symbol ?: (string)($row['symbol'] ?? ''), $assetType, $src)) return false;
   if (!quote_source_is_liveish($src, $assetType)) return false;
   $updatedAt = (int)($row['updated_at'] ?? 0);
   if ($updatedAt <= 0) return false;
   $age = max(0, $nowTs - $updatedAt);
   $maxAge = match($assetType) {
-    'forex' => 10,
-    'commodities' => 8,
-    'futures' => 10,
-    'stocks', 'arab' => 14,
-    default => 12,
+    'forex' => max(300, min(1800, (int)env('QUOTE_ACTIVE_CACHE_SECONDS_FOREX', '900'))),
+    'commodities' => max(300, min(3600, (int)env('QUOTE_ACTIVE_CACHE_SECONDS_COMMODITIES', '1800'))),
+    'futures' => max(300, min(3600, (int)env('QUOTE_ACTIVE_CACHE_SECONDS_FUTURES', '1800'))),
+    'stocks', 'arab' => max(600, min(43200, (int)env('QUOTE_ACTIVE_CACHE_SECONDS_DELAYED', '14400'))),
+    default => 600,
   };
   return $age <= $maxAge;
 };
+
+if (!$allowLive) {
+  $items = [];
+  foreach ($list as $sym) {
+    $warm = is_array($warmBySymbol[$sym] ?? null) ? $warmBySymbol[$sym] : null;
+    $normWarm = $buildItem($sym, $warm, $type, $market, $nowTs);
+    if ($normWarm && $warmUsable($warm, $type, $nowTs, $sym)) {
+      if (($normWarm['source'] ?? '') === '') $normWarm['source'] = 'cache';
+      $normWarm['cache_first'] = true;
+      $items[] = $normWarm;
+      continue;
+    }
+    $normReference = $buildItem($sym, $referenceRow($sym), $type, $market, $nowTs);
+    if ($normReference) {
+      $normReference['cache_first'] = true;
+      $items[] = $normReference;
+      continue;
+    }
+    $items[] = [
+      'symbol' => $sym,
+      'type' => $type,
+      'market' => $market,
+      'price' => 0.0,
+      'change_pct' => 0.0,
+      'updated_at' => 0,
+      'source' => 'unavailable',
+      'timing_class' => 'unavailable',
+      'cache_first' => true,
+    ];
+  }
+  $out = [
+    'ok' => true,
+    'items' => $items,
+    'count' => count($items),
+    'type' => $type,
+    'market' => $market,
+    'live_count' => 0,
+    'authority' => 'active',
+    'cache_first' => true,
+    'mode' => 'cache_fast',
+  ];
+  $json = json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+  if ($cacheTtl > 0 && $json !== false) @file_put_contents($cacheFile, $json, LOCK_EX);
+  header('Content-Type: application/json; charset=utf-8');
+  echo $json !== false ? $json : json_encode($out);
+  exit;
+}
 
 $directRow = static function(string $sym, string $type, array $meta, ?array $warm, int $nowTs): ?array {
   $chg = is_array($warm) ? (float)($warm['change_pct'] ?? 0) : 0.0;
@@ -137,7 +208,7 @@ $directRow = static function(string $sym, string $type, array $meta, ?array $war
             'price' => (float)$live['price'],
             'change_pct' => (float)($live['change_pct'] ?? $chg),
             'updated_at' => $nowTs,
-            'source' => 'eodhd_live',
+            'source' => 'eodhd',
           ];
         }
       }
@@ -176,11 +247,15 @@ $directRow = static function(string $sym, string $type, array $meta, ?array $war
             'price' => (float)$row['price'],
             'change_pct' => (float)($row['change_pct'] ?? $chg),
             'updated_at' => $nowTs,
-            'source' => 'massive_live',
+            'source' => 'massive',
           ];
         }
       }
     } catch (Throwable $e) {}
+  }
+
+  if (function_exists('quote_source_blocked_for_symbol') && quote_source_blocked_for_symbol($sym, $type, 'provider_live')) {
+    return null;
   }
 
   try {
@@ -212,7 +287,7 @@ if (!$single) {
       'ttl' => 1,
       'yahoo_ttl' => 1,
       'massive_ttl' => 1,
-      'eodhd_ttl' => 1,
+      'eodhd_ttl' => 3,
       'direct_budget' => count($liveSymbols),
       'direct_yahoo_budget' => count($liveSymbols),
       'chart_budget' => min(2, count($liveSymbols)),
@@ -242,8 +317,13 @@ foreach ($list as $sym) {
     continue;
   }
   $normWarm = $buildItem($sym, $warm, $type, $market, $nowTs);
-  if ($warmUsable($warm, $type, $nowTs) && $normWarm) {
+  if ($warmUsable($warm, $type, $nowTs, $sym) && $normWarm) {
     $items[] = $normWarm;
+    continue;
+  }
+  $normReference = $buildItem($sym, $referenceRow($sym), $type, $market, $nowTs);
+  if ($normReference) {
+    $items[] = $normReference;
     continue;
   }
   $items[] = [
@@ -254,6 +334,7 @@ foreach ($list as $sym) {
     'change_pct' => 0.0,
     'updated_at' => 0,
     'source' => 'unavailable',
+    'timing_class' => 'unavailable',
   ];
 }
 

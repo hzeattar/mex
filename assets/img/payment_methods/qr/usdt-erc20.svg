@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="USDT ERC20 QR">
+  <rect width="160" height="160" rx="18" fill="#ffffff"/>
+  <rect x="18" y="18" width="36" height="36" fill="#06101f"/><rect x="26" y="26" width="20" height="20" fill="#ffffff"/><rect x="31" y="31" width="10" height="10" fill="#06101f"/>
+  <rect x="106" y="18" width="36" height="36" fill="#06101f"/><rect x="114" y="26" width="20" height="20" fill="#ffffff"/><rect x="119" y="31" width="10" height="10" fill="#06101f"/>
+  <rect x="18" y="106" width="36" height="36" fill="#06101f"/><rect x="26" y="114" width="20" height="20" fill="#ffffff"/><rect x="31" y="119" width="10" height="10" fill="#06101f"/>
+  <path d="M66 20h12v20H66zM86 22h18v8H86zM68 48h34v8H68zM62 66h16v8H62zM86 66h8v18h-8zM104 64h22v10h-22zM134 66h8v24h-8zM66 92h12v12H66zM86 92h24v8H86zM118 98h14v14h-14zM70 116h20v8H70zM98 116h8v20h-8zM116 128h28v8h-28zM68 140h16v6H68z" fill="#06101f"/>
+  <text x="80" y="82" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle" fill="#2f7dff">USDT ERC20</text>
+</svg>

@@ -13,8 +13,9 @@ $body = read_json_body();
 $signalId = (int)($body['signal_id'] ?? 0);
 $subscriptionId = (int)($body['subscription_id'] ?? 0);
 $amount = (float)($body['amount'] ?? 0);
-$mode = strtolower(trim((string)($body['mode'] ?? 'demo')));
-$mode = ($mode === 'real' || $mode === 'demo') ? $mode : 'demo';
+$mode = strtolower(trim((string)($body['mode'] ?? 'real')));
+$mode = $mode === 'demo' ? 'demo' : 'real';
+if ($mode !== 'real') json_response(['ok'=>false,'error'=>'demo_mode_locked'], 403);
 if ($signalId <= 0) json_response(['ok'=>false,'error'=>'Invalid signal'], 422);
 
 $st = $pdo->prepare("SELECT * FROM trading_signals WHERE id=? AND status='active' AND COALESCE(bot_enabled,0)=1 AND (valid_until IS NULL OR valid_until=0 OR valid_until>=?) LIMIT 1");

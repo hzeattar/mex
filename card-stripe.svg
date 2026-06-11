@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80" role="img" aria-label="Stripe card">
+  <rect width="120" height="80" rx="14" fill="#0b162b"/>
+  <rect x="14" y="19" width="92" height="42" rx="10" fill="#635bff"/>
+  <path d="M14 31h92v8H14z" fill="#06101f" opacity=".75"/>
+  <path d="M29 51h22M60 51h29" stroke="#cfe1ff" stroke-width="5" stroke-linecap="round"/>
+  <text x="60" y="30" fill="#fff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">stripe</text>
+</svg>

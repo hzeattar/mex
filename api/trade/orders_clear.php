@@ -14,7 +14,7 @@ $side   = strtoupper(trim((string)($body['side'] ?? '')));
 $where = 'user_id=?';
 $params = [$uid];
 
-if ($symbol !== '' && preg_match('/^[A-Z0-9:._-]{2,32}$/', $symbol)) {
+if ($symbol !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $symbol)) {
   $where .= ' AND symbol=?';
   $params[] = $symbol;
 }

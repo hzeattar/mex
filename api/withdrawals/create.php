@@ -8,16 +8,36 @@ require_once __DIR__ . '/../lib/affiliates.php';
 require_method('POST');
 $idem = idem_require('withdraw_create');
 $uid = (int)$idem['user_id'];
-require_withdraw_allowed($uid);
-require_approved_kyc($uid, 'withdraw');
 
 $pdo = db();
 $body = read_json_body();
+$method = strtolower(trim((string)($body['method'] ?? '')));
+$currency = strtoupper(trim((string)($body['currency'] ?? 'USDT')));
+$amount = (float)($body['amount'] ?? 0);
+$details = $body['details'] ?? [];
+if (!is_array($details)) $details = [];
+$destination = trim((string)($body['destination'] ?? ($details['destination'] ?? $details['wallet_address'] ?? $details['bank_account'] ?? '')));
+
+// Keep sensitive payout destination encrypted only in destination_enc.
+// details_json remains for non-sensitive notes/metadata shown in admin UI.
+$sensitiveDetailKeys = ['destination','wallet_address','bank_account','iban','card_number','account_number','routing_number','swift','bank_iban','crypto_address'];
+foreach ($sensitiveDetailKeys as $sKey) {
+  if (array_key_exists($sKey, $details)) unset($details[$sKey]);
+}
+
+if ($amount <= 0 || $destination === '') {
+  $resp = ['ok'=>false,'error'=>'Invalid request'];
+  idem_store_response($uid, $idem['key'], $idem['scope'], $resp);
+  json_response($resp, 422);
+}
+
+require_withdraw_allowed($uid);
 
 $kycFlag = $pdo->prepare('SELECT enabled FROM feature_flags WHERE flag_key=?');
 $kycFlag->execute(['kyc_required_withdraw']);
 $kycRequired = (int)($kycFlag->fetchColumn() ?: 0);
 if ($kycRequired === 1) {
+  require_approved_kyc($uid, 'withdraw');
   $kyc = $pdo->prepare('SELECT status FROM kyc_requests WHERE user_id=? ORDER BY id DESC LIMIT 1');
   $kyc->execute([$uid]);
   $kycStatus = (string)($kyc->fetchColumn() ?: 'none');
@@ -26,19 +46,6 @@ if ($kycRequired === 1) {
     idem_store_response($uid, $idem['key'], $idem['scope'], $resp);
     json_response($resp, 403);
   }
-}
-
-$method = strtolower(trim((string)($body['method'] ?? '')));
-$currency = strtoupper(trim((string)($body['currency'] ?? 'USDT')));
-$amount = (float)($body['amount'] ?? 0);
-$details = $body['details'] ?? [];
-if (!is_array($details)) $details = [];
-$destination = trim((string)($body['destination'] ?? ($details['destination'] ?? $details['wallet_address'] ?? $details['bank_account'] ?? '')));
-
-if ($amount <= 0 || $destination === '') {
-  $resp = ['ok'=>false,'error'=>'Invalid request'];
-  idem_store_response($uid, $idem['key'], $idem['scope'], $resp);
-  json_response($resp, 422);
 }
 
 $st = $pdo->prepare("SELECT code, currency, min_amount, max_amount, status, instructions_en, instructions_ar, instructions_ru, title_en, title_ar, title_ru, account_scope FROM payment_methods WHERE kind='withdraw' AND code=? LIMIT 1");
@@ -101,7 +108,7 @@ try {
     ]);
   } catch (Throwable $e2) {}
 
-  $resp = ['ok'=>true,'withdrawal'=>['id'=>$wid,'status'=>'requested','amount'=>$amount,'currency'=>$currency],'instructions'=>['title'=>$title,'details'=>$instructions ?: 'Your withdrawal request was submitted for admin review.']];
+  $resp = ['ok'=>true,'withdrawal'=>['id'=>$wid,'status'=>'requested','amount'=>$amount,'currency'=>$currency],'instructions'=>['title'=>$title,'details'=>$instructions ?: 'Your withdrawal request was received and is now being processed.']];
   idem_store_response($uid, $idem['key'], $idem['scope'], $resp);
   json_response($resp);
 } catch (Throwable $e) {

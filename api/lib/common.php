@@ -417,7 +417,7 @@ function db(): PDO {
       throw new RuntimeException('DB is not configured. Set DB_* or Railway MYSQL* variables.');
     }
     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', $railway ? '8' : '5')));
+    $connectTimeout = max(1, min(30, (int)env('DB_CONNECT_TIMEOUT', $railway ? '3' : '5')));
     $pdoOptions = [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -433,7 +433,7 @@ function db(): PDO {
     if ($persistentEnabled) {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
     }
-    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '2' : '0')));
+    $connectRetries = max(0, min(5, (int)env('DB_CONNECT_RETRIES', $railway ? '1' : '0')));
     $lastConnectError = null;
     for ($attempt = 0; $attempt <= $connectRetries; $attempt++) {
       try {
@@ -461,23 +461,6 @@ function db(): PDO {
       $bootstrapped = true;
       require_once __DIR__ . '/schema.php';
 
-      // Fast path: when the DB already records the current schema version, skip the
-      // expensive install/upgrade scan. The upgrade issues hundreds of
-      // information_schema round-trips, which over the Railway DB proxy can take
-      // tens of seconds. Without this gate every cold PHP-FPM worker pays that cost
-      // on its first DB request (very slow immediately after a deploy/restart).
-      // Mirrors the version-marker gating already used by the SQLite branch below.
-      if (!defined('FORCE_MIGRATE') && function_exists('schema_setting_get')) {
-        try {
-          $dbSchemaVer = (string)(schema_setting_get($pdo, 'mysql', 'META_SCHEMA_VER', '') ?: '');
-        } catch (Throwable $e) {
-          $dbSchemaVer = '';
-        }
-        if ($dbSchemaVer !== '' && $dbSchemaVer === $schemaVer) {
-          return $pdo;
-        }
-      }
-
       $driver = 'mysql';
       try { $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) ?: 'mysql'; } catch (Throwable $e) {}
 
@@ -490,14 +473,25 @@ function db(): PDO {
         function schema_upgrade(PDO $pdo, string $driver = 'mysql'): void { /* noop */ }
       }
 
-      // Install base tables then apply upgrades (both are idempotent)
-      // Wrap in try/catch so a failed migration does not kill the container.
+      // Install base tables then apply upgrades only when the schema version changed.
+      // Skipping the idempotent migration path on warm workers removes a large first-request cost.
       try {
         $lock = migrate_lock_acquire();
         try {
-          schema_install($pdo, $driver);
-          schema_upgrade($pdo, $driver);
-          vp_feature_bootstrap($pdo, $driver);
+          $needsUpgrade = defined('FORCE_MIGRATE');
+          if (!$needsUpgrade) {
+            try {
+              $dbVer = (string)(schema_setting_get($pdo, $driver, 'META_SCHEMA_VER', '') ?: '');
+              $needsUpgrade = ($dbVer === '' || $dbVer !== $schemaVer);
+            } catch (Throwable $e) {
+              $needsUpgrade = true;
+            }
+          }
+          if ($needsUpgrade) {
+            schema_install($pdo, $driver);
+            schema_upgrade($pdo, $driver);
+            vp_feature_bootstrap($pdo, $driver);
+          }
           // Seed defaults only once (heavy writes). Upgrades should not re-seed unless forced.
           $seedDone = '';
           try {
@@ -511,11 +505,13 @@ function db(): PDO {
             }
           }
         // Persist schema version in DB to avoid repeated upgrades when marker file isn't writable.
-          try {
-            $now = time();
-            schema_setting_set($pdo, $driver, 'META_SCHEMA_VER', (string)$schemaVer, $now);
-          } catch (Throwable $e) {
-            // ignore
+          if ($needsUpgrade) {
+            try {
+              $now = time();
+              schema_setting_set($pdo, $driver, 'META_SCHEMA_VER', (string)$schemaVer, $now);
+            } catch (Throwable $e) {
+              // ignore
+            }
           }
         } finally {
           migrate_lock_release($lock);

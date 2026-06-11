@@ -63,6 +63,7 @@ $timeframe = trim((string)($payload['timeframe'] ?? $payload['tf'] ?? ''));
 $direction = strtoupper(trim((string)($payload['direction'] ?? $payload['action'] ?? '')));
 if ($direction === 'LONG') $direction = 'BUY';
 if ($direction === 'SHORT') $direction = 'SELL';
+if (in_array($direction, ['HOLD','WAIT','WATCH'], true)) $direction = 'NEUTRAL';
 
 $entry = $payload['entry'] ?? $payload['entry_price'] ?? null;
 $sl = $payload['sl'] ?? $payload['stop_loss'] ?? null;
@@ -70,7 +71,7 @@ $tp1 = $payload['tp'] ?? $payload['take_profit_1'] ?? null;
 $tp2 = $payload['tp2'] ?? $payload['take_profit_2'] ?? null;
 $conf = (int)($payload['confidence'] ?? 60);
 
-if ($symbol === '' || !in_array($type, ['crypto','forex','stocks','commodities'], true) || !in_array($direction, ['BUY','SELL'], true)) {
+if ($symbol === '' || !in_array($type, ['crypto','forex','stocks','commodities'], true) || !in_array($direction, ['BUY','SELL','NEUTRAL'], true)) {
   json_response(['ok'=>false,'error'=>'Invalid payload'], 422);
 }
 

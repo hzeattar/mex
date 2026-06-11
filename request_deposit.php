@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/_common.php';
-require_once __DIR__ . '/../api/lib/ledger.php';
+require_once __DIR__ . '/api/lib/ledger.php';
 
 bot_require_token();
 $pdo = db();

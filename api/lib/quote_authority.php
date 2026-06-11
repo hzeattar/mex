@@ -114,7 +114,12 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
       $maxStaleAge = $assetType === 'crypto'
         ? max(30, min(600, (int)env('QUOTES_CACHE_ONLY_CRYPTO_STALE_SECONDS', '300')))
         : qa_market_list_stale_seconds($assetType);
-      if ($cachedPrice > 0 && !quote_source_is_untrusted($cachedSource) && $cachedAge <= $maxStaleAge) {
+      if (
+        $cachedPrice > 0
+        && !quote_source_is_untrusted($cachedSource)
+        && !(function_exists('quote_source_blocked_for_symbol') && quote_source_blocked_for_symbol($sym, $assetType, $cachedSource))
+        && $cachedAge <= $maxStaleAge
+      ) {
         $price = $cachedPrice;
         $change = (float)($cached['change_pct'] ?? 0);
         $updatedAt = $cachedUpdatedAt;
@@ -250,7 +255,12 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
       $maxStaleAge = $type === 'crypto'
         ? max(30, min(600, (int)env('MARKET_LIST_CRYPTO_STALE_SECONDS', '180')))
         : qa_market_list_stale_seconds($type);
-      if ($cachedPrice > 0 && !quote_source_is_untrusted($cachedSource) && $cachedAge <= $maxStaleAge) {
+      if (
+        $cachedPrice > 0
+        && !quote_source_is_untrusted($cachedSource)
+        && !(function_exists('quote_source_blocked_for_symbol') && quote_source_blocked_for_symbol($sym, $type, $cachedSource))
+        && $cachedAge <= $maxStaleAge
+      ) {
         $out[$sym] = [
           'price' => $cachedPrice,
           'change_pct' => (float)($cached['change_pct'] ?? 0),
@@ -291,9 +301,9 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
 function qa_market_list_stale_seconds(string $assetType): int {
   $assetType = vp_normalize_asset_type($assetType);
   return match ($assetType) {
-    'forex' => max(900, min(43200, (int)env('MARKET_LIST_FOREX_STALE_SECONDS', '21600'))),
-    'commodities', 'futures' => max(900, min(21600, (int)env('MARKET_LIST_MARKET_HOURS_STALE_SECONDS', '7200'))),
-    'stocks', 'arab' => max(1800, min(86400, (int)env('MARKET_LIST_DELAYED_STALE_SECONDS', '21600'))),
+    'forex' => max(30, min(1800, (int)env('MARKET_LIST_FOREX_STALE_SECONDS', '120'))),
+    'commodities', 'futures' => max(60, min(3600, (int)env('MARKET_LIST_MARKET_HOURS_STALE_SECONDS', '300'))),
+    'stocks', 'arab' => max(300, min(21600, (int)env('MARKET_LIST_DELAYED_STALE_SECONDS', '900'))),
     default => qa_quote_max_age($assetType, false),
   };
 }

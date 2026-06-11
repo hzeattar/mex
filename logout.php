@@ -1,5 +1,7 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/api/lib/common.php';
-try { clear_session_user_id(); } catch (Throwable $e) { /* ignore DB errors on logout */ }
-?><!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><script>try{localStorage.removeItem('tp_token');}catch(e){};window.location.replace('/');</script></head><body></body></html>
+require_once __DIR__ . '/_common.php';
+
+require_method('POST');
+clear_session_user_id();
+json_response(['ok'=>true]);

@@ -840,9 +840,9 @@
 
   function startLoops(){
     clearTimers();
-    schedule(() => { if(!document.hidden) loadQuote().catch(() => {}); }, pollMs(state.type));
-    schedule(() => { if(!document.hidden) loadMarkets(false).catch(() => {}); }, state.type === 'crypto' ? 10000 : 16000);
-    schedule(() => { if(!document.hidden) loadPortfolio(false).catch(() => {}); }, 8000);
+    schedule(()=>{ if(!document.hidden) loadQuote().catch(()=>{}); }, pollMs(state.type));
+    schedule(()=>{ if(!document.hidden) loadMarkets(false).catch(()=>{}); }, state.type==='crypto' ? 15000 : 20000);
+    schedule(()=>{ if(!document.hidden) loadPortfolio(false).catch(()=>{}); }, 12000);
   }
 
   function mount(){
@@ -908,12 +908,16 @@
   }
 
   window.addEventListener('hashchange', scheduleMount);
+  let __trVisDebounce = 0;
   document.addEventListener('visibilitychange', () => {
     if(document.hidden) return;
-    if(routeIsTrade()) {
-      loadQuote().catch(() => {});
-      loadPortfolio(false).catch(() => {});
-    }
+    clearTimeout(__trVisDebounce);
+    __trVisDebounce = setTimeout(() => {
+      if(routeIsTrade()){
+        loadQuote().catch(() => {});
+        loadPortfolio(false).catch(() => {});
+      }
+    }, 400);
   }, { passive:true });
   document.addEventListener('DOMContentLoaded', scheduleMount);
   scheduleMount();

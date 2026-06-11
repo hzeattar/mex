@@ -12,6 +12,41 @@ $mode   = trade_mode_for_user($pdo, $uid);
 $limit  = (int)($_GET['limit'] ?? 60);
 $limit  = max(1, min(200, $limit));
 
+function orders_optional_select(PDO $pdo, string $table, array $columns): string {
+  $driver = function_exists('db_driver') ? db_driver() : '';
+  $parts = [];
+  foreach ($columns as $col => $default) {
+    $name = is_int($col) ? (string)$default : (string)$col;
+    $fallback = is_int($col) ? "''" : (string)$default;
+    try {
+      $exists = function_exists('schema_column_exists')
+        ? schema_column_exists($pdo, $table, $name, $driver)
+        : true;
+    } catch (Throwable $e) {
+      $exists = true;
+    }
+    $parts[] = $exists ? $name : ($fallback . ' AS ' . $name);
+  }
+  return $parts ? ', ' . implode(', ', $parts) : '';
+}
+
+function order_copy_meta(array $row): array {
+  $raw = trim((string)($row['meta'] ?? ''));
+  if ($raw === '') return ['source'=>'','copy_subscription_id'=>0,'source_signal_id'=>0,'copied_from_admin'=>0];
+  $meta = json_decode($raw, true);
+  if (!is_array($meta)) return ['source'=>'','copy_subscription_id'=>0,'source_signal_id'=>0,'copied_from_admin'=>0];
+  $source = strtolower((string)($meta['source'] ?? ''));
+  $copySub = (int)($meta['subscription_id'] ?? $meta['copy_subscription_id'] ?? 0);
+  $signalId = (int)($meta['signal_id'] ?? $meta['source_signal_id'] ?? 0);
+  $isCopy = $copySub > 0 || $source === 'trading_bot';
+  return [
+    'source' => $isCopy ? 'trading_bot' : $source,
+    'copy_subscription_id' => $isCopy ? $copySub : 0,
+    'source_signal_id' => $isCopy ? $signalId : 0,
+    'copied_from_admin' => $isCopy ? 1 : 0,
+  ];
+}
+
 // Demo vs Real is differentiated by prefixing the stored symbol:
 //   demo: @D@BTCUSDT
 //   real: @R@BTCUSDT
@@ -43,7 +78,8 @@ if ($side === 'BUY' || $side === 'SELL') {
 }
 
 // Pull raw rows (including CLOSE rows) then collapse to one row per position.
-$sql = "SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,position_id,pnl_usd,close_reason,closed_at,status,created_at
+$orderMetaSel = orders_optional_select($pdo, 'orders', ['meta' => "''"]);
+$sql = "SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,position_id,pnl_usd,close_reason,closed_at,status,created_at{$orderMetaSel}
         FROM orders
         WHERE $where
         ORDER BY id DESC
@@ -94,11 +130,12 @@ foreach ($byPos as $pid => $pack) {
   $marketType = strtolower((string)($open['market_type'] ?? 'spot'));
   $lev        = (int)($open['leverage'] ?? 1);
 
-  // For PERP, used_usdt is margin (notional/leverage). For SPOT it's the notional.
+  // For PERP, usd_amount is already the locked initial margin in current place_order.php.
+  // Older legacy rows may store notional, so fallback still divides qty*entry by leverage when usd_amount is missing.
   $usedUsdt = 0.0;
   if ($marketType === 'perp') {
-    if ($usdAmount > 0 && $lev > 0) {
-      $usedUsdt = $usdAmount / max(1,$lev);
+    if ($usdAmount > 0) {
+      $usedUsdt = $usdAmount;
     } else {
       $q = (float)($open['qty'] ?? 0);
       if ($q > 0 && $entryPrice > 0) $usedUsdt = ($q * $entryPrice) / max(1,$lev);
@@ -137,6 +174,7 @@ foreach ($byPos as $pid => $pack) {
   $stt = strtolower((string)(($close['status'] ?? null) ?: ($open['status'] ?? '')));
   $isClosed = ($stt === 'closed' || ($close && (int)($close['closed_at'] ?? 0) > 0));
   $rawStatus = strtolower(trim((string)($open['status'] ?? '')));
+  $copyMeta = order_copy_meta($open);
   $rawPositionId = (int)($open['position_id'] ?? 0);
   $rawFillPrice = (float)($open['fill_price'] ?? 0);
   $isPending = !$isClosed
@@ -153,6 +191,7 @@ foreach ($byPos as $pid => $pack) {
     'order_id'         => (int)($open['id'] ?? 0),
     'position_id'      => (int)$pid,
     'account_mode'     => $accountMode,
+    'mode'             => $accountMode,
     'symbol'           => $cleanSymbol,
     'symbol_raw'       => $rawSymbol,
     'asset_type'       => (string)($open['asset_type'] ?? ''),
@@ -181,6 +220,10 @@ foreach ($byPos as $pid => $pack) {
     'created_at'       => (int)($open['created_at'] ?? 0),
     'closed_at'        => $closedAt,
     'close_reason'     => (string)(($close['close_reason'] ?? null) ?: ($open['close_reason'] ?? '')),
+    'source'           => $copyMeta['source'],
+    'copy_subscription_id' => $copyMeta['copy_subscription_id'],
+    'source_signal_id' => $copyMeta['source_signal_id'],
+    'copied_from_admin'=> $copyMeta['copied_from_admin'],
   ];
 }
 

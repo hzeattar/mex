@@ -51,7 +51,7 @@ $theme_js_v  = is_file($theme_js)  ? (int)@filemtime($theme_js)  : $js_v;
     window.__SUPPORT_EMAIL = <?php echo json_encode(site_setting('site.support_email', 'support@mexgroup.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
     window.__BRAND_NAME = <?php echo json_encode(site_setting('site.brand', 'MEX Group'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
     window.__BRAND_TAGLINE = <?php echo json_encode(site_setting('site.tagline', 'Professional trading & investment platform'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
-    window.__BRAND_LOGO_URL = <?php echo json_encode(site_setting('site.app_logo_url', $defaultLogoUrl ?? './assets/img/mexgroup_logo.svg'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
+    window.__BRAND_LOGO_URL = <?php echo json_encode(site_setting('site.app_logo_url', $defaultLogoUrl ?? './assets/img/mex_global_logo.png'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
     window.__MARKETS_FIRST_BATCH_SIZE = <?php echo (int)env('MARKETS_FIRST_BATCH_SIZE', '12'); ?>;
     window.__MARKETS_BATCH_SIZE = <?php echo (int)env('MARKETS_BATCH_SIZE', '20'); ?>;
   </script>

@@ -5,10 +5,11 @@ require_once __DIR__ . '/../api/lib/ledger.php';
 admin_require();
 
 $pdo = db();
+$driver = db_driver();
 $msg = '';
 $error = '';
 $hasAdminNote = false;
-try { $hasAdminNote = schema_column_exists('deposits', 'admin_note'); } catch (Throwable $e) {}
+try { $hasAdminNote = schema_column_exists($pdo, 'deposits', 'admin_note', $driver); } catch (Throwable $e) {}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   try {

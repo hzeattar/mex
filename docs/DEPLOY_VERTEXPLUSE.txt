@@ -1,8 +1,0 @@
-VertexPluse quick deploy
-
-1) Extract this package into public_html
-2) Import db/vertexpluse_import_schema.sql
-3) Fill .env with new domain + MySQL credentials
-4) Ensure PHP 8.1+ and pdo_mysql enabled
-5) Ensure writable: api/data api/uploads api/cache
-6) If migrating from old domain, update APP_URL and SITE_URL in .env

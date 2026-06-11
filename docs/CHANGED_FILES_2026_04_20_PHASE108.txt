@@ -1,5 +1,0 @@
-assets/js/app.js
-assets/js/multibank-theme.js
-api/market_snapshot.php
-api/lib/quotes.php
-api/quotes.php

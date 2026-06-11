@@ -17,49 +17,60 @@ header('Access-Control-Allow-Origin: *');
 
 // ── Hardcoded symbol seed prices (absolute fallback) ──────────────────────────
 const FX_SEEDS = [
-  'EURUSD'=>1.154,'GBPUSD'=>1.336,'USDJPY'=>144.2,'USDCHF'=>0.796,
-  'AUDUSD'=>0.653,'USDCAD'=>1.373,'NZDUSD'=>0.584,'EURGBP'=>0.863,
-  'EURJPY'=>166.4,'GBPJPY'=>192.8,'EURCAD'=>1.583,'EURAUD'=>1.766,
-  'EURCHF'=>0.918,'GBPCHF'=>1.064,'AUDCHF'=>0.520,'CADJPY'=>105.1,
-  'CHFJPY'=>181.2,'NZDJPY'=>84.2,'AUDNZD'=>1.118,'AUDCAD'=>0.896,
-  'GBPAUD'=>2.045,'USDMXN'=>18.9,'USDSEK'=>9.8,'USDNOK'=>10.4,
-  'USDPLN'=>3.85,'USDTRY'=>38.2,'USDSGD'=>1.29,'USDHKD'=>7.82,
-  'USDCNH'=>7.24,'USDBRL'=>5.55,'USDZAR'=>17.9,'USDILS'=>3.62,
-  'USDTHB'=>33.5,'USDINR'=>83.8,'USDPHP'=>56.2,'EURHUF'=>405.0,
-  'EURPLN'=>4.42,'EURTRY'=>44.1,'GBPTRY'=>51.1,'USDDKK'=>6.62,
+  'EURUSD'=>1.135,'GBPUSD'=>1.336,'USDJPY'=>144.2,'USDCHF'=>0.822,
+  'AUDUSD'=>0.653,'USDCAD'=>1.365,'NZDUSD'=>0.596,'EURGBP'=>0.850,
+  'EURJPY'=>163.7,'GBPJPY'=>192.5,'EURCAD'=>1.549,'EURAUD'=>1.737,
+  'EURCHF'=>0.934,'GBPCHF'=>1.098,'AUDCHF'=>0.537,'CADJPY'=>105.7,
+  'CHFJPY'=>175.5,'NZDJPY'=>85.9,'AUDNZD'=>1.095,'AUDCAD'=>0.892,
+  'GBPAUD'=>2.043,'USDMXN'=>19.2,'USDSEK'=>9.8,'USDNOK'=>10.4,
+  'USDPLN'=>3.82,'USDTRY'=>38.5,'USDSGD'=>1.29,'USDHKD'=>7.82,
+  'USDCNH'=>7.24,'USDBRL'=>5.65,'USDZAR'=>18.2,'USDILS'=>3.62,
+  'USDTHB'=>33.5,'USDINR'=>83.5,'USDPHP'=>56.2,'EURHUF'=>405.0,
+  'EURPLN'=>4.33,'EURTRY'=>43.7,'GBPTRY'=>51.4,'USDDKK'=>6.72,
 ];
 
 const COMMODITY_SEEDS = [
-  'XAUUSD'=>4330,'XAGUSD'=>38.5,'XPTUSD'=>1080,'XPDUSD'=>1030,
-  'USOIL'=>62.5,'UKOIL'=>65.2,'NGAS'=>2.85,'BRENT'=>65.2,
-  'COPPER'=>4.72,'WHEAT'=>540,'CORN'=>420,'SOYBEAN'=>1050,
-  'SUGAR'=>18.2,'COTTON'=>68.0,'COFFEE'=>340,'COCOA'=>8500,
-  'NATGAS'=>2.85,'LUMBER'=>520,'NICKEL'=>15800,'ZINC'=>2650,
-  'ALUMINIUM'=>2420,'LEAD'=>2050,'TIN'=>31000,'HEATING_OIL'=>2.15,
-  'RBOB_GAS'=>2.05,'OJ'=>450,'LEAN_HOGS'=>82,'LIVE_CATTLE'=>185,
+  'XAUUSD'=>3315,'XAGUSD'=>33.5,'XPTUSD'=>1080,'XPDUSD'=>1010,
+  'USOIL'=>62.5,'UKOIL'=>65.8,'NGAS'=>3.45,'BRENT'=>65.8,
+  'COPPER'=>4.72,'WHEAT'=>525,'CORN'=>435,'SOYBEAN'=>1055,
+  'SUGAR'=>18.8,'COTTON'=>68.0,'COFFEE'=>320,'COCOA'=>8500,
+  'NATGAS'=>3.45,'LUMBER'=>560,'NICKEL'=>15500,'ZINC'=>2650,
+  'ALUMINIUM'=>2480,'LEAD'=>2050,'TIN'=>30200,'HEATING_OIL'=>2.15,
+  'RBOB_GAS'=>2.05,'RBOB'=>2.05,'OJ'=>450,'OATS'=>340,'RICE'=>17.5,
+  'MILK'=>17.0,'LEAN_HOGS'=>85,'LIVE_CATTLE'=>198,'FEEDER_CATTLE'=>260,
 ];
 
 const STOCK_SEEDS = [
-  'AAPL'=>205,'TSLA'=>285,'NVDA'=>135,'MSFT'=>440,'GOOGL'=>175,
-  'META'=>620,'AMZN'=>195,'NFLX'=>1180,'AMD'=>120,'INTC'=>22,
-  'ORCL'=>165,'CRM'=>285,'PYPL'=>72,'V'=>310,'MA'=>530,
-  'JPM'=>240,'BAC'=>42,'UNH'=>490,'JNJ'=>160,'PFE'=>26,
-  'MRK'=>90,'CVX'=>155,'XOM'=>108,'WMT'=>92,'COST'=>960,
-  'HD'=>380,'DIS'=>105,'BABA'=>125,'NKE'=>75,'SBUX'=>82,
-  'GS'=>580,'MS'=>125,'SHOP'=>85,'SNAP'=>28,'PLTR'=>120,
-  'COIN'=>265,'SQ'=>55,'ADBE'=>430,'UBER'=>80,'LYFT'=>14,
-  'ZOOM'=>65,'RIVN'=>15,'GME'=>25,'SOFI'=>14,'DKNG'=>48,
-  'RBLX'=>55,'HOOD'=>65,'LCID'=>3,'AMC'=>4,'OPEN'=>2,
+  'AAPL'=>232,'TSLA'=>342,'NVDA'=>135,'MSFT'=>452,'GOOGL'=>178,
+  'META'=>625,'AMZN'=>205,'NFLX'=>1080,'AMD'=>118,'INTC'=>22,
+  'ORCL'=>175,'CRM'=>285,'PYPL'=>72,'V'=>335,'MA'=>575,
+  'JPM'=>245,'BAC'=>42,'UNH'=>315,'JNJ'=>162,'PFE'=>27,
+  'MRK'=>90,'CVX'=>155,'XOM'=>108,'WMT'=>92,'COST'=>1010,
+  'HD'=>385,'DIS'=>112,'BABA'=>125,'NKE'=>78,'SBUX'=>88,
+  'GS'=>580,'MS'=>125,'SHOP'=>95,'SNAP'=>28,'PLTR'=>125,
+  'COIN'=>265,'SQ'=>62,'ADBE'=>455,'UBER'=>85,'LYFT'=>15,
+  'ZOOM'=>72,'RIVN'=>28,'GME'=>28,'SOFI'=>14,'DKNG'=>48,
+  'RBLX'=>75,'HOOD'=>62,'LCID'=>22,'AMC'=>5,'OPEN'=>12,
 ];
 
 const FUTURES_SEEDS = [
-  'ES_F'=>5950,'NQ_F'=>21500,'YM_F'=>43000,'RTY_F'=>2100,
-  'CL_F'=>62,'GC_F'=>4380,'ZN_F'=>112,'ZB_F'=>122,
-  'ZC_F'=>420,'ZS_F'=>1050,'ZW_F'=>540,'SI_F'=>39,
-  'HG_F'=>4.72,'NG_F'=>2.85,'RB_F'=>2.05,'HO_F'=>2.15,
-  'VX_F'=>18,'BTC_F'=>69500,'ETH_F'=>2600,'DX_F'=>98,
-  '6E_F'=>1.154,'6B_F'=>1.336,'6J_F'=>0.0069,'6C_F'=>0.729,
-  '6A_F'=>0.653,'PA_F'=>1030,'PL_F'=>1080,'LE_F'=>185,'HE_F'=>82,
+  'ES_F'=>5950,'NQ_F'=>21500,'YM_F'=>42800,'RTY_F'=>2350,
+  'CL_F'=>62,'GC_F'=>3315,'ZN_F'=>111,'ZB_F'=>120,
+  'ZC_F'=>435,'ZS_F'=>1055,'ZW_F'=>525,'SI_F'=>33.5,
+  'HG_F'=>4.72,'NG_F'=>3.45,'RB_F'=>2.05,'HO_F'=>2.15,
+  'VX_F'=>18,'BTC_F'=>104000,'ETH_F'=>2550,'DX_F'=>99,
+  '6E_F'=>1.135,'6B_F'=>1.336,'6J_F'=>0.0069,'6C_F'=>0.733,
+  '6A_F'=>0.653,'PA_F'=>1010,'PL_F'=>1080,'LE_F'=>198,'HE_F'=>85,
+  'NKD_F'=>38750,'BZ_F'=>65.8,'EMD_F'=>3200,
+];
+
+const ARAB_SEEDS = [
+  '2222'=>30,'1120'=>95,'2010'=>75,'7010'=>40,'1211'=>50,'1150'=>34,
+  '1180'=>36,'2280'=>58,'1010'=>28,'1020'=>22,'1030'=>24,'1050'=>32,
+  '2050'=>28,'2080'=>45,'7020'=>15,'7030'=>18,'2040'=>12,'2060'=>20,
+  '2090'=>16,'2100'=>18,'4001'=>12,'4002'=>35,'4190'=>145,'4200'=>42,
+  '4210'=>18,'4240'=>15,'4260'=>88,'4280'=>60,'4300'=>110,'4321'=>28,
+  '2150'=>14,'2160'=>16,'2170'=>75,'2180'=>22,
 ];
 
 // ── Static symbol→type map ──────────────────────────────────────────────────
@@ -96,6 +107,8 @@ $SYMBOL_TYPES = [
   'COCOA'=>'commodities','LUMBER'=>'commodities','NICKEL'=>'commodities','ZINC'=>'commodities',
   'ALUMINIUM'=>'commodities','LEAD'=>'commodities','TIN'=>'commodities','OJ'=>'commodities',
   'LEAN_HOGS'=>'commodities','LIVE_CATTLE'=>'commodities','HEATING_OIL'=>'commodities',
+  'RBOB'=>'commodities','OATS'=>'commodities','RICE'=>'commodities','MILK'=>'commodities',
+  'FEEDER_CATTLE'=>'commodities',
   // Stocks
   'AAPL'=>'stocks','TSLA'=>'stocks','NVDA'=>'stocks','MSFT'=>'stocks','GOOGL'=>'stocks',
   'META'=>'stocks','AMZN'=>'stocks','NFLX'=>'stocks','AMD'=>'stocks','INTC'=>'stocks',
@@ -115,6 +128,14 @@ $SYMBOL_TYPES = [
   'VX_F'=>'futures','BTC_F'=>'futures','ETH_F'=>'futures','DX_F'=>'futures',
   '6E_F'=>'futures','6B_F'=>'futures','6J_F'=>'futures','6C_F'=>'futures',
   '6A_F'=>'futures','PA_F'=>'futures','PL_F'=>'futures','LE_F'=>'futures','HE_F'=>'futures',
+  'NKD_F'=>'futures','BZ_F'=>'futures','EMD_F'=>'futures',
+  // Arab equities
+  '2222'=>'arab','1120'=>'arab','2010'=>'arab','7010'=>'arab','1211'=>'arab','1150'=>'arab',
+  '1180'=>'arab','2280'=>'arab','1010'=>'arab','1020'=>'arab','1030'=>'arab','1050'=>'arab',
+  '2050'=>'arab','2080'=>'arab','7020'=>'arab','7030'=>'arab','2040'=>'arab','2060'=>'arab',
+  '2090'=>'arab','2100'=>'arab','4001'=>'arab','4002'=>'arab','4190'=>'arab','4200'=>'arab',
+  '4210'=>'arab','4240'=>'arab','4260'=>'arab','4280'=>'arab','4300'=>'arab','4321'=>'arab',
+  '2150'=>'arab','2160'=>'arab','2170'=>'arab','2180'=>'arab',
 ];
 
 // ── Parse request ───────────────────────────────────────────────────────────
@@ -126,6 +147,36 @@ $requested = array_values(array_unique(array_filter(
 if (!$requested) {
   echo json_encode(['ok'=>true,'items'=>[],'source'=>'public_prices']);
   exit;
+}
+
+// ── Server-side cache (serve-stale-while-revalidate) ─────────────────────────
+// Upstream live fetches (Binance / Frankfurter / Yahoo) are slow & variable.
+// Strategy: serve a fresh cache instantly; if stale, serve the stale copy
+// immediately and refresh in the background (FPM) so users never wait.
+$_pp_keybase = $requested;
+sort($_pp_keybase);
+$_pp_cacheDir  = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR;
+$_pp_cacheFile = $_pp_cacheDir . '/pubprices_' . substr(sha1(implode(',', $_pp_keybase)), 0, 20) . '.json';
+$_pp_ttl        = 12;   // considered fresh (seconds)
+$_pp_maxStale   = 180;  // serve stale up to this age when background refresh is unavailable
+$_pp_refreshOnly = false;
+
+$_pp_cached = is_file($_pp_cacheFile) ? @file_get_contents($_pp_cacheFile) : false;
+$_pp_age    = is_file($_pp_cacheFile) ? (time() - (int)@filemtime($_pp_cacheFile)) : PHP_INT_MAX;
+if (is_string($_pp_cached) && $_pp_cached !== '') {
+  if ($_pp_age < $_pp_ttl) {
+    echo $_pp_cached;                 // fresh → done
+    exit;
+  }
+  if (function_exists('fastcgi_finish_request')) {
+    echo $_pp_cached;                 // stale → serve now, refresh in background
+    @ob_flush(); @flush();
+    @fastcgi_finish_request();
+    $_pp_refreshOnly = true;
+  } elseif ($_pp_age < $_pp_maxStale) {
+    echo $_pp_cached;                 // stale but acceptable; skip blocking refresh
+    exit;
+  }
 }
 
 // ── Group by type ──────────────────────────────────────────────────────────
@@ -187,7 +238,7 @@ if (!empty($byType['forex'])) {
 }
 
 // ── Fetch commodities & stocks ──────────────────────────────────────────────
-foreach (['commodities','stocks','futures'] as $t) {
+foreach (['commodities','stocks','futures','arab'] as $t) {
   if (empty($byType[$t])) continue;
   try {
     $pl = qa_quote_payload($t, $byType[$t], [
@@ -202,7 +253,7 @@ foreach (['commodities','stocks','futures'] as $t) {
 }
 
 // ── Build response with seed fallbacks ─────────────────────────────────────
-$allSeeds = array_merge(FX_SEEDS, COMMODITY_SEEDS, STOCK_SEEDS, FUTURES_SEEDS);
+$allSeeds = FX_SEEDS + COMMODITY_SEEDS + STOCK_SEEDS + FUTURES_SEEDS + ARAB_SEEDS;
 $items = [];
 foreach ($requested as $sym) {
   $type  = $SYMBOL_TYPES[$sym] ?? 'crypto';
@@ -227,7 +278,10 @@ foreach ($requested as $sym) {
   ];
 }
 
-echo json_encode(
+$_pp_out = json_encode(
   ['ok'=>true,'items'=>$items,'source'=>'public_prices','ts'=>time()],
   JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
 );
+if (!is_dir($_pp_cacheDir)) { @mkdir($_pp_cacheDir, 0775, true); }
+@file_put_contents($_pp_cacheFile, $_pp_out, LOCK_EX);
+if (!$_pp_refreshOnly) { echo $_pp_out; }

@@ -56,12 +56,15 @@ function qa_quotes_cache_ttl(string $assetType, string $mode, int $count): int {
     return $assetType === 'crypto' ? 0 : max(0, min(2, (int)env('QUOTES_API_DIRECT_CACHE_TTL_NONCRYPTO', '0')));
   }
   if ($mode === 'visible') {
-    return $assetType === 'crypto' ? 0 : max(0, min(2, (int)env('QUOTES_API_VISIBLE_CACHE_TTL_NONCRYPTO', '0')));
+    // OPTIMIZED: Increased cache TTL to reduce API calls and improve speed
+    return $assetType === 'crypto'
+      ? max(0, min(10, (int)env('QUOTES_API_VISIBLE_CACHE_TTL_CRYPTO', '5')))
+      : max(0, min(45, (int)env('QUOTES_API_VISIBLE_CACHE_TTL_NONCRYPTO', '10')));
   }
   if ($mode === 'focus') {
     return $assetType === 'crypto'
       ? max(1, min(5, (int)env('QUOTES_API_FOCUS_CACHE_TTL_CRYPTO', '3')))
-      : max(1, min(8, (int)env('QUOTES_API_FOCUS_CACHE_TTL_NONCRYPTO', '4')));
+      : max(1, min(8, (int)env('QUOTES_API_FOCUS_CACHE_TTL_NONCRYPTO', '5')));
   }
   if ($mode === 'cache_only') {
     return $assetType === 'crypto'
@@ -73,10 +76,11 @@ function qa_quotes_cache_ttl(string $assetType, string $mode, int $count): int {
       ? max(1, min(3, (int)env('QUOTES_API_FRESH_CACHE_TTL_CRYPTO', '1')))
       : max(1, min(6, (int)env('QUOTES_API_FRESH_CACHE_TTL_NONCRYPTO', '2')));
   }
-  if ($assetType === 'crypto') return max(0, min(5, (int)env('QUOTES_API_CACHE_TTL_CRYPTO', '1')));
-  if ($assetType === 'forex') return max(0, min(8, (int)env('QUOTES_API_CACHE_TTL_FOREX', '1')));
-  if ($assetType === 'arab') return max(0, min(6, (int)env('QUOTES_API_CACHE_TTL_ARAB', '1')));
-  if ($assetType === 'stocks') return max(0, min(15, (int)env('QUOTES_API_CACHE_TTL_STOCKS', '1')));
-  if (in_array($assetType, ['commodities','futures'], true)) return max(0, min(10, (int)env('QUOTES_API_CACHE_TTL_COMMODITIES', '2')));
+  // OPTIMIZED: Increased default cache TTLs to reduce API calls
+  if ($assetType === 'crypto') return max(0, min(5, (int)env('QUOTES_API_CACHE_TTL_CRYPTO', '2')));
+  if ($assetType === 'forex') return max(0, min(8, (int)env('QUOTES_API_CACHE_TTL_FOREX', '3')));
+  if ($assetType === 'arab') return max(0, min(6, (int)env('QUOTES_API_CACHE_TTL_ARAB', '3')));
+  if ($assetType === 'stocks') return max(0, min(15, (int)env('QUOTES_API_CACHE_TTL_STOCKS', '3')));
+  if (in_array($assetType, ['commodities','futures'], true)) return max(0, min(10, (int)env('QUOTES_API_CACHE_TTL_COMMODITIES', '5')));
   return 0;
 }

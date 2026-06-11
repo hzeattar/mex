@@ -30,7 +30,7 @@ function site_lang_name(string $c): string
 
 function site_is_rtl(string $c): bool
 {
-    return $c === 'ar';
+    return in_array($c, ['ar'], true);
 }
 
 function site_locale(): string

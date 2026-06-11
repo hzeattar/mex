@@ -13,11 +13,30 @@ if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) json_response(['ok'=>
 $size = (int)($f['size'] ?? 0);
 if ($size <= 0 || $size > 8 * 1024 * 1024) json_response(['ok'=>false,'error'=>'File too large'], 422);
 $ext = strtolower(pathinfo((string)($f['name'] ?? ''), PATHINFO_EXTENSION));
-if (!in_array($ext, ['jpg','jpeg','png','webp','pdf'], true)) json_response(['ok'=>false,'error'=>'Unsupported file type'], 422);
+$allowedMimeByExt = [
+  'jpg' => ['image/jpeg'],
+  'jpeg' => ['image/jpeg'],
+  'png' => ['image/png'],
+  'webp' => ['image/webp'],
+  'pdf' => ['application/pdf','application/x-pdf'],
+];
+if (!isset($allowedMimeByExt[$ext])) json_response(['ok'=>false,'error'=>'Unsupported file type'], 422);
+$mime = '';
+if (function_exists('finfo_open')) {
+  $fi = @finfo_open(FILEINFO_MIME_TYPE);
+  if ($fi) {
+    $mime = (string)@finfo_file($fi, (string)$f['tmp_name']);
+    @finfo_close($fi);
+  }
+}
+if ($mime !== '' && !in_array($mime, $allowedMimeByExt[$ext], true)) {
+  json_response(['ok'=>false,'error'=>'Unsupported file content'], 422);
+}
 
 $pdo = db();
+$driver = db_driver();
 $cols = ['id','details_json'];
-try { if (schema_column_exists('deposits', 'status')) $cols[] = 'status'; } catch (Throwable $e) {}
+try { if (schema_column_exists($pdo, 'deposits', 'status', $driver)) $cols[] = 'status'; } catch (Throwable $e) {}
 $stmt = $pdo->prepare('SELECT '.implode(',', $cols).' FROM deposits WHERE id=? AND user_id=? LIMIT 1');
 $stmt->execute([$depositId, $uid]);
 $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -42,6 +61,7 @@ $details['proof_original_name'] = (string)($f['name'] ?? $filename);
 $details['proof_uploaded_at'] = time();
 $details['proof_size'] = $size;
 $details['proof_ext'] = $ext;
+$details['proof_mime'] = $mime;
 $pdo->prepare('UPDATE deposits SET details_json=?, updated_at=? WHERE id=? AND user_id=?')->execute([
   json_encode($details, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
   time(),

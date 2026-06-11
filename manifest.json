@@ -1,0 +1,125 @@
+{
+  "node_modules/lightweight-charts/dist/lightweight-charts.production.mjs": {
+    "file": "js/chart-DbDccfIU.js",
+    "name": "chart",
+    "src": "node_modules/lightweight-charts/dist/lightweight-charts.production.mjs",
+    "isDynamicEntry": true
+  },
+  "src/main.js": {
+    "file": "js/main-Dh_BIJa5.js",
+    "name": "main",
+    "src": "src/main.js",
+    "isEntry": true,
+    "dynamicImports": [
+      "src/utils/marketIcon.js",
+      "src/views/home.js",
+      "src/views/trade.js",
+      "src/views/portfolio.js",
+      "src/views/funding.js",
+      "src/views/funding.js",
+      "src/views/funding.js",
+      "src/views/funding.js",
+      "src/views/kyc.js",
+      "src/views/invest.js",
+      "src/views/news.js",
+      "src/views/support.js",
+      "src/views/account.js"
+    ]
+  },
+  "src/utils/marketIcon.js": {
+    "file": "js/marketIcon-D-Yq8Sis.js",
+    "name": "marketIcon",
+    "src": "src/utils/marketIcon.js",
+    "isDynamicEntry": true
+  },
+  "src/views/account.js": {
+    "file": "js/account-nZ0T1b5i.js",
+    "name": "account",
+    "src": "src/views/account.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js"
+    ]
+  },
+  "src/views/funding.js": {
+    "file": "js/funding-CEVcK8kc.js",
+    "name": "funding",
+    "src": "src/views/funding.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js"
+    ]
+  },
+  "src/views/home.js": {
+    "file": "js/home-FYKkBxq7.js",
+    "name": "home",
+    "src": "src/views/home.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js",
+      "src/utils/marketIcon.js"
+    ]
+  },
+  "src/views/invest.js": {
+    "file": "js/invest-DbleNPzu.js",
+    "name": "invest",
+    "src": "src/views/invest.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js"
+    ]
+  },
+  "src/views/kyc.js": {
+    "file": "js/kyc-B_jF53nX.js",
+    "name": "kyc",
+    "src": "src/views/kyc.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js"
+    ]
+  },
+  "src/views/news.js": {
+    "file": "js/news-KbBxEVmh.js",
+    "name": "news",
+    "src": "src/views/news.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js"
+    ]
+  },
+  "src/views/portfolio.js": {
+    "file": "js/portfolio-niyp4nTS.js",
+    "name": "portfolio",
+    "src": "src/views/portfolio.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js"
+    ]
+  },
+  "src/views/support.js": {
+    "file": "js/support-BqdsDPBs.js",
+    "name": "support",
+    "src": "src/views/support.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js"
+    ]
+  },
+  "src/views/trade.js": {
+    "file": "js/trade-BIc6V7sT.js",
+    "name": "trade",
+    "src": "src/views/trade.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/main.js",
+      "src/utils/marketIcon.js"
+    ],
+    "dynamicImports": [
+      "node_modules/lightweight-charts/dist/lightweight-charts.production.mjs"
+    ]
+  },
+  "style.css": {
+    "file": "css/style-CDXrV_xg.css",
+    "src": "style.css"
+  }
+}

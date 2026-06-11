@@ -1,0 +1,136 @@
+/* Mobile responsive fixes for payments history */
+@media (max-width: 768px) {
+    .payments-history-container {
+        overflow-x: hidden !important;
+        width: 100%;
+    }
+
+    .payments-table,
+    .payments-grid {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .payments-table table {
+        min-width: 100%;
+        font-size: 14px;
+    }
+
+    .payments-table th,
+    .payments-table td {
+        padding: 8px 4px;
+        white-space: nowrap;
+    }
+
+    .payment-card {
+        width: 100%;
+        margin-bottom: 10px;
+        overflow: hidden;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .payment-card-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 10px;
+        font-size: 13px;
+    }
+
+    .payment-card-label {
+        font-weight: 600;
+        color: #666;
+    }
+
+    .payment-card-value {
+        word-break: break-word;
+        overflow-wrap: break-word;
+        text-align: right;
+    }
+
+    /* Ensure no horizontal overflow */
+    body {
+        overflow-x: hidden;
+    }
+
+    .wallet-container,
+    .funding-container {
+        width: 100%;
+        overflow-x: hidden;
+    }
+}
+
+/* Mobile Account Modal Fixes */
+@media (max-width: 768px) {
+    .account-modal,
+    .account-popup {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 90% !important;
+        max-width: 90% !important;
+        max-height: 80vh !important;
+        z-index: 9999 !important;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        overflow-y: auto;
+    }
+
+    .account-modal-overlay,
+    .account-popup-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9998;
+    }
+
+    .account-modal-header,
+    .account-popup-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .account-modal-close-btn,
+    .account-popup-close-btn {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #333;
+        padding: 0;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .account-modal-content,
+    .account-popup-content {
+        padding: 16px;
+        overflow-y: auto;
+        max-height: calc(80vh - 60px);
+    }
+
+    /* Prevent modal from appearing off-screen */
+    .account-modal-container {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 9998 !important;
+    }
+}

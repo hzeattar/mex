@@ -26,6 +26,8 @@ $market = strtolower(trim((string)($_GET['market'] ?? (($type === 'futures' || $
 $tf     = (string)($_GET['tf'] ?? '1m'); // Binance intervals
 $limit  = (int)($_GET['limit'] ?? 200);
 $end    = (int)($_GET['end'] ?? 0); // unix seconds (optional) for pagination
+$fast   = ((int)($_GET['fast'] ?? 0) === 1);
+$forceRefresh = ((int)($_GET['refresh'] ?? 0) === 1);
 
 if ($symbol === '') json_response(['ok'=>false,'error'=>'Missing symbol'], 422);
 $limit = max(10, min(500, $limit));
@@ -102,11 +104,33 @@ function candles_default_market_meta(string $symbol, string $type): array {
       'USDCAD' => ['yahoo_ticker' => 'CAD=X', 'tv_symbol' => 'FX:USDCAD'],
     ],
     'commodities' => [
-      'XAUUSD' => ['tv_symbol' => 'OANDA:XAUUSD'],
-      'XAGUSD' => ['tv_symbol' => 'OANDA:XAGUSD'],
+      'XAUUSD' => ['yahoo_ticker' => 'GC=F', 'tv_symbol' => 'OANDA:XAUUSD'],
+      'XAGUSD' => ['yahoo_ticker' => 'SI=F', 'tv_symbol' => 'OANDA:XAGUSD'],
+      'XPTUSD' => ['yahoo_ticker' => 'PL=F', 'tv_symbol' => 'OANDA:XPTUSD'],
+      'XPDUSD' => ['yahoo_ticker' => 'PA=F', 'tv_symbol' => 'OANDA:XPDUSD'],
       'USOIL' => ['yahoo_ticker' => 'CL=F', 'tv_symbol' => 'TVC:USOIL'],
       'UKOIL' => ['yahoo_ticker' => 'BZ=F', 'tv_symbol' => 'TVC:UKOIL'],
       'NGAS' => ['yahoo_ticker' => 'NG=F', 'tv_symbol' => 'FX:NGAS'],
+      'BRENT' => ['yahoo_ticker' => 'BZ=F', 'tv_symbol' => 'TVC:UKOIL'],
+      'NATGAS' => ['yahoo_ticker' => 'NG=F', 'tv_symbol' => 'FX:NGAS'],
+      'COPPER' => ['yahoo_ticker' => 'HG=F', 'tv_symbol' => 'TVC:COPPER'],
+      'WHEAT' => ['yahoo_ticker' => 'ZW=F', 'tv_symbol' => 'CBOT:ZW1!'],
+      'CORN' => ['yahoo_ticker' => 'ZC=F', 'tv_symbol' => 'CBOT:ZC1!'],
+      'SOYBEAN' => ['yahoo_ticker' => 'ZS=F', 'tv_symbol' => 'CBOT:ZS1!'],
+      'SUGAR' => ['yahoo_ticker' => 'SB=F', 'tv_symbol' => 'ICEUS:SB1!'],
+      'COTTON' => ['yahoo_ticker' => 'CT=F', 'tv_symbol' => 'ICEUS:CT1!'],
+      'COFFEE' => ['yahoo_ticker' => 'KC=F', 'tv_symbol' => 'ICEUS:KC1!'],
+      'COCOA' => ['yahoo_ticker' => 'CC=F', 'tv_symbol' => 'ICEUS:CC1!'],
+      'LUMBER' => ['yahoo_ticker' => 'LB=F', 'tv_symbol' => 'CME:LBS1!'],
+      'OJ' => ['yahoo_ticker' => 'OJ=F', 'tv_symbol' => 'ICEUS:OJ1!'],
+      'HEATING_OIL' => ['yahoo_ticker' => 'HO=F', 'tv_symbol' => 'NYMEX:HO1!'],
+      'RBOB' => ['yahoo_ticker' => 'RB=F', 'tv_symbol' => 'NYMEX:RB1!'],
+      'OATS' => ['yahoo_ticker' => 'ZO=F', 'tv_symbol' => 'CBOT:ZO1!'],
+      'RICE' => ['yahoo_ticker' => 'ZR=F', 'tv_symbol' => 'CBOT:ZR1!'],
+      'MILK' => ['yahoo_ticker' => 'DC=F', 'tv_symbol' => 'CME:DC1!'],
+      'LEAN_HOGS' => ['yahoo_ticker' => 'HE=F', 'tv_symbol' => 'CME:HE1!'],
+      'LIVE_CATTLE' => ['yahoo_ticker' => 'LE=F', 'tv_symbol' => 'CME:LE1!'],
+      'FEEDER_CATTLE' => ['yahoo_ticker' => 'GF=F', 'tv_symbol' => 'CME:GF1!'],
     ],
     'futures' => [
       'ES_F' => ['yahoo_ticker' => 'ES=F', 'tv_symbol' => 'CME_MINI:ES1!'],
@@ -117,6 +141,30 @@ function candles_default_market_meta(string $symbol, string $type): array {
       'GC_F' => ['yahoo_ticker' => 'GC=F', 'tv_symbol' => 'COMEX:GC1!'],
       'ZN_F' => ['yahoo_ticker' => 'ZN=F', 'tv_symbol' => 'CBOT:ZN1!'],
       'ZB_F' => ['yahoo_ticker' => 'ZB=F', 'tv_symbol' => 'CBOT:ZB1!'],
+      'ZC_F' => ['yahoo_ticker' => 'ZC=F', 'tv_symbol' => 'CBOT:ZC1!'],
+      'ZS_F' => ['yahoo_ticker' => 'ZS=F', 'tv_symbol' => 'CBOT:ZS1!'],
+      'ZW_F' => ['yahoo_ticker' => 'ZW=F', 'tv_symbol' => 'CBOT:ZW1!'],
+      'SI_F' => ['yahoo_ticker' => 'SI=F', 'tv_symbol' => 'COMEX:SI1!'],
+      'HG_F' => ['yahoo_ticker' => 'HG=F', 'tv_symbol' => 'COMEX:HG1!'],
+      'NG_F' => ['yahoo_ticker' => 'NG=F', 'tv_symbol' => 'NYMEX:NG1!'],
+      'RB_F' => ['yahoo_ticker' => 'RB=F', 'tv_symbol' => 'NYMEX:RB1!'],
+      'HO_F' => ['yahoo_ticker' => 'HO=F', 'tv_symbol' => 'NYMEX:HO1!'],
+      'VX_F' => ['yahoo_ticker' => '^VIX', 'tv_symbol' => 'CBOE:VX1!'],
+      'BTC_F' => ['yahoo_ticker' => 'BTC=F', 'tv_symbol' => 'CME:BTC1!'],
+      'ETH_F' => ['yahoo_ticker' => 'ETH=F', 'tv_symbol' => 'CME:ETH1!'],
+      'DX_F' => ['yahoo_ticker' => 'DX-Y.NYB', 'tv_symbol' => 'CAPITALCOM:DXY'],
+      '6E_F' => ['yahoo_ticker' => 'EURUSD=X', 'tv_symbol' => 'CME:6E1!'],
+      '6B_F' => ['yahoo_ticker' => '6B=F', 'tv_symbol' => 'CME:6B1!'],
+      '6J_F' => ['yahoo_ticker' => 'JPY=X', 'tv_symbol' => 'CME:6J1!'],
+      '6C_F' => ['yahoo_ticker' => 'CAD=X', 'tv_symbol' => 'CME:6C1!'],
+      '6A_F' => ['yahoo_ticker' => 'AUDUSD=X', 'tv_symbol' => 'CME:6A1!'],
+      'PA_F' => ['yahoo_ticker' => 'PA=F', 'tv_symbol' => 'COMEX:PA1!'],
+      'PL_F' => ['yahoo_ticker' => 'PL=F', 'tv_symbol' => 'COMEX:PL1!'],
+      'LE_F' => ['yahoo_ticker' => 'LE=F', 'tv_symbol' => 'CME:LE1!'],
+      'HE_F' => ['yahoo_ticker' => 'HE=F', 'tv_symbol' => 'CME:HE1!'],
+      'NKD_F' => ['yahoo_ticker' => 'NKD=F', 'tv_symbol' => 'OSE:NK2251!'],
+      'BZ_F' => ['yahoo_ticker' => 'BZ=F', 'tv_symbol' => 'ICEEUR:BRN1!'],
+      'EMD_F' => ['yahoo_ticker' => 'EMD=F', 'tv_symbol' => 'CME_MINI:EMD1!'],
     ],
     'arab' => [
       '2222' => ['yahoo_ticker' => '2222.SR', 'tv_symbol' => 'TADAWUL:2222'],
@@ -237,6 +285,19 @@ function candles_cache_depth_enough(array $candles, int $limit, string $provider
   if (in_array($providerType, ['commodities','forex'], true)) $baseNeed = max(80, (int)ceil($limit * 0.78));
   if (in_array($tf, ['4h','6h','8h','12h','1d','3d','1w'], true)) $baseNeed = max(40, (int)ceil($limit * 0.55));
   return $count >= min($limit, $baseNeed);
+}
+
+function candles_minimum_display_bars(int $limit, string $providerType = ''): int {
+  $limit = max(1, $limit);
+  $kind = vp_normalize_asset_type($providerType);
+  if ($kind === 'crypto') return min($limit, 30);
+  return min($limit, max(10, min(24, (int)ceil($limit * 0.25))));
+}
+
+function candles_has_display_history(array $items, int $limit, string $providerType = ''): bool {
+  $items = candles_normalize_series($items);
+  if (count($items) < candles_minimum_display_bars($limit, $providerType)) return false;
+  return candles_series_has_real_movement($items, 24);
 }
 
 
@@ -381,7 +442,7 @@ function candles_finalize_items(array $items, string $symbol, string $market, st
 
 function candles_sync_live_tail(array $items, string $symbol, string $market, string $assetType, int $step, int $end = 0): array {
   if ($end > 0 || !$items || $step <= 0) return $items;
-  if ((int)env('CANDLES_SYNC_LIVE_TAIL', '0') !== 1) return $items;
+  if ((int)env('CANDLES_SYNC_LIVE_TAIL', '1') !== 1) return $items;
   if (candles_request_over_budget((int)env('CANDLES_LIVE_TAIL_RESERVE_MS', '1000'))) return $items;
   try {
     // Read from central cache first (no upstream hit), fallback to quote_price
@@ -405,10 +466,14 @@ function candles_sync_live_tail(array $items, string $symbol, string $market, st
     $lastTime = (int)($last['time'] ?? 0);
     if ($lastTime <= 0) return $items;
 
+    $isCryptoAsset = (strtolower($assetType) === 'crypto');
+    if (!$isCryptoAsset && $lastTime < ($nowBucket - $step)) {
+      return $items;
+    }
+
     if ($lastTime < ($nowBucket - $step)) {
       $prevClose = (float)($last['close'] ?? $live);
       $gapBuckets = max(0, (int)round(($nowBucket - $lastTime) / max(1, $step)));
-      $isCryptoAsset = (strtolower($assetType) === 'crypto');
       $driftVsPrev = ($prevClose > 0) ? abs($live - $prevClose) / max(1.0, abs($prevClose)) : 0.0;
       $useFlatAnchor = $isCryptoAsset && ($gapBuckets > 1 || $driftVsPrev > 0.03);
       $items[] = [
@@ -427,20 +492,8 @@ function candles_sync_live_tail(array $items, string $symbol, string $market, st
     $low = (float)($last['low'] ?? $live);
     $close = (float)($last['close'] ?? $live);
     $drift = ($close > 0) ? abs($live - $close) / max(1.0, abs($close)) : 0.0;
-    $isCryptoAsset = (strtolower($assetType) === 'crypto');
     $hugeDrift = $drift > ($isCryptoAsset ? 0.02 : 0.08);
     if ($hugeDrift) {
-      if (!$isCryptoAsset && $lastTime < $nowBucket) {
-        $items[] = [
-          'time' => $nowBucket,
-          'open' => $live,
-          'high' => $live,
-          'low' => $live,
-          'close' => $live,
-          'volume' => 0.0,
-        ];
-        return array_slice($items, -500);
-      }
       return $items;
     }
 
@@ -528,11 +581,36 @@ function candles_quote_seed_items(float $price, int $now, int $step, int $limit)
   if (!($price > 0) || $step <= 0 || $limit <= 0) return [];
   $alignedNow = (int)(floor($now / $step) * $step);
   $items = [];
+  $anchor = $price;
   for ($i = $limit - 1; $i >= 0; $i--) {
     $t = $alignedNow - ($i * $step);
-    $items[] = ['time'=>$t,'open'=>$price,'high'=>$price,'low'=>$price,'close'=>$price,'volume'=>0.0];
+    $seed = (int) sprintf('%u', crc32((string)$price . '|' . (string)intval($t / $step) . '|' . (string)$limit));
+    $r1 = (($seed % 1000) / 1000.0) - 0.5;
+    $r2 = (((int)((intdiv($seed, 11)) % 1000)) / 1000.0) - 0.5;
+    $amp = max(0.00008, min(0.0012, 0.00022 + (abs($r2) * 0.0005)));
+    $open = $anchor;
+    $close = max(0.00000001, $open * (1.0 + ($r1 * $amp)));
+    $high = max($open, $close) * (1.0 + abs($r2) * $amp);
+    $low = min($open, $close) * (1.0 - abs($r2) * $amp);
+    $items[] = ['time'=>$t,'open'=>$open,'high'=>$high,'low'=>$low,'close'=>$close,'volume'=>max(0.01, abs($r1) * 1000.0)];
+    $anchor = $close;
   }
   return $items;
+}
+
+function candles_cached_seed_price(string $symbol, string $assetType): float {
+  try {
+    $q = quote_get($symbol, $assetType);
+    $p = (float)($q['price'] ?? 0);
+    if ($p > 0) return $p;
+  } catch (Throwable $e) {}
+  try {
+    $st = db()->prepare('SELECT seed_price FROM markets WHERE symbol=? LIMIT 1');
+    $st->execute([strtoupper($symbol)]);
+    $p = (float)($st->fetchColumn() ?: 0);
+    if ($p > 0) return $p;
+  } catch (Throwable $e) {}
+  return 0.0;
 }
 
 try {
@@ -540,6 +618,26 @@ try {
   // Then refresh in the background (shared hosting friendly).
   $cacheFile = candles_cache_path($symbol,$market,$tf,$type);
   $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
+  if ($fast && !$forceRefresh && $end <= 0) {
+    $step = tf_seconds($tf);
+    if ($cachedAll) {
+      $fastItems = candles_finalize_items(candles_from_cache($cachedAll, 0, $limit), $symbol, $market, $type, $step, 0);
+      if ($fastItems && candles_has_display_history($fastItems, $limit, $providerType)) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok'=>true,'items'=>$fastItems,'cached'=>true,'source'=>'cache_fast','fast'=>true], JSON_UNESCAPED_SLASHES);
+        exit;
+      }
+      @unlink($cacheFile);
+      $cachedAll = [];
+    }
+    $seedPrice = ((int)env('CANDLES_FAST_SEED_FALLBACK', '0') === 1) ? candles_cached_seed_price($symbol, $type) : 0.0;
+    if ($seedPrice > 0) {
+      $items = candles_quote_seed_items($seedPrice, time(), $step, $limit);
+      header('Content-Type: application/json; charset=utf-8');
+      echo json_encode(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, $step, 0),'synthetic'=>true,'source'=>'synthetic_seed_fast','fast'=>true], JSON_UNESCAPED_SLASHES);
+      exit;
+    }
+  }
   if ($end <= 0 && $cachedAll) {
     $age = is_file($cacheFile) ? (time() - (int)@filemtime($cacheFile)) : 999999;
     $baseStale = (int)env('CANDLES_MAX_STALE_FAST', '180'); // seconds
@@ -709,12 +807,12 @@ try {
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
           candles_cache_save($symbol,$market,$tf, $merged, $type);
           if (in_array($providerType, ['stocks','arab','commodities','futures'], true)) {
-            if (candles_series_has_real_movement($out, 24)) {
+            if (candles_has_display_history($out, $limit, $providerType)) {
               json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart','warm'=>true]);
             }
           }
           $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
-          if ($outMatchesLive) {
+          if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
             json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart','warm'=>false]);
           }
         }
@@ -799,12 +897,12 @@ try {
       $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
       candles_cache_save($symbol,$market,$tf, $merged, $type);
       if (in_array($providerType, ['stocks','arab','commodities','futures','forex'], true)) {
-        if (candles_series_has_real_movement($out, 24)) {
+        if (candles_has_display_history($out, $limit, $providerType)) {
           json_response(['ok'=>true,'items'=>$out,'source'=>'aggs','warm'=>true]);
         }
       }
       $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
-      if ($outMatchesLive) {
+      if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
         json_response(['ok'=>true,'items'=>$out,'source'=>'aggs','warm'=>false]);
       }
     }
@@ -829,12 +927,12 @@ try {
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
           candles_cache_save($symbol,$market,$tf, $merged, $type);
           if (in_array($providerType, ['forex','commodities'], true)) {
-            if (candles_series_has_real_movement($out, 24)) {
+            if (candles_has_display_history($out, $limit, $providerType)) {
               json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart_fallback','warm'=>true]);
             }
           }
           $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
-          if ($outMatchesLive) {
+          if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
             json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart_fallback','warm'=>false]);
           }
         }
@@ -879,9 +977,15 @@ try {
     $lastBar = $tail ? end($tail) : null;
     $last = is_array($lastBar) ? (float)($lastBar['close'] ?? 0) : 0.0;
   }
+  if (!($last > 0)) $last = candles_cached_seed_price($symbol, $type);
   $price = $last > 0 ? $last : 0.0;
   if (!($price > 0)) {
     json_response(['ok'=>true,'items'=>[],'source'=>'empty_fallback']);
+  }
+  // Honest charts: do not fabricate synthetic price action by default.
+  // Return "no data" so the UI shows a loading/empty state instead of fake candles.
+  if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
+    json_response(['ok'=>true,'items'=>[],'source'=>'no_data','synthetic'=>false]);
   }
   $alignedNow = (int)(floor($now / $step) * $step);
   for ($i = $limit-1; $i >= 0; $i--) {
@@ -927,8 +1031,13 @@ try {
       $lastBar = $tail ? end($tail) : null;
       $last = is_array($lastBar) ? (float)($lastBar['close'] ?? 0) : 0.0;
     }
+    if (!($last > 0)) $last = candles_cached_seed_price($symbol, $type);
     if (!($last > 0)) {
       json_response(['ok'=>true,'items'=>[],'soft_error'=>'provider_unavailable','source'=>'empty_error_fallback']);
+    }
+    // Honest charts: do not fabricate synthetic price action by default.
+    if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
+      json_response(['ok'=>true,'items'=>[],'soft_error'=>'provider_unavailable','source'=>'no_data','synthetic'=>false]);
     }
     $price = $last;
     $step = max(1, tf_seconds($tf));

@@ -39,6 +39,10 @@ http {
   gzip_min_length 256;
   gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
 
+  # Proxy cache for API responses
+  proxy_cache_path /tmp/nginx_cache levels=1:2 keys_zone=api_cache:10m max_size=100m inactive=10m use_temp_path=off;
+  proxy_cache_key "$scheme$request_method$host$request_uri";
+
   server {
     listen [::]:${PORT} ipv6only=off default_server;
 ${EXTRA_LISTEN}
@@ -83,8 +87,16 @@ ${EXTRA_LISTEN}
     }
 
     # Cacheable API endpoints - short-lived for snappy UX
-    location ~ ^/api/(markets|public_prices|ping|feature_flags)\.php$ {
+    location ~ ^/api/(markets|public_prices|ping|feature_flags|summary|level)\.php$ {
       try_files $uri =404;
+
+      # Cache successful API responses for 5 seconds
+      proxy_cache api_cache;
+      proxy_cache_valid 200 5s;
+      proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+      proxy_cache_background_update on;
+      proxy_cache_lock on;
+      add_header X-Cache-Status $upstream_cache_status always;
 
       fastcgi_param  QUERY_STRING       $query_string;
       fastcgi_param  REQUEST_METHOD     $request_method;

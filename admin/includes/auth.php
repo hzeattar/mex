@@ -4,7 +4,43 @@ require_once __DIR__ . '/../../api/lib/common.php';
 require_once __DIR__ . '/../../api/lib/schema.php';
 require_once __DIR__ . '/../../api/lib/crypto.php';
 require_once __DIR__ . '/../../api/lib/affiliates.php';
-session_start();
+
+function admin_request_is_secure(): bool {
+  $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+  $proto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+  return $https === 'on' || $https === '1' || $proto === 'https';
+}
+
+function admin_session_lifetime(): int {
+  $ttl = (int)(env('ADMIN_SESSION_TTL', '86400') ?? 86400);
+  return max(3600, min(604800, $ttl));
+}
+
+function admin_cookie_options(int $expires = 0, bool $httpOnly = true): array {
+  return [
+    'expires' => $expires,
+    'path' => '/admin',
+    'secure' => admin_request_is_secure(),
+    'httponly' => $httpOnly,
+    'samesite' => 'Lax',
+  ];
+}
+
+function admin_session_cookie_options(): array {
+  return [
+    'lifetime' => admin_session_lifetime(),
+    'path' => '/admin',
+    'secure' => admin_request_is_secure(),
+    'httponly' => true,
+    'samesite' => 'Lax',
+  ];
+}
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+  session_name('MEXADMINSESSID');
+  session_set_cookie_params(admin_session_cookie_options());
+  session_start();
+}
 
 // Auto-upgrade schema (safe for shared hosting)
 $pdo = null;
@@ -56,10 +92,14 @@ try {
 }
 
 function admin_csrf_token(): string {
-  if (empty($_SESSION['admin_csrf']) || !is_string($_SESSION['admin_csrf'])) {
-    $_SESSION['admin_csrf'] = bin2hex(random_bytes(24));
+  $cookieName = admin_csrf_cookie_name();
+  $token = (string)($_COOKIE[$cookieName] ?? '');
+  if (!preg_match('/^[a-f0-9]{48}$/', $token)) {
+    $token = bin2hex(random_bytes(24));
   }
-  return (string)$_SESSION['admin_csrf'];
+  $_SESSION['admin_csrf'] = $token;
+  setcookie($cookieName, $token, admin_cookie_options(time() + admin_session_lifetime(), true));
+  return $token;
 }
 
 function admin_csrf_input(): string {
@@ -68,7 +108,7 @@ function admin_csrf_input(): string {
 
 function admin_verify_csrf(): void {
   $posted = (string)($_POST['csrf'] ?? '');
-  $token = (string)($_SESSION['admin_csrf'] ?? '');
+  $token = (string)($_COOKIE[admin_csrf_cookie_name()] ?? ($_SESSION['admin_csrf'] ?? ''));
   if ($posted === '' || $token === '' || !hash_equals($token, $posted)) {
     throw new RuntimeException('Security token mismatch. Refresh the page and try again.');
   }
@@ -285,15 +325,105 @@ function admin_recent_audit(int $limit = 8): array {
 }
 
 
+function admin_auth_cookie_name(): string {
+  return 'MEX_ADMIN_AUTH';
+}
+
+function admin_csrf_cookie_name(): string {
+  return 'MEX_ADMIN_CSRF';
+}
+
+function admin_base64url(string $raw): string {
+  return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
+}
+
+function admin_base64url_decode(string $raw): string {
+  $pad = strlen($raw) % 4;
+  if ($pad) $raw .= str_repeat('=', 4 - $pad);
+  $decoded = base64_decode(strtr($raw, '-_', '+/'), true);
+  return $decoded === false ? '' : $decoded;
+}
+
+function admin_auth_secret(): string {
+  $secret = (string)(env('ADMIN_SESSION_SECRET', '') ?: env('APP_KEY', '') ?: env('JWT_SECRET', '') ?: env('ADMIN_PASSWORD', '') ?: 'mex-admin-session');
+  return hash('sha256', $secret);
+}
+
+function admin_auth_sign(string $payload): string {
+  return hash_hmac('sha256', $payload, admin_auth_secret());
+}
+
+function admin_issue_auth_cookie(string $email): void {
+  $now = time();
+  $payload = admin_base64url(json_encode([
+    'email' => $email,
+    'iat' => $now,
+    'exp' => $now + admin_session_lifetime(),
+  ], JSON_UNESCAPED_SLASHES));
+  $token = $payload . '.' . admin_auth_sign($payload);
+  setcookie(admin_auth_cookie_name(), $token, admin_cookie_options($now + admin_session_lifetime(), true));
+}
+
+function admin_clear_auth_cookie(): void {
+  setcookie(admin_auth_cookie_name(), '', admin_cookie_options(time() - 3600, true));
+  setcookie(admin_csrf_cookie_name(), '', admin_cookie_options(time() - 3600, true));
+}
+
+function admin_restore_from_cookie(): bool {
+  $token = (string)($_COOKIE[admin_auth_cookie_name()] ?? '');
+  if ($token === '' || !str_contains($token, '.')) return false;
+  [$payload, $sig] = explode('.', $token, 2);
+  if ($payload === '' || $sig === '' || !hash_equals(admin_auth_sign($payload), $sig)) return false;
+  $data = json_decode(admin_base64url_decode($payload), true);
+  if (!is_array($data)) return false;
+  $email = trim((string)($data['email'] ?? ''));
+  $exp = (int)($data['exp'] ?? 0);
+  $cfgEmail = trim((string)(env('ADMIN_EMAIL', '') ?? ''));
+  if ($email === '' || $exp < time()) return false;
+  if ($cfgEmail !== '' && !hash_equals($cfgEmail, $email)) return false;
+  $_SESSION['admin_ok'] = true;
+  $_SESSION['admin_email'] = $email;
+  $_SESSION['admin_last_seen'] = time();
+  admin_issue_auth_cookie($email);
+  admin_csrf_token();
+  return true;
+}
+
+function admin_login_success(string $email): void {
+  if (session_status() === PHP_SESSION_ACTIVE) {
+    @session_regenerate_id(true);
+  }
+  $_SESSION['admin_ok'] = true;
+  $_SESSION['admin_email'] = $email;
+  $_SESSION['admin_last_seen'] = time();
+  unset($_SESSION['admin_csrf']);
+  admin_issue_auth_cookie($email);
+  admin_csrf_token();
+}
+
+function admin_logout_now(): void {
+  $_SESSION = [];
+  admin_clear_auth_cookie();
+  if (session_status() === PHP_SESSION_ACTIVE) {
+    session_destroy();
+  }
+}
+
 function admin_is_logged_in(): bool {
-  return isset($_SESSION['admin_ok']) && $_SESSION['admin_ok'] === true;
+  if (isset($_SESSION['admin_ok']) && $_SESSION['admin_ok'] === true) return true;
+  return admin_restore_from_cookie();
 }
 
 function admin_require(): void {
   if (!admin_is_logged_in()) {
-    header('Location: /admin/login.php');
+    $next = (string)($_SERVER['REQUEST_URI'] ?? '/admin/dashboard.php');
+    if (!str_starts_with($next, '/admin/')) $next = '/admin/dashboard.php';
+    header('Location: /admin/login.php?next=' . rawurlencode($next));
     exit;
   }
+  $_SESSION['admin_last_seen'] = time();
+  admin_issue_auth_cookie((string)($_SESSION['admin_email'] ?? admin_actor_email()));
+  admin_csrf_token();
 }
 
 // Backwards-compatible alias used by some admin pages

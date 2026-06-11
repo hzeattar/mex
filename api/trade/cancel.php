@@ -1,23 +1,50 @@
-require_trade_allowed($uid);
 <?php
-require_once __DIR__ . '/../lib/bootstrap.php';
-require_once __DIR__ . '/../lib/db.php';
-require_once __DIR__ . '/../lib/telegram.php';
+require_once __DIR__ . '/../lib/common.php';
 
-$db = db();
-$u = require_user($db);
+require_method('POST');
+$uid = require_auth();
+require_trade_allowed($uid);
 
-$body = json_decode(file_get_contents('php://input'), true) ?: [];
-$orderId = (int)($body['order_id'] ?? 0);
-if (!$orderId) json_out(['ok'=>false,'error'=>'order_id required'], 400);
+$pdo = db();
+$body = read_json_body();
 
-$stmt = $db->prepare('SELECT id, status FROM orders WHERE id=? AND user_id=?');
-$stmt->execute([$orderId, $u['id']]);
-$o = $stmt->fetch(PDO::FETCH_ASSOC);
-if (!$o) json_out(['ok'=>false,'error'=>'Order not found'], 404);
-if ($o['status'] !== 'open') json_out(['ok'=>false,'error'=>'Only open orders can be canceled'], 400);
+$orderId = (int)($body['order_id'] ?? ($body['id'] ?? ($body['orderId'] ?? 0)));
+if ($orderId <= 0) {
+  json_response(['ok' => false, 'error' => 'order_id required'], 400);
+}
 
-$stmt = $db->prepare("UPDATE orders SET status='canceled' WHERE id=? AND user_id=?");
-$stmt->execute([$orderId, $u['id']]);
+$pdo->beginTransaction();
+try {
+  $lock = db_driver() === 'mysql' ? ' FOR UPDATE' : '';
+  $st = $pdo->prepare("SELECT id, status, position_id, fill_price, closed_at FROM orders WHERE id=? AND user_id=?{$lock}");
+  $st->execute([$orderId, $uid]);
+  $order = $st->fetch(PDO::FETCH_ASSOC);
+  if (!$order) {
+    $pdo->rollBack();
+    json_response(['ok' => false, 'error' => 'Order not found'], 404);
+  }
 
-json_out(['ok'=>true]);
+  $status = strtolower(trim((string)($order['status'] ?? '')));
+  $positionId = (int)($order['position_id'] ?? 0);
+  $fillPrice = (float)($order['fill_price'] ?? 0);
+  $closedAt = (int)($order['closed_at'] ?? 0);
+  $terminal = in_array($status, ['filled', 'closed', 'canceled', 'cancelled', 'rejected'], true);
+  if ($terminal || $positionId > 0 || $fillPrice > 0 || $closedAt > 0) {
+    $pdo->rollBack();
+    json_response([
+      'ok' => false,
+      'error' => 'This order is already executed. Use Close position instead.',
+      'code' => 'order_already_executed',
+    ], 409);
+  }
+
+  $ts = now_ts();
+  $up = $pdo->prepare("UPDATE orders SET status='canceled', close_reason='user_canceled', closed_at=?, updated_at=? WHERE id=? AND user_id=?");
+  $up->execute([$ts, $ts, $orderId, $uid]);
+  $pdo->commit();
+
+  json_response(['ok' => true, 'order_id' => $orderId, 'status' => 'canceled']);
+} catch (Throwable $e) {
+  if ($pdo->inTransaction()) $pdo->rollBack();
+  json_response(['ok' => false, 'error' => $e->getMessage()], 500);
+}

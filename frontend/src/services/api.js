@@ -32,15 +32,17 @@ function cacheKeyFor(path) {
 
 function defaultCacheTtl(path) {
   const p = String(path || '');
-  if (p.includes('/markets.php')) return 15000;
-  if (p.includes('/wallet/summary.php')) return 10000;
-  if (p.includes('/trade/portfolio.php')) return 8000;
-  if (p.includes('/trade/orders.php')) return 8000;
-  if (p.includes('/invest/contracts.php') || p.includes('/signals.php')) return 15000;
+  if (p.includes('/markets.php')) return 5000;
+  if (p.includes('/wallet/summary.php')) return 3000;
+  if (p.includes('/trade/portfolio.php')) return 2000;
+  if (p.includes('/trade/orders.php')) return 2000;
+  if (p.includes('/invest/contracts.php') || p.includes('/signals.php')) return 6000;
   if (p.includes('/quotes.php')) {
-    if (p.includes('cache_only=1')) return 3000;
-    if (p.includes('purpose=watchlist')) return 1500;
+    if (p.includes('cache_only=1')) return 1000;
+    if (p.includes('purpose=watchlist')) return 600;
   }
+  if (p.includes('/bootstrap.php')) return 60000;
+  if (p.includes('/public_prices.php')) return 12000;
   return 0;
 }
 
@@ -133,6 +135,17 @@ async function doFetch(path, options = {}) {
 export function abortAll() {
   activeControllers.forEach((c) => c.abort());
   activeControllers.clear();
+}
+
+/**
+ * Invalidate all cache entries whose URL contains any of the given substrings.
+ * Call immediately after any write operation (place_order, close_position, cancel)
+ * so the next GET for portfolio/orders fetches fresh data from the server.
+ */
+export function clearCacheFor(...paths) {
+  for (const key of responseCache.keys()) {
+    if (paths.some((p) => key.includes(p))) responseCache.delete(key);
+  }
 }
 
 export async function postApi(path, body, options = {}) {

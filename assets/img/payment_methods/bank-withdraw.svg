@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80" role="img" aria-label="Bank withdrawal">
+  <rect width="120" height="80" rx="14" fill="#0b162b"/>
+  <path d="M20 35h50v8H20zM25 61h42v6H25zM29 45h8v13h-8zM46 45h8v13h-8zM63 45h8v13h-8z" fill="#cfe1ff"/>
+  <path d="M18 29 45 15l27 14v5H18z" fill="#5d7cff"/>
+  <path d="M82 25h16v20h10L90 62 72 45h10z" fill="#18c98f"/>
+</svg>

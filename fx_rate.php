@@ -1,11 +1,16 @@
 <?php
 declare(strict_types=1);
 
-// Backward-compatible endpoint (some pages may call /fx_rate.php)
-// Internally delegates to /api/fx_rate.php style implementation.
+/**
+ * FX Rate endpoint (USD -> XXX)
+ *
+ * Used by the Mini App converter.
+ * - Always returns ok=true (never crash UI)
+ * - Supports manual overrides (FX_OVERRIDE_XXX)
+ */
 
-require_once __DIR__ . '/api/lib/common.php';
-require_once __DIR__ . '/api/lib/fx.php';
+require_once __DIR__ . '/lib/common.php';
+require_once __DIR__ . '/lib/fx.php';
 
 require_method('GET');
 

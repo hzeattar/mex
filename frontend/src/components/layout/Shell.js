@@ -50,9 +50,9 @@ export function renderShell(app) {
         </nav>
         <div class="flex-1"></div>
         <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-panel border border-line">
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-panel border border-line" title="Total = Available + In Use">
             <span class="text-[10px] text-muted uppercase" id="topbar-currency">${esc(wallet.currency)}</span>
-            <strong class="text-xs font-mono" id="topbar-balance">${money(wallet.available)}</strong>
+            <strong class="text-xs font-mono" id="topbar-balance">${money(wallet.balance || wallet.available)}</strong>
           </div>
           ${modeSelector(mode, 'desktop')}
           <button class="icon-btn relative" id="notif-btn" title="Notifications">
@@ -138,12 +138,27 @@ export function renderShell(app) {
         <div class="license-modal-panel">
           <div class="license-modal-head">
             <div>
-              <span>Regulated entity</span>
+              <span>🇦🇪 Regulated entity</span>
               <strong>MEX Global Financial Services LLC</strong>
+              <small>SCA License No. LIC-0005622</small>
             </div>
             <button type="button" class="icon-btn icon-btn-sm" data-license-close>${icons.close}</button>
           </div>
-          <iframe id="license-pdf-frame" title="SCA license certificate"></iframe>
+          <div class="license-pdf-viewer">
+            <iframe id="license-pdf-frame" title="SCA license certificate" loading="lazy"></iframe>
+            <div class="license-pdf-fallback hidden" id="license-pdf-fallback">
+              <img src="/assets/docs/SCA_LIC-0005622_Certificate_preview.png"
+                   alt="SCA License Certificate preview"
+                   class="license-preview-img"
+                   loading="lazy" />
+              <p class="text-muted text-sm text-center mt-3">PDF preview not supported in this browser.</p>
+            </div>
+          </div>
+          <div class="license-modal-actions">
+            <a href="${LICENSE_PDF_URL}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost">
+              Open certificate in new tab ↗
+            </a>
+          </div>
         </div>
       </div>
     </div>`;
@@ -193,7 +208,7 @@ function refreshShellBalance() {
   const cur = document.getElementById('topbar-currency');
   const bal = document.getElementById('topbar-balance');
   if (cur) cur.textContent = wallet.currency || 'USDT';
-  if (bal) bal.textContent = money(wallet.available || wallet.balance || 0);
+  if (bal) bal.textContent = money(wallet.balance || wallet.available || 0);
   const drawerWallet = document.querySelector('.mobile-menu-wallet');
   if (drawerWallet) {
     drawerWallet.innerHTML = `<small>${esc(wallet.currency || 'USDT')}</small><strong>${money(wallet.available || wallet.balance || 0)}</strong><span>${get('mode') === 'real' ? 'Live workspace' : 'Demo workspace'}</span>`;
@@ -234,26 +249,30 @@ function bindShell(app) {
     setMode(el.dataset.setMode);
   });
   $('#trade-mobile-balance-more', app)?.addEventListener('click', (e) => {
+    e.preventDefault();
     e.stopPropagation();
     const popover = $('#trade-mobile-balance-popover', app);
     const open = popover?.classList.toggle('hidden') === false;
     e.currentTarget.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
-  document.addEventListener('click', (e) => {
-    closeModeMenus();
-    closeTradeBalancePopover();
-    if (!e.target?.closest?.('#account-popover-panel') && !e.target?.closest?.('[data-account-trigger]')) {
-      closeAccountPopover();
-    }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+  if (!window.__mexShellGlobalListenersBound) {
+    window.__mexShellGlobalListenersBound = true;
+    document.addEventListener('click', (e) => {
       closeModeMenus();
       closeTradeBalancePopover();
-      closeAccountPopover();
-      closeLicenseModal();
-    }
-  });
+      if (!e.target?.closest?.('#account-popover-panel') && !e.target?.closest?.('[data-account-trigger]')) {
+        closeAccountPopover();
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModeMenus();
+        closeTradeBalancePopover();
+        closeAccountPopover();
+        closeLicenseModal();
+      }
+    });
+  }
   $$('#notif-btn, #notif-btn-m', app).forEach(b => b?.addEventListener('click', toggleNotifications));
   $('#notif-close', app)?.addEventListener('click', () => $('#notif-panel')?.classList.add('hidden'));
 
@@ -318,7 +337,8 @@ async function loadNotifications() {
     if (!items.length) { list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.no_notifications', 'No notifications')}</p>`; return; }
     list.innerHTML = items.slice(0, 20).map(n => `<div class="notif-item ${n.read ? '' : 'unread'}"><p class="text-xs">${esc(n.message || n.title || '--')}</p><span class="text-[10px] text-muted">${esc(n.created_at || '')}</span></div>`).join('');
     translateDom(list);
-  } catch (e) { list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.failed_to_load', 'Failed to load')}</p>`; }
+  } catch (e) { _marketsCache = _marketsCache?.length ? _marketsCache : _fallbackDrawerMarkets;
+    renderMarketsList(_marketsCache, ''); }
 }
 
 function syncActive() {
@@ -417,8 +437,42 @@ function licenseMiniCard() {
 function openLicenseModal() {
   const modal = $('#license-modal');
   const frame = $('#license-pdf-frame');
+  const fallback = $('#license-pdf-fallback');
   if (!modal) return;
-  if (frame && !frame.getAttribute('src')) frame.setAttribute('src', LICENSE_PDF_URL);
+
+  // Lazy-load the PDF only on first open
+  if (frame && !frame.getAttribute('src')) {
+    frame.setAttribute('src', LICENSE_PDF_URL);
+
+    // Show fallback if iframe is blank after 4s (mobile browsers often can't render PDF iframes)
+    const fallbackTimer = setTimeout(() => {
+      if (!frame.dataset.loaded && fallback) {
+        frame.classList.add('is-hidden');
+        fallback.classList.remove('hidden');
+      }
+    }, 4000);
+
+    frame.addEventListener('load', () => {
+      frame.dataset.loaded = '1';
+      clearTimeout(fallbackTimer);
+      // Additional check: some browsers fire load but content is blank
+      try {
+        const h = frame.contentDocument?.body?.scrollHeight || 0;
+        if (h < 10 && fallback) {
+          frame.classList.add('is-hidden');
+          fallback.classList.remove('hidden');
+        }
+      } catch (_) {
+        // cross-origin — assume it loaded OK if no error
+      }
+    }, { once: true });
+
+    frame.addEventListener('error', () => {
+      clearTimeout(fallbackTimer);
+      if (fallback) { frame.classList.add('is-hidden'); fallback.classList.remove('hidden'); }
+    }, { once: true });
+  }
+
   modal.classList.remove('hidden');
   document.body.classList.add('license-modal-open');
 }
@@ -431,6 +485,11 @@ function closeLicenseModal() {
 
 /* ── Markets Side Drawer ── */
 let _marketsCache = null;
+const _fallbackDrawerMarkets = [
+  ['BTCUSDT', 'Bitcoin / Tether', 'crypto'], ['ETHUSDT', 'Ethereum / Tether', 'crypto'], ['BNBUSDT', 'BNB / Tether', 'crypto'],
+  ['EURUSD', 'Euro / US Dollar', 'forex'], ['GBPUSD', 'British Pound / US Dollar', 'forex'], ['USDJPY', 'US Dollar / Japanese Yen', 'forex'],
+  ['XAUUSD', 'Gold Spot / US Dollar', 'commodities'], ['AAPL', 'Apple Inc.', 'stocks'], ['2222', 'Saudi Aramco', 'arab'],
+].map(([symbol, name, type]) => ({ symbol, name, type, price: null, change_pct: null }));
 
 async function openMarketsDrawer() {
   const drawer = $('#markets-drawer');
@@ -451,10 +510,12 @@ async function loadMarketsList() {
     if (!_marketsCache) {
       const data = await api('/markets.php?type=crypto&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=50', { timeout: 0, retry: 1, cacheTtl: 15000 });
       _marketsCache = data?.items || data?.markets || data || [];
+      if (!_marketsCache.length) _marketsCache = _fallbackDrawerMarkets;
     }
     renderMarketsList(_marketsCache, '');
   } catch (e) {
-    list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.failed_to_load', 'Failed to load')}</p>`;
+    _marketsCache = _marketsCache?.length ? _marketsCache : _fallbackDrawerMarkets;
+    renderMarketsList(_marketsCache, '');
   }
 }
 

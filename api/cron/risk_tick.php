@@ -61,16 +61,39 @@ $demoCur = (string)env('DEMO_CURRENCY', 'USDT_DEMO');
 
 $armedOpened = 0;
 try {
-  $armedStmt = $pdo->prepare("SELECT sbs.*, ts.* FROM trading_bot_subscriptions sbs JOIN trading_signals ts ON ts.id=sbs.signal_id WHERE sbs.status IN ('active','armed') AND COALESCE(sbs.copied_position_id,0)=0 AND ts.status='active' ORDER BY sbs.id ASC LIMIT 100");
+  $armedStmt = $pdo->prepare("SELECT
+      sbs.id AS sbs_id, sbs.user_id AS sbs_user_id, sbs.mode AS sbs_mode, sbs.currency AS sbs_currency,
+      sbs.reserved_amount AS sbs_reserved_amount, sbs.hold_id AS sbs_hold_id, sbs.lock_until AS sbs_lock_until,
+      sbs.profit_share_pct AS sbs_profit_share_pct, sbs.leverage AS sbs_leverage, sbs.status AS sbs_status,
+      sbs.copied_position_id AS sbs_copied_position_id, sbs.entry_price_snapshot AS sbs_entry_price_snapshot,
+      ts.*
+    FROM trading_bot_subscriptions sbs
+    JOIN trading_signals ts ON ts.id=sbs.signal_id
+    WHERE sbs.status IN ('active','armed') AND COALESCE(sbs.copied_position_id,0)=0 AND ts.status='active'
+    ORDER BY sbs.id ASC LIMIT 100");
   $armedStmt->execute();
-  foreach (($armedStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $sub) {
-    $uid2 = (int)($sub['user_id'] ?? 0);
+  foreach (($armedStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+    $uid2 = (int)($row['sbs_user_id'] ?? 0);
     if ($uid2 <= 0) continue;
+    $signal = $row;
+    $sub = $row;
+    $sub['id'] = (int)($row['sbs_id'] ?? 0);
+    $sub['user_id'] = $uid2;
+    $sub['mode'] = (string)($row['sbs_mode'] ?? 'real');
+    $sub['currency'] = (string)($row['sbs_currency'] ?? 'USDT');
+    $sub['reserved_amount'] = (float)($row['sbs_reserved_amount'] ?? 0);
+    $sub['hold_id'] = (int)($row['sbs_hold_id'] ?? 0);
+    $sub['lock_until'] = $row['sbs_lock_until'] ?? null;
+    $sub['profit_share_pct'] = (float)($row['sbs_profit_share_pct'] ?? 0);
+    $sub['leverage'] = max(1, (int)($row['sbs_leverage'] ?? 1));
+    $sub['status'] = (string)($row['sbs_status'] ?? 'active');
+    $sub['copied_position_id'] = (int)($row['sbs_copied_position_id'] ?? 0);
+    $sub['entry_price_snapshot'] = $row['sbs_entry_price_snapshot'] ?? null;
     try {
-      $live = tb_quote_signal_live($sub, $sub);
-      if ((float)($sub['entry_price'] ?? 0) > 0 && !tb_signal_entry_ready($sub, $live)) continue;
+      $live = tb_quote_signal_live($signal, $sub);
+      if ((float)($signal['entry_price'] ?? 0) > 0 && !tb_signal_entry_ready($signal, $live)) continue;
       $pdo->beginTransaction();
-      tb_open_subscription($pdo, $uid2, $sub, $sub);
+      tb_open_subscription($pdo, $uid2, $signal, $sub);
       $pdo->commit();
       $armedOpened++;
     } catch (Throwable $armedErr) {

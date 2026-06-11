@@ -10,7 +10,7 @@ import { initI18n, t, translateDom } from './utils/i18n.js';
 const initialState = {
   booted: false,
   user: null,
-  brand: { name: 'MEX Group', product: 'Trading Platform', tagline: 'Professional trading workspace' },
+  brand: { name: 'MEX Global', product: 'Trading Platform', tagline: 'Professional trading workspace', logo_url: '/assets/img/mex_global_logo.png' },
   mode: localStorage.getItem('vp_mode') || 'demo',
   route: 'home',
   // Markets
@@ -48,7 +48,7 @@ const store = createStore(initialState);
 defineRoute('home', () => import('./views/home.js'));
 defineRoute('trade', () => import('./views/trade.js'));
 defineRoute('portfolio', () => import('./views/portfolio.js'));
-defineRoute('wallet', () => import('./views/wallet.js'));
+defineRoute('wallet', () => import('./views/funding.js'));
 defineRoute('deposit', () => import('./views/funding.js'));
 defineRoute('withdraw', () => import('./views/funding.js'));
 defineRoute('funding', () => import('./views/funding.js'));
@@ -61,34 +61,39 @@ defineRoute('account', () => import('./views/account.js'));
 // Bootstrap
 async function boot() {
   const app = document.getElementById('app');
-  let bootTimedOut = false;
 
-  // Safety timeout: force shell render after 12s even if bootstrap API hangs
+  // ── Phase 1: Instant skeleton shell (no API wait) ──────────────────
+  set('booted', true);
+  renderShell(app);
+  translateDom(app);
+  const view = app.querySelector('#view');
+  startRouter(view);
+
+  // ── Phase 2: Load i18n + critical data in parallel ─────────────────
+  let bootTimedOut = false;
   const safetyTimer = setTimeout(() => {
-    if (!get('booted')) {
-      console.warn('[boot] Bootstrap took too long, forcing shell render');
-      bootTimedOut = true;
-      set('booted', true);
-      try { renderShell(app); translateDom(app); const view = app.querySelector('#view'); if (view) startRouter(view); } catch(e) { console.error('[boot] Safety render failed:', e); }
-    }
-  }, 12000);
+    bootTimedOut = true;
+    console.warn('[boot] Bootstrap took too long');
+  }, 15000);
 
   try {
+    // i18n is already initialized by now (import-time), but ensure translations
     await initI18n();
+    translateDom(app);
 
+    // Load bootstrap data (user, wallet, brand, level, kyc)
     let data = null;
     try {
-      data = await api('/bootstrap.php', { timeout: 9000, retry: 2 });
+      data = await api('/bootstrap.php', { timeout: 0, retry: 1 });
     } catch (apiErr) {
       console.error('[boot] Bootstrap API failed:', apiErr.message);
       try {
-        data = await api('/bootstrap.php', { timeout: 15000 });
+        data = await api('/bootstrap.php', { timeout: 0, retry: 0 });
       } catch (retryErr) {
         console.error('[boot] Bootstrap retry failed:', retryErr.message);
       }
     }
 
-    if (bootTimedOut) return;
     clearTimeout(safetyTimer);
 
     if (data && data.ok !== false) {
@@ -99,7 +104,12 @@ async function boot() {
         product: window.__BRAND_PRODUCT || remoteBrand.name || get('brand').product || 'Trading Platform',
         tagline: remoteBrand.tagline || get('brand').tagline,
         name: window.__BRAND_NAME || remoteBrand.name || 'MEX Group',
+        support_email: remoteBrand.support_email || get('brand').support_email || '',
+        whatsapp_support_url: remoteBrand.whatsapp_support_url || data.support?.whatsapp_url || '',
+        logo_url: remoteBrand.logo_url || get('brand').logo_url || '/assets/img/mex_global_logo.png',
+        avalon_stats: remoteBrand.avalon_stats || get('brand').avalon_stats || null,
       });
+      if (data.support) set('support', { ...get('support'), ...data.support });
       set('wallet', data.wallet || null);
       set('level', data.level || null);
       set('kyc', data.kyc || null);
@@ -108,15 +118,15 @@ async function boot() {
       console.warn('[boot] Bootstrap returned error:', data.error);
     }
 
-    set('booted', true);
-
-    // Render shell
+    // Re-render with real data
     renderShell(app);
     translateDom(app);
+    const view2 = app.querySelector('#view');
+    if (view2) startRouter(view2);
 
-    // Start router
-    const view = app.querySelector('#view');
-    await startRouter(view);
+    // ── Phase 3: Prefetch next-route data in background ─────────────
+    prefetchCommonData();
+
   } catch (err) {
     if (bootTimedOut) return;
     clearTimeout(safetyTimer);
@@ -124,6 +134,17 @@ async function boot() {
     app.innerHTML = `      <div class="min-h-screen flex items-center justify-center p-8">        <div class="card max-w-md text-center space-y-4">          <h1 class="text-xl font-bold text-red">${t('common.connection_failed', 'Connection failed')}</h1>          <p class="text-muted text-sm">${err.message}</p>          <button class="btn-primary" onclick="location.reload()">${t('common.retry', 'Retry')}</button>        </div>      </div>`;
     translateDom(app);
   }
+}
+
+/** Pre-warm API cache for pages the user is likely to visit next */
+function prefetchCommonData() {
+  // Fire and forget - these populate the in-memory cache
+  setTimeout(() => {
+    api('/trade/portfolio.php', { timeout: 5000 }).catch(() => {});
+  }, 2000);
+  setTimeout(() => {
+    api('/markets.php?type=crypto&purpose=watchlist', { timeout: 5000 }).catch(() => {});
+  }, 3000);
 }
 
 if (document.readyState === 'loading') {

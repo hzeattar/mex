@@ -8,9 +8,10 @@ $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) json_response(['ok'=>false,'error'=>'Invalid deposit id'], 422);
 
 $pdo = db();
+$driver = db_driver();
 $cols = ['id','provider','method_code','currency','amount','status','external_ref','created_at','updated_at'];
 foreach (['confirmed_at','admin_note','details_json'] as $c) {
-  try { if (schema_column_exists('deposits', $c)) $cols[] = $c; } catch (Throwable $e) {}
+  try { if (schema_column_exists($pdo, 'deposits', $c, $driver)) $cols[] = $c; } catch (Throwable $e) {}
 }
 $stmt = $pdo->prepare('SELECT '.implode(',', $cols).' FROM deposits WHERE id=? AND user_id=? LIMIT 1');
 $stmt->execute([$id, $uid]);

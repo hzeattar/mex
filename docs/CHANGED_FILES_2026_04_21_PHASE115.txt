@@ -1,4 +1,0 @@
-assets/js/app.js
-api/trade/candles.php
-api/quotes.php
-docs/HANDOFF_2026_04_21_PHASE115_NONCRYPTO_FASTPATH_AND_CHART_STABILITY.md

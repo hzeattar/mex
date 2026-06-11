@@ -158,6 +158,18 @@ try {
   json_response($resp);
 } catch (Throwable $e) {
   try {
+    tp_log('stripe', 'ERROR', 'checkout_session_create_failed', [
+      'deposit_id' => $depositId ?? null,
+      'user_id' => $uid,
+      'method' => $method,
+      'amount' => $amount,
+      'currency' => $currency,
+      'error' => $e->getMessage(),
+    ]);
+  } catch (Throwable $ignoredLog) {}
+  error_log('[stripe_checkout] session create failed for deposit ' . (string)($depositId ?? 0) . ': ' . $e->getMessage());
+
+  try {
     $failDetails = $details;
     $failDetails['checkout_status'] = 'failed_to_create';
     $failDetails['stripe_error'] = $e->getMessage();
@@ -165,7 +177,11 @@ try {
     $upd->execute([json_encode($failDetails, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), time(), $depositId]);
   } catch (Throwable $ignored) {}
 
-  $resp = ['ok' => false, 'error' => 'Could not start Stripe Checkout'];
+  $resp = [
+    'ok' => false,
+    'error' => 'Stripe Checkout is unavailable right now. Please try again in a moment.',
+    'code' => 'stripe_checkout_unavailable',
+  ];
   idem_store_response($uid, $idem['key'], $idem['scope'], $resp);
-  json_response($resp, 502);
+  json_response($resp, 503);
 }

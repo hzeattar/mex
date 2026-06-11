@@ -1,5 +1,0 @@
-assets/js/app.js
-assets/js/multibank-theme.js
-api/quotes.php
-api/trade/candles.php
-docs/HANDOFF_2026_04_21_PHASE112_NONCRYPTO_RENDER_AND_POLL_GUARD.md

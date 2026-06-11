@@ -17,8 +17,9 @@ export default defineConfig({
           if (info.name && info.name.endsWith('.css')) return 'css/[name]-[hash].css';
           return 'assets/[name]-[hash][extname]';
         },
-        manualChunks: {
-          chart: ['lightweight-charts'],
+        manualChunks(id) {
+          if (id.includes('lightweight-charts')) return 'chart';
+          if (id.includes('node_modules')) return 'vendor';
         },
       },
     },

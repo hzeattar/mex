@@ -65,6 +65,120 @@ $st->execute([$uid]);
 $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 $items = [];
 
+$subscriptionIds = [];
+$copiedPositionToSub = [];
+foreach ($rows as $r) {
+  $sid = (int)($r['id'] ?? 0);
+  if ($sid > 0) $subscriptionIds[] = $sid;
+  $pid = (int)($r['copied_position_id'] ?? 0);
+  if ($sid > 0 && $pid > 0) $copiedPositionToSub[$pid] = $sid;
+}
+$subscriptionIds = array_values(array_unique($subscriptionIds));
+
+$cleanSymbol = static function(string $symbol): string {
+  if (str_starts_with($symbol, '@R@') || str_starts_with($symbol, '@D@')) return substr($symbol, 3);
+  return $symbol;
+};
+$quoteMark = static function(string $symbol, string $type, string $marketType, float $entry): float {
+  $symbol = strtoupper($symbol);
+  $type = function_exists('vp_normalize_asset_type') ? vp_normalize_asset_type($type) : strtolower($type);
+  $marketType = strtolower($marketType ?: 'spot');
+  try {
+    $q = quote_get($symbol, $type, $marketType);
+    if (is_array($q)) {
+      $p = $marketType === 'perp' ? (float)($q['mark_price'] ?? 0) : 0.0;
+      if (!($p > 0)) $p = (float)($q['price'] ?? 0);
+      if ($p > 0) return $p;
+    }
+  } catch (Throwable $e) {}
+  return $entry > 0 ? $entry : 0.0;
+};
+$positionPnl = static function(string $side, float $entry, float $mark, float $qty): float {
+  $side = strtoupper($side);
+  if ($side === 'SELL') return ($entry - $mark) * $qty;
+  return ($mark - $entry) * $qty;
+};
+
+$openPositionsBySub = [];
+$closedPositionsBySub = [];
+$positionToSub = $copiedPositionToSub;
+
+if ($subscriptionIds && schema_table_exists($pdo, 'positions', $driver) && schema_column_exists($pdo, 'positions', 'copy_subscription_id', $driver)) {
+  try {
+    $in = implode(',', array_fill(0, count($subscriptionIds), '?'));
+    $ps = $pdo->prepare("SELECT id,copy_subscription_id,symbol,asset_type,market_type,side,qty,entry_price,leverage,margin_initial,opened_at,updated_at,status FROM positions WHERE user_id=? AND status='open' AND copy_subscription_id IN ($in) ORDER BY id DESC");
+    $ps->execute(array_merge([$uid], $subscriptionIds));
+    foreach (($ps->fetchAll(PDO::FETCH_ASSOC) ?: []) as $p) {
+      $sid = (int)($p['copy_subscription_id'] ?? 0);
+      if ($sid <= 0) continue;
+      $rawSymbol = (string)($p['symbol'] ?? '');
+      $symbol = strtoupper($cleanSymbol($rawSymbol));
+      $type = $normalizeType((string)($p['asset_type'] ?? ''), $symbol);
+      $marketType = strtolower((string)($p['market_type'] ?? 'spot'));
+      $entry = (float)($p['entry_price'] ?? 0);
+      $qty = (float)($p['qty'] ?? 0);
+      $mark = $quoteMark($symbol, $type, $marketType, $entry);
+      $pnl = $positionPnl((string)($p['side'] ?? 'BUY'), $entry, $mark, $qty);
+      $item = [
+        'position_id' => (int)($p['id'] ?? 0),
+        'symbol' => $symbol,
+        'asset_type' => $type,
+        'market_type' => $marketType,
+        'side' => strtoupper((string)($p['side'] ?? 'BUY')),
+        'qty' => $qty,
+        'entry_price' => $entry,
+        'mark_price' => $mark,
+        'leverage' => max(1, (int)($p['leverage'] ?? 1)),
+        'margin_initial' => (float)($p['margin_initial'] ?? 0),
+        'unrealized_pnl' => $pnl,
+        'status' => (string)($p['status'] ?? 'open'),
+        'opened_at' => (int)($p['opened_at'] ?? 0),
+      ];
+      $openPositionsBySub[$sid][] = $item;
+      $positionToSub[(int)$p['id']] = $sid;
+    }
+  } catch (Throwable $e) {}
+}
+
+if ($subscriptionIds && schema_table_exists($pdo, 'orders', $driver)) {
+  try {
+    $os = $pdo->prepare("SELECT id,position_id,symbol,asset_type,market_type,side,qty,limit_price,fill_price,usd_amount,leverage,fee_paid,pnl_usd,close_reason,closed_at,status,created_at,meta FROM orders WHERE user_id=? AND status='closed' ORDER BY id DESC LIMIT 500");
+    $os->execute([$uid]);
+    $subSet = array_fill_keys($subscriptionIds, true);
+    foreach (($os->fetchAll(PDO::FETCH_ASSOC) ?: []) as $o) {
+      $sid = 0;
+      $meta = json_decode((string)($o['meta'] ?? ''), true);
+      if (is_array($meta)) $sid = (int)($meta['subscription_id'] ?? 0);
+      $pid = (int)($o['position_id'] ?? 0);
+      if ($sid <= 0 && $pid > 0 && isset($positionToSub[$pid])) $sid = (int)$positionToSub[$pid];
+      if ($sid <= 0 || !isset($subSet[$sid])) continue;
+      $rawSymbol = (string)($o['symbol'] ?? '');
+      $symbol = strtoupper($cleanSymbol($rawSymbol));
+      $type = $normalizeType((string)($o['asset_type'] ?? ''), $symbol);
+      $exit = (float)($o['limit_price'] ?? 0);
+      if (!($exit > 0)) $exit = (float)($o['fill_price'] ?? 0);
+      $closedPositionsBySub[$sid][] = [
+        'order_id' => (int)($o['id'] ?? 0),
+        'position_id' => $pid,
+        'symbol' => $symbol,
+        'asset_type' => $type,
+        'market_type' => strtolower((string)($o['market_type'] ?? 'spot')),
+        'side' => strtoupper((string)($o['side'] ?? 'BUY')),
+        'qty' => (float)($o['qty'] ?? 0),
+        'entry_price' => (float)($o['fill_price'] ?? 0),
+        'exit_price' => $exit,
+        'leverage' => max(1, (int)($o['leverage'] ?? 1)),
+        'pnl_usd' => (float)($o['pnl_usd'] ?? 0),
+        'fee_paid' => (float)($o['fee_paid'] ?? 0),
+        'close_reason' => (string)($o['close_reason'] ?? ''),
+        'created_at' => (int)($o['created_at'] ?? 0),
+        'closed_at' => (int)($o['closed_at'] ?? 0),
+        'status' => 'closed',
+      ];
+    }
+  } catch (Throwable $e) {}
+}
+
 $liveBy = [];
 $seen = [];
 $isTrustedCopyQuote = static function(array $q, string $assetType, string $symbol): bool {
@@ -121,13 +235,32 @@ foreach ($rows as $r) {
 }
 
 foreach ($rows as $r) {
+  $marketSymbol = strtoupper((string)($r['market_symbol'] ?? ''));
   $botName = trim((string)($r['bot_name_'.$lang] ?? ''));
   if ($botName === '') $botName = trim((string)($r['bot_name_en'] ?? ''));
-  if ($botName === '') $botName = trim((string)($r['market_symbol'] ?? 'Trading Bot'));
+  if ($botName === '') {
+    $assetName = preg_replace('/(USDT|USD|_F)$/', '', $marketSymbol);
+    $botName = 'Avalon ' . ($assetName ?: ($marketSymbol ?: 'AI')) . ' AI Bot';
+  }
   $botBrief = trim((string)($r['bot_brief_'.$lang] ?? ''));
   if ($botBrief === '') $botBrief = trim((string)($r['bot_brief_en'] ?? ''));
+  $sid = (int)($r['id'] ?? 0);
+  $openPositions = $openPositionsBySub[$sid] ?? [];
+  $closedPositions = $closedPositionsBySub[$sid] ?? [];
+  $openCount = count($openPositions);
+  $closedCount = count($closedPositions);
+  $openPnl = 0.0;
+  foreach ($openPositions as $p) $openPnl += (float)($p['unrealized_pnl'] ?? 0);
+  $closedPnl = 0.0;
+  foreach ($closedPositions as $p) $closedPnl += (float)($p['pnl_usd'] ?? 0);
+  $statusLower = strtolower((string)($r['status'] ?? ''));
+  $statusGroup = ($openCount > 0 || in_array($statusLower, ['active','armed','copied'], true)) ? 'active' : 'closed';
+  if ($openCount === 0 && in_array($statusLower, ['canceled','cancelled','closed','expired'], true)) $statusGroup = 'closed';
+  $direction = strtoupper(trim((string)($r['direction'] ?? 'BUY')));
+  if (!in_array($direction, ['BUY','SELL','NEUTRAL'], true)) $direction = 'BUY';
+
   $items[] = [
-    'id' => (int)($r['id'] ?? 0),
+    'id' => $sid,
     'signal_id' => (int)($r['signal_id'] ?? 0),
     'mode' => (string)($r['mode'] ?? 'real'),
     'currency' => (string)($r['currency'] ?? ''),
@@ -138,12 +271,20 @@ foreach ($rows as $r) {
     'status' => (string)($r['status'] ?? ''),
     'entry_price_snapshot' => array_key_exists('entry_price_snapshot', $r) && $r['entry_price_snapshot'] !== null ? (float)$r['entry_price_snapshot'] : null,
     'copied_position_id' => !empty($r['copied_position_id']) ? (int)$r['copied_position_id'] : null,
-    'position_status' => (string)($r['position_status'] ?? ''),
+    'position_status' => $openCount > 0 ? 'open' : (string)($r['position_status'] ?? ''),
+    'open_positions' => $openPositions,
+    'closed_positions' => $closedPositions,
+    'open_count' => $openCount,
+    'closed_count' => $closedCount,
+    'pnl_total' => $openPnl + $closedPnl,
+    'pnl_open' => $openPnl,
+    'pnl_closed' => $closedPnl,
+    'status_group' => $statusGroup,
     'bot_name' => $botName,
     'bot_brief' => $botBrief,
     'symbol' => (string)($r['market_symbol'] ?? ''),
     'type' => $normalizeType((string)($r['market_type'] ?? ''), (string)($r['market_symbol'] ?? '')),
-    'direction' => (string)($r['direction'] ?? 'BUY'),
+    'direction' => $direction,
     'timeframe' => (string)($r['timeframe'] ?? ''),
     'entry' => $r['entry_price'] !== null ? (float)$r['entry_price'] : null,
     'sl' => $r['stop_loss'] !== null ? (float)$r['stop_loss'] : null,
