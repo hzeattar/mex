@@ -393,33 +393,46 @@ function accountPopoverMarkup() {
       <span class="account-popover-avatar">${esc(initial)}</span>
       <div class="min-w-0">
         <strong>${esc(name)}</strong>
-        <small>${esc(user.email || 'No email attached')}</small>
+        <small>${esc(user.email || t('shell.no_email', 'No email attached'))}</small>
       </div>
       <button type="button" class="icon-btn icon-btn-sm" data-account-close>${icons.close}</button>
     </div>
     <div class="account-popover-balance">
       <span>${esc(wallet.currency || 'USDT')}</span>
       <strong>${money(wallet.available || wallet.balance || 0)}</strong>
-      <small>${get('mode') === 'real' ? 'Real account' : 'Demo account'}</small>
+      <small>${get('mode') === 'real' ? t('shell.real_account', 'Real account') : t('shell.demo_account', 'Demo account')}</small>
     </div>
     <div class="account-popover-grid">
-      <span><small>KYC</small><b>${esc(titleCase(kycStatus))}</b></span>
-      <span><small>Level</small><b>${esc(current.name || current.name_en || current.level_code || 'Starter')}</b></span>
+      <span><small>${t('shell.kyc', 'KYC')}</small><b>${esc(kycStatusLabel(kycStatus))}</b></span>
+      <span><small>${t('shell.level', 'Level')}</small><b>${esc(current.name || current.name_en || current.level_code || 'Starter')}</b></span>
     </div>
     <div class="account-popover-actions">
-      <a href="#/home" data-nav="home">${icons.home}<span>Dashboard</span></a>
-      <a href="#/wallet" data-nav="wallet">${icons.wallet}<span>Funds</span></a>
-      <a href="#/kyc" data-nav="kyc">${icons.kyc}<span>KYC</span></a>
-      <a href="#/account" data-nav="account">${icons.account}<span>Full account</span></a>
+      <a href="#/home" data-nav="home">${icons.home}<span>${t('nav.dashboard', 'Dashboard')}</span></a>
+      <a href="#/wallet" data-nav="wallet">${icons.wallet}<span>${t('nav.funds', 'Funds')}</span></a>
+      <a href="#/kyc" data-nav="kyc">${icons.kyc}<span>${t('shell.kyc', 'KYC')}</span></a>
+      <a href="#/account" data-nav="account">${icons.account}<span>${t('shell.full_account', 'Full account')}</span></a>
       ${whatsappReady
         ? `<a href="${escAttr(whatsappUrl)}" target="_blank" rel="noopener">${icons.whatsapp || icons.support}<span>WhatsApp</span></a>`
-        : `<button type="button" disabled>${icons.whatsapp || icons.support}<span>WhatsApp setup</span></button>`}
-      <a href="/logout.php" class="is-danger">${icons.lock}<span>Logout</span></a>
+        : `<button type="button" disabled>${icons.whatsapp || icons.support}<span>${t('shell.whatsapp_setup', 'WhatsApp setup')}</span></button>`}
+      <a href="/logout.php" class="is-danger">${icons.lock}<span>${t('shell.logout', 'Logout')}</span></a>
     </div>`;
 }
 
 function titleCase(value) {
   return String(value || '').replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+function kycStatusLabel(status) {
+  const s = String(status || '').toLowerCase().replace(/\s+/g, '_');
+  const map = {
+    accepted: t('kyc.label.accepted', 'Accepted'),
+    approved: t('kyc.label.accepted', 'Accepted'),
+    verified: t('kyc.label.accepted', 'Accepted'),
+    pending: t('kyc.label.pending', 'Pending'),
+    rejected: t('kyc.label.rejected', 'Rejected'),
+    not_submitted: t('kyc.label.not_submitted', 'Not submitted'),
+  };
+  return map[s] || titleCase(status);
 }
 
 function licenseMiniCard() {

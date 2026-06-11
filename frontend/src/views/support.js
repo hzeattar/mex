@@ -65,17 +65,17 @@ export function render() {
         <form class="support-ticket-form" data-ticket-form>
           <label class="support-field">
             <span>${t('support.field.reason', 'Topic')}</span>
-            <select name="reason_code" class="input-base">
+            <select name="reason_code" class="input">
               ${REASONS.map((r) => `<option value="${r}">${esc(reasonLabel(r))}</option>`).join('')}
             </select>
           </label>
           <label class="support-field">
             <span>${t('support.field.subject', 'Subject')}</span>
-            <input name="subject" class="input-base" maxlength="190" placeholder="${escAttr(t('support.field.subject_ph', 'Short summary (optional)'))}" />
+            <input name="subject" class="input" maxlength="190" placeholder="${escAttr(t('support.field.subject_ph', 'Short summary (optional)'))}" />
           </label>
           <label class="support-field">
             <span>${t('support.field.message', 'Message')}</span>
-            <textarea name="message" class="input-base" rows="4" maxlength="4000" required placeholder="${escAttr(t('support.field.message_ph', 'Describe your issue in detail...'))}"></textarea>
+            <textarea name="message" class="input" rows="4" maxlength="4000" required placeholder="${escAttr(t('support.field.message_ph', 'Describe your issue in detail...'))}"></textarea>
           </label>
           <div class="support-form-foot">
             <span class="text-xs support-form-status" data-ticket-status></span>
@@ -167,7 +167,7 @@ async function openTicket(root, id) {
         </div>`).join('')}
     </div>
     <form class="support-reply-form" data-reply-form>
-      <textarea name="message" class="input-base" rows="2" maxlength="4000" required placeholder="${escAttr(t('support.reply_ph', 'Write a reply...'))}"></textarea>
+      <textarea name="message" class="input" rows="2" maxlength="4000" required placeholder="${escAttr(t('support.reply_ph', 'Write a reply...'))}"></textarea>
       <div class="support-form-foot">
         <span class="text-xs support-form-status" data-reply-status></span>
         <button type="submit" class="btn-primary">${t('support.send_reply', 'Send reply')}</button>
