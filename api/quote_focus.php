@@ -26,6 +26,50 @@ if (!$list) {
   json_response(['ok' => false, 'error' => 'symbols required'], 400);
 }
 
+// Crypto fast lane: one batched Binance 24hr call (1s file cache) shared by
+// every user thanks to the nginx 1s micro-cache → at most ~1 upstream call
+// per second regardless of user count. Central cache stays as the fallback.
+$items = null;
+if ($type === 'crypto') {
+  require_once __DIR__ . '/lib/marketdata.php';
+  try {
+    $map = binance_ticker_24hr_many_cached($list, 1);
+  } catch (Throwable $e) {
+    $map = [];
+  }
+  if ($map) {
+    $now = time();
+    $items = [];
+    $missingLive = [];
+    foreach ($list as $sym) {
+      $m = $map[$sym] ?? null;
+      if (is_array($m) && (float)($m['price'] ?? 0) > 0) {
+        $items[] = [
+          'symbol' => $sym,
+          'type' => 'crypto',
+          'price' => (float)$m['price'],
+          'change_pct' => (float)($m['change_pct'] ?? 0),
+          'updated_at' => $now,
+          'provider_updated_at' => $now,
+          'received_at' => $now,
+          'cache_updated_at' => $now,
+          'source' => 'binance',
+          'delayed' => false,
+          'timing_class' => 'live',
+          'age_sec' => 0,
+        ];
+      } else {
+        $missingLive[] = $sym;
+      }
+    }
+    // Symbols Binance doesn't list fall back to the central cache below.
+    $list = $missingLive;
+    if (!$list) {
+      json_response(['ok' => true, 'items' => $items, 'authority' => 'binance', 'mode' => 'focus_live', 'source' => 'binance']);
+    }
+  }
+}
+
 // Two-tier central read. Tier 1 enforces a freshness window so a stale local
 // file cache falls through to the DB (which the feed worker keeps fresh) and
 // re-warms the file. Tier 2 serves the last-known price (better than '--').
@@ -34,7 +78,8 @@ $freshAge = match ($type) {
   'forex' => max(5, (int)env('QUOTE_FOCUS_FRESH_AGE_FOREX', '20')),
   default => max(10, (int)env('QUOTE_FOCUS_FRESH_AGE_DEFAULT', '90')),
 };
-$items = quote_central_items($list, $type, $freshAge);
+$centralItems = quote_central_items($list, $type, $freshAge);
+$items = is_array($items) ? array_merge($items, $centralItems) : $centralItems;
 
 $stale = [];
 foreach ($items as $i => $it) {
