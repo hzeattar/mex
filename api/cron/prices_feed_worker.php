@@ -83,12 +83,12 @@ echo "[feed-worker] isDaemon=" . ($isDaemon ? 'true' : 'false') . "\n"; flush();
 
 // ── Cycle intervals (seconds) ─────────────────────────────────────────────
 $intervals = [
-  'crypto'      => max(2, min(10, (int)env('FEED_INTERVAL_CRYPTO', '3'))),
-  'forex'       => max(5, min(60, (int)env('FEED_INTERVAL_FOREX', '15'))),
-  'stocks'      => max(10, min(120, (int)env('FEED_INTERVAL_STOCKS', '30'))),
-  'arab'        => max(10, min(120, (int)env('FEED_INTERVAL_ARAB', '30'))),
-  'commodities' => max(5, min(60, (int)env('FEED_INTERVAL_COMMODITIES', '15'))),
-  'futures'     => max(5, min(60, (int)env('FEED_INTERVAL_FUTURES', '15'))),
+  'crypto'      => max(1, min(5, (int)env('FEED_INTERVAL_CRYPTO', '2'))),
+  'forex'       => max(3, min(30, (int)env('FEED_INTERVAL_FOREX', '8'))),
+  'stocks'      => max(5, min(60, (int)env('FEED_INTERVAL_STOCKS', '15'))),
+  'arab'        => max(5, min(60, (int)env('FEED_INTERVAL_ARAB', '15'))),
+  'commodities' => max(3, min(30, (int)env('FEED_INTERVAL_COMMODITIES', '8'))),
+  'futures'     => max(3, min(30, (int)env('FEED_INTERVAL_FUTURES', '8'))),
 ];
 
 $types = ['crypto', 'forex', 'commodities', 'futures', 'stocks', 'arab'];
@@ -125,7 +125,7 @@ function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbo
   if (!$symbols) return ['count' => 0, 'written' => 0, 'upserted' => 0];
 
   $now = time();
-  $perType = max(6, min(250, (int)env('FEED_PER_TYPE_LIMIT', '120')));
+  $perType = max(10, min(300, (int)env('FEED_PER_TYPE_LIMIT', '200')));
   $symbols = array_slice($symbols, 0, $perType);
 
   $metaForProvider = [];
@@ -140,12 +140,13 @@ function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbo
     $live = quote_bulk_live($symbols, $type, $metaForProvider, [
       'ttl' => 1,
       'yahoo_ttl' => 1,
-      'massive_ttl' => 1,
       'eodhd_ttl' => 1,
+      'massive_ttl' => 1,
       'persist' => true,
       'direct_budget' => $count,
       'direct_yahoo_budget' => $count,
       'chart_budget' => $isCrypto ? 8 : min($count, 16),
+      'allow_direct_batch' => true,
     ]);
   } catch (Throwable $e) {
     $live = [];

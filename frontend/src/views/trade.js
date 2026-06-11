@@ -425,16 +425,16 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   const quoteType = normalizeType(type) === 'favorites' ? 'crypto' : normalizeType(type);
   // Crypto: fast 4.5s poll, short timeout (WebSocket-backed sources)
   // Non-crypto uses paid EODHD snapshots; keep focus quotes noticeably quicker than the watchlist.
-  const interval   = quoteType === 'crypto' ? 4500 : 6000;
-  const reqTimeout = quoteType === 'crypto' ? 3000 : 12000;
-  const reqRetry   = quoteType === 'crypto' ? 0    : 1;
+  const interval   = quoteType === 'crypto' ? 2500 : 4000;
+  const reqTimeout = quoteType === 'crypto' ? 2000 : 8000;
+  const reqRetry   = quoteType === 'crypto' ? 0    : 0;
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
     activeQuoteController = new AbortController();
     try {
       const liveParams = quoteType === 'crypto' ? '' : '&fresh=1&strict_live=1';
       const url = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus${liveParams}&_=${Date.now()}`;
-      const data = await api(url, { timeout: quoteType === 'crypto' ? 2400 : Math.min(reqTimeout, 6000), retry: reqRetry, signal: activeQuoteController.signal, cacheTtl: 500, cache: 'no-store' });
+      const data = await api(url, { timeout: quoteType === 'crypto' ? 1800 : Math.min(reqTimeout, 5000), retry: reqRetry, signal: activeQuoteController.signal, cacheTtl: 500, cache: 'no-store' });
       if (!isCurrentRun(runId, symbol, type)) return;
       if (data?.items?.[0]) updatePrice(container, data.items[0], runId);
     } catch (_e) {

@@ -380,6 +380,10 @@ if ($isUiFastPath) {
   $fastAllowLive = ($focusLiveFast && !$cacheOnly && !$visible && $purpose === 'focus')
     || $watchlistLiveCrypto
     || $watchlistLiveNonCrypto;
+  // For focus requests, prefer central cache (fast) over live upstream (slow)
+  if ($purpose === 'focus' && !$cacheOnly) {
+    $fastAllowLive = false;
+  }
   $fastPayload = quotes_degraded_payload($typeAlias, $list, $fastAllowLive);
   $fastPayload['mode'] = $fastAllowLive ? ($isWatchlistRequest ? 'watchlist_live_fast' : 'focus_fast') : 'cache_fast';
   $fastPayload['cache_first'] = true;
@@ -394,12 +398,12 @@ if ($isUiFastPath) {
 }
 
 $isNonCrypto = ($typeAlias !== 'crypto');
-$focusCacheFirst = (int)env('QUOTES_FOCUS_CACHE_FIRST_NONCRYPTO', '0') === 1;
-$isFocusRequest = $focusCacheFirst && $isNonCrypto && ($purpose === 'focus') && !$fresh && !$direct && !$strictLive && count($list) <= 3;
+$focusCacheFirst = (int)env('QUOTES_FOCUS_CACHE_FIRST_NONCRYPTO', '1') === 1;
+$isFocusRequest = $focusCacheFirst && $isNonCrypto && ($purpose === 'focus') && !$fresh && !$direct && !$strictLive && count($list) <= 5;
 if ($isFocusRequest) {
   try {
     $quickPayload = qa_quote_payload($typeAlias, $list, [
-      'allow_live' => false,
+      'allow_live' => true,
       'allow_crypto_seed' => false,
       'allow_noncrypto_seed' => false,
       'allow_stale_display' => true,
@@ -431,12 +435,12 @@ try {
     'allow_crypto_seed' => false,
     'allow_noncrypto_seed' => false,
     'allow_stale_display' => $visible || $cacheOnly,
-    'direct_budget' => $visibleNonCrypto ? 0 : (($focusNonCrypto && count($list) <= 1) ? 1 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list))))),
-    'direct_yahoo_budget' => $visibleNonCrypto ? 0 : (($focusNonCrypto && count($list) <= 1) ? 1 : (($direct || $fresh) ? max(1, min(count($list), 3)) : min(2, count($list)))),
-    'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? $visibleChartBudget : ($focusNonCrypto ? min(1, count($list)) : min(1, count($list)))),
-    'chart_budget_ms' => $visibleNonCrypto ? max(300, min(2000, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_MS_NONCRYPTO', '700'))) : ($focusNonCrypto ? max(700, min(2200, (int)env('QUOTES_FOCUS_CHART_FALLBACK_MS_NONCRYPTO', '1600'))) : 3000),
-    'allow_direct_batch' => $visibleNonCrypto || ($focusNonCrypto && count($list) <= 1),
-    'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 2 : 4),
+    'direct_budget' => $visibleNonCrypto ? 0 : (($focusNonCrypto && count($list) <= 1) ? 0 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list))))),
+    'direct_yahoo_budget' => $visibleNonCrypto ? 0 : (($focusNonCrypto && count($list) <= 1) ? 0 : (($direct || $fresh) ? max(1, min(count($list), 3)) : min(2, count($list)))),
+    'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? $visibleChartBudget : ($focusNonCrypto ? 0 : min(1, count($list)))),
+    'chart_budget_ms' => $visibleNonCrypto ? max(300, min(2000, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_MS_NONCRYPTO', '700'))) : ($focusNonCrypto ? 0 : 3000),
+    'allow_direct_batch' => false,
+    'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 1 : 4),
   ]);
 } catch (Throwable $e) {
   $payload = quotes_degraded_payload($typeAlias, $list, $allowLive && !$cacheOnly);

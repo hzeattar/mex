@@ -4,7 +4,7 @@ let pollTimer = null;
 let pollController = null;
 let pollSeq = 0;
 let eventSource = null;
-const DEFAULT_POLL_MS = 3000;
+const DEFAULT_POLL_MS = 2000;
 
 // Delta state: holds the latest snapshot merged with deltas
 let deltaState = {}; // symbol -> item

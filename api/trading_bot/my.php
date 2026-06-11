@@ -8,6 +8,19 @@ $driver = db_driver();
 $lang = strtolower((string)($_GET['lang'] ?? 'en'));
 if (!in_array($lang, ['en','ar','ru','hi'], true)) $lang = 'en';
 
+$fresh = ((int)($_GET['fresh'] ?? 0) === 1);
+
+// Fast-path cache: subscriptions rarely change second-to-second
+$cacheKey = "tb_my_{$uid}_{$lang}";
+$cacheFile = __DIR__ . '/../data/cache/' . $cacheKey . '.json';
+$cacheTtl = 8; // seconds
+if (!$fresh && is_file($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
+  $cached = @json_decode(@file_get_contents($cacheFile), true);
+  if (is_array($cached) && !empty($cached['ok'])) {
+    json_response($cached);
+  }
+}
+
 $normalizeType = static function(string $rawType, string $symbol): string {
   $raw = strtolower(trim($rawType));
   if ($raw === 'fx') $raw = 'forex';
@@ -185,7 +198,7 @@ $isTrustedCopyQuote = static function(array $q, string $assetType, string $symbo
   $assetType = strtolower(trim($assetType));
   $source = strtolower(trim((string)($q['source'] ?? $q['provider'] ?? '')));
   $updatedAt = (int)($q['updated_at'] ?? 0);
-  if ($updatedAt <= 0 || (time() - $updatedAt) > 15) return false;
+  if ($updatedAt <= 0 || (time() - $updatedAt) > 60) return false;
   if ($assetType === 'commodities' && preg_match('/^X(?:AU|AG|PT|PD)USD$/', strtoupper($symbol))) {
     return in_array($source, ['massive','provider_live','provider_fallback'], true);
   }
@@ -197,28 +210,18 @@ foreach ($rows as $r) {
   $seen[$symbol] = true;
   $type = $normalizeType((string)($r['market_type'] ?? ''), $symbol);
   try {
-    $price = (float)quote_price_fresh($symbol, $type);
+    $price = 0.0;
     $quote = quote_get($symbol, $type);
     $trustedQuote = (is_array($quote) && $isTrustedCopyQuote($quote, $type, $symbol)) ? $quote : null;
     $resolvedPrice = 0.0;
     $resolvedSource = (string)($trustedQuote['source'] ?? $trustedQuote['provider'] ?? '');
-    if ($price > 0) {
-      $resolvedPrice = $price;
-      if ($resolvedSource === '') {
-        $resolvedSource = ($type === 'crypto') ? 'binance' : 'provider_live';
-      }
-    } elseif ($trustedQuote && (float)($trustedQuote['price'] ?? 0) > 0) {
+    if ($trustedQuote && (float)($trustedQuote['price'] ?? 0) > 0) {
       $resolvedPrice = (float)$trustedQuote['price'];
-    }
-    if ($resolvedPrice <= 0 && $type !== 'crypto') {
-      try {
-        $direct = quote_fetch_external($symbol, $type);
-        if ($direct !== null && (float)$direct > 0) {
-          $resolvedPrice = (float)$direct;
-          if ($resolvedSource === '') $resolvedSource = 'provider_live';
-        }
-      } catch (Throwable $e) {
-        // ignore
+    } elseif ($type === 'crypto') {
+      $price = (float)quote_price_fresh($symbol, $type);
+      if ($price > 0) {
+        $resolvedPrice = $price;
+        $resolvedSource = 'binance';
       }
     }
     if ($resolvedPrice > 0 || $trustedQuote) {
@@ -297,4 +300,10 @@ foreach ($rows as $r) {
     'live_updated_at' => (int)($liveBy[strtoupper((string)($r['market_symbol'] ?? ''))]['updated_at'] ?? 0),
   ];
 }
-json_response(['ok'=>true,'items'=>$items]);
+$out = ['ok'=>true,'items'=>$items];
+json_response($out);
+
+// Write cache for fast-path next request
+if (!empty($cacheFile)) {
+  @file_put_contents($cacheFile, json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+}
