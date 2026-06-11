@@ -26,10 +26,31 @@ if (!$list) {
   json_response(['ok' => false, 'error' => 'symbols required'], 400);
 }
 
-// maxAge=0 → serve the last known central price at any age (age_sec is
-// reported per item; the frontend rejects regressions on its own).
-$maxAge = max(0, (int)env('QUOTE_FOCUS_MAX_AGE', '0'));
-$items = quote_central_items($list, $type, $maxAge);
+// Two-tier central read. Tier 1 enforces a freshness window so a stale local
+// file cache falls through to the DB (which the feed worker keeps fresh) and
+// re-warms the file. Tier 2 serves the last-known price (better than '--').
+$freshAge = match ($type) {
+  'crypto' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_CRYPTO', '8')),
+  'forex' => max(5, (int)env('QUOTE_FOCUS_FRESH_AGE_FOREX', '20')),
+  default => max(10, (int)env('QUOTE_FOCUS_FRESH_AGE_DEFAULT', '90')),
+};
+$items = quote_central_items($list, $type, $freshAge);
+
+$stale = [];
+foreach ($items as $i => $it) {
+  if (!((float)($it['price'] ?? 0) > 0)) $stale[(string)($it['symbol'] ?? '')] = $i;
+}
+if ($stale) {
+  $maxAge = max($freshAge, (int)env('QUOTE_FOCUS_MAX_AGE', '900'));
+  $lastKnown = quote_central_items(array_keys($stale), $type, $maxAge);
+  foreach ($lastKnown as $lk) {
+    $sym = (string)($lk['symbol'] ?? '');
+    if ($sym !== '' && isset($stale[$sym]) && (float)($lk['price'] ?? 0) > 0) {
+      $items[$stale[$sym]] = $lk;
+      unset($stale[$sym]);
+    }
+  }
+}
 
 // Cold-start fallback: symbols missing from central get the newest trusted
 // market_quotes row (pure DB read — still no upstream calls).
