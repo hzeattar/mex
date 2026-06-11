@@ -1,4 +1,4 @@
-import{j as s,k as r,h as e,g as o}from"./main-4sNiSzdn.js";function i(){const a=s("brand")||{},n=s("support")||{},t=a.whatsapp_support_url||n.whatsapp_url||"",p=/^https?:\/\//i.test(String(t));return`
+import{j as s,k as r,h as e,g as o}from"./main-v-tQbWh8.js";function i(){const a=s("brand")||{},n=s("support")||{},t=a.whatsapp_support_url||n.whatsapp_url||"",p=/^https?:\/\//i.test(String(t));return`
     <div class="support-whatsapp-page animate-fade-in">
       <section class="card support-whatsapp-card">
         <span class="support-whatsapp-logo">${r.whatsapp}</span>

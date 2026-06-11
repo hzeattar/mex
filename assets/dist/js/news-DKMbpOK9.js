@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:assets/dist/js/news-B9GzxDvm.js
-import{j as o,f as s,t as r,d as w,c as x}from"./main-CQ9GDTgp.js";let f=[];function k(){return`
-========
-import{k as p,g as s,t as r,e as m,c as y}from"./main-4sNiSzdn.js";let f=[];function E(){return`
->>>>>>>> docs-design:assets/dist/js/news-WtbnxDnh.js
+import{k as p,g as s,t as r,e as m,c as y}from"./main-v-tQbWh8.js";let f=[];function E(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="news-hero card">
         <div class="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

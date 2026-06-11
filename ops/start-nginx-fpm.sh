@@ -62,18 +62,37 @@ if [ "${IN_CONTAINER_CRON:-1}" != "0" ]; then
         || nice -n 19 php -r '@file_get_contents("http://127.0.0.1:".getenv("PORT").$argv[1]);' "$1" >/dev/null 2>&1 \
         || true
     }
+    # Warm the exact URLs the frontend requests (response cache is keyed by query).
+    warm_markets_http() {
+      warm_http "/api/markets.php?scope=home&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=50"
+      warm_http "/api/markets.php?type=crypto&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=50"
+      warm_http "/api/markets.php?type=forex&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=30"
+      warm_http "/api/markets.php?type=stocks&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=20"
+      warm_http "/api/markets.php?type=commodities&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=20"
+      warm_http "/api/markets.php?type=futures&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=20"
+      warm_http "/api/markets.php?type=arab&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=10"
+    }
     sleep 20  # let php-fpm + DB settle before the first warm
-    # Warm one non-crypto asset class per cycle (round-robin) so a single run
-    # never warms all six classes at once and starves the web container. Crypto
-    # is refreshed every cycle via the light quotes_tick. per_type caps how many
-    # symbols each warm fetches so the run completes well within the timeout
-    # (the home/trade watchlists only show the top pairs). Everything runs at the
-    # lowest CPU priority (nice -n 19) so user requests always win the CPU.
-    # One-time startup diagnostic so we can confirm the cron actually runs and
-    # persists (visible in `railway logs`). Output is truncated to stay concise.
+    if [ "${FEED_WORKER_ENABLED:-0}" = "1" ]; then
+      # A dedicated feed-worker service keeps the central quote cache warm and
+      # is the single source of truth for upstream provider access. The web
+      # container must NOT fetch upstream itself (double quota burn + rate
+      # limits); it only refreshes the markets.php HTTP response caches, which
+      # read from the central/DB cache and never hit providers (no_rescue=1).
+      echo "[warm] feed-worker mode: HTTP response-cache warming only" >&2
+      while true; do
+        warm_markets_http
+        sleep 45
+      done
+    fi
+    # Legacy mode (no feed worker): warm one non-crypto asset class per cycle
+    # (round-robin) so a single run never warms all six classes at once and
+    # starves the web container. Crypto is refreshed every cycle via the light
+    # quotes_tick. per_type caps how many symbols each warm fetches so the run
+    # completes well within the timeout. Everything runs at the lowest CPU
+    # priority (nice -n 19) so user requests always win the CPU.
     echo "[warm] diag quotes_tick: $(nice -n 19 timeout 30 php /app/api/cron/quotes_tick.php 2>&1 | head -c 300)" >&2
     echo "[warm] diag quotes_warm forex: $(nice -n 19 timeout 70 php /app/api/cron/quotes_warm.php types=forex per_type=24 2>&1 | head -c 300)" >&2
-    echo "[warm] diag stored: $(php -r "require '/app/api/lib/common.php'; require '/app/api/lib/quotes.php'; foreach(['EURUSD','USDJPY','USDCHF','GBPUSD'] as \$s){ \$r=quote_get(\$s,'forex'); echo \$s.'[p='.(\$r['price']??'NULL').',src='.(\$r['source']??'NULL').'] '; }" 2>&1 | head -c 400)" >&2
     set -- forex stocks arab commodities futures
     idx=1
     count=$#
@@ -83,14 +102,10 @@ if [ "${IN_CONTAINER_CRON:-1}" != "0" ]; then
       # One non-crypto class per cycle (warmed roughly every count*interval).
       nctype=$(eval "echo \${$idx}")
       nice -n 19 timeout 70 php /app/api/cron/quotes_warm.php "types=$nctype" "per_type=24" >/dev/null 2>&1 || true
-      # Refresh the hottest markets.php response caches (home + trade crypto) so
-      # the first organic visitor each cycle is served instantly instead of being
-      # stuck on a rebuild; markets.php keeps them live via stale-while-revalidate.
-      warm_http "/api/markets.php?scope=home&supported=1&lite=1&with_quotes=1&rescue=1&limit=30"
-      warm_http "/api/markets.php?type=crypto&scope=trade&supported=1&lite=1&with_quotes=1&rescue=1&rescue_noncrypto=1&limit=36"
-      for dt in crypto forex stocks commodities futures arab; do
-        warm_http "/api/markets.php?type=${dt}&scope=trade&supported=1&lite=1&with_quotes=0&fast_list=1&show_unpriced=1&limit=80"
-      done
+      # Refresh the hottest markets.php response caches so the first organic
+      # visitor each cycle is served instantly instead of being stuck on a
+      # rebuild; markets.php keeps them live via stale-while-revalidate.
+      warm_markets_http
       idx=$((idx + 1)); [ "$idx" -gt "$count" ] && idx=1
       sleep 75
     done
