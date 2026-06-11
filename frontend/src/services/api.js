@@ -10,15 +10,17 @@ function cacheKeyFor(path) {
 
 function defaultCacheTtl(path) {
   const p = String(path || '');
-  if (p.includes('/markets.php')) return 15000;
-  if (p.includes('/wallet/summary.php')) return 10000;
-  if (p.includes('/trade/portfolio.php')) return 8000;
-  if (p.includes('/trade/orders.php')) return 8000;
-  if (p.includes('/invest/contracts.php') || p.includes('/signals.php')) return 15000;
+  if (p.includes('/markets.php')) return 5000;
+  if (p.includes('/wallet/summary.php')) return 3000;
+  if (p.includes('/trade/portfolio.php')) return 2000;
+  if (p.includes('/trade/orders.php')) return 2000;
+  if (p.includes('/invest/contracts.php') || p.includes('/signals.php')) return 6000;
   if (p.includes('/quotes.php')) {
-    if (p.includes('cache_only=1')) return 3000;
-    if (p.includes('purpose=watchlist')) return 1500;
+    if (p.includes('cache_only=1')) return 1000;
+    if (p.includes('purpose=watchlist')) return 600;
   }
+  if (p.includes('/bootstrap.php')) return 60000;
+  if (p.includes('/public_prices.php')) return 12000;
   return 0;
 }
 
@@ -56,8 +58,7 @@ async function doFetch(path, options = {}) {
     else options.signal.addEventListener('abort', onAbort, { once: true });
   }
   const timeoutMs = options.timeout === 0 ? 0 : Math.max(1000, Number(options.timeout ?? 18000));
-  let didTimeout = false;
-  const timeout = timeoutMs > 0 ? setTimeout(() => { didTimeout = true; controller.abort(); }, timeoutMs) : null;
+  const timeout = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
   try {
     const url = path.startsWith('http') ? path : `${BASE}${path}`;
@@ -92,10 +93,7 @@ async function doFetch(path, options = {}) {
         await sleep(350);
         return doFetch(path, { ...options, retry: options.retry - 1, timeout: Math.max(timeoutMs || 0, 16000) });
       }
-      const friendly = new Error(didTimeout ? 'Request timed out. Please try again.' : 'Request was cancelled.');
-      friendly.name = 'RequestAbortError';
-      friendly.code = didTimeout ? 'timeout' : 'aborted';
-      throw friendly;
+      throw err;
     }
     if (options.retry && options.retry > 0) {
       await sleep(Math.min(1000 * (4 - options.retry), 3000));
@@ -111,6 +109,17 @@ async function doFetch(path, options = {}) {
 export function abortAll() {
   activeControllers.forEach((c) => c.abort());
   activeControllers.clear();
+}
+
+/**
+ * Invalidate all cache entries whose URL contains any of the given substrings.
+ * Call immediately after any write operation (place_order, close_position, cancel)
+ * so the next GET for portfolio/orders fetches fresh data from the server.
+ */
+export function clearCacheFor(...paths) {
+  for (const key of responseCache.keys()) {
+    if (paths.some((p) => key.includes(p))) responseCache.delete(key);
+  }
 }
 
 export async function postApi(path, body, options = {}) {

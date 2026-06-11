@@ -971,9 +971,10 @@ try{ window.VPTradeLiveQuoteStore = VPTradeLiveQuoteStore; }catch(e){}
 
 function normalizeLiveAssetType(type){
   const t = String(type || '').toLowerCase();
-  if(t === 'fx' || t === 'indices') return 'forex';
+  if(t === 'fx') return 'forex';
+  if(t === 'indices' || t === 'index') return 'indices';
   if(t === 'perpetual' || t === 'perp') return 'futures';
-  if(t === 'crypto' || t === 'forex' || t === 'stocks' || t === 'commodities' || t === 'futures' || t === 'arab') return t;
+  if(t === 'crypto' || t === 'forex' || t === 'stocks' || t === 'commodities' || t === 'indices' || t === 'futures' || t === 'arab') return t;
   return t || 'crypto';
 }
 
@@ -1234,22 +1235,30 @@ function toggleTheme(){
 
 async function loadI18n(){
   let dict = null;
-  try{
-    const res = await fetch(`./assets/i18n/${state.lang}.json`, {cache:'no-store'});
-    if(res.ok) dict = await res.json();
-  }catch(e){}
+  const cacheKey = 'i18n_' + state.lang;
+  const cached = sessionStorage.getItem(cacheKey);
+  if(cached){
+    try{ dict = JSON.parse(cached); }catch(e){}
+  }
   if(!dict){
-    const res = await fetch(`./assets/i18n/en.json`, {cache:'no-store'});
+    try{
+      const res = await fetch(`./assets/i18n/${state.lang}.json`, {cache:'force-cache'});
+      if(res.ok) dict = await res.json();
+    }catch(e){}
+  }
+  if(!dict){
+    const res = await fetch(`./assets/i18n/en.json`, {cache:'force-cache'});
     dict = await res.json();
   }
   // Optional overrides from Admin (settings table)
   try{
-    const o = await fetch(`${API_BASE}/i18n_overrides.php?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
+    const o = await fetch(`${API_BASE}/i18n_overrides.php?lang=${encodeURIComponent(state.lang)}`, {cache:'force-cache'});
     const j = await o.json();
     if(j && j.ok && j.dict && typeof j.dict === 'object'){
       Object.assign(dict, j.dict);
     }
   }catch(e){}
+  if(dict) sessionStorage.setItem(cacheKey, JSON.stringify(dict));
   state.dict = state.dict || {};
   state.dict[state.lang] = dict;
   state.t = (k)=> dict[k] ?? k;
@@ -4098,7 +4107,7 @@ async function api(path, opts={}){
         headers,
         body,
         signal: controller.signal,
-        cache: 'no-store',
+        cache: 'default',
       });
       text = await res.text();
     }catch(e){

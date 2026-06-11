@@ -5,6 +5,10 @@ import { delegate } from '../utils/dom.js';
 import { api, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
+import { currentLocale, t } from '../utils/i18n.js';
+
+// Listeners bound to the persistent #view container; disposed on cleanup to avoid accumulation.
+let investDisposers = [];
 
 export function render() {
   const tab = get('invest.tab') || localStorage.getItem('vp_earn_tab') || 'copy';
@@ -15,31 +19,16 @@ export function render() {
   const mode = get('mode');
 
   return `
-    <div class="space-y-5 animate-fade-in">
-      <section class="feature-hero">
-        <div class="relative z-10">
-          <span class="badge-accent">Earn desk</span>
-          <h1 class="text-2xl lg:text-3xl font-black mt-2">Copy Trading & Contracts</h1>
-          <p class="text-muted text-sm mt-2 max-w-2xl">Follow approved copy signals on Real accounts, or subscribe to level-gated contracts managed inside MEX Group.</p>
-        </div>
-        <div class="feature-hero__stats">
-          ${heroStat('Mode', mode === 'real' ? 'Real' : 'Demo', mode === 'real' ? 'Internal execution' : 'Preview only')}
-          ${heroStat('Available', '$' + money(wallet.available), wallet.currency || 'USDT')}
-          ${heroStat('Level', current.name || current.name_en || 'Level 1', next?.name ? `Next: ${next.name}` : 'Customer tier')}
-        </div>
-      </section>
-
-      <section class="level-strip">
-        ${levelPill('Current level', current.name || current.name_en || 'Level 1', 'Customer tier', true)}
-        ${levelPill('Next level', next?.name || next?.name_en || 'Level 2', next?.min_deposit_total ? `$${money(next.min_deposit_total)} deposits` : 'Deposit progression')}
-        ${levelPill('Real available', '$' + money(wallet.available), wallet.currency || 'USDT')}
-        ${levelPill('Active copies', String((get('invest.copies') || []).length || 0), 'Real copy desk')}
-        ${levelPill('Active contracts', String((get('invest.mine.contracts') || []).length || 0), 'Running')}
-      </section>
+    <div class="space-y-4 animate-fade-in earn-page">
+      <div class="earn-balance-bar">
+        <span class="text-[10px] text-muted uppercase tracking-wider">${t('balance.available', 'Available Balance')}</span>
+        <strong class="text-lg font-mono">${money(wallet.available)} <small class="text-muted text-xs font-normal">${esc(wallet.currency || 'USDT')}</small></strong>
+        <span class="earn-mode-chip ${mode === 'real' ? 'is-real' : 'is-demo'}">${mode === 'real' ? t('mode.real', 'Real') : t('mode.demo', 'Demo')}</span>
+      </div>
 
       <div class="segmented">
-        <button class="${tab === 'copy' ? 'active' : ''}" data-earn-tab="copy">Copy Trading</button>
-        <button class="${tab === 'contracts' ? 'active' : ''}" data-earn-tab="contracts">Contracts</button>
+        <button class="${tab === 'copy' ? 'active' : ''}" data-earn-tab="copy">${t('earn.trading_bots', 'Trading Bots')}</button>
+        <button class="${tab === 'contracts' ? 'active' : ''}" data-earn-tab="contracts">${t('earn.contracts', 'Contracts')}</button>
       </div>
 
       <div id="invest-content">
@@ -61,28 +50,34 @@ export function mount(container) {
       currentPill.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
     }
   }, 100);
-  delegate(container, '[data-earn-tab]', 'click', (_e, el) => {
+  investDisposers.push(delegate(container, '[data-earn-tab]', 'click', (_e, el) => {
     set('invest.tab', el.dataset.earnTab);
     localStorage.setItem('vp_earn_tab', el.dataset.earnTab);
     renderContent(container);
-  });
-  delegate(container, '[data-copy-signal]', 'click', (_e, btn) => openCopyDialog(btn.dataset.copySignal, container));
-  delegate(container, '[data-contract-subscribe]', 'click', (_e, btn) => openContractDialog(btn.dataset.contractSubscribe, container));
-  delegate(container, '[data-switch-real]', 'click', () => {
+  }));
+  investDisposers.push(delegate(container, '[data-copy-signal]', 'click', (_e, btn) => openCopyDialog(btn.dataset.copySignal, container)));
+  investDisposers.push(delegate(container, '[data-cancel-copy]', 'click', (_e, btn) => cancelCopySubscription(btn.dataset.cancelCopy, container)));
+  investDisposers.push(delegate(container, '[data-contract-subscribe]', 'click', (_e, btn) => openContractDialog(btn.dataset.contractSubscribe, container)));
+  investDisposers.push(delegate(container, '[data-switch-real]', 'click', () => {
     localStorage.setItem('vp_mode', 'real');
     set('mode', 'real');
     location.reload();
-  });
-  delegate(container, '[data-open-kyc]', 'click', () => { location.hash = '#/kyc'; });
+  }));
+  investDisposers.push(delegate(container, '[data-open-kyc]', 'click', () => { location.hash = '#/kyc'; }));
+}
+
+export function cleanup() {
+  investDisposers.forEach((d) => { try { d(); } catch (_e) {} });
+  investDisposers = [];
 }
 
 async function loadInvest(container) {
   try {
     const [signals, contracts, copies, mine] = await Promise.all([
-      api('/signals.php?bot=1&home=1&lang=en', { timeout: 8000 }).catch(() => ({ items: [] })),
-      api('/invest/contracts.php?lang=en', { timeout: 8000 }).catch(() => ({ items: [] })),
-      api('/trading_bot/my.php?lang=en', { timeout: 8000 }).catch(() => ({ items: [] })),
-      api('/invest/my.php?lang=en', { timeout: 8000 }).catch(() => ({ items: [] })),
+      api(`/signals.php?bot=1&home=1&lang=${encodeURIComponent(currentLocale())}`, { timeout: 8000 }).catch(() => ({ items: [] })),
+      api(`/invest/contracts.php?lang=${encodeURIComponent(currentLocale())}`, { timeout: 8000 }).catch(() => ({ items: [] })),
+      api(`/trading_bot/my.php?lang=${encodeURIComponent(currentLocale())}`, { timeout: 8000 }).catch(() => ({ items: [] })),
+      api(`/invest/my.php?lang=${encodeURIComponent(currentLocale())}`, { timeout: 8000 }).catch(() => ({ items: [] })),
     ]);
     set('invest.signals', signals.items || []);
     set('invest.contracts', contracts.items || []);
@@ -106,26 +101,37 @@ function renderContent(container) {
 function copyView() {
   const signals = get('invest.signals') || [];
   const copies = get('invest.copies') || [];
+  const activeCopies = copies.filter(copyIsActive);
+  const closedCopies = copies.filter(item => !copyIsActive(item));
   return `
     <section class="desk-panel">
       <div class="panel-head">
         <div>
-          <span class="badge-green">Signal desk</span>
-          <h2>Copy trading signals</h2>
-          <p>Real-only subscriptions. KYC approval is required before copying.</p>
+          <span class="badge-green">${t('bot.avalon_ai', 'Avalon AI')}</span>
+          <h2>${t('bot.avalon_name', 'Avalon AI Trading Bot')}</h2>
+          <p>${t('bot.avalon_copy', 'Real-only AI copy bots with admin-managed trade operations.')}</p>
         </div>
       </div>
-      ${signals.length ? `<div class="copy-grid">${signals.map(signalCard).join('')}</div>` : emptyState('No copy signals available yet.')}
+      ${signals.length ? `<div class="copy-grid">${signals.map(signalCard).join('')}</div>` : emptyState(t('bot.no_signals', 'No bot trades available yet.'))}
     </section>
     <section class="desk-panel">
       <div class="panel-head">
         <div>
-          <span class="badge-accent">Your desk</span>
-          <h2>My copies</h2>
-          <p>Active, armed, copied, and closed subscriptions.</p>
+          <span class="badge-accent">${t('earn.your_desk', 'Your desk')}</span>
+          <h2>${t('bot.my_avalon_copies', 'My Avalon copies')}</h2>
+          <p>${t('bot.copies_separate_copy', 'Copied bot operations are kept here, separate from manual Trade activity.')}</p>
         </div>
       </div>
-      ${copies.length ? `<div class="history-grid">${copies.map(copyHistoryCard).join('')}</div>` : emptyState('No copied signals yet.')}
+      <div class="copy-history-columns">
+        <div>
+          <div class="history-subtitle"><span>${t('trade.active', 'Active')}</span><b>${activeCopies.length}</b></div>
+          ${activeCopies.length ? `<div class="history-grid">${activeCopies.map(copyHistoryCard).join('')}</div>` : emptyState(t('bot.no_active_copies', 'No active copies.'))}
+        </div>
+        <div>
+          <div class="history-subtitle"><span>${t('trade.closed', 'Closed')}</span><b>${closedCopies.length}</b></div>
+          ${closedCopies.length ? `<div class="history-grid">${closedCopies.map(copyHistoryCard).join('')}</div>` : emptyState(t('bot.no_closed_copies', 'No closed copies yet.'))}
+        </div>
+      </div>
     </section>`;
 }
 
@@ -136,31 +142,32 @@ function contractsView() {
     <section class="desk-panel">
       <div class="panel-head">
         <div>
-          <span class="badge-accent">Contracts</span>
-          <h2>Perpetual and term contracts</h2>
-          <p>Level-gated contracts for approved Real wallets.</p>
+          <span class="badge-accent">${t('earn.contracts', 'Contracts')}</span>
+          <h2>${t('earn.contracts_title', 'Perpetual and term contracts')}</h2>
+          <p>${t('earn.contracts_copy', 'Level-gated contracts for approved Real wallets.')}</p>
         </div>
       </div>
-      ${contracts.length ? `<div class="contract-grid">${contracts.map(contractCard).join('')}</div>` : emptyState('No contracts available yet.')}
+      ${contracts.length ? `<div class="contract-grid">${contracts.map(contractCard).join('')}</div>` : emptyState(t('earn.no_contracts', 'No contracts available yet.'))}
     </section>
     <section class="desk-panel">
       <div class="panel-head">
         <div>
-          <span class="badge-green">Running</span>
-          <h2>My contracts</h2>
-          <p>Subscriptions funded from the Real wallet ledger.</p>
+          <span class="badge-green">${t('earn.running', 'Running')}</span>
+          <h2>${t('earn.my_contracts', 'My contracts')}</h2>
+          <p>${t('earn.my_contracts_copy', 'Subscriptions funded from the Real wallet ledger.')}</p>
         </div>
       </div>
-      ${mine.length ? `<div class="history-grid">${mine.map(contractHistoryCard).join('')}</div>` : emptyState('No active contracts yet.')}
+      ${mine.length ? `<div class="history-grid">${mine.map(contractHistoryCard).join('')}</div>` : emptyState(t('earn.no_active_contracts', 'No active contracts yet.'))}
     </section>`;
 }
 
 function signalCard(sig) {
   const symbol = sig.symbol || sig.market_symbol || '--';
   const dir = String(sig.direction || 'BUY').toUpperCase();
+  const direction = normalizeDirection(dir);
   const type = sig.type || sig.market_type || 'crypto';
   const live = Number(sig.live_price || 0);
-  const status = live > 0 ? 'LIVE' : 'UNAVAILABLE';
+  const status = live > 0 ? t('market.live', 'LIVE') : t('market.unavailable', 'UNAVAILABLE');
   const chip = live > 0 ? 'status-chip-live' : 'status-chip-locked';
   const quote = live > 0 ? `$${money(live, type === 'forex' ? 5 : 2)}` : '--';
   const change = live > 0 ? pct(sig.live_change_pct || 0) : '0.00%';
@@ -169,13 +176,13 @@ function signalCard(sig) {
   return `<article class="copy-card">
     <div class="copy-card__top">
       <div class="flex items-center gap-3 min-w-0">
-        ${marketLogo({ symbol, type }, 'market-logo')}
+        <span class="avalon-bot-mark" aria-hidden="true">&#129302;</span>
         <div class="min-w-0">
-          <h3>${esc(symbol)}</h3>
-          <p>${esc(sig.bot_name || sig.bot_name_en || sig.timeframe || 'Managed copy signal')}</p>
+          <h3>${esc(sig.bot_name || sig.bot_name_en || `Avalon ${symbol} AI Bot`)}</h3>
+          <p>${esc(symbol)} - ${t('bot.ai_trade_operation', 'AI trade operation')}</p>
         </div>
       </div>
-      <span class="badge-${dir === 'BUY' ? 'buy' : 'sell'}">${esc(dir)}</span>
+      ${directionChip(direction)}
     </div>
     <div class="copy-card__quote">
       <span class="status-chip ${chip}">${status}</span>
@@ -183,70 +190,83 @@ function signalCard(sig) {
       <span class="${Number(sig.live_change_pct || 0) >= 0 ? 'text-buy' : 'text-sell'}">${change}</span>
     </div>
     <div class="signal-metrics">
-      ${metric('Entry', priceValue(sig.entry ?? sig.entry_price))}
-      ${metric('Stop loss', priceValue(sig.sl ?? sig.stop_loss))}
-      ${metric('Take profit', priceValue(sig.tp1 ?? sig.take_profit_1))}
-      ${metric('Confidence', `${Number(sig.confidence || 0)}%`)}
+      ${metric(t('trade.entry', 'Entry'), priceValue(sig.entry ?? sig.entry_price))}
+      ${metric(t('trade.stop_loss', 'Stop loss'), priceValue(sig.sl ?? sig.stop_loss))}
+      ${metric(t('trade.take_profit', 'Take profit'), priceValue(sig.tp1 ?? sig.take_profit_1))}
+      ${metric(t('bot.confidence', 'Confidence'), `${Number(sig.confidence || 0)}%`)}
     </div>
-    <p class="copy-brief">${esc(sig.bot_brief || sig.note || 'Desk-managed setup with controlled entry, stop, and target.')}</p>
+    <p class="copy-brief">${esc(sig.bot_brief || sig.note || t('bot.default_brief', 'Desk-managed setup with controlled entry, stop, and target.'))}</p>
     <div class="copy-card__chips">
-      <span>Min $${money(minAmount)}</span>
-      <span>${Number(sig.copy_lock_days || 0)}d lock</span>
-      <span>${Number(sig.copy_profit_share_pct || 0)}% share</span>
-      <span>${Number(sig.subscribers || 0)} followers</span>
+      <span>${t('common.min', 'Min')} $${money(minAmount)}</span>
+      <span>${Number(sig.copy_lock_days || 0)}${t('common.days_short', 'd')} ${t('bot.lock', 'lock')}</span>
+      <span>${Number(sig.copy_profit_share_pct || 0)}% ${t('bot.share', 'share')}</span>
+      <span>${Number(sig.subscribers || 0)} ${t('bot.followers', 'followers')}</span>
       ${levelChip}
     </div>
-    <button class="btn-primary w-full mt-4" data-copy-signal="${escAttr(sig.id)}">Copy Real</button>
+    <button class="btn-primary w-full mt-4" data-copy-signal="${escAttr(sig.id)}">${t('bot.copy_on_real', 'Copy on Real')}</button>
   </article>`;
 }
 
 function contractCard(c) {
   const eligible = c.eligible !== false;
-  const term = Number(c.is_perpetual || 0) === 1 ? 'Perpetual' : `${Number(c.term_days || 0)}d`;
+  const term = Number(c.is_perpetual || 0) === 1 ? t('earn.perpetual', 'Perpetual') : `${Number(c.term_days || 0)}${t('common.days_short', 'd')}`;
   const min = Number(c.min_amount || 0);
-  const badge = eligible ? 'ELIGIBLE' : 'LEVEL LOCKED';
+  const badge = eligible ? t('earn.eligible', 'ELIGIBLE') : t('earn.level_locked', 'LEVEL LOCKED');
   return `<article class="contract-card ${eligible ? '' : 'locked'}">
     <div class="copy-card__top">
       <div>
-        <span class="badge-accent">${esc(c.badge || c.risk || 'Contract')}</span>
-        <h3>${esc(c.name || c.name_en || 'Contract')}</h3>
+        <span class="badge-accent">${esc(c.badge || c.risk || t('earn.contract', 'Contract'))}</span>
+        <h3>${esc(c.name || c.name_en || t('earn.contract', 'Contract'))}</h3>
       </div>
       <span class="status-chip ${eligible ? 'status-chip-live' : 'status-chip-locked'}">${badge}</span>
     </div>
-    <p class="copy-brief">${esc(c.desc || c.description || c.details || 'Level managed contract product.')}</p>
+    <p class="copy-brief">${esc(c.desc || c.description || c.details || t('earn.contract_default_copy', 'Level managed contract product.'))}</p>
     <div class="signal-metrics">
-      ${metric('ROI', `${Number(c.roi_percent || 0)}%`)}
-      ${metric('Term', term)}
-      ${metric('Minimum', `$${money(min)}`)}
-      ${metric('Schedule', c.payout_schedule || 'end')}
+      ${metric(t('earn.roi', 'ROI'), `${Number(c.roi_percent || 0)}%`)}
+      ${metric(t('earn.term', 'Term'), term)}
+      ${metric(t('earn.minimum', 'Minimum'), `$${money(min)}`)}
+      ${metric(t('earn.schedule', 'Schedule'), c.payout_schedule || t('earn.end', 'end'))}
     </div>
     <div class="copy-card__chips">
-      <span>${esc(c.required_level?.name || 'Starter')}</span>
-      <span>${Number(c.early_exit_allowed || 0) ? 'Early exit' : 'Locked term'}</span>
-      <span>${esc(c.product_kind || 'contract')}</span>
+      <span>${esc(c.required_level?.name || t('level.starter', 'Starter'))}</span>
+      <span>${Number(c.early_exit_allowed || 0) ? t('earn.early_exit', 'Early exit') : t('earn.locked_term', 'Locked term')}</span>
+      <span>${esc(c.product_kind || t('earn.contract', 'contract'))}</span>
     </div>
-    <button class="${eligible ? 'btn-primary' : 'btn-ghost'} w-full mt-4" ${eligible ? `data-contract-subscribe="${escAttr(c.id)}"` : 'disabled'}>${eligible ? 'Subscribe' : 'Level locked'}</button>
+    <button class="${eligible ? 'btn-primary' : 'btn-ghost'} w-full mt-4" ${eligible ? `data-contract-subscribe="${escAttr(c.id)}"` : 'disabled'}>${eligible ? t('earn.subscribe', 'Subscribe') : t('earn.level_locked_label', 'Level locked')}</button>
   </article>`;
 }
 
 function copyHistoryCard(item) {
   const symbol = item.symbol || item.market_symbol || '--';
   const status = String(item.status || 'active').toUpperCase();
+  const active = copyIsActive(item);
+  const openPositions = Array.isArray(item.open_positions) ? item.open_positions : [];
+  const closedPositions = Array.isArray(item.closed_positions) ? item.closed_positions : [];
+  const pnlTotal = Number(item.pnl_total || 0);
   return `<article class="history-card">
     <div class="flex items-center gap-3">
-      ${marketLogo({ symbol, type: item.type }, 'market-logo')}
+      <span class="avalon-mini-mark" aria-hidden="true">&#129302;</span>
       <div class="min-w-0">
-        <h3>${esc(symbol)}</h3>
-        <p>${esc(item.bot_name || item.timeframe || 'Copy subscription')}</p>
+        <h3>${esc(item.bot_name || item.bot_name_en || `Avalon ${symbol} AI Bot`)}</h3>
+        <p>${esc(symbol)} - ${esc(item.status_group || t('bot.copy_subscription', 'copy subscription'))}</p>
       </div>
       <span class="status-chip">${esc(status)}</span>
     </div>
     <div class="signal-metrics mt-3">
-      ${metric('Reserved', `$${money(item.reserved_amount || 0)}`)}
-      ${metric('Live', item.live_price ? `$${money(item.live_price)}` : '--')}
-      ${metric('Share', `${Number(item.profit_share_pct || 0)}%`)}
-      ${metric('Leverage', `${Number(item.leverage || 1)}x`)}
+      ${metric(t('bot.reserved', 'Reserved'), `$${money(item.reserved_amount || 0)}`)}
+      ${metric(t('trade.open', 'Open'), String(item.open_count ?? openPositions.length))}
+      ${metric(t('trade.closed', 'Closed'), String(item.closed_count ?? closedPositions.length))}
+      ${metric('PnL', `$${money(pnlTotal)}`)}
     </div>
+    <details class="copy-details">
+      <summary>${t('bot.trade_history', 'Bot trade history')}</summary>
+      <div class="copy-details-list">
+        ${openPositions.length ? `<strong>${t('trade.active_trades', 'Active trades')}</strong>${openPositions.map(copyPositionRow).join('')}` : ''}
+        ${closedPositions.length ? `<strong>${t('trade.closed_trades', 'Closed trades')}</strong>${closedPositions.map(copyPositionRow).join('')}` : ''}
+        ${!openPositions.length && !closedPositions.length ? `<p class="text-muted text-xs">${t('bot.no_child_trades', 'No child trades have been opened yet.')}</p>` : ''}
+      </div>
+    </details>
+    ${active ? `<button class="btn-danger w-full mt-3" data-cancel-copy="${escAttr(item.id)}">${t('bot.cancel_copy_market', 'Cancel copy at market')}</button>` : ''}
   </article>`;
 }
 
@@ -254,16 +274,16 @@ function contractHistoryCard(item) {
   return `<article class="history-card">
     <div class="flex items-center justify-between gap-3">
       <div>
-        <h3>${esc(item.plan_name || 'Contract')}</h3>
-        <p>${esc(item.status || 'active')} &middot; ${Number(item.is_perpetual || 0) ? 'Perpetual' : 'Term'}</p>
+        <h3>${esc(item.plan_name || t('earn.contract', 'Contract'))}</h3>
+        <p>${esc(item.status || t('trade.active', 'active'))} &middot; ${Number(item.is_perpetual || 0) ? t('earn.perpetual', 'Perpetual') : t('earn.term', 'Term')}</p>
       </div>
-      <span class="status-chip status-chip-live">${esc(item.product_kind || 'contract')}</span>
+      <span class="status-chip status-chip-live">${esc(item.product_kind || t('earn.contract', 'contract'))}</span>
     </div>
     <div class="signal-metrics mt-3">
-      ${metric('Amount', `$${money(item.amount || 0)}`)}
-      ${metric('Expected', `$${money(item.expected_return || 0)}`)}
-      ${metric('Paid', `$${money(item.paid_total || 0)}`)}
-      ${metric('ROI', `${Number(item.cycle_roi_percent || 0)}%`)}
+      ${metric(t('deposit.amount', 'Amount'), `$${money(item.amount || 0)}`)}
+      ${metric(t('earn.expected', 'Expected'), `$${money(item.expected_return || 0)}`)}
+      ${metric(t('earn.paid', 'Paid'), `$${money(item.paid_total || 0)}`)}
+      ${metric(t('earn.roi', 'ROI'), `${Number(item.cycle_roi_percent || 0)}%`)}
     </div>
   </article>`;
 }
@@ -280,12 +300,12 @@ function openCopyDialog(id, container) {
   showDialog(`
     <form class="space-y-4" id="copy-form">
       <div>
-        <span class="badge-green">Copy real</span>
-        <h2 class="text-lg font-bold mt-1">${esc(sig.symbol || sig.market_symbol || 'Signal')}</h2>
-        <p class="text-xs text-muted">${esc(sig.bot_brief || sig.note || 'Desk-managed copy signal.')}</p>
+        <span class="badge-green">${t('bot.avalon_ai', 'Avalon AI')}</span>
+        <h2 class="text-lg font-bold mt-1">${esc(sig.bot_name || sig.bot_name_en || `Avalon ${sig.symbol || sig.market_symbol || 'AI'} Bot`)}</h2>
+        <p class="text-xs text-muted">${esc(sig.bot_brief || sig.note || t('bot.admin_managed_operation', 'AI bot operation managed from admin.'))}</p>
       </div>
       <div class="signal-metrics">
-        ${metric('Entry', priceValue(sig.entry ?? sig.entry_price))}
+        ${metric(t('trade.entry', 'Entry'), priceValue(sig.entry ?? sig.entry_price))}
         ${metric('SL', priceValue(sig.sl ?? sig.stop_loss))}
         ${metric('TP', priceValue(sig.tp1 ?? sig.take_profit_1))}
         ${metric('Share', `${Number(sig.copy_profit_share_pct || 0)}%`)}
@@ -294,9 +314,9 @@ function openCopyDialog(id, container) {
         <span class="text-xs text-muted">Copy amount (USDT)</span>
         <input class="input mt-1" name="amount" type="number" min="${minAmount}" step="0.01" value="${minAmount}" required />
       </label>
-      <p class="dialog-note">This uses your Real wallet and may reserve funds until the copy is closed or expires.</p>
+      <p class="dialog-note">${t('bot.copy_dialog_note', 'This uses your Real wallet and may reserve funds until the copy is closed or expires.')}</p>
       <p class="dialog-error hidden" id="copy-error"></p>
-      <button class="btn-primary w-full" type="submit">Confirm Copy</button>
+      <button class="btn-primary w-full" type="submit">${t('bot.confirm_copy', 'Confirm Copy')}</button>
     </form>
   `);
   document.querySelector('#copy-form')?.addEventListener('submit', async (e) => {
@@ -310,11 +330,27 @@ function openCopyDialog(id, container) {
       await loadInvest(container);
     } catch (ex) {
       if (err) {
-        err.textContent = ex?.message || 'Copy failed';
+        err.textContent = ex?.message || t('bot.copy_failed', 'Copy failed');
         err.classList.remove('hidden');
       }
     }
   });
+}
+
+async function cancelCopySubscription(id, container) {
+  if (!id) return;
+  const ok = window.confirm(t('bot.cancel_confirm', 'Cancel this Avalon copy and close its open trades at the current market price?'));
+  if (!ok) return;
+  try {
+    await postApi('/trading_bot/cancel.php', { subscription_id: Number(id) }, { timeout: 15000 });
+    await loadInvest(container);
+  } catch (ex) {
+    showDialog(`<div class="text-center space-y-3">
+      <h2 class="text-lg font-bold">${t('bot.cancel_failed', 'Cancel failed')}</h2>
+      <p class="text-sm text-muted">${esc(ex?.message || t('bot.cancel_failed_copy', 'Could not cancel this copy right now.'))}</p>
+      <button class="btn-primary btn-sm" type="button" data-dialog-close>${t('common.close', 'Close')}</button>
+    </div>`);
+  }
 }
 
 function openContractDialog(id, container) {
@@ -329,23 +365,23 @@ function openContractDialog(id, container) {
   showDialog(`
     <form class="space-y-4" id="contract-form">
       <div>
-        <span class="badge-accent">Contract</span>
-        <h2 class="text-lg font-bold mt-1">${esc(contract.name || contract.name_en || 'Contract')}</h2>
-        <p class="text-xs text-muted">${esc(contract.desc || contract.details || 'Level-gated contract subscription.')}</p>
+        <span class="badge-accent">${t('earn.contract', 'Contract')}</span>
+        <h2 class="text-lg font-bold mt-1">${esc(contract.name || contract.name_en || t('earn.contract', 'Contract'))}</h2>
+        <p class="text-xs text-muted">${esc(contract.desc || contract.details || t('earn.contract_subscription_copy', 'Level-gated contract subscription.'))}</p>
       </div>
       <div class="signal-metrics">
-        ${metric('ROI', `${Number(contract.roi_percent || 0)}%`)}
-        ${metric('Term', Number(contract.is_perpetual || 0) ? 'Perpetual' : `${Number(contract.term_days || 0)}d`)}
-        ${metric('Minimum', `$${money(minAmount)}`)}
-        ${metric('Schedule', contract.payout_schedule || 'end')}
+        ${metric(t('earn.roi', 'ROI'), `${Number(contract.roi_percent || 0)}%`)}
+        ${metric(t('earn.term', 'Term'), Number(contract.is_perpetual || 0) ? t('earn.perpetual', 'Perpetual') : `${Number(contract.term_days || 0)}${t('common.days_short', 'd')}`)}
+        ${metric(t('earn.minimum', 'Minimum'), `$${money(minAmount)}`)}
+        ${metric(t('earn.schedule', 'Schedule'), contract.payout_schedule || t('earn.end', 'end'))}
       </div>
       <label class="block">
-        <span class="text-xs text-muted">Amount (USDT)</span>
+        <span class="text-xs text-muted">${t('deposit.amount', 'Amount')} (USDT)</span>
         <input class="input mt-1" name="amount" type="number" min="${minAmount}" step="0.01" value="${minAmount}" required />
       </label>
-      <p class="dialog-note">Funds are debited through the ledger and the contract is managed internally.</p>
+      <p class="dialog-note">${t('earn.contract_dialog_note', 'Funds are debited through the ledger and the contract is managed internally.')}</p>
       <p class="dialog-error hidden" id="contract-error"></p>
-      <button class="btn-primary w-full" type="submit">Subscribe</button>
+      <button class="btn-primary w-full" type="submit">${t('earn.subscribe', 'Subscribe')}</button>
     </form>
   `);
   document.querySelector('#contract-form')?.addEventListener('submit', async (e) => {
@@ -362,7 +398,7 @@ function openContractDialog(id, container) {
       await loadInvest(container);
     } catch (ex) {
       if (err) {
-        err.textContent = ex?.message || 'Subscription failed';
+        err.textContent = ex?.message || t('earn.subscription_failed', 'Subscription failed');
         err.classList.remove('hidden');
       }
     }
@@ -373,17 +409,17 @@ function earnGate() {
   const mode = get('mode');
   if (mode !== 'real') {
     return {
-      title: 'Real account required',
-      body: 'Copy trading and contracts are visible in Demo, but activation is Real-only.',
-      action: 'Switch to Real',
+      title: t('funding.real_required', 'Real account required'),
+      body: t('earn.real_required_copy', 'Avalon copies and contracts are visible in Demo, but activation requires an approved Real account.'),
+      action: t('earn.switch_real', 'Switch to Real'),
       attr: 'data-switch-real',
     };
   }
   if (!kycApproved()) {
     return {
-      title: 'KYC approval required',
-      body: 'Submit and approve KYC before copying signals or subscribing to contracts.',
-      action: 'Open KYC',
+      title: t('earn.kyc_required', 'KYC approval required'),
+      body: t('earn.kyc_required_copy', 'Submit and approve KYC before copying signals or subscribing to contracts.'),
+      action: t('earn.open_kyc', 'Open KYC'),
       attr: 'data-open-kyc',
     };
   }
@@ -432,6 +468,7 @@ function showDialog(content) {
   </div>`;
   document.body.appendChild(wrap);
   wrap.querySelector('.dialog-close')?.addEventListener('click', closeDialog);
+  wrap.querySelector('[data-dialog-close]')?.addEventListener('click', closeDialog);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) closeDialog(); });
 }
 
@@ -461,6 +498,39 @@ function levelPill(label, value, sub, isCurrent = false) {
 
 function emptyState(text) {
   return `<div class="empty-state">${esc(text)}</div>`;
+}
+
+
+function normalizeDirection(direction) {
+  const value = String(direction || 'BUY').toUpperCase();
+  return ['BUY', 'SELL', 'NEUTRAL'].includes(value) ? value : 'BUY';
+}
+
+function directionChip(direction) {
+  const value = normalizeDirection(direction);
+  return `<span class="bot-direction-chip is-${value.toLowerCase()}">${esc(directionLabel(value))}</span>`;
+}
+
+function directionLabel(direction) {
+  const value = normalizeDirection(direction);
+  if (value === 'SELL') return t('trade.sell', 'SELL');
+  if (value === 'NEUTRAL') return t('bot.neutral', 'NEUTRAL');
+  return t('trade.buy', 'BUY');
+}
+
+function copyIsActive(item) {
+  const status = String(item?.status_group || item?.status || '').toLowerCase();
+  return ['active', 'armed', 'copied', 'open', 'running', 'pending'].some(x => status.includes(x));
+}
+
+function copyPositionRow(pos) {
+  const side = normalizeDirection(pos.side || 'BUY');
+  const pnl = Number(pos.pnl || pos.pnl_usd || pos.unrealized_pnl || 0);
+  return `<div class="copy-position-row">
+    <span>${esc(pos.symbol || '--')}</span>
+    ${directionChip(side)}
+    <b class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</b>
+  </div>`;
 }
 
 function priceValue(value) {

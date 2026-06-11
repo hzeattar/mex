@@ -6,6 +6,16 @@ $driver = db_driver();
 $msg = '';
 
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+function signal_direction_pill($direction){
+  $dir = strtoupper(trim((string)$direction));
+  if (!in_array($dir, ['BUY','SELL','NEUTRAL'], true)) $dir = 'BUY';
+  $styles = [
+    'BUY' => 'border-color:rgba(24,201,143,.35);background:rgba(24,201,143,.12);color:#18c98f',
+    'SELL' => 'border-color:rgba(246,70,93,.38);background:rgba(246,70,93,.12);color:#ff6074',
+    'NEUTRAL' => 'border-color:rgba(148,163,184,.35);background:rgba(148,163,184,.12);color:#cbd5e1',
+  ];
+  return '<span class="pill" style="' . $styles[$dir] . '">' . h($dir) . '</span>';
+}
 
 $markets = $pdo->query("SELECT symbol, name, type, status FROM markets WHERE status='active' ORDER BY type ASC, sort_order ASC, symbol ASC")->fetchAll(PDO::FETCH_ASSOC);
 try {
@@ -21,6 +31,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   $action = (string)($_POST['action'] ?? '');
   $now = time();
   try {
+  admin_verify_csrf();
 
   if ($action === 'save') {
     $id = (int)($_POST['id'] ?? 0);
@@ -62,7 +73,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     if ($market_symbol === '' || !preg_match('/^[A-Z0-9:_\-]{2,32}$/', $market_symbol)) {
       $msg = 'Invalid symbol';
-    } elseif (!in_array($direction, ['BUY','SELL'], true)) {
+    } elseif (!in_array($direction, ['BUY','SELL','NEUTRAL'], true)) {
       $msg = 'Invalid direction';
     } else {
       $entryF = $entry === '' ? null : (float)$entry;
@@ -132,8 +143,8 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ob_start();
 ?>
 <div class="card">
-  <h2 style="margin:0 0 10px">Signals / Copy Desk</h2>
-  <p style="margin:0 0 10px;color:#94a3b8">Publish admin trade ideas here, then expose them as copy-ready platform signals. Users will copy these entries into their own accounts using the same entry / SL / TP profile.</p>
+  <h2 style="margin:0 0 10px">Avalon AI Bots / Copy Desk</h2>
+  <p style="margin:0 0 10px;color:#94a3b8">Create one Avalon bot per market, define its direction, entry, SL, TP, leverage, and copy rules. Client subscriptions appear as copy baskets and their copied trades stay linked to the bot history.</p>
   <?php if($msg): ?>
     <div class="pill ok" style="margin-bottom:10px"><?=h($msg)?></div>
   <?php endif; ?>
@@ -186,6 +197,7 @@ ob_start();
   </div>
 
   <form method="post" style="margin-top:12px">
+    <?=admin_csrf_input()?>
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="id" value="<?=h($edit['id'] ?? 0)?>">
 
@@ -218,6 +230,7 @@ ob_start();
         <select name="direction">
           <option value="BUY" <?=strtoupper($edit['direction']??'BUY')==='BUY'?'selected':''?>>BUY</option>
           <option value="SELL" <?=strtoupper($edit['direction']??'BUY')==='SELL'?'selected':''?>>SELL</option>
+          <option value="NEUTRAL" <?=strtoupper($edit['direction']??'BUY')==='NEUTRAL'?'selected':''?>>NEUTRAL / watch only</option>
         </select>
       </div>
     </div>
@@ -237,10 +250,11 @@ ob_start();
     </div>
 
     <div class="card" style="margin-top:12px;background:#0b1a33;border:1px solid #1f2937">
-      <div style="font-weight:700;margin-bottom:8px">Copy signal exposure</div>
+      <div style="font-weight:700;margin-bottom:8px">Avalon AI bot exposure</div>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">If the bot title is empty, the client app will show an automatic name such as <strong>Avalon BTC AI Bot</strong>. Use the brief fields to describe the bot strategy for clients.</div>
       <div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:end">
         <div>
-          <label>Enable copy signal</label><br>
+          <label>Enable Avalon bot</label><br>
           <select name="bot_enabled">
             <option value="0" <?=(int)($edit['bot_enabled'] ?? 0)!==1?'selected':''?>>No</option>
             <option value="1" <?=(int)($edit['bot_enabled'] ?? 0)===1?'selected':''?>>Yes</option>
@@ -263,16 +277,16 @@ ob_start();
         <div><label>Comments count</label><br><input type="number" min="0" name="comments_count" value="<?=h($edit['comments_count'] ?? 0)?>"></div>
       </div>
       <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:12px">
-        <div><label>Signal title (EN)</label><br><input name="bot_name_en" value="<?=h($edit['bot_name_en'] ?? '')?>" placeholder="Signal Alpha"></div>
-        <div><label>Signal title (AR)</label><br><input name="bot_name_ar" value="<?=h($edit['bot_name_ar'] ?? '')?>" placeholder="إشارة ألفا"></div>
-        <div><label>Signal title (RU)</label><br><input name="bot_name_ru" value="<?=h($edit['bot_name_ru'] ?? '')?>" placeholder="Signal Alpha"></div>
+        <div><label>Bot title (EN)</label><br><input name="bot_name_en" value="<?=h($edit['bot_name_en'] ?? '')?>" placeholder="Avalon BTC AI Bot"></div>
+        <div><label>Bot title (AR)</label><br><input name="bot_name_ar" value="<?=h($edit['bot_name_ar'] ?? '')?>" placeholder="بوت Avalon للبيتكوين"></div>
+        <div><label>Bot title (RU)</label><br><input name="bot_name_ru" value="<?=h($edit['bot_name_ru'] ?? '')?>" placeholder="Avalon BTC AI Bot"></div>
       </div>
       <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:12px">
-        <div><label>Signal brief (EN)</label><br><textarea name="bot_brief_en" rows="3"><?=h($edit['bot_brief_en'] ?? '')?></textarea></div>
-        <div><label>Signal brief (AR)</label><br><textarea name="bot_brief_ar" rows="3"><?=h($edit['bot_brief_ar'] ?? '')?></textarea></div>
-        <div><label>Signal brief (RU)</label><br><textarea name="bot_brief_ru" rows="3"><?=h($edit['bot_brief_ru'] ?? '')?></textarea></div>
+        <div><label>Bot brief (EN)</label><br><textarea name="bot_brief_en" rows="3"><?=h($edit['bot_brief_en'] ?? '')?></textarea></div>
+        <div><label>Bot brief (AR)</label><br><textarea name="bot_brief_ar" rows="3"><?=h($edit['bot_brief_ar'] ?? '')?></textarea></div>
+        <div><label>Bot brief (RU)</label><br><textarea name="bot_brief_ru" rows="3"><?=h($edit['bot_brief_ru'] ?? '')?></textarea></div>
       </div>
-      <div style="color:#94a3b8;font-size:12px;margin-top:8px">Client copy uses the same signal entry / SL / TP values you save here. Positive profit share is charged only when copied positions close in profit.</div>
+      <div style="color:#94a3b8;font-size:12px;margin-top:8px">Client copy uses this bot's entry / SL / TP values. Positive profit share is charged only when copied positions close in profit. Use the Recent Signals table to edit each bot like a normal trade setup.</div>
     </div>
 
     <div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:12px; align-items:end">
@@ -293,13 +307,13 @@ ob_start();
           <a class="btn" href="/admin/signals.php" style="margin-left:8px">Cancel</a>
         <?php endif; ?>
       </div>
-      <div style="color:#94a3b8;font-size:12px">Tip: enable <strong>Trading bot</strong> only for signals that should appear in dashboard and allow copy actions.</div>
+      <div style="color:#94a3b8;font-size:12px">Tip: enable <strong>Avalon bot</strong> only for setups that should appear in dashboard/Earn and allow copy actions.</div>
     </div>
   </form>
 </div>
 
 <div class="card">
-  <h3 style="margin:0 0 10px">Recent Signals</h3>
+  <h3 style="margin:0 0 10px">Recent Avalon Bots</h3>
 
   <form method="get" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px">
     <input name="symbol" value="<?=h($filter_symbol)?>" placeholder="Filter symbol (BTCUSDT)">
@@ -328,7 +342,7 @@ ob_start();
           <td><?=h($r['id'])?></td>
           <td><strong><?=h($r['market_symbol'])?></strong><?php if($r['timeframe']): ?> <span class="pill"><?=h($r['timeframe'])?></span><?php endif; ?></td>
           <td><span class="pill"><?=h($r['market_type'])?></span></td>
-          <td><span class="pill"><?=h($r['direction'])?></span></td>
+          <td><?=signal_direction_pill($r['direction'])?></td>
           <td>
             <div><?=h($r['entry_price'])?></div>
             <div class="muted small">SL <?=h($r['stop_loss'])?> • TP1 <?=h($r['take_profit_1'])?></div>
@@ -348,6 +362,7 @@ ob_start();
           <td style="white-space:nowrap">
             <a class="btn" href="/admin/signals.php?id=<?=h($r['id'])?>">Edit</a>
             <form method="post" style="display:inline">
+              <?=admin_csrf_input()?>
               <input type="hidden" name="action" value="toggle">
               <input type="hidden" name="id" value="<?=h($r['id'])?>">
               <input type="hidden" name="cur" value="<?=h($r['status'])?>">

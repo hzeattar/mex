@@ -72,7 +72,7 @@ function auth_ensure_wallets(int $uid): void {
   }
 }
 
-function auth_user_payload(array $row): array {
+function auth_user_payload(array $row, ?array $levelInfo = null): array {
   $first = trim((string)($row['first_name'] ?? ''));
   $last  = trim((string)($row['last_name'] ?? ''));
   $username = trim((string)($row['username'] ?? ''));
@@ -100,8 +100,10 @@ function auth_user_payload(array $row): array {
     }
   } catch (Throwable $e) {}
 
-  $levelInfo = ['confirmed_deposit_total'=>0,'current'=>null,'next'=>null];
-  try { $levelInfo = vp_resolve_user_level(db(), (int)($row['id'] ?? 0), (string)($row['locale'] ?? 'en')); } catch (Throwable $e) {}
+  if ($levelInfo === null) {
+    $levelInfo = ['confirmed_deposit_total'=>0,'current'=>null,'next'=>null];
+    try { $levelInfo = vp_resolve_user_level(db(), (int)($row['id'] ?? 0), (string)($row['locale'] ?? 'en')); } catch (Throwable $e) {}
+  }
 
   return [
     'id' => (int)($row['id'] ?? 0),
@@ -144,6 +146,21 @@ function auth_sync_identity(PDO $pdo, int $uid, string $provider, string $provid
   if ($provider === '' || $providerUserId === '') return;
   $now = now_ts();
   $metaJson = $meta ? json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
+  try {
+    $st = $pdo->prepare('SELECT user_id,provider_username,provider_email,meta_json FROM user_identities WHERE provider=? AND provider_user_id=? LIMIT 1');
+    $st->execute([$provider, $providerUserId]);
+    $existing = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    if ($existing
+      && (int)($existing['user_id'] ?? 0) === $uid
+      && (string)($existing['provider_username'] ?? '') === (string)($username ?? '')
+      && (string)($existing['provider_email'] ?? '') === (string)($email ?? '')
+      && (string)($existing['meta_json'] ?? '') === (string)($metaJson ?? '')
+    ) {
+      return;
+    }
+  } catch (Throwable $e) {
+    // Continue with the idempotent upsert below.
+  }
   if (db_driver() === 'mysql') {
     $sql = 'INSERT INTO user_identities(user_id,provider,provider_user_id,provider_username,provider_email,meta_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?) '
          . 'ON DUPLICATE KEY UPDATE user_id=VALUES(user_id), provider_username=VALUES(provider_username), provider_email=VALUES(provider_email), meta_json=VALUES(meta_json), updated_at=VALUES(updated_at)';
@@ -166,18 +183,32 @@ function auth_ensure_trading_accounts(int $uid): void {
     'live' => ['label' => 'Standard', 'base_currency' => (string)env('REAL_CURRENCY', 'USDT'), 'is_primary' => 1],
     'demo' => ['label' => 'Demo', 'base_currency' => (string)env('DEMO_CURRENCY', 'USDT_DEMO'), 'is_primary' => 0],
   ];
+  $existing = [];
+  try {
+    $st = $pdo->prepare("SELECT mode FROM trading_accounts WHERE user_id=? AND mode IN ('live','demo')");
+    $st->execute([$uid]);
+    foreach (($st->fetchAll(PDO::FETCH_COLUMN) ?: []) as $mode) {
+      $mode = strtolower((string)$mode);
+      if ($mode !== '') $existing[$mode] = true;
+    }
+  } catch (Throwable $e) {}
   foreach ($modes as $mode => $cfg) {
-    $st = $pdo->prepare('SELECT id FROM trading_accounts WHERE user_id=? AND mode=? LIMIT 1');
-    $st->execute([$uid, $mode]);
-    if ((int)($st->fetchColumn() ?: 0) > 0) continue;
-    $pdo->prepare('INSERT INTO trading_accounts(user_id,account_no,mode,label,status,base_currency,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
-        ->execute([$uid, auth_generate_account_no($uid, $mode), $mode, $cfg['label'], 'active', $cfg['base_currency'], $cfg['is_primary'], $now, $now]);
+    if (!empty($existing[$mode])) continue;
+    try {
+      $pdo->prepare('INSERT INTO trading_accounts(user_id,account_no,mode,label,status,base_currency,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+          ->execute([$uid, auth_generate_account_no($uid, $mode), $mode, $cfg['label'], 'active', $cfg['base_currency'], $cfg['is_primary'], $now, $now]);
+    } catch (Throwable $e) {
+      // Another request may have created it first; unique keys keep this idempotent.
+    }
   }
 }
 
 function auth_ensure_platform_user(int $uid, array $opts = []): void {
   auth_ensure_wallets($uid);
   auth_ensure_trading_accounts($uid);
+  if (array_key_exists('sync_identity', $opts) && !$opts['sync_identity']) {
+    return;
+  }
   $pdo = db();
   $email = trim((string)($opts['email'] ?? ''));
   $telegramId = trim((string)($opts['telegram_id'] ?? ''));

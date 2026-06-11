@@ -11,6 +11,7 @@ auth_ensure_platform_user($uid, [
   'email' => (string)($row['email'] ?? ''),
   'telegram_id' => (string)($row['tg_id'] ?? ''),
   'username' => (string)($row['username'] ?? ''),
+  'sync_identity' => false,
 ]);
 
 $user = auth_user_payload($row);
@@ -26,6 +27,8 @@ try {
   $identities['email'] = trim((string)($row['email'] ?? '')) !== '';
   $identities['telegram'] = trim((string)($row['tg_id'] ?? '')) !== '';
 }
+$identities['email'] = $identities['email'] || trim((string)($row['email'] ?? '')) !== '';
+$identities['telegram'] = $identities['telegram'] || trim((string)($row['tg_id'] ?? '')) !== '';
 
 $kycStatus = 'none';
 $kycCountry = '';

@@ -23,15 +23,26 @@ $requestLimit = (int)($_GET['limit'] ?? 0);
 $requestLimit = $requestLimit > 0 ? max(6, min(80, $requestLimit)) : 0;
 $supportedOnly = ((int)($_GET['supported'] ?? 0) === 1) || in_array($scope, ['home', 'trade'], true);
 $supportedInteractive = $withQuotes && $supportedOnly && in_array($scope, ['home', 'trade'], true);
-$disableSupportedRescue = ((int)($_GET['no_rescue'] ?? 0) === 1)
-  || ((int)env('MARKETS_SUPPORTED_RESCUE_DISABLED', '0') === 1);
-$allowListRescue = $forceLive
+$fastList = ((int)($_GET['fast_list'] ?? 0) === 1)
+  || (($supportedInteractive && (int)env('MARKETS_FAST_LIST_DEFAULT', '1') === 1) && !$forceLive && !$grouped);
+$explicitRescue = ((int)($_GET['rescue'] ?? 0) === 1);
+$noRescueParam = ((int)($_GET['no_rescue'] ?? 0) === 1);
+// Home/trade drawers must never go empty just because an old bundled JS file
+// sent no_rescue=1. Keep the param available for non-interactive diagnostics,
+// but ignore it by default for user-facing lists.
+$ignoreNoRescueForInteractive = in_array($scope, ['home', 'trade'], true)
+  && ((int)env('MARKETS_IGNORE_NO_RESCUE_FOR_INTERACTIVE', '1') === 1);
+$disableSupportedRescue = (($noRescueParam && !$ignoreNoRescueForInteractive)
+    || ((int)env('MARKETS_SUPPORTED_RESCUE_DISABLED', '0') === 1))
+  && !$explicitRescue;
+$allowListRescue = !$fastList && ($forceLive
+  || $explicitRescue
   || ($supportedInteractive && !$disableSupportedRescue)
-  || ((int)($_GET['rescue'] ?? env('MARKETS_RESCUE_LIVE_ON_MISS', '0')) === 1);
+  || ((int)env('MARKETS_RESCUE_LIVE_ON_MISS', '0') === 1));
 
-header('Cache-Control: public, max-age=5, s-maxage=5');
-header('Pragma: no-cache');
-header('X-MEX-Markets-Build: price-ref-v20');
+header('Cache-Control: public, max-age=15, s-maxage=15');
+header('Pragma:');
+header('X-MEX-Markets-Build: price-ref-v29');
 
 $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
   'connect_timeout' => max(1, min(2, (int)env('MARKETS_UPSTREAM_CONNECT_TIMEOUT', '1'))),
@@ -42,202 +53,201 @@ $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
 function vp_supported_market_defs(): array {
   return [
     // ── CRYPTO (50+) ────────────────────────────────────────────────────────
-    ['symbol'=>'BTCUSDT', 'name'=>'Bitcoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:BTCUSDT', 'sort_order'=>10, 'seed_price'=>69500,   'icon'=>'btc'],
-    ['symbol'=>'ETHUSDT', 'name'=>'Ethereum / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:ETHUSDT', 'sort_order'=>12, 'seed_price'=>2600,    'icon'=>'eth'],
-    ['symbol'=>'SOLUSDT', 'name'=>'Solana / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:SOLUSDT', 'sort_order'=>14, 'seed_price'=>2.15,     'icon'=>'sol'],
-    ['symbol'=>'XRPUSDT', 'name'=>'XRP / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:XRPUSDT', 'sort_order'=>16, 'seed_price'=>2.15,     'icon'=>'xrp'],
-    ['symbol'=>'BNBUSDT', 'name'=>'BNB / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:BNBUSDT', 'sort_order'=>18, 'seed_price'=>650,     'icon'=>'bnb'],
-    ['symbol'=>'DOGEUSDT','name'=>'Dogecoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:DOGEUSDT','sort_order'=>20, 'seed_price'=>0.19,    'icon'=>'doge'],
-    ['symbol'=>'ADAUSDT', 'name'=>'Cardano / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:ADAUSDT', 'sort_order'=>22, 'seed_price'=>0.72,    'icon'=>'ada'],
-    ['symbol'=>'AVAXUSDT','name'=>'Avalanche / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:AVAXUSDT','sort_order'=>24, 'seed_price'=>122,      'icon'=>'avax'],
-    ['symbol'=>'LINKUSDT','name'=>'Chainlink / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:LINKUSDT','sort_order'=>26, 'seed_price'=>18,      'icon'=>'link'],
-    ['symbol'=>'DOTUSDT', 'name'=>'Polkadot / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:DOTUSDT', 'sort_order'=>28, 'seed_price'=>4.2,       'icon'=>'dot'],
-    ['symbol'=>'LTCUSDT', 'name'=>'Litecoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:LTCUSDT', 'sort_order'=>30, 'seed_price'=>95,      'icon'=>'ltc'],
-    ['symbol'=>'MATICUSDT','name'=>'Polygon / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:MATICUSDT','sort_order'=>32,'seed_price'=>0.12,    'icon'=>'matic'],
-    ['symbol'=>'UNIUSDT', 'name'=>'Uniswap / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:UNIUSDT', 'sort_order'=>34, 'seed_price'=>6.5,       'icon'=>'uni'],
-    ['symbol'=>'ATOMUSDT','name'=>'Cosmos / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:ATOMUSDT','sort_order'=>36, 'seed_price'=>8.5,       'icon'=>'atom'],
-    ['symbol'=>'ETCUSDT', 'name'=>'Ethereum Classic / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:ETCUSDT', 'sort_order'=>38, 'seed_price'=>122,      'icon'=>'etc'],
-    ['symbol'=>'XLMUSDT', 'name'=>'Stellar / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:XLMUSDT', 'sort_order'=>40, 'seed_price'=>0.19,    'icon'=>'xlm'],
-    ['symbol'=>'TRXUSDT', 'name'=>'TRON / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:TRXUSDT', 'sort_order'=>42, 'seed_price'=>0.19,    'icon'=>'trx'],
-    ['symbol'=>'SHIBUSDT','name'=>'Shiba Inu / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:SHIBUSDT','sort_order'=>44, 'seed_price'=>0.000013,'icon'=>'shib'],
-    ['symbol'=>'NEARUSDT','name'=>'NEAR Protocol / Tether',   'type'=>'crypto','tv_symbol'=>'BINANCE:NEARUSDT','sort_order'=>46, 'seed_price'=>3.2,     'icon'=>'near'],
-    ['symbol'=>'VETUSDT', 'name'=>'VeChain / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:VETUSDT', 'sort_order'=>48, 'seed_price'=>0.025,   'icon'=>'vet'],
-    ['symbol'=>'SANDUSDT','name'=>'The Sandbox / Tether',     'type'=>'crypto','tv_symbol'=>'BINANCE:SANDUSDT','sort_order'=>50, 'seed_price'=>0.72,    'icon'=>'sand'],
+    ['symbol'=>'BTCUSDT', 'name'=>'Bitcoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:BTCUSDT', 'sort_order'=>10, 'seed_price'=>68000,   'icon'=>'btc'],
+    ['symbol'=>'ETHUSDT', 'name'=>'Ethereum / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:ETHUSDT', 'sort_order'=>12, 'seed_price'=>3500,    'icon'=>'eth'],
+    ['symbol'=>'SOLUSDT', 'name'=>'Solana / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:SOLUSDT', 'sort_order'=>14, 'seed_price'=>170,     'icon'=>'sol'],
+    ['symbol'=>'XRPUSDT', 'name'=>'XRP / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:XRPUSDT', 'sort_order'=>16, 'seed_price'=>1.5,     'icon'=>'xrp'],
+    ['symbol'=>'BNBUSDT', 'name'=>'BNB / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:BNBUSDT', 'sort_order'=>18, 'seed_price'=>600,     'icon'=>'bnb'],
+    ['symbol'=>'DOGEUSDT','name'=>'Dogecoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:DOGEUSDT','sort_order'=>20, 'seed_price'=>0.12,    'icon'=>'doge'],
+    ['symbol'=>'ADAUSDT', 'name'=>'Cardano / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:ADAUSDT', 'sort_order'=>22, 'seed_price'=>0.45,    'icon'=>'ada'],
+    ['symbol'=>'AVAXUSDT','name'=>'Avalanche / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:AVAXUSDT','sort_order'=>24, 'seed_price'=>25,      'icon'=>'avax'],
+    ['symbol'=>'LINKUSDT','name'=>'Chainlink / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:LINKUSDT','sort_order'=>26, 'seed_price'=>15,      'icon'=>'link'],
+    ['symbol'=>'DOTUSDT', 'name'=>'Polkadot / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:DOTUSDT', 'sort_order'=>28, 'seed_price'=>5,       'icon'=>'dot'],
+    ['symbol'=>'LTCUSDT', 'name'=>'Litecoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:LTCUSDT', 'sort_order'=>30, 'seed_price'=>90,      'icon'=>'ltc'],
+    ['symbol'=>'MATICUSDT','name'=>'Polygon / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:MATICUSDT','sort_order'=>32,'seed_price'=>0.55,    'icon'=>'matic'],
+    ['symbol'=>'UNIUSDT', 'name'=>'Uniswap / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:UNIUSDT', 'sort_order'=>34, 'seed_price'=>8,       'icon'=>'uni'],
+    ['symbol'=>'ATOMUSDT','name'=>'Cosmos / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:ATOMUSDT','sort_order'=>36, 'seed_price'=>9,       'icon'=>'atom'],
+    ['symbol'=>'ETCUSDT', 'name'=>'Ethereum Classic / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:ETCUSDT', 'sort_order'=>38, 'seed_price'=>28,      'icon'=>'etc'],
+    ['symbol'=>'XLMUSDT', 'name'=>'Stellar / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:XLMUSDT', 'sort_order'=>40, 'seed_price'=>0.12,    'icon'=>'xlm'],
+    ['symbol'=>'TRXUSDT', 'name'=>'TRON / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:TRXUSDT', 'sort_order'=>42, 'seed_price'=>0.12,    'icon'=>'trx'],
+    ['symbol'=>'SHIBUSDT','name'=>'Shiba Inu / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:SHIBUSDT','sort_order'=>44, 'seed_price'=>0.000018,'icon'=>'shib'],
+    ['symbol'=>'NEARUSDT','name'=>'NEAR Protocol / Tether',   'type'=>'crypto','tv_symbol'=>'BINANCE:NEARUSDT','sort_order'=>46, 'seed_price'=>5.5,     'icon'=>'near'],
+    ['symbol'=>'VETUSDT', 'name'=>'VeChain / Tether',         'type'=>'crypto','tv_symbol'=>'BINANCE:VETUSDT', 'sort_order'=>48, 'seed_price'=>0.032,   'icon'=>'vet'],
+    ['symbol'=>'SANDUSDT','name'=>'The Sandbox / Tether',     'type'=>'crypto','tv_symbol'=>'BINANCE:SANDUSDT','sort_order'=>50, 'seed_price'=>0.45,    'icon'=>'sand'],
     ['symbol'=>'MANAUSDT','name'=>'Decentraland / Tether',    'type'=>'crypto','tv_symbol'=>'BINANCE:MANAUSDT','sort_order'=>52, 'seed_price'=>0.40,    'icon'=>'mana'],
-    ['symbol'=>'ALGOUSDT','name'=>'Algorand / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:ALGOUSDT','sort_order'=>54, 'seed_price'=>0.2,    'icon'=>'algo'],
-    ['symbol'=>'AAVEUSDT','name'=>'Aave / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:AAVEUSDT','sort_order'=>56, 'seed_price'=>95,      'icon'=>'aave'],
-    ['symbol'=>'ICPUSDT', 'name'=>'Internet Computer / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:ICPUSDT','sort_order'=>58,'seed_price'=>5.8,      'icon'=>'icp'],
-    ['symbol'=>'FILUSDT', 'name'=>'Filecoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:FILUSDT', 'sort_order'=>60, 'seed_price'=>3.2,     'icon'=>'fil'],
-    ['symbol'=>'APTUSDT', 'name'=>'Aptos / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:APTUSDT', 'sort_order'=>62, 'seed_price'=>5.5,      'icon'=>'apt'],
-    ['symbol'=>'ARBUSDT', 'name'=>'Arbitrum / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:ARBUSDT', 'sort_order'=>64, 'seed_price'=>0.38,     'icon'=>'arb'],
+    ['symbol'=>'ALGOUSDT','name'=>'Algorand / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:ALGOUSDT','sort_order'=>54, 'seed_price'=>0.16,    'icon'=>'algo'],
+    ['symbol'=>'AAVEUSDT','name'=>'Aave / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:AAVEUSDT','sort_order'=>56, 'seed_price'=>90,      'icon'=>'aave'],
+    ['symbol'=>'ICPUSDT', 'name'=>'Internet Computer / Tether','type'=>'crypto','tv_symbol'=>'BINANCE:ICPUSDT','sort_order'=>58,'seed_price'=>12,      'icon'=>'icp'],
+    ['symbol'=>'FILUSDT', 'name'=>'Filecoin / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:FILUSDT', 'sort_order'=>60, 'seed_price'=>5.5,     'icon'=>'fil'],
+    ['symbol'=>'APTUSDT', 'name'=>'Aptos / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:APTUSDT', 'sort_order'=>62, 'seed_price'=>10,      'icon'=>'apt'],
+    ['symbol'=>'ARBUSDT', 'name'=>'Arbitrum / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:ARBUSDT', 'sort_order'=>64, 'seed_price'=>1.1,     'icon'=>'arb'],
     ['symbol'=>'OPUSDT',  'name'=>'Optimism / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:OPUSDT',  'sort_order'=>66, 'seed_price'=>2.0,     'icon'=>'op'],
-    ['symbol'=>'INJUSDT', 'name'=>'Injective / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:INJUSDT', 'sort_order'=>68, 'seed_price'=>122,      'icon'=>'inj'],
+    ['symbol'=>'INJUSDT', 'name'=>'Injective / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:INJUSDT', 'sort_order'=>68, 'seed_price'=>28,      'icon'=>'inj'],
     ['symbol'=>'SUIUSDT', 'name'=>'Sui / Tether',             'type'=>'crypto','tv_symbol'=>'BINANCE:SUIUSDT', 'sort_order'=>70, 'seed_price'=>1.0,     'icon'=>'sui'],
-    ['symbol'=>'GRTUSDT', 'name'=>'The Graph / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:GRTUSDT', 'sort_order'=>72, 'seed_price'=>0.12,    'icon'=>'grt'],
+    ['symbol'=>'GRTUSDT', 'name'=>'The Graph / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:GRTUSDT', 'sort_order'=>72, 'seed_price'=>0.25,    'icon'=>'grt'],
     ['symbol'=>'CRVUSDT', 'name'=>'Curve DAO / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:CRVUSDT', 'sort_order'=>74, 'seed_price'=>0.40,    'icon'=>'crv'],
-    ['symbol'=>'MKRUSDT', 'name'=>'Maker / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:MKRUSDT', 'sort_order'=>76, 'seed_price'=>1850,    'icon'=>'mkr'],
-    ['symbol'=>'FETUSDT', 'name'=>'Fetch.ai / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:FETUSDT', 'sort_order'=>78, 'seed_price'=>1.6,     'icon'=>'fet'],
-    ['symbol'=>'STXUSDT', 'name'=>'Stacks / Tether',          'type'=>'crypto','tv_symbol'=>'BINANCE:STXUSDT', 'sort_order'=>80, 'seed_price'=>1.6,     'icon'=>'stx'],
-    ['symbol'=>'COMPUSDT','name'=>'Compound / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:COMPUSDT','sort_order'=>82, 'seed_price'=>48,      'icon'=>'comp'],
-    ['symbol'=>'ZECUSDT', 'name'=>'Zcash / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:ZECUSDT', 'sort_order'=>84, 'seed_price'=>42,      'icon'=>'zec'],
-    ['symbol'=>'DASHUSDT','name'=>'Dash / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:DASHUSDT','sort_order'=>86, 'seed_price'=>28,      'icon'=>'dash'],
-    ['symbol'=>'SNXUSDT', 'name'=>'Synthetix / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:SNXUSDT', 'sort_order'=>88, 'seed_price'=>1.5,     'icon'=>'snx'],
+    ['symbol'=>'MKRUSDT', 'name'=>'Maker / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:MKRUSDT', 'sort_order'=>76, 'seed_price'=>2800,    'icon'=>'mkr'],
+    ['symbol'=>'FETUSDT', 'name'=>'Fetch.ai / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:FETUSDT', 'sort_order'=>78, 'seed_price'=>1.8,     'icon'=>'fet'],
+    ['symbol'=>'STXUSDT', 'name'=>'Stacks / Tether',          'type'=>'crypto','tv_symbol'=>'BINANCE:STXUSDT', 'sort_order'=>80, 'seed_price'=>1.8,     'icon'=>'stx'],
+    ['symbol'=>'COMPUSDT','name'=>'Compound / Tether',        'type'=>'crypto','tv_symbol'=>'BINANCE:COMPUSDT','sort_order'=>82, 'seed_price'=>60,      'icon'=>'comp'],
+    ['symbol'=>'ZECUSDT', 'name'=>'Zcash / Tether',           'type'=>'crypto','tv_symbol'=>'BINANCE:ZECUSDT', 'sort_order'=>84, 'seed_price'=>32,      'icon'=>'zec'],
+    ['symbol'=>'DASHUSDT','name'=>'Dash / Tether',            'type'=>'crypto','tv_symbol'=>'BINANCE:DASHUSDT','sort_order'=>86, 'seed_price'=>35,      'icon'=>'dash'],
+    ['symbol'=>'SNXUSDT', 'name'=>'Synthetix / Tether',       'type'=>'crypto','tv_symbol'=>'BINANCE:SNXUSDT', 'sort_order'=>88, 'seed_price'=>2.8,     'icon'=>'snx'],
 
     // ── FOREX (50+) ─────────────────────────────────────────────────────────
-    ['symbol'=>'EURUSD','name'=>'Euro / US Dollar',               'type'=>'forex','tv_symbol'=>'FX:EURUSD','sort_order'=>100,'seed_price'=>1.154,'icon'=>'forex'],
-    ['symbol'=>'GBPUSD','name'=>'British Pound / US Dollar',      'type'=>'forex','tv_symbol'=>'FX:GBPUSD','sort_order'=>102,'seed_price'=>1.336,'icon'=>'forex'],
-    ['symbol'=>'USDJPY','name'=>'US Dollar / Japanese Yen',       'type'=>'forex','tv_symbol'=>'FX:USDJPY','sort_order'=>104,'seed_price'=>184.2,'icon'=>'forex'],
-    ['symbol'=>'USDCHF','name'=>'US Dollar / Swiss Franc',        'type'=>'forex','tv_symbol'=>'FX:USDCHF','sort_order'=>106,'seed_price'=>0.796,'icon'=>'forex'],
-    ['symbol'=>'AUDUSD','name'=>'Australian Dollar / US Dollar',  'type'=>'forex','tv_symbol'=>'FX:AUDUSD','sort_order'=>108,'seed_price'=>0.653,'icon'=>'forex'],
-    ['symbol'=>'USDCAD','name'=>'US Dollar / Canadian Dollar',    'type'=>'forex','tv_symbol'=>'FX:USDCAD','sort_order'=>110,'seed_price'=>1.373,'icon'=>'forex'],
-    ['symbol'=>'NZDUSD','name'=>'NZ Dollar / US Dollar',          'type'=>'forex','tv_symbol'=>'FX:NZDUSD','sort_order'=>112,'seed_price'=>0.584,'icon'=>'forex'],
-    ['symbol'=>'EURGBP','name'=>'Euro / British Pound',           'type'=>'forex','tv_symbol'=>'FX:EURGBP','sort_order'=>114,'seed_price'=>0.863,'icon'=>'forex'],
-    ['symbol'=>'EURJPY','name'=>'Euro / Japanese Yen',            'type'=>'forex','tv_symbol'=>'FX:EURJPY','sort_order'=>116,'seed_price'=>166.4,'icon'=>'forex'],
-    ['symbol'=>'GBPJPY','name'=>'British Pound / Japanese Yen',   'type'=>'forex','tv_symbol'=>'FX:GBPJPY','sort_order'=>118,'seed_price'=>17.55.8,'icon'=>'forex'],
-    ['symbol'=>'EURCAD','name'=>'Euro / Canadian Dollar',         'type'=>'forex','tv_symbol'=>'FX:EURCAD','sort_order'=>120,'seed_price'=>1.583,'icon'=>'forex'],
-    ['symbol'=>'EURAUD','name'=>'Euro / Australian Dollar',       'type'=>'forex','tv_symbol'=>'FX:EURAUD','sort_order'=>122,'seed_price'=>1.766,'icon'=>'forex'],
-    ['symbol'=>'EURCHF','name'=>'Euro / Swiss Franc',             'type'=>'forex','tv_symbol'=>'FX:EURCHF','sort_order'=>124,'seed_price'=>0.918,'icon'=>'forex'],
-    ['symbol'=>'EURNZD','name'=>'Euro / NZ Dollar',               'type'=>'forex','tv_symbol'=>'FX:EURNZD','sort_order'=>126,'seed_price'=>1.98,'icon'=>'forex'],
-    ['symbol'=>'GBPAUD','name'=>'British Pound / Australian Dollar','type'=>'forex','tv_symbol'=>'FX:GBPAUD','sort_order'=>128,'seed_price'=>2.045,'icon'=>'forex'],
-    ['symbol'=>'GBPCAD','name'=>'British Pound / Canadian Dollar','type'=>'forex','tv_symbol'=>'FX:GBPCAD','sort_order'=>130,'seed_price'=>1.8330,'icon'=>'forex'],
-    ['symbol'=>'GBPCHF','name'=>'British Pound / Swiss Franc',    'type'=>'forex','tv_symbol'=>'FX:GBPCHF','sort_order'=>132,'seed_price'=>1.064,'icon'=>'forex'],
-    ['symbol'=>'GBPNZD','name'=>'British Pound / NZ Dollar',      'type'=>'forex','tv_symbol'=>'FX:GBPNZD','sort_order'=>134,'seed_price'=>2.291,'icon'=>'forex'],
-    ['symbol'=>'AUDCAD','name'=>'Australian Dollar / Canadian Dollar','type'=>'forex','tv_symbol'=>'FX:AUDCAD','sort_order'=>136,'seed_price'=>0.896,'icon'=>'forex'],
-    ['symbol'=>'AUDCHF','name'=>'Australian Dollar / Swiss Franc','type'=>'forex','tv_symbol'=>'FX:AUDCHF','sort_order'=>138,'seed_price'=>0.52,'icon'=>'forex'],
-    ['symbol'=>'AUDNZD','name'=>'Australian Dollar / NZ Dollar',  'type'=>'forex','tv_symbol'=>'FX:AUDNZD','sort_order'=>140,'seed_price'=>1.118,'icon'=>'forex'],
-    ['symbol'=>'AUDJPY','name'=>'Australian Dollar / Japanese Yen','type'=>'forex','tv_symbol'=>'FX:AUDJPY','sort_order'=>142,'seed_price'=>84.2.2,'icon'=>'forex'],
-    ['symbol'=>'CADJPY','name'=>'Canadian Dollar / Japanese Yen', 'type'=>'forex','tv_symbol'=>'FX:CADJPY','sort_order'=>144,'seed_price'=>105.1,'icon'=>'forex'],
-    ['symbol'=>'CHFJPY','name'=>'Swiss Franc / Japanese Yen',     'type'=>'forex','tv_symbol'=>'FX:CHFJPY','sort_order'=>146,'seed_price'=>17.51.2,'icon'=>'forex'],
-    ['symbol'=>'NZDJPY','name'=>'NZ Dollar / Japanese Yen',       'type'=>'forex','tv_symbol'=>'FX:NZDJPY','sort_order'=>148,'seed_price'=>84.2.0,'icon'=>'forex'],
-    ['symbol'=>'CADCHF','name'=>'Canadian Dollar / Swiss Franc',  'type'=>'forex','tv_symbol'=>'FX:CADCHF','sort_order'=>150,'seed_price'=>0.58,'icon'=>'forex'],
-    ['symbol'=>'NZDCAD','name'=>'NZ Dollar / Canadian Dollar',    'type'=>'forex','tv_symbol'=>'FX:NZDCAD','sort_order'=>152,'seed_price'=>0.801,'icon'=>'forex'],
-    ['symbol'=>'USDMXN','name'=>'US Dollar / Mexican Peso',       'type'=>'forex','tv_symbol'=>'FX:USDMXN','sort_order'=>160,'seed_price'=>17.5.9,'icon'=>'forex'],
-    ['symbol'=>'USDSEK','name'=>'US Dollar / Swedish Krona',      'type'=>'forex','tv_symbol'=>'FX:USDSEK','sort_order'=>162,'seed_price'=>9.8,'icon'=>'forex'],
-    ['symbol'=>'USDNOK','name'=>'US Dollar / Norwegian Krone',    'type'=>'forex','tv_symbol'=>'FX:USDNOK','sort_order'=>164,'seed_price'=>10.4,'icon'=>'forex'],
-    ['symbol'=>'USDPLN','name'=>'US Dollar / Polish Zloty',       'type'=>'forex','tv_symbol'=>'FX:USDPLN','sort_order'=>166,'seed_price'=>3.85,'icon'=>'forex'],
-    ['symbol'=>'USDTRY','name'=>'US Dollar / Turkish Lira',       'type'=>'forex','tv_symbol'=>'FX:USDTRY','sort_order'=>168,'seed_price'=>38.2,'icon'=>'forex'],
-    ['symbol'=>'USDSGD','name'=>'US Dollar / Singapore Dollar',   'type'=>'forex','tv_symbol'=>'FX:USDSGD','sort_order'=>170,'seed_price'=>1.29,'icon'=>'forex'],
+    ['symbol'=>'EURUSD','name'=>'Euro / US Dollar',               'type'=>'forex','tv_symbol'=>'FX:EURUSD','sort_order'=>100,'seed_price'=>1.084,'icon'=>'forex'],
+    ['symbol'=>'GBPUSD','name'=>'British Pound / US Dollar',      'type'=>'forex','tv_symbol'=>'FX:GBPUSD','sort_order'=>102,'seed_price'=>1.268,'icon'=>'forex'],
+    ['symbol'=>'USDJPY','name'=>'US Dollar / Japanese Yen',       'type'=>'forex','tv_symbol'=>'FX:USDJPY','sort_order'=>104,'seed_price'=>155.2,'icon'=>'forex'],
+    ['symbol'=>'USDCHF','name'=>'US Dollar / Swiss Franc',        'type'=>'forex','tv_symbol'=>'FX:USDCHF','sort_order'=>106,'seed_price'=>0.906,'icon'=>'forex'],
+    ['symbol'=>'AUDUSD','name'=>'Australian Dollar / US Dollar',  'type'=>'forex','tv_symbol'=>'FX:AUDUSD','sort_order'=>108,'seed_price'=>0.654,'icon'=>'forex'],
+    ['symbol'=>'USDCAD','name'=>'US Dollar / Canadian Dollar',    'type'=>'forex','tv_symbol'=>'FX:USDCAD','sort_order'=>110,'seed_price'=>1.365,'icon'=>'forex'],
+    ['symbol'=>'NZDUSD','name'=>'NZ Dollar / US Dollar',          'type'=>'forex','tv_symbol'=>'FX:NZDUSD','sort_order'=>112,'seed_price'=>0.606,'icon'=>'forex'],
+    ['symbol'=>'EURGBP','name'=>'Euro / British Pound',           'type'=>'forex','tv_symbol'=>'FX:EURGBP','sort_order'=>114,'seed_price'=>0.855,'icon'=>'forex'],
+    ['symbol'=>'EURJPY','name'=>'Euro / Japanese Yen',            'type'=>'forex','tv_symbol'=>'FX:EURJPY','sort_order'=>116,'seed_price'=>168.2,'icon'=>'forex'],
+    ['symbol'=>'GBPJPY','name'=>'British Pound / Japanese Yen',   'type'=>'forex','tv_symbol'=>'FX:GBPJPY','sort_order'=>118,'seed_price'=>196.8,'icon'=>'forex'],
+    ['symbol'=>'EURCAD','name'=>'Euro / Canadian Dollar',         'type'=>'forex','tv_symbol'=>'FX:EURCAD','sort_order'=>120,'seed_price'=>1.479,'icon'=>'forex'],
+    ['symbol'=>'EURAUD','name'=>'Euro / Australian Dollar',       'type'=>'forex','tv_symbol'=>'FX:EURAUD','sort_order'=>122,'seed_price'=>1.657,'icon'=>'forex'],
+    ['symbol'=>'EURCHF','name'=>'Euro / Swiss Franc',             'type'=>'forex','tv_symbol'=>'FX:EURCHF','sort_order'=>124,'seed_price'=>0.981,'icon'=>'forex'],
+    ['symbol'=>'EURNZD','name'=>'Euro / NZ Dollar',               'type'=>'forex','tv_symbol'=>'FX:EURNZD','sort_order'=>126,'seed_price'=>1.789,'icon'=>'forex'],
+    ['symbol'=>'GBPAUD','name'=>'British Pound / Australian Dollar','type'=>'forex','tv_symbol'=>'FX:GBPAUD','sort_order'=>128,'seed_price'=>1.939,'icon'=>'forex'],
+    ['symbol'=>'GBPCAD','name'=>'British Pound / Canadian Dollar','type'=>'forex','tv_symbol'=>'FX:GBPCAD','sort_order'=>130,'seed_price'=>1.730,'icon'=>'forex'],
+    ['symbol'=>'GBPCHF','name'=>'British Pound / Swiss Franc',    'type'=>'forex','tv_symbol'=>'FX:GBPCHF','sort_order'=>132,'seed_price'=>1.148,'icon'=>'forex'],
+    ['symbol'=>'GBPNZD','name'=>'British Pound / NZ Dollar',      'type'=>'forex','tv_symbol'=>'FX:GBPNZD','sort_order'=>134,'seed_price'=>2.092,'icon'=>'forex'],
+    ['symbol'=>'AUDCAD','name'=>'Australian Dollar / Canadian Dollar','type'=>'forex','tv_symbol'=>'FX:AUDCAD','sort_order'=>136,'seed_price'=>0.894,'icon'=>'forex'],
+    ['symbol'=>'AUDCHF','name'=>'Australian Dollar / Swiss Franc','type'=>'forex','tv_symbol'=>'FX:AUDCHF','sort_order'=>138,'seed_price'=>0.592,'icon'=>'forex'],
+    ['symbol'=>'AUDNZD','name'=>'Australian Dollar / NZ Dollar',  'type'=>'forex','tv_symbol'=>'FX:AUDNZD','sort_order'=>140,'seed_price'=>1.079,'icon'=>'forex'],
+    ['symbol'=>'AUDJPY','name'=>'Australian Dollar / Japanese Yen','type'=>'forex','tv_symbol'=>'FX:AUDJPY','sort_order'=>142,'seed_price'=>101.5,'icon'=>'forex'],
+    ['symbol'=>'CADJPY','name'=>'Canadian Dollar / Japanese Yen', 'type'=>'forex','tv_symbol'=>'FX:CADJPY','sort_order'=>144,'seed_price'=>113.7,'icon'=>'forex'],
+    ['symbol'=>'CHFJPY','name'=>'Swiss Franc / Japanese Yen',     'type'=>'forex','tv_symbol'=>'FX:CHFJPY','sort_order'=>146,'seed_price'=>171.2,'icon'=>'forex'],
+    ['symbol'=>'NZDJPY','name'=>'NZ Dollar / Japanese Yen',       'type'=>'forex','tv_symbol'=>'FX:NZDJPY','sort_order'=>148,'seed_price'=>94.0,'icon'=>'forex'],
+    ['symbol'=>'CADCHF','name'=>'Canadian Dollar / Swiss Franc',  'type'=>'forex','tv_symbol'=>'FX:CADCHF','sort_order'=>150,'seed_price'=>0.664,'icon'=>'forex'],
+    ['symbol'=>'NZDCAD','name'=>'NZ Dollar / Canadian Dollar',    'type'=>'forex','tv_symbol'=>'FX:NZDCAD','sort_order'=>152,'seed_price'=>0.827,'icon'=>'forex'],
+    ['symbol'=>'USDMXN','name'=>'US Dollar / Mexican Peso',       'type'=>'forex','tv_symbol'=>'FX:USDMXN','sort_order'=>160,'seed_price'=>17.2,'icon'=>'forex'],
+    ['symbol'=>'USDSEK','name'=>'US Dollar / Swedish Krona',      'type'=>'forex','tv_symbol'=>'FX:USDSEK','sort_order'=>162,'seed_price'=>10.6,'icon'=>'forex'],
+    ['symbol'=>'USDNOK','name'=>'US Dollar / Norwegian Krone',    'type'=>'forex','tv_symbol'=>'FX:USDNOK','sort_order'=>164,'seed_price'=>10.8,'icon'=>'forex'],
+    ['symbol'=>'USDPLN','name'=>'US Dollar / Polish Zloty',       'type'=>'forex','tv_symbol'=>'FX:USDPLN','sort_order'=>166,'seed_price'=>4.02,'icon'=>'forex'],
+    ['symbol'=>'USDTRY','name'=>'US Dollar / Turkish Lira',       'type'=>'forex','tv_symbol'=>'FX:USDTRY','sort_order'=>168,'seed_price'=>32.5,'icon'=>'forex'],
+    ['symbol'=>'USDSGD','name'=>'US Dollar / Singapore Dollar',   'type'=>'forex','tv_symbol'=>'FX:USDSGD','sort_order'=>170,'seed_price'=>1.35,'icon'=>'forex'],
     ['symbol'=>'USDHKD','name'=>'US Dollar / Hong Kong Dollar',   'type'=>'forex','tv_symbol'=>'FX:USDHKD','sort_order'=>172,'seed_price'=>7.82,'icon'=>'forex'],
-    ['symbol'=>'USDDKK','name'=>'US Dollar / Danish Krone',       'type'=>'forex','tv_symbol'=>'FX:USDDKK','sort_order'=>174,'seed_price'=>6.62,'icon'=>'forex'],
-    ['symbol'=>'USDBRL','name'=>'US Dollar / Brazilian Real',     'type'=>'forex','tv_symbol'=>'FX:USDBRL','sort_order'=>176,'seed_price'=>5.55,'icon'=>'forex'],
-    ['symbol'=>'USDZAR','name'=>'US Dollar / South African Rand', 'type'=>'forex','tv_symbol'=>'FX:USDZAR','sort_order'=>178,'seed_price'=>17.9,'icon'=>'forex'],
-    ['symbol'=>'USDCNH','name'=>'US Dollar / Chinese Yuan Offshore','type'=>'forex','tv_symbol'=>'FX:USDCNH','sort_order'=>180,'seed_price'=>7.24,'icon'=>'forex'],
-    ['symbol'=>'USDILS','name'=>'US Dollar / Israeli Shekel',     'type'=>'forex','tv_symbol'=>'FX:USDILS','sort_order'=>182,'seed_price'=>3.62,'icon'=>'forex'],
-    ['symbol'=>'USDINR','name'=>'US Dollar / Indian Rupee',       'type'=>'forex','tv_symbol'=>'FX:USDINR','sort_order'=>184,'seed_price'=>83.8,'icon'=>'forex'],
-    ['symbol'=>'EURPLN','name'=>'Euro / Polish Zloty',            'type'=>'forex','tv_symbol'=>'FX:EURPLN','sort_order'=>186,'seed_price'=>4.42,'icon'=>'forex'],
-    ['symbol'=>'EURHUF','name'=>'Euro / Hungarian Forint',        'type'=>'forex','tv_symbol'=>'FX:EURHUF','sort_order'=>188,'seed_price'=>405,'icon'=>'forex'],
-    ['symbol'=>'EURTRY','name'=>'Euro / Turkish Lira',            'type'=>'forex','tv_symbol'=>'FX:EURTRY','sort_order'=>190,'seed_price'=>44.1,'icon'=>'forex'],
-    ['symbol'=>'GBPTRY','name'=>'British Pound / Turkish Lira',   'type'=>'forex','tv_symbol'=>'FX:GBPTRY','sort_order'=>192,'seed_price'=>51.1,'icon'=>'forex'],
+    ['symbol'=>'USDDKK','name'=>'US Dollar / Danish Krone',       'type'=>'forex','tv_symbol'=>'FX:USDDKK','sort_order'=>174,'seed_price'=>6.89,'icon'=>'forex'],
+    ['symbol'=>'USDBRL','name'=>'US Dollar / Brazilian Real',     'type'=>'forex','tv_symbol'=>'FX:USDBRL','sort_order'=>176,'seed_price'=>5.05,'icon'=>'forex'],
+    ['symbol'=>'USDZAR','name'=>'US Dollar / South African Rand', 'type'=>'forex','tv_symbol'=>'FX:USDZAR','sort_order'=>178,'seed_price'=>18.8,'icon'=>'forex'],
+    ['symbol'=>'USDCNH','name'=>'US Dollar / Chinese Yuan Offshore','type'=>'forex','tv_symbol'=>'FX:USDCNH','sort_order'=>180,'seed_price'=>7.25,'icon'=>'forex'],
+    ['symbol'=>'USDILS','name'=>'US Dollar / Israeli Shekel',     'type'=>'forex','tv_symbol'=>'FX:USDILS','sort_order'=>182,'seed_price'=>3.72,'icon'=>'forex'],
+    ['symbol'=>'USDINR','name'=>'US Dollar / Indian Rupee',       'type'=>'forex','tv_symbol'=>'FX:USDINR','sort_order'=>184,'seed_price'=>83.5,'icon'=>'forex'],
+    ['symbol'=>'EURPLN','name'=>'Euro / Polish Zloty',            'type'=>'forex','tv_symbol'=>'FX:EURPLN','sort_order'=>186,'seed_price'=>4.26,'icon'=>'forex'],
+    ['symbol'=>'EURHUF','name'=>'Euro / Hungarian Forint',        'type'=>'forex','tv_symbol'=>'FX:EURHUF','sort_order'=>188,'seed_price'=>393,'icon'=>'forex'],
+    ['symbol'=>'EURTRY','name'=>'Euro / Turkish Lira',            'type'=>'forex','tv_symbol'=>'FX:EURTRY','sort_order'=>190,'seed_price'=>35.2,'icon'=>'forex'],
+    ['symbol'=>'GBPTRY','name'=>'British Pound / Turkish Lira',   'type'=>'forex','tv_symbol'=>'FX:GBPTRY','sort_order'=>192,'seed_price'=>41.2,'icon'=>'forex'],
 
     // ── STOCKS (50+) ─────────────────────────────────────────────────────────
-    ['symbol'=>'AAPL', 'name'=>'Apple Inc.',         'type'=>'stocks','tv_symbol'=>'NASDAQ:AAPL', 'yahoo_ticker'=>'AAPL', 'sort_order'=>200,'seed_price'=>205,'icon'=>'apple'],
+    ['symbol'=>'AAPL', 'name'=>'Apple Inc.',         'type'=>'stocks','tv_symbol'=>'NASDAQ:AAPL', 'yahoo_ticker'=>'AAPL', 'sort_order'=>200,'seed_price'=>187,'icon'=>'apple'],
     ['symbol'=>'MSFT', 'name'=>'Microsoft Corp.',    'type'=>'stocks','tv_symbol'=>'NASDAQ:MSFT', 'yahoo_ticker'=>'MSFT', 'sort_order'=>202,'seed_price'=>420,'icon'=>'microsoft'],
-    ['symbol'=>'NVDA', 'name'=>'NVIDIA Corp.',       'type'=>'stocks','tv_symbol'=>'NASDAQ:NVDA', 'yahoo_ticker'=>'NVDA', 'sort_order'=>204,'seed_price'=>135,'icon'=>'nvda'],
-    ['symbol'=>'TSLA', 'name'=>'Tesla Inc.',         'type'=>'stocks','tv_symbol'=>'NASDAQ:TSLA', 'yahoo_ticker'=>'TSLA', 'sort_order'=>206,'seed_price'=>285,'icon'=>'tsla'],
-    ['symbol'=>'AMZN', 'name'=>'Amazon.com Inc.',    'type'=>'stocks','tv_symbol'=>'NASDAQ:AMZN', 'yahoo_ticker'=>'AMZN', 'sort_order'=>208,'seed_price'=>1.6,'icon'=>'amzn'],
-    ['symbol'=>'GOOGL','name'=>'Alphabet Inc.',      'type'=>'stocks','tv_symbol'=>'NASDAQ:GOOGL','yahoo_ticker'=>'GOOGL','sort_order'=>210,'seed_price'=>2.15,'icon'=>'googl'],
-    ['symbol'=>'META', 'name'=>'Meta Platforms',     'type'=>'stocks','tv_symbol'=>'NASDAQ:META', 'yahoo_ticker'=>'META', 'sort_order'=>212,'seed_price'=>620,'icon'=>'meta'],
-    ['symbol'=>'NFLX', 'name'=>'Netflix Inc.',       'type'=>'stocks','tv_symbol'=>'NASDAQ:NFLX', 'yahoo_ticker'=>'NFLX', 'sort_order'=>214,'seed_price'=>1050,'icon'=>'nflx'],
-    ['symbol'=>'AMD',  'name'=>'AMD Inc.',           'type'=>'stocks','tv_symbol'=>'NASDAQ:AMD',  'yahoo_ticker'=>'AMD',  'sort_order'=>216,'seed_price'=>1.6,'icon'=>'amd'],
-    ['symbol'=>'INTC', 'name'=>'Intel Corp.',        'type'=>'stocks','tv_symbol'=>'NASDAQ:INTC', 'yahoo_ticker'=>'INTC', 'sort_order'=>218,'seed_price'=>122, 'icon'=>'intc'],
-    ['symbol'=>'ORCL', 'name'=>'Oracle Corp.',       'type'=>'stocks','tv_symbol'=>'NYSE:ORCL',   'yahoo_ticker'=>'ORCL', 'sort_order'=>220,'seed_price'=>165,'icon'=>'stock'],
-    ['symbol'=>'CRM',  'name'=>'Salesforce Inc.',    'type'=>'stocks','tv_symbol'=>'NYSE:CRM',    'yahoo_ticker'=>'CRM',  'sort_order'=>222,'seed_price'=>285,'icon'=>'stock'],
-    ['symbol'=>'PYPL', 'name'=>'PayPal Holdings',    'type'=>'stocks','tv_symbol'=>'NASDAQ:PYPL', 'yahoo_ticker'=>'PYPL', 'sort_order'=>224,'seed_price'=>55, 'icon'=>'stock'],
-    ['symbol'=>'V',    'name'=>'Visa Inc.',          'type'=>'stocks','tv_symbol'=>'NYSE:V',      'yahoo_ticker'=>'V',    'sort_order'=>226,'seed_price'=>1.5,'icon'=>'stock'],
-    ['symbol'=>'MA',   'name'=>'Mastercard Inc.',    'type'=>'stocks','tv_symbol'=>'NYSE:MA',     'yahoo_ticker'=>'MA',   'sort_order'=>228,'seed_price'=>620,'icon'=>'stock'],
-    ['symbol'=>'JPM',  'name'=>'JPMorgan Chase',     'type'=>'stocks','tv_symbol'=>'NYSE:JPM',    'yahoo_ticker'=>'JPM',  'sort_order'=>230,'seed_price'=>2.15,'icon'=>'stock'],
-    ['symbol'=>'BAC',  'name'=>'Bank of America',    'type'=>'stocks','tv_symbol'=>'NYSE:BAC',    'yahoo_ticker'=>'BAC',  'sort_order'=>232,'seed_price'=>42, 'icon'=>'stock'],
-    ['symbol'=>'UNH',  'name'=>'UnitedHealth Group', 'type'=>'stocks','tv_symbol'=>'NYSE:UNH',    'yahoo_ticker'=>'UNH',  'sort_order'=>234,'seed_price'=>490,'icon'=>'stock'],
-    ['symbol'=>'JNJ',  'name'=>'Johnson & Johnson',  'type'=>'stocks','tv_symbol'=>'NYSE:JNJ',    'yahoo_ticker'=>'JNJ',  'sort_order'=>236,'seed_price'=>160,'icon'=>'stock'],
-    ['symbol'=>'PFE',  'name'=>'Pfizer Inc.',        'type'=>'stocks','tv_symbol'=>'NYSE:PFE',    'yahoo_ticker'=>'PFE',  'sort_order'=>238,'seed_price'=>26, 'icon'=>'stock'],
-    ['symbol'=>'MRK',  'name'=>'Merck & Co.',        'type'=>'stocks','tv_symbol'=>'NYSE:MRK',    'yahoo_ticker'=>'MRK',  'sort_order'=>240,'seed_price'=>1.6,'icon'=>'stock'],
-    ['symbol'=>'CVX',  'name'=>'Chevron Corp.',      'type'=>'stocks','tv_symbol'=>'NYSE:CVX',    'yahoo_ticker'=>'CVX',  'sort_order'=>242,'seed_price'=>155,'icon'=>'stock'],
-    ['symbol'=>'XOM',  'name'=>'ExxonMobil Corp.',   'type'=>'stocks','tv_symbol'=>'NYSE:XOM',    'yahoo_ticker'=>'XOM',  'sort_order'=>244,'seed_price'=>2.15,'icon'=>'stock'],
-    ['symbol'=>'WMT',  'name'=>'Walmart Inc.',       'type'=>'stocks','tv_symbol'=>'NYSE:WMT',    'yahoo_ticker'=>'WMT',  'sort_order'=>246,'seed_price'=>92, 'icon'=>'stock'],
-    ['symbol'=>'COST', 'name'=>'Costco Wholesale',   'type'=>'stocks','tv_symbol'=>'NASDAQ:COST', 'yahoo_ticker'=>'COST', 'sort_order'=>248,'seed_price'=>1080,'icon'=>'stock'],
-    ['symbol'=>'HD',   'name'=>'Home Depot Inc.',    'type'=>'stocks','tv_symbol'=>'NYSE:HD',     'yahoo_ticker'=>'HD',   'sort_order'=>250,'seed_price'=>380,'icon'=>'stock'],
-    ['symbol'=>'DIS',  'name'=>'Walt Disney Co.',    'type'=>'stocks','tv_symbol'=>'NYSE:DIS',    'yahoo_ticker'=>'DIS',  'sort_order'=>252,'seed_price'=>2.15,'icon'=>'stock'],
-    ['symbol'=>'BABA', 'name'=>'Alibaba Group',      'type'=>'stocks','tv_symbol'=>'NYSE:BABA',   'yahoo_ticker'=>'BABA', 'sort_order'=>254,'seed_price'=>125, 'icon'=>'stock'],
-    ['symbol'=>'NKE',  'name'=>'Nike Inc.',          'type'=>'stocks','tv_symbol'=>'NYSE:NKE',    'yahoo_ticker'=>'NKE',  'sort_order'=>256,'seed_price'=>75, 'icon'=>'stock'],
-    ['symbol'=>'SBUX', 'name'=>'Starbucks Corp.',    'type'=>'stocks','tv_symbol'=>'NASDAQ:SBUX', 'yahoo_ticker'=>'SBUX', 'sort_order'=>258,'seed_price'=>82, 'icon'=>'stock'],
-    ['symbol'=>'GS',   'name'=>'Goldman Sachs',      'type'=>'stocks','tv_symbol'=>'NYSE:GS',     'yahoo_ticker'=>'GS',   'sort_order'=>260,'seed_price'=>520,'icon'=>'stock'],
-    ['symbol'=>'MS',   'name'=>'Morgan Stanley',     'type'=>'stocks','tv_symbol'=>'NYSE:MS',     'yahoo_ticker'=>'MS',   'sort_order'=>262,'seed_price'=>125, 'icon'=>'stock'],
-    ['symbol'=>'PLTR', 'name'=>'Palantir Tech.',     'type'=>'stocks','tv_symbol'=>'NYSE:PLTR',   'yahoo_ticker'=>'PLTR', 'sort_order'=>264,'seed_price'=>122, 'icon'=>'stock'],
-    ['symbol'=>'COIN', 'name'=>'Coinbase Global',    'type'=>'stocks','tv_symbol'=>'NASDAQ:COIN', 'yahoo_ticker'=>'COIN', 'sort_order'=>266,'seed_price'=>265,'icon'=>'stock'],
-    ['symbol'=>'SQ',   'name'=>'Block Inc.',         'type'=>'stocks','tv_symbol'=>'NYSE:XYZ',    'yahoo_ticker'=>'XYZ',  'sort_order'=>268,'seed_price'=>55, 'icon'=>'stock'],
-    ['symbol'=>'ADBE', 'name'=>'Adobe Inc.',         'type'=>'stocks','tv_symbol'=>'NASDAQ:ADBE', 'yahoo_ticker'=>'ADBE', 'sort_order'=>270,'seed_price'=>450,'icon'=>'stock'],
-    ['symbol'=>'UBER', 'name'=>'Uber Technologies',  'type'=>'stocks','tv_symbol'=>'NYSE:UBER',   'yahoo_ticker'=>'UBER', 'sort_order'=>272,'seed_price'=>80, 'icon'=>'stock'],
-    ['symbol'=>'SNAP', 'name'=>'Snap Inc.',          'type'=>'stocks','tv_symbol'=>'NYSE:SNAP',   'yahoo_ticker'=>'SNAP', 'sort_order'=>274,'seed_price'=>28, 'icon'=>'stock'],
-    ['symbol'=>'SHOP', 'name'=>'Shopify Inc.',       'type'=>'stocks','tv_symbol'=>'NYSE:SHOP',   'yahoo_ticker'=>'SHOP', 'sort_order'=>276,'seed_price'=>85, 'icon'=>'stock'],
-    ['symbol'=>'RBLX', 'name'=>'Roblox Corp.',       'type'=>'stocks','tv_symbol'=>'NYSE:RBLX',   'yahoo_ticker'=>'RBLX', 'sort_order'=>278,'seed_price'=>28, 'icon'=>'stock'],
-    ['symbol'=>'DKNG', 'name'=>'DraftKings Inc.',    'type'=>'stocks','tv_symbol'=>'NASDAQ:DKNG', 'yahoo_ticker'=>'DKNG', 'sort_order'=>280,'seed_price'=>48, 'icon'=>'stock'],
-    ['symbol'=>'SOFI', 'name'=>'SoFi Technologies',  'type'=>'stocks','tv_symbol'=>'NASDAQ:SOFI', 'yahoo_ticker'=>'SOFI', 'sort_order'=>282,'seed_price'=>8.5,  'icon'=>'stock'],
-    ['symbol'=>'RIVN', 'name'=>'Rivian Automotive',  'type'=>'stocks','tv_symbol'=>'NASDAQ:RIVN', 'yahoo_ticker'=>'RIVN', 'sort_order'=>284,'seed_price'=>5.8, 'icon'=>'stock'],
-    ['symbol'=>'GME',  'name'=>'GameStop Corp.',     'type'=>'stocks','tv_symbol'=>'NYSE:GME',    'yahoo_ticker'=>'GME',  'sort_order'=>286,'seed_price'=>28, 'icon'=>'stock'],
+    ['symbol'=>'NVDA', 'name'=>'NVIDIA Corp.',       'type'=>'stocks','tv_symbol'=>'NASDAQ:NVDA', 'yahoo_ticker'=>'NVDA', 'sort_order'=>204,'seed_price'=>875,'icon'=>'nvda'],
+    ['symbol'=>'TSLA', 'name'=>'Tesla Inc.',         'type'=>'stocks','tv_symbol'=>'NASDAQ:TSLA', 'yahoo_ticker'=>'TSLA', 'sort_order'=>206,'seed_price'=>172,'icon'=>'tsla'],
+    ['symbol'=>'AMZN', 'name'=>'Amazon.com Inc.',    'type'=>'stocks','tv_symbol'=>'NASDAQ:AMZN', 'yahoo_ticker'=>'AMZN', 'sort_order'=>208,'seed_price'=>178,'icon'=>'amzn'],
+    ['symbol'=>'GOOGL','name'=>'Alphabet Inc.',      'type'=>'stocks','tv_symbol'=>'NASDAQ:GOOGL','yahoo_ticker'=>'GOOGL','sort_order'=>210,'seed_price'=>165,'icon'=>'googl'],
+    ['symbol'=>'META', 'name'=>'Meta Platforms',     'type'=>'stocks','tv_symbol'=>'NASDAQ:META', 'yahoo_ticker'=>'META', 'sort_order'=>212,'seed_price'=>470,'icon'=>'meta'],
+    ['symbol'=>'NFLX', 'name'=>'Netflix Inc.',       'type'=>'stocks','tv_symbol'=>'NASDAQ:NFLX', 'yahoo_ticker'=>'NFLX', 'sort_order'=>214,'seed_price'=>640,'icon'=>'nflx'],
+    ['symbol'=>'AMD',  'name'=>'AMD Inc.',           'type'=>'stocks','tv_symbol'=>'NASDAQ:AMD',  'yahoo_ticker'=>'AMD',  'sort_order'=>216,'seed_price'=>168,'icon'=>'amd'],
+    ['symbol'=>'INTC', 'name'=>'Intel Corp.',        'type'=>'stocks','tv_symbol'=>'NASDAQ:INTC', 'yahoo_ticker'=>'INTC', 'sort_order'=>218,'seed_price'=>34, 'icon'=>'intc'],
+    ['symbol'=>'ORCL', 'name'=>'Oracle Corp.',       'type'=>'stocks','tv_symbol'=>'NYSE:ORCL',   'yahoo_ticker'=>'ORCL', 'sort_order'=>220,'seed_price'=>122,'icon'=>'stock'],
+    ['symbol'=>'CRM',  'name'=>'Salesforce Inc.',    'type'=>'stocks','tv_symbol'=>'NYSE:CRM',    'yahoo_ticker'=>'CRM',  'sort_order'=>222,'seed_price'=>275,'icon'=>'stock'],
+    ['symbol'=>'PYPL', 'name'=>'PayPal Holdings',    'type'=>'stocks','tv_symbol'=>'NASDAQ:PYPL', 'yahoo_ticker'=>'PYPL', 'sort_order'=>224,'seed_price'=>66, 'icon'=>'stock'],
+    ['symbol'=>'V',    'name'=>'Visa Inc.',          'type'=>'stocks','tv_symbol'=>'NYSE:V',      'yahoo_ticker'=>'V',    'sort_order'=>226,'seed_price'=>278,'icon'=>'stock'],
+    ['symbol'=>'MA',   'name'=>'Mastercard Inc.',    'type'=>'stocks','tv_symbol'=>'NYSE:MA',     'yahoo_ticker'=>'MA',   'sort_order'=>228,'seed_price'=>470,'icon'=>'stock'],
+    ['symbol'=>'JPM',  'name'=>'JPMorgan Chase',     'type'=>'stocks','tv_symbol'=>'NYSE:JPM',    'yahoo_ticker'=>'JPM',  'sort_order'=>230,'seed_price'=>195,'icon'=>'stock'],
+    ['symbol'=>'BAC',  'name'=>'Bank of America',    'type'=>'stocks','tv_symbol'=>'NYSE:BAC',    'yahoo_ticker'=>'BAC',  'sort_order'=>232,'seed_price'=>38, 'icon'=>'stock'],
+    ['symbol'=>'UNH',  'name'=>'UnitedHealth Group', 'type'=>'stocks','tv_symbol'=>'NYSE:UNH',    'yahoo_ticker'=>'UNH',  'sort_order'=>234,'seed_price'=>510,'icon'=>'stock'],
+    ['symbol'=>'JNJ',  'name'=>'Johnson & Johnson',  'type'=>'stocks','tv_symbol'=>'NYSE:JNJ',    'yahoo_ticker'=>'JNJ',  'sort_order'=>236,'seed_price'=>156,'icon'=>'stock'],
+    ['symbol'=>'PFE',  'name'=>'Pfizer Inc.',        'type'=>'stocks','tv_symbol'=>'NYSE:PFE',    'yahoo_ticker'=>'PFE',  'sort_order'=>238,'seed_price'=>27, 'icon'=>'stock'],
+    ['symbol'=>'MRK',  'name'=>'Merck & Co.',        'type'=>'stocks','tv_symbol'=>'NYSE:MRK',    'yahoo_ticker'=>'MRK',  'sort_order'=>240,'seed_price'=>128,'icon'=>'stock'],
+    ['symbol'=>'CVX',  'name'=>'Chevron Corp.',      'type'=>'stocks','tv_symbol'=>'NYSE:CVX',    'yahoo_ticker'=>'CVX',  'sort_order'=>242,'seed_price'=>162,'icon'=>'stock'],
+    ['symbol'=>'XOM',  'name'=>'ExxonMobil Corp.',   'type'=>'stocks','tv_symbol'=>'NYSE:XOM',    'yahoo_ticker'=>'XOM',  'sort_order'=>244,'seed_price'=>115,'icon'=>'stock'],
+    ['symbol'=>'WMT',  'name'=>'Walmart Inc.',       'type'=>'stocks','tv_symbol'=>'NYSE:WMT',    'yahoo_ticker'=>'WMT',  'sort_order'=>246,'seed_price'=>68, 'icon'=>'stock'],
+    ['symbol'=>'COST', 'name'=>'Costco Wholesale',   'type'=>'stocks','tv_symbol'=>'NASDAQ:COST', 'yahoo_ticker'=>'COST', 'sort_order'=>248,'seed_price'=>820,'icon'=>'stock'],
+    ['symbol'=>'HD',   'name'=>'Home Depot Inc.',    'type'=>'stocks','tv_symbol'=>'NYSE:HD',     'yahoo_ticker'=>'HD',   'sort_order'=>250,'seed_price'=>345,'icon'=>'stock'],
+    ['symbol'=>'DIS',  'name'=>'Walt Disney Co.',    'type'=>'stocks','tv_symbol'=>'NYSE:DIS',    'yahoo_ticker'=>'DIS',  'sort_order'=>252,'seed_price'=>115,'icon'=>'stock'],
+    ['symbol'=>'BABA', 'name'=>'Alibaba Group',      'type'=>'stocks','tv_symbol'=>'NYSE:BABA',   'yahoo_ticker'=>'BABA', 'sort_order'=>254,'seed_price'=>78, 'icon'=>'stock'],
+    ['symbol'=>'NKE',  'name'=>'Nike Inc.',          'type'=>'stocks','tv_symbol'=>'NYSE:NKE',    'yahoo_ticker'=>'NKE',  'sort_order'=>256,'seed_price'=>96, 'icon'=>'stock'],
+    ['symbol'=>'SBUX', 'name'=>'Starbucks Corp.',    'type'=>'stocks','tv_symbol'=>'NASDAQ:SBUX', 'yahoo_ticker'=>'SBUX', 'sort_order'=>258,'seed_price'=>76, 'icon'=>'stock'],
+    ['symbol'=>'GS',   'name'=>'Goldman Sachs',      'type'=>'stocks','tv_symbol'=>'NYSE:GS',     'yahoo_ticker'=>'GS',   'sort_order'=>260,'seed_price'=>456,'icon'=>'stock'],
+    ['symbol'=>'MS',   'name'=>'Morgan Stanley',     'type'=>'stocks','tv_symbol'=>'NYSE:MS',     'yahoo_ticker'=>'MS',   'sort_order'=>262,'seed_price'=>98, 'icon'=>'stock'],
+    ['symbol'=>'PLTR', 'name'=>'Palantir Tech.',     'type'=>'stocks','tv_symbol'=>'NYSE:PLTR',   'yahoo_ticker'=>'PLTR', 'sort_order'=>264,'seed_price'=>22, 'icon'=>'stock'],
+    ['symbol'=>'COIN', 'name'=>'Coinbase Global',    'type'=>'stocks','tv_symbol'=>'NASDAQ:COIN', 'yahoo_ticker'=>'COIN', 'sort_order'=>266,'seed_price'=>230,'icon'=>'stock'],
+    ['symbol'=>'SQ',   'name'=>'Block Inc.',         'type'=>'stocks','tv_symbol'=>'NYSE:XYZ',    'yahoo_ticker'=>'XYZ',  'sort_order'=>268,'seed_price'=>72, 'icon'=>'stock'],
+    ['symbol'=>'ADBE', 'name'=>'Adobe Inc.',         'type'=>'stocks','tv_symbol'=>'NASDAQ:ADBE', 'yahoo_ticker'=>'ADBE', 'sort_order'=>270,'seed_price'=>475,'icon'=>'stock'],
+    ['symbol'=>'UBER', 'name'=>'Uber Technologies',  'type'=>'stocks','tv_symbol'=>'NYSE:UBER',   'yahoo_ticker'=>'UBER', 'sort_order'=>272,'seed_price'=>74, 'icon'=>'stock'],
+    ['symbol'=>'SNAP', 'name'=>'Snap Inc.',          'type'=>'stocks','tv_symbol'=>'NYSE:SNAP',   'yahoo_ticker'=>'SNAP', 'sort_order'=>274,'seed_price'=>17, 'icon'=>'stock'],
+    ['symbol'=>'SHOP', 'name'=>'Shopify Inc.',       'type'=>'stocks','tv_symbol'=>'NYSE:SHOP',   'yahoo_ticker'=>'SHOP', 'sort_order'=>276,'seed_price'=>73, 'icon'=>'stock'],
+    ['symbol'=>'RBLX', 'name'=>'Roblox Corp.',       'type'=>'stocks','tv_symbol'=>'NYSE:RBLX',   'yahoo_ticker'=>'RBLX', 'sort_order'=>278,'seed_price'=>35, 'icon'=>'stock'],
+    ['symbol'=>'DKNG', 'name'=>'DraftKings Inc.',    'type'=>'stocks','tv_symbol'=>'NASDAQ:DKNG', 'yahoo_ticker'=>'DKNG', 'sort_order'=>280,'seed_price'=>41, 'icon'=>'stock'],
+    ['symbol'=>'SOFI', 'name'=>'SoFi Technologies',  'type'=>'stocks','tv_symbol'=>'NASDAQ:SOFI', 'yahoo_ticker'=>'SOFI', 'sort_order'=>282,'seed_price'=>9,  'icon'=>'stock'],
+    ['symbol'=>'RIVN', 'name'=>'Rivian Automotive',  'type'=>'stocks','tv_symbol'=>'NASDAQ:RIVN', 'yahoo_ticker'=>'RIVN', 'sort_order'=>284,'seed_price'=>12, 'icon'=>'stock'],
+    ['symbol'=>'GME',  'name'=>'GameStop Corp.',     'type'=>'stocks','tv_symbol'=>'NYSE:GME',    'yahoo_ticker'=>'GME',  'sort_order'=>286,'seed_price'=>17, 'icon'=>'stock'],
 
     // ── COMMODITIES (30+) ───────────────────────────────────────────────────
-    ['symbol'=>'XAUUSD','name'=>'Gold Spot',          'type'=>'commodities','tv_symbol'=>'OANDA:XAUUSD','yahoo_ticker'=>'GC=F', 'sort_order'=>300,'seed_price'=>4330,'icon'=>'metal'],
-    ['symbol'=>'XAGUSD','name'=>'Silver Spot',        'type'=>'commodities','tv_symbol'=>'OANDA:XAGUSD','yahoo_ticker'=>'SI=F', 'sort_order'=>302,'seed_price'=>38.5,'icon'=>'metal'],
-    ['symbol'=>'XPTUSD','name'=>'Platinum Spot',      'type'=>'commodities','tv_symbol'=>'OANDA:XPTUSD','yahoo_ticker'=>'PL=F', 'sort_order'=>304,'seed_price'=>1080, 'icon'=>'metal'],
-    ['symbol'=>'XPDUSD','name'=>'Palladium Spot',     'type'=>'commodities','tv_symbol'=>'OANDA:XPDUSD','yahoo_ticker'=>'PA=F', 'sort_order'=>306,'seed_price'=>1030,'icon'=>'metal'],
-    ['symbol'=>'USOIL', 'name'=>'WTI Crude Oil',      'type'=>'commodities','tv_symbol'=>'TVC:USOIL',  'yahoo_ticker'=>'CL=F', 'sort_order'=>310,'seed_price'=>62.5,'icon'=>'oil'],
-    ['symbol'=>'UKOIL', 'name'=>'Brent Crude Oil',    'type'=>'commodities','tv_symbol'=>'TVC:UKOIL',  'yahoo_ticker'=>'BZ=F', 'sort_order'=>312,'seed_price'=>65.2,'icon'=>'oil'],
-    ['symbol'=>'NGAS',  'name'=>'Natural Gas',        'type'=>'commodities','tv_symbol'=>'FX:NGAS',   'yahoo_ticker'=>'NG=F', 'sort_order'=>314,'seed_price'=>2.85,'icon'=>'oil'],
-    ['symbol'=>'COPPER','name'=>'Copper',              'type'=>'commodities','tv_symbol'=>'TVC:COPPER', 'yahoo_ticker'=>'HG=F', 'sort_order'=>316,'seed_price'=>4.72,'icon'=>'metal'],
-    ['symbol'=>'WHEAT', 'name'=>'Wheat',               'type'=>'commodities','tv_symbol'=>'CBOT:ZW1!', 'yahoo_ticker'=>'ZW=F', 'sort_order'=>320,'seed_price'=>520, 'icon'=>'commodity'],
-    ['symbol'=>'CORN',  'name'=>'Corn',                'type'=>'commodities','tv_symbol'=>'CBOT:ZC1!', 'yahoo_ticker'=>'ZC=F', 'sort_order'=>322,'seed_price'=>420, 'icon'=>'commodity'],
-    ['symbol'=>'SOYBEAN','name'=>'Soybeans',           'type'=>'commodities','tv_symbol'=>'CBOT:ZS1!', 'yahoo_ticker'=>'ZS=F', 'sort_order'=>324,'seed_price'=>1050,'icon'=>'commodity'],
-    ['symbol'=>'SUGAR', 'name'=>'Sugar #11',           'type'=>'commodities','tv_symbol'=>'ICEUS:SB1!','yahoo_ticker'=>'SB=F', 'sort_order'=>326,'seed_price'=>17.5.2,'icon'=>'commodity'],
-    ['symbol'=>'COTTON','name'=>'Cotton #2',           'type'=>'commodities','tv_symbol'=>'ICEUS:CT1!','yahoo_ticker'=>'CT=F', 'sort_order'=>328,'seed_price'=>68,  'icon'=>'commodity'],
-    ['symbol'=>'COFFEE','name'=>'Coffee "C"',          'type'=>'commodities','tv_symbol'=>'ICEUS:KC1!','yahoo_ticker'=>'KC=F', 'sort_order'=>330,'seed_price'=>2.15, 'icon'=>'commodity'],
-    ['symbol'=>'COCOA', 'name'=>'Cocoa',               'type'=>'commodities','tv_symbol'=>'ICEUS:CC1!','yahoo_ticker'=>'CC=F', 'sort_order'=>332,'seed_price'=>8500,'icon'=>'commodity'],
-    ['symbol'=>'LUMBER','name'=>'Lumber',              'type'=>'commodities','tv_symbol'=>'CME:LBS1!', 'yahoo_ticker'=>'LB=F', 'sort_order'=>334,'seed_price'=>520, 'icon'=>'commodity'],
-    ['symbol'=>'NICKEL','name'=>'Nickel',              'type'=>'commodities','tv_symbol'=>'LME:NICKEL','yahoo_ticker'=>'NI=F', 'sort_order'=>336,'seed_price'=>15800,'icon'=>'metal'],
-    ['symbol'=>'ZINC',  'name'=>'Zinc',                'type'=>'commodities','tv_symbol'=>'LME:ZINC',  'yahoo_ticker'=>'ZI=F', 'sort_order'=>338,'seed_price'=>1850,'icon'=>'metal'],
-    ['symbol'=>'ALUMINIUM','name'=>'Aluminium',        'type'=>'commodities','tv_symbol'=>'LME:ALUMINUM','yahoo_ticker'=>'ALI=F','sort_order'=>340,'seed_price'=>2420,'icon'=>'metal'],
-    ['symbol'=>'LEAD',  'name'=>'Lead',                'type'=>'commodities','tv_symbol'=>'LME:LEAD',  'yahoo_ticker'=>'',     'sort_order'=>342,'seed_price'=>2100,'icon'=>'metal'],
-    ['symbol'=>'TIN',   'name'=>'Tin',                 'type'=>'commodities','tv_symbol'=>'LME:TIN',   'yahoo_ticker'=>'',     'sort_order'=>344,'seed_price'=>31000,'icon'=>'metal'],
-    ['symbol'=>'OJ',    'name'=>'Orange Juice',        'type'=>'commodities','tv_symbol'=>'ICEUS:OJ1!','yahoo_ticker'=>'OJ=F', 'sort_order'=>346,'seed_price'=>450, 'icon'=>'commodity'],
-    ['symbol'=>'LEAN_HOGS','name'=>'Lean Hogs',        'type'=>'commodities','tv_symbol'=>'CME:HE1!',  'yahoo_ticker'=>'HE=F', 'sort_order'=>348,'seed_price'=>95,  'icon'=>'commodity'],
-    ['symbol'=>'LIVE_CATTLE','name'=>'Live Cattle',    'type'=>'commodities','tv_symbol'=>'CME:LE1!',  'yahoo_ticker'=>'LE=F', 'sort_order'=>350,'seed_price'=>17.55, 'icon'=>'commodity'],
-    ['symbol'=>'HEATING_OIL','name'=>'Heating Oil',    'type'=>'commodities','tv_symbol'=>'NYMEX:HO1!','yahoo_ticker'=>'HO=F','sort_order'=>352,'seed_price'=>2.15,'icon'=>'oil'],
-    ['symbol'=>'RBOB', 'name'=>'RBOB Gasoline',          'type'=>'commodities','tv_symbol'=>'NYMEX:RB1!','yahoo_ticker'=>'RB=F','sort_order'=>354,'seed_price'=>2.05,'icon'=>'oil'],
-    ['symbol'=>'OATS', 'name'=>'Oats',                   'type'=>'commodities','tv_symbol'=>'CBOT:ZO1!','yahoo_ticker'=>'ZO=F','sort_order'=>356,'seed_price'=>340,'icon'=>'commodity'],
-    ['symbol'=>'RICE', 'name'=>'Rough Rice',             'type'=>'commodities','tv_symbol'=>'CBOT:ZR1!','yahoo_ticker'=>'ZR=F','sort_order'=>358,'seed_price'=>16.5,'icon'=>'commodity'],
-    ['symbol'=>'MILK', 'name'=>'Class III Milk',         'type'=>'commodities','tv_symbol'=>'CME:DC1!', 'yahoo_ticker'=>'DC=F','sort_order'=>360,'seed_price'=>17.5.0,'icon'=>'commodity'],
-    ['symbol'=>'FEEDER_CATTLE','name'=>'Feeder Cattle',  'type'=>'commodities','tv_symbol'=>'CME:GF1!', 'yahoo_ticker'=>'GF=F','sort_order'=>362,'seed_price'=>260,'icon'=>'commodity'],
+    ['symbol'=>'XAUUSD','name'=>'Gold Spot',          'type'=>'commodities','tv_symbol'=>'OANDA:XAUUSD','yahoo_ticker'=>'GC=F', 'sort_order'=>300,'seed_price'=>2350,'icon'=>'metal'],
+    ['symbol'=>'XAGUSD','name'=>'Silver Spot',        'type'=>'commodities','tv_symbol'=>'OANDA:XAGUSD','yahoo_ticker'=>'SI=F', 'sort_order'=>302,'seed_price'=>29.5,'icon'=>'metal'],
+    ['symbol'=>'XPTUSD','name'=>'Platinum Spot',      'type'=>'commodities','tv_symbol'=>'OANDA:XPTUSD','yahoo_ticker'=>'PL=F', 'sort_order'=>304,'seed_price'=>960, 'icon'=>'metal'],
+    ['symbol'=>'XPDUSD','name'=>'Palladium Spot',     'type'=>'commodities','tv_symbol'=>'OANDA:XPDUSD','yahoo_ticker'=>'PA=F', 'sort_order'=>306,'seed_price'=>1050,'icon'=>'metal'],
+    ['symbol'=>'USOIL', 'name'=>'WTI Crude Oil',      'type'=>'commodities','tv_symbol'=>'TVC:USOIL',  'yahoo_ticker'=>'CL=F', 'sort_order'=>310,'seed_price'=>78.5,'icon'=>'oil'],
+    ['symbol'=>'UKOIL', 'name'=>'Brent Crude Oil',    'type'=>'commodities','tv_symbol'=>'TVC:UKOIL',  'yahoo_ticker'=>'BZ=F', 'sort_order'=>312,'seed_price'=>83.2,'icon'=>'oil'],
+    ['symbol'=>'NGAS',  'name'=>'Natural Gas',        'type'=>'commodities','tv_symbol'=>'FX:NGAS',   'yahoo_ticker'=>'NG=F', 'sort_order'=>314,'seed_price'=>2.15,'icon'=>'oil'],
+    ['symbol'=>'COPPER','name'=>'Copper',              'type'=>'commodities','tv_symbol'=>'TVC:COPPER', 'yahoo_ticker'=>'HG=F', 'sort_order'=>316,'seed_price'=>4.55,'icon'=>'metal'],
+    ['symbol'=>'WHEAT', 'name'=>'Wheat',               'type'=>'commodities','tv_symbol'=>'CBOT:ZW1!', 'yahoo_ticker'=>'ZW=F', 'sort_order'=>320,'seed_price'=>580, 'icon'=>'commodity'],
+    ['symbol'=>'CORN',  'name'=>'Corn',                'type'=>'commodities','tv_symbol'=>'CBOT:ZC1!', 'yahoo_ticker'=>'ZC=F', 'sort_order'=>322,'seed_price'=>440, 'icon'=>'commodity'],
+    ['symbol'=>'SOYBEAN','name'=>'Soybeans',           'type'=>'commodities','tv_symbol'=>'CBOT:ZS1!', 'yahoo_ticker'=>'ZS=F', 'sort_order'=>324,'seed_price'=>1180,'icon'=>'commodity'],
+    ['symbol'=>'SUGAR', 'name'=>'Sugar #11',           'type'=>'commodities','tv_symbol'=>'ICEUS:SB1!','yahoo_ticker'=>'SB=F', 'sort_order'=>326,'seed_price'=>19.5,'icon'=>'commodity'],
+    ['symbol'=>'COTTON','name'=>'Cotton #2',           'type'=>'commodities','tv_symbol'=>'ICEUS:CT1!','yahoo_ticker'=>'CT=F', 'sort_order'=>328,'seed_price'=>77,  'icon'=>'commodity'],
+    ['symbol'=>'COFFEE','name'=>'Coffee "C"',          'type'=>'commodities','tv_symbol'=>'ICEUS:KC1!','yahoo_ticker'=>'KC=F', 'sort_order'=>330,'seed_price'=>185, 'icon'=>'commodity'],
+    ['symbol'=>'COCOA', 'name'=>'Cocoa',               'type'=>'commodities','tv_symbol'=>'ICEUS:CC1!','yahoo_ticker'=>'CC=F', 'sort_order'=>332,'seed_price'=>9200,'icon'=>'commodity'],
+    ['symbol'=>'LUMBER','name'=>'Lumber',              'type'=>'commodities','tv_symbol'=>'CME:LBS1!', 'yahoo_ticker'=>'LB=F', 'sort_order'=>334,'seed_price'=>540, 'icon'=>'commodity'],
+    ['symbol'=>'NICKEL','name'=>'Nickel',              'type'=>'commodities','tv_symbol'=>'LME:NICKEL','yahoo_ticker'=>'NI=F', 'sort_order'=>336,'seed_price'=>17800,'icon'=>'metal'],
+    ['symbol'=>'ZINC',  'name'=>'Zinc',                'type'=>'commodities','tv_symbol'=>'LME:ZINC',  'yahoo_ticker'=>'ZI=F', 'sort_order'=>338,'seed_price'=>2800,'icon'=>'metal'],
+    ['symbol'=>'ALUMINIUM','name'=>'Aluminium',        'type'=>'commodities','tv_symbol'=>'LME:ALUMINUM','yahoo_ticker'=>'ALI=F','sort_order'=>340,'seed_price'=>2680,'icon'=>'metal'],
+    ['symbol'=>'TIN',   'name'=>'Tin',                 'type'=>'commodities','tv_symbol'=>'LME:TIN',   'yahoo_ticker'=>'',     'sort_order'=>344,'seed_price'=>29500,'icon'=>'metal'],
+    ['symbol'=>'OJ',    'name'=>'Orange Juice',        'type'=>'commodities','tv_symbol'=>'ICEUS:OJ1!','yahoo_ticker'=>'OJ=F', 'sort_order'=>346,'seed_price'=>430, 'icon'=>'commodity'],
+    ['symbol'=>'LEAN_HOGS','name'=>'Lean Hogs',        'type'=>'commodities','tv_symbol'=>'CME:HE1!',  'yahoo_ticker'=>'HE=F', 'sort_order'=>348,'seed_price'=>90,  'icon'=>'commodity'],
+    ['symbol'=>'LIVE_CATTLE','name'=>'Live Cattle',    'type'=>'commodities','tv_symbol'=>'CME:LE1!',  'yahoo_ticker'=>'LE=F', 'sort_order'=>350,'seed_price'=>192, 'icon'=>'commodity'],
+    ['symbol'=>'HEATING_OIL','name'=>'Heating Oil',    'type'=>'commodities','tv_symbol'=>'NYMEX:HO1!','yahoo_ticker'=>'HO=F','sort_order'=>352,'seed_price'=>2.45,'icon'=>'oil'],
+    ['symbol'=>'RBOB', 'name'=>'RBOB Gasoline',          'type'=>'commodities','tv_symbol'=>'NYMEX:RB1!','yahoo_ticker'=>'RB=F','sort_order'=>354,'seed_price'=>2.35,'icon'=>'oil'],
+    ['symbol'=>'OATS', 'name'=>'Oats',                   'type'=>'commodities','tv_symbol'=>'CBOT:ZO1!','yahoo_ticker'=>'ZO=F','sort_order'=>356,'seed_price'=>360,'icon'=>'commodity'],
+    ['symbol'=>'RICE', 'name'=>'Rough Rice',             'type'=>'commodities','tv_symbol'=>'CBOT:ZR1!','yahoo_ticker'=>'ZR=F','sort_order'=>358,'seed_price'=>18.5,'icon'=>'commodity'],
+    ['symbol'=>'MILK', 'name'=>'Class III Milk',         'type'=>'commodities','tv_symbol'=>'CME:DC1!', 'yahoo_ticker'=>'DC=F','sort_order'=>360,'seed_price'=>18.0,'icon'=>'commodity'],
+    ['symbol'=>'FEEDER_CATTLE','name'=>'Feeder Cattle',  'type'=>'commodities','tv_symbol'=>'CME:GF1!', 'yahoo_ticker'=>'GF=F','sort_order'=>362,'seed_price'=>255,'icon'=>'commodity'],
 
     // ── FUTURES (30+) ───────────────────────────────────────────────────────
-    ['symbol'=>'ES_F', 'name'=>'E-mini S&P 500 Future',      'type'=>'futures','tv_symbol'=>'CME_MINI:ES1!', 'yahoo_ticker'=>'ES=F', 'sort_order'=>400,'seed_price'=>5950, 'icon'=>'future'],
-    ['symbol'=>'NQ_F', 'name'=>'E-mini Nasdaq 100 Future',   'type'=>'futures','tv_symbol'=>'CME_MINI:NQ1!', 'yahoo_ticker'=>'NQ=F', 'sort_order'=>402,'seed_price'=>34000,'icon'=>'future'],
-    ['symbol'=>'YM_F', 'name'=>'E-mini Dow Future',          'type'=>'futures','tv_symbol'=>'CBOT_MINI:YM1!','yahoo_ticker'=>'YM=F', 'sort_order'=>404,'seed_price'=>43000,'icon'=>'future'],
-    ['symbol'=>'RTY_F','name'=>'E-mini Russell 2000 Future', 'type'=>'futures','tv_symbol'=>'CME_MINI:RTY1!','yahoo_ticker'=>'RTY=F','sort_order'=>406,'seed_price'=>2100, 'icon'=>'future'],
-    ['symbol'=>'CL_F', 'name'=>'WTI Crude Future',           'type'=>'futures','tv_symbol'=>'NYMEX:CL1!',   'yahoo_ticker'=>'CL=F', 'sort_order'=>408,'seed_price'=>125,   'icon'=>'oil'],
-    ['symbol'=>'GC_F', 'name'=>'Gold Future',                'type'=>'futures','tv_symbol'=>'COMEX:GC1!',   'yahoo_ticker'=>'GC=F', 'sort_order'=>410,'seed_price'=>4330, 'icon'=>'metal'],
-    ['symbol'=>'ZN_F', 'name'=>'10Y Treasury Note Future',   'type'=>'futures','tv_symbol'=>'CBOT:ZN1!',    'yahoo_ticker'=>'ZN=F', 'sort_order'=>412,'seed_price'=>112,  'icon'=>'future'],
-    ['symbol'=>'ZB_F', 'name'=>'30Y Treasury Bond Future',   'type'=>'futures','tv_symbol'=>'CBOT:ZB1!',    'yahoo_ticker'=>'ZB=F', 'sort_order'=>414,'seed_price'=>122,  'icon'=>'future'],
-    ['symbol'=>'ZC_F', 'name'=>'Corn Future',                'type'=>'futures','tv_symbol'=>'CBOT:ZC1!',    'yahoo_ticker'=>'ZC=F', 'sort_order'=>416,'seed_price'=>420,  'icon'=>'future'],
-    ['symbol'=>'ZS_F', 'name'=>'Soybean Future',             'type'=>'futures','tv_symbol'=>'CBOT:ZS1!',    'yahoo_ticker'=>'ZS=F', 'sort_order'=>418,'seed_price'=>1050, 'icon'=>'future'],
-    ['symbol'=>'ZW_F', 'name'=>'Wheat Future',               'type'=>'futures','tv_symbol'=>'CBOT:ZW1!',    'yahoo_ticker'=>'ZW=F', 'sort_order'=>420,'seed_price'=>520,  'icon'=>'future'],
-    ['symbol'=>'SI_F', 'name'=>'Silver Future',              'type'=>'futures','tv_symbol'=>'COMEX:SI1!',   'yahoo_ticker'=>'SI=F', 'sort_order'=>422,'seed_price'=>39,   'icon'=>'metal'],
-    ['symbol'=>'HG_F', 'name'=>'Copper Future',              'type'=>'futures','tv_symbol'=>'COMEX:HG1!',   'yahoo_ticker'=>'HG=F', 'sort_order'=>424,'seed_price'=>4.72, 'icon'=>'metal'],
-    ['symbol'=>'NG_F', 'name'=>'Natural Gas Future',         'type'=>'futures','tv_symbol'=>'NYMEX:NG1!',   'yahoo_ticker'=>'NG=F', 'sort_order'=>426,'seed_price'=>2.85, 'icon'=>'oil'],
-    ['symbol'=>'RB_F', 'name'=>'RBOB Gasoline Future',       'type'=>'futures','tv_symbol'=>'NYMEX:RB1!',   'yahoo_ticker'=>'RB=F', 'sort_order'=>428,'seed_price'=>2.05, 'icon'=>'oil'],
-    ['symbol'=>'HO_F', 'name'=>'Heating Oil Future',         'type'=>'futures','tv_symbol'=>'NYMEX:HO1!',   'yahoo_ticker'=>'HO=F', 'sort_order'=>430,'seed_price'=>2.15, 'icon'=>'oil'],
-    ['symbol'=>'VX_F', 'name'=>'VIX Future (CBOE)',          'type'=>'futures','tv_symbol'=>'CBOE:VX1!',    'yahoo_ticker'=>'^VIX', 'sort_order'=>432,'seed_price'=>18,   'icon'=>'future'],
-    ['symbol'=>'BTC_F','name'=>'Bitcoin CME Future',         'type'=>'futures','tv_symbol'=>'CME:BTC1!',    'yahoo_ticker'=>'BTC=F','sort_order'=>434,'seed_price'=>69500,'icon'=>'btc'],
-    ['symbol'=>'ETH_F','name'=>'Ether CME Future',           'type'=>'futures','tv_symbol'=>'CME:ETH1!',    'yahoo_ticker'=>'ETH=F','sort_order'=>436,'seed_price'=>2600, 'icon'=>'eth'],
+    ['symbol'=>'ES_F', 'name'=>'E-mini S&P 500 Future',      'type'=>'futures','tv_symbol'=>'CME_MINI:ES1!', 'yahoo_ticker'=>'ES=F', 'sort_order'=>400,'seed_price'=>5200, 'icon'=>'future'],
+    ['symbol'=>'NQ_F', 'name'=>'E-mini Nasdaq 100 Future',   'type'=>'futures','tv_symbol'=>'CME_MINI:NQ1!', 'yahoo_ticker'=>'NQ=F', 'sort_order'=>402,'seed_price'=>18500,'icon'=>'future'],
+    ['symbol'=>'YM_F', 'name'=>'E-mini Dow Future',          'type'=>'futures','tv_symbol'=>'CBOT_MINI:YM1!','yahoo_ticker'=>'YM=F', 'sort_order'=>404,'seed_price'=>39000,'icon'=>'future'],
+    ['symbol'=>'RTY_F','name'=>'E-mini Russell 2000 Future', 'type'=>'futures','tv_symbol'=>'CME_MINI:RTY1!','yahoo_ticker'=>'RTY=F','sort_order'=>406,'seed_price'=>2050, 'icon'=>'future'],
+    ['symbol'=>'CL_F', 'name'=>'WTI Crude Future',           'type'=>'futures','tv_symbol'=>'NYMEX:CL1!',   'yahoo_ticker'=>'CL=F', 'sort_order'=>408,'seed_price'=>78,   'icon'=>'oil'],
+    ['symbol'=>'GC_F', 'name'=>'Gold Future',                'type'=>'futures','tv_symbol'=>'COMEX:GC1!',   'yahoo_ticker'=>'GC=F', 'sort_order'=>410,'seed_price'=>2350, 'icon'=>'metal'],
+    ['symbol'=>'ZN_F', 'name'=>'10Y Treasury Note Future',   'type'=>'futures','tv_symbol'=>'CBOT:ZN1!',    'yahoo_ticker'=>'ZN=F', 'sort_order'=>412,'seed_price'=>110,  'icon'=>'future'],
+    ['symbol'=>'ZB_F', 'name'=>'30Y Treasury Bond Future',   'type'=>'futures','tv_symbol'=>'CBOT:ZB1!',    'yahoo_ticker'=>'ZB=F', 'sort_order'=>414,'seed_price'=>120,  'icon'=>'future'],
+    ['symbol'=>'ZC_F', 'name'=>'Corn Future',                'type'=>'futures','tv_symbol'=>'CBOT:ZC1!',    'yahoo_ticker'=>'ZC=F', 'sort_order'=>416,'seed_price'=>440,  'icon'=>'future'],
+    ['symbol'=>'ZS_F', 'name'=>'Soybean Future',             'type'=>'futures','tv_symbol'=>'CBOT:ZS1!',    'yahoo_ticker'=>'ZS=F', 'sort_order'=>418,'seed_price'=>1185, 'icon'=>'future'],
+    ['symbol'=>'ZW_F', 'name'=>'Wheat Future',               'type'=>'futures','tv_symbol'=>'CBOT:ZW1!',    'yahoo_ticker'=>'ZW=F', 'sort_order'=>420,'seed_price'=>580,  'icon'=>'future'],
+    ['symbol'=>'SI_F', 'name'=>'Silver Future',              'type'=>'futures','tv_symbol'=>'COMEX:SI1!',   'yahoo_ticker'=>'SI=F', 'sort_order'=>422,'seed_price'=>29,   'icon'=>'metal'],
+    ['symbol'=>'HG_F', 'name'=>'Copper Future',              'type'=>'futures','tv_symbol'=>'COMEX:HG1!',   'yahoo_ticker'=>'HG=F', 'sort_order'=>424,'seed_price'=>4.55, 'icon'=>'metal'],
+    ['symbol'=>'NG_F', 'name'=>'Natural Gas Future',         'type'=>'futures','tv_symbol'=>'NYMEX:NG1!',   'yahoo_ticker'=>'NG=F', 'sort_order'=>426,'seed_price'=>2.15, 'icon'=>'oil'],
+    ['symbol'=>'RB_F', 'name'=>'RBOB Gasoline Future',       'type'=>'futures','tv_symbol'=>'NYMEX:RB1!',   'yahoo_ticker'=>'RB=F', 'sort_order'=>428,'seed_price'=>2.35, 'icon'=>'oil'],
+    ['symbol'=>'HO_F', 'name'=>'Heating Oil Future',         'type'=>'futures','tv_symbol'=>'NYMEX:HO1!',   'yahoo_ticker'=>'HO=F', 'sort_order'=>430,'seed_price'=>2.45, 'icon'=>'oil'],
+    ['symbol'=>'VX_F', 'name'=>'VIX Future (CBOE)',          'type'=>'futures','tv_symbol'=>'CBOE:VX1!',    'yahoo_ticker'=>'^VIX', 'sort_order'=>432,'seed_price'=>14,   'icon'=>'future'],
+    ['symbol'=>'BTC_F','name'=>'Bitcoin CME Future',         'type'=>'futures','tv_symbol'=>'CME:BTC1!',    'yahoo_ticker'=>'BTC=F','sort_order'=>434,'seed_price'=>68000,'icon'=>'btc'],
+    ['symbol'=>'ETH_F','name'=>'Ether CME Future',           'type'=>'futures','tv_symbol'=>'CME:ETH1!',    'yahoo_ticker'=>'ETH=F','sort_order'=>436,'seed_price'=>3500, 'icon'=>'eth'],
     ['symbol'=>'DX_F', 'name'=>'US Dollar Index Future',     'type'=>'futures','tv_symbol'=>'CAPITALCOM:DXY','yahoo_ticker'=>'DX=F','sort_order'=>438,'seed_price'=>104,  'icon'=>'future'],
-    ['symbol'=>'6E_F', 'name'=>'Euro FX Future',             'type'=>'futures','tv_symbol'=>'CME:6E1!',     'yahoo_ticker'=>'6E=F', 'sort_order'=>440,'seed_price'=>1.154,'icon'=>'future'],
-    ['symbol'=>'6B_F', 'name'=>'British Pound Future',       'type'=>'futures','tv_symbol'=>'CME:6B1!',     'yahoo_ticker'=>'6B=F', 'sort_order'=>442,'seed_price'=>1.336,'icon'=>'future'],
-    ['symbol'=>'6J_F', 'name'=>'Japanese Yen Future',        'type'=>'futures','tv_symbol'=>'CME:6J1!',     'yahoo_ticker'=>'6J=F', 'sort_order'=>444,'seed_price'=>0.0069,'icon'=>'future'],
-    ['symbol'=>'PA_F', 'name'=>'Palladium Future',           'type'=>'futures','tv_symbol'=>'COMEX:PA1!',   'yahoo_ticker'=>'PA=F', 'sort_order'=>446,'seed_price'=>1080,  'icon'=>'metal'],
-    ['symbol'=>'PL_F', 'name'=>'Platinum Future',            'type'=>'futures','tv_symbol'=>'COMEX:PL1!',   'yahoo_ticker'=>'PL=F', 'sort_order'=>448,'seed_price'=>1080,  'icon'=>'metal'],
-    ['symbol'=>'LE_F', 'name'=>'Live Cattle Future',         'type'=>'futures','tv_symbol'=>'CME:LE1!',     'yahoo_ticker'=>'LE=F', 'sort_order'=>450,'seed_price'=>17.55,  'icon'=>'future'],
-    ['symbol'=>'HE_F', 'name'=>'Lean Hog Future',            'type'=>'futures','tv_symbol'=>'CME:HE1!',     'yahoo_ticker'=>'HE=F', 'sort_order'=>452,'seed_price'=>95,   'icon'=>'future'],
+    ['symbol'=>'6E_F', 'name'=>'Euro FX Future',             'type'=>'futures','tv_symbol'=>'CME:6E1!',     'yahoo_ticker'=>'6E=F', 'sort_order'=>440,'seed_price'=>1.084,'icon'=>'future'],
+    ['symbol'=>'6B_F', 'name'=>'British Pound Future',       'type'=>'futures','tv_symbol'=>'CME:6B1!',     'yahoo_ticker'=>'6B=F', 'sort_order'=>442,'seed_price'=>1.268,'icon'=>'future'],
+    ['symbol'=>'6J_F', 'name'=>'Japanese Yen Future',        'type'=>'futures','tv_symbol'=>'CME:6J1!',     'yahoo_ticker'=>'6J=F', 'sort_order'=>444,'seed_price'=>0.0064,'icon'=>'future'],
+    ['symbol'=>'PA_F', 'name'=>'Palladium Future',           'type'=>'futures','tv_symbol'=>'COMEX:PA1!',   'yahoo_ticker'=>'PA=F', 'sort_order'=>446,'seed_price'=>960,  'icon'=>'metal'],
+    ['symbol'=>'PL_F', 'name'=>'Platinum Future',            'type'=>'futures','tv_symbol'=>'COMEX:PL1!',   'yahoo_ticker'=>'PL=F', 'sort_order'=>448,'seed_price'=>950,  'icon'=>'metal'],
+    ['symbol'=>'LE_F', 'name'=>'Live Cattle Future',         'type'=>'futures','tv_symbol'=>'CME:LE1!',     'yahoo_ticker'=>'LE=F', 'sort_order'=>450,'seed_price'=>192,  'icon'=>'future'],
+    ['symbol'=>'HE_F', 'name'=>'Lean Hog Future',            'type'=>'futures','tv_symbol'=>'CME:HE1!',     'yahoo_ticker'=>'HE=F', 'sort_order'=>452,'seed_price'=>90,   'icon'=>'future'],
     ['symbol'=>'NKD_F','name'=>'Nikkei 225 Future',          'type'=>'futures','tv_symbol'=>'OSE:NK2251!',   'yahoo_ticker'=>'NKD=F','sort_order'=>454,'seed_price'=>38750,'icon'=>'future'],
-    ['symbol'=>'BZ_F', 'name'=>'Brent Crude Future',         'type'=>'futures','tv_symbol'=>'ICEEUR:BRN1!',  'yahoo_ticker'=>'BZ=F', 'sort_order'=>456,'seed_price'=>65.2, 'icon'=>'oil'],
-    ['symbol'=>'EMD_F','name'=>'E-mini MidCap 400 Future',   'type'=>'futures','tv_symbol'=>'CME_MINI:EMD1!','yahoo_ticker'=>'EMD=F','sort_order'=>458,'seed_price'=>3950, 'icon'=>'future'],
+    ['symbol'=>'BZ_F', 'name'=>'Brent Crude Future',         'type'=>'futures','tv_symbol'=>'ICEEUR:BRN1!',  'yahoo_ticker'=>'BZ=F', 'sort_order'=>456,'seed_price'=>83.2, 'icon'=>'oil'],
+    ['symbol'=>'EMD_F','name'=>'E-mini MidCap 400 Future',   'type'=>'futures','tv_symbol'=>'CME_MINI:EMD1!','yahoo_ticker'=>'EMD=F','sort_order'=>458,'seed_price'=>2950, 'icon'=>'future'],
 
     // ── ARAB (40+) ──────────────────────────────────────────────────────────
     ['symbol'=>'2222','name'=>'Saudi Aramco',       'type'=>'arab','tv_symbol'=>'TADAWUL:2222','yahoo_ticker'=>'2222.SR','sort_order'=>500,'seed_price'=>30,'icon'=>'arab'],
@@ -245,35 +255,35 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'2010','name'=>'SABIC',              'type'=>'arab','tv_symbol'=>'TADAWUL:2010','yahoo_ticker'=>'2010.SR','sort_order'=>504,'seed_price'=>75,'icon'=>'arab'],
     ['symbol'=>'7010','name'=>'STC',                'type'=>'arab','tv_symbol'=>'TADAWUL:7010','yahoo_ticker'=>'7010.SR','sort_order'=>506,'seed_price'=>40,'icon'=>'arab'],
     ['symbol'=>'1211','name'=>'Maaden',             'type'=>'arab','tv_symbol'=>'TADAWUL:1211','yahoo_ticker'=>'1211.SR','sort_order'=>508,'seed_price'=>50,'icon'=>'arab'],
-    ['symbol'=>'1150','name'=>'Alinma Bank',        'type'=>'arab','tv_symbol'=>'TADAWUL:1150','yahoo_ticker'=>'1150.SR','sort_order'=>510,'seed_price'=>122,'icon'=>'arab'],
+    ['symbol'=>'1150','name'=>'Alinma Bank',        'type'=>'arab','tv_symbol'=>'TADAWUL:1150','yahoo_ticker'=>'1150.SR','sort_order'=>510,'seed_price'=>34,'icon'=>'arab'],
     ['symbol'=>'1180','name'=>'Saudi National Bank','type'=>'arab','tv_symbol'=>'TADAWUL:1180','yahoo_ticker'=>'1180.SR','sort_order'=>512,'seed_price'=>36,'icon'=>'arab'],
     ['symbol'=>'2280','name'=>'Almarai',            'type'=>'arab','tv_symbol'=>'TADAWUL:2280','yahoo_ticker'=>'2280.SR','sort_order'=>514,'seed_price'=>58,'icon'=>'arab'],
-    ['symbol'=>'1010','name'=>'Riyad Bank',         'type'=>'arab','tv_symbol'=>'TADAWUL:1010','yahoo_ticker'=>'1010.SR','sort_order'=>516,'seed_price'=>122,'icon'=>'arab'],
-    ['symbol'=>'1020','name'=>'Bank AlJazira',      'type'=>'arab','tv_symbol'=>'TADAWUL:1020','yahoo_ticker'=>'1020.SR','sort_order'=>518,'seed_price'=>122,'icon'=>'arab'],
+    ['symbol'=>'1010','name'=>'Riyad Bank',         'type'=>'arab','tv_symbol'=>'TADAWUL:1010','yahoo_ticker'=>'1010.SR','sort_order'=>516,'seed_price'=>28,'icon'=>'arab'],
+    ['symbol'=>'1020','name'=>'Bank AlJazira',      'type'=>'arab','tv_symbol'=>'TADAWUL:1020','yahoo_ticker'=>'1020.SR','sort_order'=>518,'seed_price'=>22,'icon'=>'arab'],
     ['symbol'=>'1030','name'=>'Saudi Hollandi Bank','type'=>'arab','tv_symbol'=>'TADAWUL:1030','yahoo_ticker'=>'1030.SR','sort_order'=>520,'seed_price'=>24,'icon'=>'arab'],
-    ['symbol'=>'1050','name'=>'Saudi British Bank', 'type'=>'arab','tv_symbol'=>'TADAWUL:1050','yahoo_ticker'=>'1050.SR','sort_order'=>522,'seed_price'=>42,'icon'=>'arab'],
-    ['symbol'=>'2050','name'=>'Savola Group',       'type'=>'arab','tv_symbol'=>'TADAWUL:2050','yahoo_ticker'=>'2050.SR','sort_order'=>524,'seed_price'=>122,'icon'=>'arab'],
-    ['symbol'=>'2080','name'=>'Sisco',              'type'=>'arab','tv_symbol'=>'TADAWUL:2080','yahoo_ticker'=>'2080.SR','sort_order'=>526,'seed_price'=>48,'icon'=>'arab'],
-    ['symbol'=>'7020','name'=>'Zain KSA',           'type'=>'arab','tv_symbol'=>'TADAWUL:7020','yahoo_ticker'=>'7020.SR','sort_order'=>528,'seed_price'=>18,'icon'=>'arab'],
-    ['symbol'=>'7030','name'=>'Etihad Etisalat',    'type'=>'arab','tv_symbol'=>'TADAWUL:7030','yahoo_ticker'=>'7030.SR','sort_order'=>530,'seed_price'=>17.5,'icon'=>'arab'],
-    ['symbol'=>'2040','name'=>'Saudi Cable',        'type'=>'arab','tv_symbol'=>'TADAWUL:2040','yahoo_ticker'=>'2040.SR','sort_order'=>532,'seed_price'=>5.8,'icon'=>'arab'],
+    ['symbol'=>'1050','name'=>'Saudi British Bank', 'type'=>'arab','tv_symbol'=>'TADAWUL:1050','yahoo_ticker'=>'1050.SR','sort_order'=>522,'seed_price'=>32,'icon'=>'arab'],
+    ['symbol'=>'2050','name'=>'Savola Group',       'type'=>'arab','tv_symbol'=>'TADAWUL:2050','yahoo_ticker'=>'2050.SR','sort_order'=>524,'seed_price'=>28,'icon'=>'arab'],
+    ['symbol'=>'2080','name'=>'Sisco',              'type'=>'arab','tv_symbol'=>'TADAWUL:2080','yahoo_ticker'=>'2080.SR','sort_order'=>526,'seed_price'=>45,'icon'=>'arab'],
+    ['symbol'=>'7020','name'=>'Zain KSA',           'type'=>'arab','tv_symbol'=>'TADAWUL:7020','yahoo_ticker'=>'7020.SR','sort_order'=>528,'seed_price'=>15,'icon'=>'arab'],
+    ['symbol'=>'7030','name'=>'Etihad Etisalat',    'type'=>'arab','tv_symbol'=>'TADAWUL:7030','yahoo_ticker'=>'7030.SR','sort_order'=>530,'seed_price'=>18,'icon'=>'arab'],
+    ['symbol'=>'2040','name'=>'Saudi Cable',        'type'=>'arab','tv_symbol'=>'TADAWUL:2040','yahoo_ticker'=>'2040.SR','sort_order'=>532,'seed_price'=>12,'icon'=>'arab'],
     ['symbol'=>'2060','name'=>'Al Qassim Cement',  'type'=>'arab','tv_symbol'=>'TADAWUL:2060','yahoo_ticker'=>'2060.SR','sort_order'=>534,'seed_price'=>20,'icon'=>'arab'],
     ['symbol'=>'2090','name'=>'National Cement',    'type'=>'arab','tv_symbol'=>'TADAWUL:2090','yahoo_ticker'=>'2090.SR','sort_order'=>536,'seed_price'=>16,'icon'=>'arab'],
-    ['symbol'=>'2100','name'=>'Yanbu Cement',       'type'=>'arab','tv_symbol'=>'TADAWUL:2100','yahoo_ticker'=>'2100.SR','sort_order'=>538,'seed_price'=>17.5,'icon'=>'arab'],
-    ['symbol'=>'4001','name'=>'Kingdom Holding',    'type'=>'arab','tv_symbol'=>'TADAWUL:4001','yahoo_ticker'=>'4001.SR','sort_order'=>540,'seed_price'=>5.8,'icon'=>'arab'],
-    ['symbol'=>'4002','name'=>'MBC Group',          'type'=>'arab','tv_symbol'=>'TADAWUL:4002','yahoo_ticker'=>'4002.SR','sort_order'=>542,'seed_price'=>28,'icon'=>'arab'],
-    ['symbol'=>'4190','name'=>'Jarir Marketing',    'type'=>'arab','tv_symbol'=>'TADAWUL:4190','yahoo_ticker'=>'4190.SR','sort_order'=>544,'seed_price'=>2.15,'icon'=>'arab'],
+    ['symbol'=>'2100','name'=>'Yanbu Cement',       'type'=>'arab','tv_symbol'=>'TADAWUL:2100','yahoo_ticker'=>'2100.SR','sort_order'=>538,'seed_price'=>18,'icon'=>'arab'],
+    ['symbol'=>'4001','name'=>'Kingdom Holding',    'type'=>'arab','tv_symbol'=>'TADAWUL:4001','yahoo_ticker'=>'4001.SR','sort_order'=>540,'seed_price'=>12,'icon'=>'arab'],
+    ['symbol'=>'4002','name'=>'MBC Group',          'type'=>'arab','tv_symbol'=>'TADAWUL:4002','yahoo_ticker'=>'4002.SR','sort_order'=>542,'seed_price'=>35,'icon'=>'arab'],
+    ['symbol'=>'4190','name'=>'Jarir Marketing',    'type'=>'arab','tv_symbol'=>'TADAWUL:4190','yahoo_ticker'=>'4190.SR','sort_order'=>544,'seed_price'=>145,'icon'=>'arab'],
     ['symbol'=>'4200','name'=>'Saudi Telecom',      'type'=>'arab','tv_symbol'=>'TADAWUL:4200','yahoo_ticker'=>'4200.SR','sort_order'=>546,'seed_price'=>42,'icon'=>'arab'],
-    ['symbol'=>'4210','name'=>'Al Hassan Ghazi',    'type'=>'arab','tv_symbol'=>'TADAWUL:4210','yahoo_ticker'=>'4210.SR','sort_order'=>548,'seed_price'=>17.5,'icon'=>'arab'],
-    ['symbol'=>'4240','name'=>'Saudi Food & Drug',  'type'=>'arab','tv_symbol'=>'TADAWUL:4240','yahoo_ticker'=>'4240.SR','sort_order'=>550,'seed_price'=>18,'icon'=>'arab'],
+    ['symbol'=>'4210','name'=>'Al Hassan Ghazi',    'type'=>'arab','tv_symbol'=>'TADAWUL:4210','yahoo_ticker'=>'4210.SR','sort_order'=>548,'seed_price'=>18,'icon'=>'arab'],
+    ['symbol'=>'4240','name'=>'Saudi Food & Drug',  'type'=>'arab','tv_symbol'=>'TADAWUL:4240','yahoo_ticker'=>'4240.SR','sort_order'=>550,'seed_price'=>15,'icon'=>'arab'],
     ['symbol'=>'4260','name'=>'Dallah Healthcare',  'type'=>'arab','tv_symbol'=>'TADAWUL:4260','yahoo_ticker'=>'4260.SR','sort_order'=>552,'seed_price'=>88,'icon'=>'arab'],
-    ['symbol'=>'4280','name'=>'Al Moammar Info.',   'type'=>'arab','tv_symbol'=>'TADAWUL:4280','yahoo_ticker'=>'4280.SR','sort_order'=>554,'seed_price'=>48,'icon'=>'arab'],
-    ['symbol'=>'4300','name'=>'SABIC Agri-Nutrients','type'=>'arab','tv_symbol'=>'TADAWUL:4300','yahoo_ticker'=>'4300.SR','sort_order'=>556,'seed_price'=>112,'icon'=>'arab'],
-    ['symbol'=>'4321','name'=>'Al Khaleej Training','type'=>'arab','tv_symbol'=>'TADAWUL:4321','yahoo_ticker'=>'4321.SR','sort_order'=>558,'seed_price'=>122,'icon'=>'arab'],
-    ['symbol'=>'2150','name'=>'Hail Cement',        'type'=>'arab','tv_symbol'=>'TADAWUL:2150','yahoo_ticker'=>'2150.SR','sort_order'=>560,'seed_price'=>18,'icon'=>'arab'],
+    ['symbol'=>'4280','name'=>'Al Moammar Info.',   'type'=>'arab','tv_symbol'=>'TADAWUL:4280','yahoo_ticker'=>'4280.SR','sort_order'=>554,'seed_price'=>60,'icon'=>'arab'],
+    ['symbol'=>'4300','name'=>'SABIC Agri-Nutrients','type'=>'arab','tv_symbol'=>'TADAWUL:4300','yahoo_ticker'=>'4300.SR','sort_order'=>556,'seed_price'=>110,'icon'=>'arab'],
+    ['symbol'=>'4321','name'=>'Al Khaleej Training','type'=>'arab','tv_symbol'=>'TADAWUL:4321','yahoo_ticker'=>'4321.SR','sort_order'=>558,'seed_price'=>28,'icon'=>'arab'],
+    ['symbol'=>'2150','name'=>'Hail Cement',        'type'=>'arab','tv_symbol'=>'TADAWUL:2150','yahoo_ticker'=>'2150.SR','sort_order'=>560,'seed_price'=>14,'icon'=>'arab'],
     ['symbol'=>'2160','name'=>'Arabian Cement',     'type'=>'arab','tv_symbol'=>'TADAWUL:2160','yahoo_ticker'=>'2160.SR','sort_order'=>562,'seed_price'=>16,'icon'=>'arab'],
     ['symbol'=>'2170','name'=>'Southern Cement',    'type'=>'arab','tv_symbol'=>'TADAWUL:2170','yahoo_ticker'=>'2170.SR','sort_order'=>564,'seed_price'=>75,'icon'=>'arab'],
-    ['symbol'=>'2180','name'=>'Eastern Cement',     'type'=>'arab','tv_symbol'=>'TADAWUL:2180','yahoo_ticker'=>'2180.SR','sort_order'=>566,'seed_price'=>122,'icon'=>'arab'],
+    ['symbol'=>'2180','name'=>'Eastern Cement',     'type'=>'arab','tv_symbol'=>'TADAWUL:2180','yahoo_ticker'=>'2180.SR','sort_order'=>566,'seed_price'=>22,'icon'=>'arab'],
   ];
 }
 
@@ -367,23 +377,23 @@ function vp_supported_rescue_limits(string $scope, string $type): array {
       'ttl' => 1,
     ],
     'forex' => [
-      'batch' => $isHome ? 2 : 3,
-      'direct_budget' => $isHome ? 2 : 3,
-      'direct_yahoo_budget' => $isHome ? 2 : 3,
-      'chart_budget' => 1,
+      'batch' => $isHome ? 8 : 16,
+      'direct_budget' => $isHome ? 8 : 12,
+      'direct_yahoo_budget' => 0,
+      'chart_budget' => 0,
       'ttl' => 2,
     ],
     'stocks' => [
-      'batch' => $isHome ? 3 : 4,
-      'direct_budget' => $isHome ? 3 : 4,
-      'direct_yahoo_budget' => $isHome ? 3 : 4,
+      'batch' => $isHome ? 8 : 16,
+      'direct_budget' => $isHome ? 8 : 12,
+      'direct_yahoo_budget' => 0,
       'chart_budget' => 0,
       'ttl' => 2,
     ],
     'commodities', 'futures', 'arab' => [
-      'batch' => $isHome ? 2 : 3,
-      'direct_budget' => $isHome ? 2 : 3,
-      'direct_yahoo_budget' => $isHome ? 2 : 3,
+      'batch' => $isHome ? 6 : 12,
+      'direct_budget' => $isHome ? 6 : 12,
+      'direct_yahoo_budget' => $type === 'futures' ? ($isHome ? 6 : 12) : 0,
       'chart_budget' => 0,
       'ttl' => 2,
     ],
@@ -397,10 +407,26 @@ function vp_supported_rescue_limits(string $scope, string $type): array {
   };
 }
 
+function vp_market_item_needs_rescue(array $item): bool {
+  $price = (float)($item['price'] ?? 0);
+  $symbol = strtoupper(trim((string)($item['symbol'] ?? '')));
+  $type = vp_normalize_asset_type((string)($item['type'] ?? ''));
+  $source = strtolower(trim((string)($item['source'] ?? '')));
+  $timing = strtolower(trim((string)($item['timing_class'] ?? '')));
+  if ($symbol === '' || $type === '') return false;
+  if ($price <= 0 || $source === '' || $source === 'unavailable' || $timing === 'unavailable') return true;
+  if (vp_market_quote_source_blocked($symbol, $type, $source)) return true;
+  if (function_exists('quote_source_is_untrusted') && quote_source_is_untrusted($source)) return true;
+  if (in_array($type, ['forex','stocks','arab'], true) && !in_array($source, ['eodhd','eodhd_rest','provider_live'], true)) return true;
+  if ($type === 'commodities' && function_exists('vp_is_spot_metal_symbol') && vp_is_spot_metal_symbol($symbol, $type)
+      && !in_array($source, ['eodhd','eodhd_rest','provider_live'], true)) return true;
+  return false;
+}
+
 function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   if (!$items || !in_array($scope, ['home', 'trade'], true)) return $items;
   $started = microtime(true);
-  $budgetMs = max(300, min(5000, (int)env('MARKETS_RESCUE_BUDGET_MS', $scope === 'home' ? '3000' : '1500')));
+  $budgetMs = max(300, min(6500, (int)env('MARKETS_RESCUE_BUDGET_MS', $scope === 'home' ? '4200' : '1800')));
   $defaultNonCryptoRescue = in_array($scope, ['home', 'trade'], true) ? '1' : '0';
   $allowNonCryptoRescue = ((int)($_GET['rescue_noncrypto'] ?? env('MARKETS_RESCUE_NONCRYPTO', $defaultNonCryptoRescue)) === 1);
 
@@ -410,12 +436,15 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   }
 
   $groups = [];
+  $scanCounts = [];
+  $scanLimit = max(4, min(30, (int)env('MARKETS_RESCUE_SCAN_LIMIT', $scope === 'home' ? '10' : '14')));
   foreach ($items as $idx => $item) {
-    $price = (float)($item['price'] ?? 0);
-    if ($price > 0) continue;
     $symbol = strtoupper(trim((string)($item['symbol'] ?? '')));
     $type = vp_normalize_asset_type((string)($item['type'] ?? ''));
     if ($symbol === '' || $type === '') continue;
+    $scanCounts[$type] = (int)($scanCounts[$type] ?? 0) + 1;
+    if ($scanCounts[$type] > $scanLimit) continue;
+    if (!vp_market_item_needs_rescue($item)) continue;
     if (!isset($groups[$type])) $groups[$type] = [];
     $groups[$type][] = ['index' => $idx, 'symbol' => $symbol, 'item' => $item];
   }
@@ -457,7 +486,7 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
         'massive_ttl' => (int)($limits['ttl'] ?? 2),
         // List endpoints must remain read/paint fast even when MySQL is
         // reconnecting. Cron warmers are responsible for durable persistence.
-        'persist' => ((int)env('MARKETS_RESCUE_PERSIST_QUOTES', '0') === 1),
+        'persist' => ((int)env('MARKETS_RESCUE_PERSIST_QUOTES', '1') === 1),
         'direct_budget' => (int)($limits['direct_budget'] ?? $batch),
         'direct_yahoo_budget' => (int)($limits['direct_yahoo_budget'] ?? $batch),
         'chart_budget' => (int)($limits['chart_budget'] ?? 0),
@@ -536,6 +565,7 @@ function vp_overlay_cached_quotes_fast(array $items): array {
       if (!($price > 0)) continue;
       $source = (string)($row['source'] ?? 'cache');
       if (vp_market_quote_source_blocked($sym, $type, $source)) continue;
+      if (function_exists('quote_source_is_untrusted') && quote_source_is_untrusted($source)) continue;
       $item['price'] = $price;
       $item['change_pct'] = (float)($row['change_pct'] ?? 0);
       $item['updated_at'] = (int)($row['updated_at'] ?? 0);
@@ -551,9 +581,179 @@ function vp_overlay_cached_quotes_fast(array $items): array {
   return $items;
 }
 
+function vp_overlay_eodhd_file_cache_fast(array $items): array {
+  if (!$items || !function_exists('eodhd_symbol_for_market')) return $items;
+  $dir = __DIR__ . '/data/cache';
+  if (!is_dir($dir)) return $items;
+  $now = time();
+
+  foreach ($items as &$item) {
+    $sym = strtoupper(trim((string)($item['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($item['type'] ?? ''));
+    if ($sym === '' || $type === '' || $type === 'crypto') continue;
+
+    $price = (float)($item['price'] ?? 0);
+    $source = strtolower(trim((string)($item['source'] ?? '')));
+    if ($price > 0 && $source !== '' && $source !== 'unavailable' && $source !== 'seed_price' && $source !== 'seed') continue;
+
+    $ticker = eodhd_symbol_for_market($sym, $type, []);
+    if (!$ticker) continue;
+    $safe = preg_replace('/[^A-Z0-9._=\-]/', '_', strtoupper($ticker));
+    $file = $dir . '/eod_rt_' . $safe . '.json';
+    if (!is_file($file)) continue;
+
+    $cacheAge = $now - (int)@filemtime($file);
+    if (in_array($type, ['stocks', 'arab'], true)) {
+      $maxCacheAge = max(300, min(604800, (int)env('MARKETS_EODHD_FILE_CACHE_MAX_AGE_DELAYED', '604800')));
+    } elseif ($type === 'forex') {
+      $maxCacheAge = max(30, min(172800, (int)env('MARKETS_EODHD_FILE_CACHE_MAX_AGE_FOREX', '172800')));
+    } else {
+      $maxCacheAge = max(60, min(172800, (int)env('MARKETS_EODHD_FILE_CACHE_MAX_AGE', '86400')));
+    }
+    if ($cacheAge < 0 || $cacheAge > $maxCacheAge) continue;
+
+    $raw = @file_get_contents($file);
+    $row = $raw ? json_decode((string)$raw, true) : null;
+    if (!is_array($row)) continue;
+    $p = (float)($row['price'] ?? 0);
+    if (!($p > 0)) continue;
+
+    $src = (string)($row['source'] ?? 'eodhd');
+    if (vp_market_quote_source_blocked($sym, $type, $src)) continue;
+    $timing = in_array($type, ['stocks', 'arab'], true) ? 'delayed' : 'live';
+    $item['price'] = $p;
+    $item['change_pct'] = (float)($row['change_pct'] ?? 0);
+    $item['updated_at'] = (int)($row['updated_at'] ?? $now);
+    $item['source'] = $src !== '' ? $src : 'eodhd';
+    $item['is_stale'] = false;
+    $item['timing_class'] = $timing;
+    $item['delayed'] = ($timing === 'delayed');
+  }
+  unset($item);
+
+  return $items;
+}
+
+function vp_overlay_eodhd_live_fast(array $items, int $limit = 16): array {
+  if (!$items || !function_exists('eodhd_symbol_for_market') || !function_exists('eodhd_quote_many_cached')) return $items;
+  if ((int)env('MARKETS_EODHD_LIVE_FAST', '1') !== 1) return $items;
+
+  $limit = max(4, min(24, $limit));
+  $tickers = [];
+  $map = [];
+  foreach ($items as $idx => $item) {
+    if (count($tickers) >= $limit) break;
+    $sym = strtoupper(trim((string)($item['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($item['type'] ?? ''));
+    if ($sym === '' || !in_array($type, ['forex', 'stocks', 'arab'], true)) continue;
+
+    $price = (float)($item['price'] ?? 0);
+    $source = strtolower(trim((string)($item['source'] ?? '')));
+    $needsLive = !($price > 0)
+      || $source === ''
+      || $source === 'unavailable'
+      || $source === 'seed'
+      || $source === 'seed_price'
+      || str_contains($source, 'reference');
+    if (!$needsLive && str_contains($source, 'eodhd')) continue;
+
+    $ticker = eodhd_symbol_for_market($sym, $type, []);
+    if (!$ticker) continue;
+    $ticker = strtoupper(trim($ticker));
+    if (!preg_match('/^[A-Z0-9._\-=]{2,40}$/', $ticker)) continue;
+    $tickers[] = $ticker;
+    $map[$ticker][] = ['index' => $idx, 'symbol' => $sym, 'type' => $type];
+  }
+  $tickers = array_values(array_unique($tickers));
+  if (!$tickers) return $items;
+
+  $prevOverride = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+  unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+  try {
+    $ttl = max(1, min(30, (int)env('MARKETS_EODHD_LIVE_FAST_TTL', '4')));
+    $rows = eodhd_quote_many_cached($tickers, $ttl);
+  } catch (Throwable $e) {
+    $rows = [];
+  } finally {
+    if ($prevOverride !== null) $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevOverride;
+  }
+
+  foreach ($rows as $ticker => $row) {
+    if (!is_array($row) || !isset($map[$ticker])) continue;
+    $p = (float)($row['price'] ?? 0);
+    if (!($p > 0)) continue;
+    foreach ($map[$ticker] as $target) {
+      $idx = (int)$target['index'];
+      if (!isset($items[$idx])) continue;
+      $type = (string)$target['type'];
+      $src = (string)($row['source'] ?? 'eodhd');
+      if (vp_market_quote_source_blocked((string)$target['symbol'], $type, $src)) continue;
+      $timing = in_array($type, ['stocks', 'arab'], true) ? 'delayed' : 'live';
+      $items[$idx]['price'] = $p;
+      $items[$idx]['change_pct'] = (float)($row['change_pct'] ?? 0);
+      $items[$idx]['updated_at'] = (int)($row['updated_at'] ?? time());
+      $items[$idx]['source'] = $src !== '' ? $src : 'eodhd';
+      $items[$idx]['is_stale'] = false;
+      $items[$idx]['timing_class'] = $timing;
+      $items[$idx]['delayed'] = ($timing === 'delayed');
+    }
+  }
+
+  return $items;
+}
+
+function vp_overlay_spot_metal_proxy_fast(array $items): array {
+  if (!$items || !function_exists('quote_bulk_live') || !function_exists('vp_is_spot_metal_symbol')) return $items;
+
+  $symbols = [];
+  $metaBySymbol = [];
+  foreach ($items as $item) {
+    $sym = strtoupper(trim((string)($item['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($item['type'] ?? ''));
+    if ($sym === '' || !vp_is_spot_metal_symbol($sym, $type)) continue;
+    $symbols[] = $sym;
+    $metaBySymbol[$sym] = market_meta($item['meta'] ?? null);
+  }
+  $symbols = array_values(array_unique($symbols));
+  if (!$symbols) return $items;
+
+  try {
+    $live = quote_bulk_live($symbols, 'commodities', $metaBySymbol, [
+      'ttl' => 2,
+      'yahoo_ttl' => 2,
+      'eodhd_ttl' => 2,
+      'persist' => false,
+    ]);
+  } catch (Throwable $e) {
+    $live = [];
+  }
+  if (!$live) return $items;
+
+  foreach ($items as &$item) {
+    $sym = strtoupper(trim((string)($item['symbol'] ?? '')));
+    if ($sym === '' || !isset($live[$sym]) || !is_array($live[$sym])) continue;
+    $row = $live[$sym];
+    $price = (float)($row['price'] ?? 0);
+    if (!($price > 0)) continue;
+    $item['price'] = $price;
+    $item['change_pct'] = (float)($row['change_pct'] ?? 0);
+    $item['updated_at'] = (int)($row['updated_at'] ?? time());
+    $item['source'] = (string)($row['source'] ?? 'market_proxy');
+    $item['is_stale'] = false;
+    $item['timing_class'] = 'live';
+    $item['delayed'] = false;
+  }
+  unset($item);
+
+  return $items;
+}
+
 function vp_filter_priced_supported_items(array $items, string $scope, bool $withQuotes, bool $supportedOnly): array {
   if (!$supportedOnly || !$withQuotes || !in_array($scope, ['home', 'trade'], true)) return $items;
-  $defaultHide = $scope === 'trade' ? '1' : '0';
+  // Do not hide supported instruments while their live quote is still warming.
+  // Prices can arrive a few seconds later via quotes/SSE; the symbol list itself
+  // must stay visible.
+  $defaultHide = '0';
   if ((int)env('MARKETS_HIDE_UNPRICED_SUPPORTED', $defaultHide) !== 1) return $items;
   $pricedItems = array_values(array_filter($items, static function(array $it): bool {
     $price = (float)($it['price'] ?? 0);
@@ -837,18 +1037,18 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
 
 function vp_fallback_futures_markets(): array {
   return [
-    ['symbol'=>'ES_F',  'name'=>'E-mini S&P 500 Future',     'tv_symbol'=>'CME_MINI:ES1!',   'yahoo_ticker'=>'ES=F',  'sort_order'=>10, 'seed_price'=>5950.0],
-    ['symbol'=>'NQ_F',  'name'=>'E-mini Nasdaq 100 Future',  'tv_symbol'=>'CME_MINI:NQ1!',   'yahoo_ticker'=>'NQ=F',  'sort_order'=>12, 'seed_price'=>16.50.0],
+    ['symbol'=>'ES_F',  'name'=>'E-mini S&P 500 Future',     'tv_symbol'=>'CME_MINI:ES1!',   'yahoo_ticker'=>'ES=F',  'sort_order'=>10, 'seed_price'=>5200.0],
+    ['symbol'=>'NQ_F',  'name'=>'E-mini Nasdaq 100 Future',  'tv_symbol'=>'CME_MINI:NQ1!',   'yahoo_ticker'=>'NQ=F',  'sort_order'=>12, 'seed_price'=>18250.0],
     ['symbol'=>'YM_F',  'name'=>'E-mini Dow Future',         'tv_symbol'=>'CBOT_MINI:YM1!',  'yahoo_ticker'=>'YM=F',  'sort_order'=>14, 'seed_price'=>39280.0],
     ['symbol'=>'RTY_F', 'name'=>'E-mini Russell 2000 Future','tv_symbol'=>'CME_MINI:RTY1!',  'yahoo_ticker'=>'RTY=F', 'sort_order'=>16, 'seed_price'=>2055.0],
     ['symbol'=>'NKD_F', 'name'=>'Nikkei 225 Future',         'tv_symbol'=>'OSE:NK2251!',     'yahoo_ticker'=>'NKD=F', 'sort_order'=>18, 'seed_price'=>38750.0],
     ['symbol'=>'CL_F',  'name'=>'WTI Crude Future',          'tv_symbol'=>'NYMEX:CL1!',      'yahoo_ticker'=>'CL=F',  'sort_order'=>20, 'seed_price'=>81.2],
     ['symbol'=>'BZ_F',  'name'=>'Brent Crude Future',        'tv_symbol'=>'ICEEUR:BRN1!',    'yahoo_ticker'=>'BZ=F',  'sort_order'=>22, 'seed_price'=>84.4],
-    ['symbol'=>'GC_F',  'name'=>'Gold Future',               'tv_symbol'=>'COMEX:GC1!',      'yahoo_ticker'=>'GC=F',  'sort_order'=>24, 'seed_price'=>4330.0],
+    ['symbol'=>'GC_F',  'name'=>'Gold Future',               'tv_symbol'=>'COMEX:GC1!',      'yahoo_ticker'=>'GC=F',  'sort_order'=>24, 'seed_price'=>2350.0],
     ['symbol'=>'SI_F',  'name'=>'Silver Future',             'tv_symbol'=>'COMEX:SI1!',      'yahoo_ticker'=>'SI=F',  'sort_order'=>26, 'seed_price'=>27.0],
     ['symbol'=>'NG_F',  'name'=>'Natural Gas Future',        'tv_symbol'=>'NYMEX:NG1!',      'yahoo_ticker'=>'NG=F',  'sort_order'=>28, 'seed_price'=>2.1],
-    ['symbol'=>'ZN_F',  'name'=>'10Y Treasury Note Future',  'tv_symbol'=>'CBOT:ZN1!',       'yahoo_ticker'=>'ZN=F',  'sort_order'=>30, 'seed_price'=>112.0],
-    ['symbol'=>'ZB_F',  'name'=>'30Y Treasury Bond Future',  'tv_symbol'=>'CBOT:ZB1!',       'yahoo_ticker'=>'ZB=F',  'sort_order'=>32, 'seed_price'=>122.0],
+    ['symbol'=>'ZN_F',  'name'=>'10Y Treasury Note Future',  'tv_symbol'=>'CBOT:ZN1!',       'yahoo_ticker'=>'ZN=F',  'sort_order'=>30, 'seed_price'=>110.0],
+    ['symbol'=>'ZB_F',  'name'=>'30Y Treasury Bond Future',  'tv_symbol'=>'CBOT:ZB1!',       'yahoo_ticker'=>'ZB=F',  'sort_order'=>32, 'seed_price'=>120.0],
   ];
 }
 
@@ -878,15 +1078,15 @@ function vp_build_fallback_market_row(array $def, int $idBase = 900000): array {
 
 function vp_fallback_commodities_markets(): array {
   return [
-    ['symbol'=>'XAUUSD',   'name'=>'Gold Spot',          'tv_symbol'=>'OANDA:XAUUSD',      'yahoo_ticker'=>'GC=F',  'sort_order'=>10, 'seed_price'=>4330.0],
+    ['symbol'=>'XAUUSD',   'name'=>'Gold Spot',          'tv_symbol'=>'OANDA:XAUUSD',      'yahoo_ticker'=>'GC=F',  'sort_order'=>10, 'seed_price'=>2350.0],
     ['symbol'=>'XAGUSD',   'name'=>'Silver Spot',        'tv_symbol'=>'OANDA:XAGUSD',      'yahoo_ticker'=>'SI=F',  'sort_order'=>12, 'seed_price'=>27.0],
-    ['symbol'=>'USOIL',    'name'=>'WTI Crude Oil',      'tv_symbol'=>'TVC:USOIL',         'yahoo_ticker'=>'CL=F',  'sort_order'=>14, 'seed_price'=>62.0],
+    ['symbol'=>'USOIL',    'name'=>'WTI Crude Oil',      'tv_symbol'=>'TVC:USOIL',         'yahoo_ticker'=>'CL=F',  'sort_order'=>14, 'seed_price'=>78.0],
     ['symbol'=>'UKOIL',    'name'=>'Brent Crude Oil',    'tv_symbol'=>'TVC:UKOIL',         'yahoo_ticker'=>'BZ=F',  'sort_order'=>16, 'seed_price'=>82.0],
     ['symbol'=>'NGAS',     'name'=>'Natural Gas',        'tv_symbol'=>'FX:NGAS',           'yahoo_ticker'=>'NG=F',  'sort_order'=>18, 'seed_price'=>2.1],
     ['symbol'=>'COPPER',   'name'=>'Copper',             'tv_symbol'=>'CAPITALCOM:COPPER', 'yahoo_ticker'=>'HG=F',  'sort_order'=>20, 'seed_price'=>4.1],
     ['symbol'=>'PLAT',     'name'=>'Platinum',           'tv_symbol'=>'OANDA:XPTUSD',      'yahoo_ticker'=>'PL=F',  'sort_order'=>22, 'seed_price'=>970.0],
     ['symbol'=>'PALL',     'name'=>'Palladium',          'tv_symbol'=>'OANDA:XPDUSD',      'yahoo_ticker'=>'PA=F',  'sort_order'=>24, 'seed_price'=>1030.0],
-    ['symbol'=>'CORN',     'name'=>'Corn',               'tv_symbol'=>'OANDA:CORNUSD',     'yahoo_ticker'=>'ZC=F',  'sort_order'=>26, 'seed_price'=>450.0],
+    ['symbol'=>'CORN',     'name'=>'Corn',               'tv_symbol'=>'OANDA:CORNUSD',     'yahoo_ticker'=>'ZC=F',  'sort_order'=>26, 'seed_price'=>430.0],
     ['symbol'=>'WHEAT',    'name'=>'Wheat',              'tv_symbol'=>'CAPITALCOM:WHEAT',  'yahoo_ticker'=>'ZW=F',  'sort_order'=>28, 'seed_price'=>560.0],
     ['symbol'=>'SOY',      'name'=>'Soybeans',           'tv_symbol'=>'CBOT:ZS1!',         'yahoo_ticker'=>'ZS=F',  'sort_order'=>30, 'seed_price'=>1010.0],
     ['symbol'=>'SUGAR',    'name'=>'Sugar',              'tv_symbol'=>'ICEUS:SB1!',        'yahoo_ticker'=>'SB=F',  'sort_order'=>32, 'seed_price'=>19.0],
@@ -930,7 +1130,7 @@ function vp_fallback_arab_markets(): array {
     ['symbol'=>'1150', 'name'=>'Alinma Bank',           'tv_symbol'=>'TADAWUL:1150', 'yahoo_ticker'=>'1150.SR', 'sort_order'=>20, 'seed_price'=>34.0],
     ['symbol'=>'1180', 'name'=>'Saudi National Bank',   'tv_symbol'=>'TADAWUL:1180', 'yahoo_ticker'=>'1180.SR', 'sort_order'=>22, 'seed_price'=>36.0],
     ['symbol'=>'2280', 'name'=>'Almarai',               'tv_symbol'=>'TADAWUL:2280', 'yahoo_ticker'=>'2280.SR', 'sort_order'=>24, 'seed_price'=>58.0],
-    ['symbol'=>'4002', 'name'=>'Mouwasat Medical',      'tv_symbol'=>'TADAWUL:4002', 'yahoo_ticker'=>'4002.SR', 'sort_order'=>26, 'seed_price'=>82.0],
+    ['symbol'=>'4002', 'name'=>'Mouwasat Medical',      'tv_symbol'=>'TADAWUL:4002', 'yahoo_ticker'=>'4002.SR', 'sort_order'=>26, 'seed_price'=>90.0],
     ['symbol'=>'4300', 'name'=>'Dar Al Arkan',          'tv_symbol'=>'TADAWUL:4300', 'yahoo_ticker'=>'4300.SR', 'sort_order'=>28, 'seed_price'=>15.0],
   ];
 }
@@ -962,7 +1162,7 @@ function vp_build_fallback_arab_row(array $def, int $idBase = 940000): array {
 
 $cacheDir = __DIR__ . '/data/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-$cacheKey = 'markets_v20_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '.json';
+$cacheKey = 'markets_v29_' . preg_replace('/[^a-z0-9_\-]/i', '_', $typeAlias) . '_' . preg_replace('/[^a-z0-9_\-]/i', '_', $scope ?: 'default') . '_' . ($supportedOnly ? 'supported' : 'all') . '_' . ($grouped ? 'g' : 'f') . '_' . ($withQuotes ? 'q' : 'n') . '_' . ($lite ? 'l' : 'n') . '_' . ($forceLive ? 'live' : 'cache') . '_' . ($allowListRescue ? 'rescue' : 'cacheonly') . '_' . ($fastList ? 'fast' : 'full') . '.json';
 $cacheFile = $cacheDir . '/' . $cacheKey;
 $cacheTtl = $withQuotes ? (int)env('MARKETS_CACHE_TTL_QUOTES', '18') : (int)env('MARKETS_CACHE_TTL', '60');
 $cacheTtl = max(0, min(300, $cacheTtl));
@@ -981,6 +1181,38 @@ if ($cacheTtl > 0 && is_file($cacheFile)) {
     header('Content-Type: application/json; charset=utf-8');
     echo (string)@file_get_contents($cacheFile);
     exit;
+  }
+  // Stale-While-Revalidate: when the cached list is only slightly stale, serve
+  // the existing copy instantly and rebuild it in the background within this
+  // same worker (fastcgi_finish_request). This keeps the visible price list
+  // fast (~sub-200ms) while still refreshing it, instead of forcing whichever
+  // visitor lands just after the TTL expired to pay the full provider rebuild.
+  // A short lock prevents a refresh stampede when many requests arrive at once.
+  $swrWindow = max(0, min(600, (int)env('MARKETS_CACHE_SWR_WINDOW', '120')));
+  if ($swrWindow > 0 && $age >= 0 && $age < ($cacheTtl + $swrWindow) && function_exists('fastcgi_finish_request')) {
+    $swrCached = (string)@file_get_contents($cacheFile);
+    if ($swrCached !== '') {
+      $swrLockFile = $cacheFile . '.refresh.lock';
+      $swrLockAge = is_file($swrLockFile) ? (time() - (int)@filemtime($swrLockFile)) : 99999;
+      $swrOwnsRefresh = ($swrLockAge >= 20);
+      if ($swrOwnsRefresh) {
+        @touch($swrLockFile);
+        register_shutdown_function(static function () use ($swrLockFile) { @unlink($swrLockFile); });
+      }
+      header('Content-Type: application/json; charset=utf-8');
+      header('X-MEX-Cache: swr');
+      echo $swrCached;
+      while (ob_get_level() > 0) { @ob_end_flush(); }
+      @flush();
+      fastcgi_finish_request();
+      if (!$swrOwnsRefresh) {
+        exit; // another worker already owns the refresh for this cache key
+      }
+      // This worker owns the refresh: silence harmless post-response header
+      // notices and fall through to rebuild + rewrite the cache file below.
+      @ignore_user_abort(true);
+      error_reporting(0);
+    }
   }
 }
 
@@ -1003,7 +1235,13 @@ if ($fastSupported) {
   // the UI hydrates missing rows through quotes.php batch requests, while
   // this endpoint always returns a stable curated list immediately.
   $items = vp_market_items_from_rows($rows, $typeAlias, $scope, false, true, [], false);
+  $fastLiveOverlay = $forceLive || ((int)env('MARKETS_FAST_LIVE_OVERLAY', '0') === 1);
+  $fastProviderOverlay = $fastLiveOverlay || $typeProvider === 'forex';
+  $fastMetalProxyOverlay = $fastLiveOverlay || ($typeProvider === 'commodities' && (int)env('MARKETS_FAST_METAL_PROXY_OVERLAY', '1') === 1);
   if ($withQuotes) $items = vp_overlay_cached_quotes_fast($items);
+  if ($withQuotes) $items = vp_overlay_eodhd_file_cache_fast($items);
+  if ($withQuotes && $fastProviderOverlay) $items = vp_overlay_eodhd_live_fast($items, $requestLimit > 0 ? min($requestLimit, 16) : 16);
+  if ($withQuotes && $fastMetalProxyOverlay) $items = vp_overlay_spot_metal_proxy_fast($items);
   if ($withQuotes && $allowListRescue) {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
@@ -1291,6 +1529,8 @@ try {
     $items = vp_rescue_supported_market_quotes($items, $scope);
   }
 
+  if ($withQuotes) $items = vp_overlay_eodhd_file_cache_fast($items);
+  if ($withQuotes) $items = vp_overlay_spot_metal_proxy_fast($items);
   $items = vp_filter_priced_supported_items($items, $scope, $withQuotes, $supportedOnly);
 
   if ($grouped) {

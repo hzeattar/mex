@@ -216,6 +216,20 @@ function vp_boot_market_groups(PDO $pdo): array {
 $bootLevel = vp_boot_level($pdo, $uid);
 $whatsappSupportUrl = vp_boot_whatsapp_support_url();
 
+// Market groups are identical for all users — cache briefly to speed up boot.
+$bootMarketsCacheFile = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'mex_boot_markets.json';
+$bootMarkets = null;
+if (is_file($bootMarketsCacheFile) && (time() - (int)@filemtime($bootMarketsCacheFile)) < 20) {
+  $decoded = json_decode((string)@file_get_contents($bootMarketsCacheFile), true);
+  if (is_array($decoded) && !empty($decoded)) $bootMarkets = $decoded;
+}
+if ($bootMarkets === null) {
+  $bootMarkets = vp_boot_market_groups($pdo);
+  if (!empty($bootMarkets)) {
+    @file_put_contents($bootMarketsCacheFile, json_encode($bootMarkets), LOCK_EX);
+  }
+}
+
 json_response([
   'ok' => true,
   'user' => auth_user_payload($row, $bootLevel),
@@ -233,7 +247,7 @@ json_response([
   'wallet' => vp_boot_wallet($uid),
   'kyc' => vp_boot_kyc($pdo, $uid),
   'level' => $bootLevel,
-  'markets' => vp_boot_market_groups($pdo),
+  'markets' => $bootMarkets,
   'forced_mode' => in_array(strtolower((string)($row['force_mode'] ?? '')), ['demo','real'], true) ? strtolower((string)$row['force_mode']) : null,
   'feature_flags' => feature_all(),
 ]);

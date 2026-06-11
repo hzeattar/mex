@@ -1,4 +1,0 @@
-assets/js/app.js
-api/lib/quotes.php
-api/trade/candles.php
-docs/HANDOFF_2026_04_20_PHASE110_NONCRYPTO_PROVIDER_FIX.md

@@ -22,7 +22,10 @@ function cron_input_token_qw(): string {
 }
 
 $token = cron_input_token_qw();
-if ($token === '' || !hash_equals((string)env('CRON_KEY',''), $token)) {
+// Trusted in-container warmer bypass (CLI + CRON_LOCAL_RUN=1 set by the startup
+// script). Local-only: external HTTP callers cannot set that env var.
+$cliLocal = (PHP_SAPI === 'cli') && (trim((string)getenv('CRON_LOCAL_RUN')) === '1');
+if (!$cliLocal && ($token === '' || !hash_equals((string)env('CRON_KEY',''), $token))) {
   http_response_code(403);
   echo 'Forbidden';
   exit;
@@ -31,91 +34,176 @@ header('Content-Type: application/json; charset=utf-8');
 
 try { $pdo = db(); } catch (Throwable $e) { json_response(['ok'=>false,'error'=>'DB not ready for cron','detail'=>$e->getMessage()], 500); }
 
-function cron_supported_quote_defs_qw(): array {
-  return [
-    'crypto' => [
-      ['symbol'=>'BTCUSDT'], ['symbol'=>'ETHUSDT'], ['symbol'=>'SOLUSDT'], ['symbol'=>'XRPUSDT'], ['symbol'=>'BNBUSDT'], ['symbol'=>'DOGEUSDT'], ['symbol'=>'ADAUSDT'], ['symbol'=>'AVAXUSDT'], ['symbol'=>'LINKUSDT'], ['symbol'=>'DOTUSDT'],
-    ],
-    'forex' => [
-      ['symbol'=>'EURUSD'], ['symbol'=>'GBPUSD'], ['symbol'=>'USDJPY'], ['symbol'=>'USDCHF'], ['symbol'=>'AUDUSD'], ['symbol'=>'USDCAD'],
-    ],
-    'stocks' => [
-      ['symbol'=>'AAPL','yahoo_ticker'=>'AAPL'], ['symbol'=>'MSFT','yahoo_ticker'=>'MSFT'], ['symbol'=>'NVDA','yahoo_ticker'=>'NVDA'], ['symbol'=>'TSLA','yahoo_ticker'=>'TSLA'], ['symbol'=>'AMZN','yahoo_ticker'=>'AMZN'], ['symbol'=>'GOOGL','yahoo_ticker'=>'GOOGL'],
-    ],
-    'commodities' => [
-      ['symbol'=>'XAUUSD','yahoo_ticker'=>'GC=F'], ['symbol'=>'XAGUSD','yahoo_ticker'=>'SI=F'], ['symbol'=>'USOIL','yahoo_ticker'=>'CL=F'], ['symbol'=>'UKOIL','yahoo_ticker'=>'BZ=F'], ['symbol'=>'NGAS','yahoo_ticker'=>'NG=F'],
-    ],
-    'futures' => [
-      ['symbol'=>'ES_F','yahoo_ticker'=>'ES=F'], ['symbol'=>'NQ_F','yahoo_ticker'=>'NQ=F'], ['symbol'=>'YM_F','yahoo_ticker'=>'YM=F'], ['symbol'=>'RTY_F','yahoo_ticker'=>'RTY=F'], ['symbol'=>'CL_F','yahoo_ticker'=>'CL=F'], ['symbol'=>'GC_F','yahoo_ticker'=>'GC=F'], ['symbol'=>'ZN_F','yahoo_ticker'=>'ZN=F'], ['symbol'=>'ZB_F','yahoo_ticker'=>'ZB=F'],
-    ],
-    'arab' => [
-      ['symbol'=>'2222','yahoo_ticker'=>'2222.SR'], ['symbol'=>'1120','yahoo_ticker'=>'1120.SR'], ['symbol'=>'2010','yahoo_ticker'=>'2010.SR'], ['symbol'=>'7010','yahoo_ticker'=>'7010.SR'], ['symbol'=>'1211','yahoo_ticker'=>'1211.SR'], ['symbol'=>'1150','yahoo_ticker'=>'1150.SR'], ['symbol'=>'1180','yahoo_ticker'=>'1180.SR'], ['symbol'=>'2280','yahoo_ticker'=>'2280.SR'],
-      ['symbol'=>'1010','yahoo_ticker'=>'1010.SR'], ['symbol'=>'1020','yahoo_ticker'=>'1020.SR'], ['symbol'=>'1030','yahoo_ticker'=>'1030.SR'], ['symbol'=>'1050','yahoo_ticker'=>'1050.SR'], ['symbol'=>'2050','yahoo_ticker'=>'2050.SR'], ['symbol'=>'2080','yahoo_ticker'=>'2080.SR'], ['symbol'=>'7020','yahoo_ticker'=>'7020.SR'], ['symbol'=>'7030','yahoo_ticker'=>'7030.SR'],
-      ['symbol'=>'2040','yahoo_ticker'=>'2040.SR'], ['symbol'=>'2060','yahoo_ticker'=>'2060.SR'], ['symbol'=>'2090','yahoo_ticker'=>'2090.SR'], ['symbol'=>'2100','yahoo_ticker'=>'2100.SR'], ['symbol'=>'4001','yahoo_ticker'=>'4001.SR'], ['symbol'=>'4002','yahoo_ticker'=>'4002.SR'], ['symbol'=>'4190','yahoo_ticker'=>'4190.SR'], ['symbol'=>'4200','yahoo_ticker'=>'4200.SR'],
-      ['symbol'=>'4210','yahoo_ticker'=>'4210.SR'], ['symbol'=>'4240','yahoo_ticker'=>'4240.SR'], ['symbol'=>'4260','yahoo_ticker'=>'4260.SR'], ['symbol'=>'4280','yahoo_ticker'=>'4280.SR'], ['symbol'=>'4300','yahoo_ticker'=>'4300.SR'], ['symbol'=>'4321','yahoo_ticker'=>'4321.SR'], ['symbol'=>'2150','yahoo_ticker'=>'2150.SR'], ['symbol'=>'2160','yahoo_ticker'=>'2160.SR'],
-      ['symbol'=>'2170','yahoo_ticker'=>'2170.SR'], ['symbol'=>'2180','yahoo_ticker'=>'2180.SR'],
-    ],
-  ];
+function cron_market_key_qw(string $type, string $symbol): string {
+  return vp_normalize_asset_type($type) . ':' . strtoupper(trim($symbol));
 }
 
-$types = ['crypto','forex','stocks','arab','commodities','futures'];
-$perType = max(6, min(250, (int)($_GET['per_type'] ?? 120)));
+function cron_static_supported_defs_qw(array $types): array {
+  $path = __DIR__ . '/../markets.php';
+  $src = @file_get_contents($path);
+  if (!is_string($src) || $src === '') return [];
+
+  $fn = strpos($src, 'function vp_supported_market_defs');
+  $ret = $fn === false ? false : strpos($src, 'return [', $fn);
+  $start = $ret === false ? false : strpos($src, '[', $ret);
+  if ($start === false) return [];
+
+  $depth = 0;
+  $inSingle = false;
+  $inDouble = false;
+  $escape = false;
+  $end = null;
+  $len = strlen($src);
+  for ($i = $start; $i < $len; $i++) {
+    $ch = $src[$i];
+    if ($escape) { $escape = false; continue; }
+    if (($inSingle || $inDouble) && $ch === '\\') { $escape = true; continue; }
+    if (!$inDouble && $ch === "'") { $inSingle = !$inSingle; continue; }
+    if (!$inSingle && $ch === '"') { $inDouble = !$inDouble; continue; }
+    if ($inSingle || $inDouble) continue;
+    if ($ch === '[') $depth++;
+    elseif ($ch === ']') {
+      $depth--;
+      if ($depth === 0) { $end = $i; break; }
+    }
+  }
+  if ($end === null) return [];
+
+  $arrayCode = substr($src, $start, $end - $start + 1);
+  try { $defs = eval('return ' . $arrayCode . ';'); } catch (Throwable $e) { return []; }
+  if (!is_array($defs)) return [];
+
+  $allowed = array_flip($types);
+  $out = [];
+  foreach ($defs as $def) {
+    if (!is_array($def)) continue;
+    $symbol = strtoupper(trim((string)($def['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($def['type'] ?? ''));
+    if ($symbol === '' || !isset($allowed[$type])) continue;
+    $def['symbol'] = $symbol;
+    $def['type'] = $type;
+    $def['_catalog_supported'] = true;
+    $out[cron_market_key_qw($type, $symbol)] = $def;
+  }
+  return $out;
+}
+
+function cron_supported_quote_defs_qw(PDO $pdo, array $types): array {
+  $defsByKey = cron_static_supported_defs_qw($types);
+  $allowed = array_flip($types);
+
+  try {
+    $st = $pdo->query("SELECT symbol, type, meta, sort_order FROM markets WHERE status='active' ORDER BY sort_order ASC, symbol ASC");
+    $rows = $st ? ($st->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+  } catch (Throwable $e) {
+    $rows = [];
+  }
+
+  foreach ($rows as $row) {
+    $symbol = strtoupper(trim((string)($row['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
+    if ($symbol === '' || !isset($allowed[$type])) continue;
+
+    $key = cron_market_key_qw($type, $symbol);
+    $base = $defsByKey[$key] ?? [];
+    $def = array_merge($base, [
+      'symbol' => $symbol,
+      'type' => $type,
+      'sort_order' => isset($row['sort_order']) ? (int)$row['sort_order'] : (int)($base['sort_order'] ?? 999999),
+    ]);
+
+    $meta = market_meta($row['meta'] ?? null);
+    foreach ($meta as $metaKey => $metaValue) {
+      if ($metaValue === null || $metaValue === '') continue;
+      if ($metaKey === 'yahoo_ticker' && !empty($base['yahoo_ticker'])) continue;
+      $def[$metaKey] = $metaValue;
+    }
+    $defsByKey[$key] = $def;
+  }
+
+  $grouped = array_fill_keys($types, []);
+  foreach ($defsByKey as $def) {
+    $type = vp_normalize_asset_type((string)($def['type'] ?? ''));
+    $symbol = strtoupper(trim((string)($def['symbol'] ?? '')));
+    if ($symbol === '' || !isset($grouped[$type])) continue;
+    $def['symbol'] = $symbol;
+    $def['type'] = $type;
+    $grouped[$type][] = $def;
+  }
+
+  foreach ($grouped as $type => $defs) {
+    usort($defs, static function(array $a, array $b): int {
+      $catalog = (empty($a['_catalog_supported']) ? 1 : 0) <=> (empty($b['_catalog_supported']) ? 1 : 0);
+      if ($catalog !== 0) return $catalog;
+      $order = ((int)($a['sort_order'] ?? 999999)) <=> ((int)($b['sort_order'] ?? 999999));
+      return $order !== 0 ? $order : strcmp((string)($a['symbol'] ?? ''), (string)($b['symbol'] ?? ''));
+    });
+    $grouped[$type] = $defs;
+  }
+
+  return $grouped;
+}
+
+$allTypes = ['crypto','forex','stocks','arab','commodities','futures'];
+$requestedTypesRaw = trim((string)($_GET['types'] ?? $_GET['type'] ?? ''));
+// Allow the in-container CLI warmer to target a single market type per cycle
+// (e.g. `php quotes_warm.php types=forex`) so each run stays light instead of
+// warming all six asset classes at once and starving the web container.
+if ($requestedTypesRaw === '' && PHP_SAPI === 'cli') {
+  foreach ((array)($argv ?? []) as $arg) {
+    $arg = trim((string)$arg);
+    if (str_starts_with($arg, 'types=')) { $requestedTypesRaw = trim(substr($arg, 6)); break; }
+    if (str_starts_with($arg, '--types=')) { $requestedTypesRaw = trim(substr($arg, 8)); break; }
+    if (str_starts_with($arg, 'type=')) { $requestedTypesRaw = trim(substr($arg, 5)); break; }
+  }
+}
+$types = $allTypes;
+if ($requestedTypesRaw !== '') {
+  $requested = [];
+  foreach (preg_split('/\s*,\s*/', $requestedTypesRaw) as $rawType) {
+    $t = vp_normalize_asset_type((string)$rawType);
+    if ($t !== '' && in_array($t, $allTypes, true) && !in_array($t, $requested, true)) $requested[] = $t;
+  }
+  if ($requested) $types = $requested;
+}
+$deepWarm = ((int)($_GET['deep'] ?? 0) === 1) || count($types) === 1;
+$perType = max(6, min(300, (int)($_GET['per_type'] ?? 150)));
 $results = [];
 $totalUpserts = 0;
 $now = time();
+$supportedDefs = cron_supported_quote_defs_qw($pdo, $types);
 
-// Pull ALL active supported symbols straight from the markets table so the
-// warm cache covers the full tradable universe (not just a hardcoded subset).
-// quote_bulk_live() resolves the right provider per symbol (Binance for
-// crypto, Frankfurter/Yahoo for forex, Yahoo for stocks/commodities/futures/
-// arab), so secondary cryptos, minor/exotic FX pairs and Saudi equities all
-// receive real prices instead of seed placeholders.
-$symbolsByType = [];
-$metaByTypeSymbol = [];
-try {
-  $allStmt = $pdo->query("SELECT symbol, type, meta FROM markets WHERE status='active'");
-  foreach (($allStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
-    $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
-    if ($sym === '') continue;
-    $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
-    if (!in_array($type, $types, true)) continue;
-    if (!isset($symbolsByType[$type])) { $symbolsByType[$type] = []; $metaByTypeSymbol[$type] = []; }
-    if (isset($metaByTypeSymbol[$type][$sym])) continue;
-    $symbolsByType[$type][] = $sym;
-    $metaByTypeSymbol[$type][$sym] = market_meta($row['meta'] ?? null);
-  }
-} catch (Throwable $e) {}
-
-// Supplement with the static catalog (cron_supported_quote_defs_qw): some
-// markets (notably the Saudi/arab equities) are served by markets.php from a
-// hardcoded catalog and are not stored in the `markets` table, so the DB pass
-// above misses them. Merge any catalog symbol not already collected so the
-// warm cache covers them too.
-$staticDefs = cron_supported_quote_defs_qw();
 foreach ($types as $type) {
-  foreach (($staticDefs[$type] ?? []) as $def) {
+  $defs = array_slice($supportedDefs[$type] ?? [], 0, $perType);
+  $symbols = [];
+  $metaBySymbol = [];
+  foreach ($defs as $def) {
     $sym = strtoupper(trim((string)($def['symbol'] ?? '')));
     if ($sym === '') continue;
-    if (!isset($symbolsByType[$type])) { $symbolsByType[$type] = []; $metaByTypeSymbol[$type] = []; }
-    if (isset($metaByTypeSymbol[$type][$sym])) continue;
-    $symbolsByType[$type][] = $sym;
-    $metaByTypeSymbol[$type][$sym] = $def;
+    $symbols[] = $sym;
+    $metaBySymbol[$sym] = $def;
   }
-}
-
-foreach ($types as $type) {
-  $symbols = array_slice($symbolsByType[$type] ?? [], 0, $perType);
   if (!$symbols) { $results[$type] = ['count'=>0,'upserts'=>0]; continue; }
-  $metaBySymbol = [];
-  foreach ($symbols as $sym) { $metaBySymbol[$sym] = $metaByTypeSymbol[$type][$sym] ?? []; }
-  $count = count($symbols);
+  $chartCap = match ($type) {
+    'stocks', 'arab', 'commodities', 'futures' => $deepWarm ? min(60, count($symbols)) : min(18, count($symbols)),
+    default => 0,
+  };
+  $chartBudgetMs = 0;
+  if ($chartCap > 0) {
+    $chartBudgetMs = $deepWarm
+      ? max(3500, min(9500, 600 + ($chartCap * 220)))
+      : max(1800, min(4200, 500 + ($chartCap * 160)));
+  }
   $opts = [
     'ttl' => 1,
     'yahoo_ttl' => 1,
     'massive_ttl' => 1,
-    'direct_budget' => $count,
-    'direct_yahoo_budget' => $count,
-    'chart_budget' => in_array($type, ['arab','forex','commodities','futures'], true) ? min($count, 16) : 8,
+    'direct_budget' => count($symbols),
+    'direct_yahoo_budget' => count($symbols),
+    'allow_direct_batch' => $chartCap > 0,
+    'chart_budget' => $chartCap,
+    'chart_budget_cap' => $chartCap,
+    'chart_budget_ms' => $chartBudgetMs,
   ];
   $live = [];
   try { $live = quote_bulk_live(array_values(array_unique($symbols)), $type, $metaBySymbol, $opts); } catch (Throwable $e) { $live = []; }
@@ -133,12 +221,14 @@ foreach ($types as $type) {
       $totalUpserts++;
     } catch (Throwable $e) {}
   }
-  $results[$type] = ['count'=>$count,'upserts'=>$upserts];
+  $results[$type] = ['count'=>count($symbols),'upserts'=>$upserts];
 }
 
 $payload = [
   'ok' => true,
   'warmed_at' => $now,
+  'types' => $types,
+  'deep' => $deepWarm,
   'per_type' => $perType,
   'total_upserts' => $totalUpserts,
   'results' => $results,

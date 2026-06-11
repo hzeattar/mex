@@ -144,8 +144,8 @@ function http_get_json(string $url, array $headers = []): array {
       $connectTimeout = min($connectTimeout, 2);
       $requestTimeout = min($requestTimeout, 4);
     } elseif (str_contains($host, 'eodhd.com') && !is_array($timeoutOverride)) {
-      $connectTimeout = min($connectTimeout, 2);
-      $requestTimeout = min($requestTimeout, 4);
+      $connectTimeout = max($connectTimeout, 3);
+      $requestTimeout = max($requestTimeout, 8);
     }
     $connectTimeout = max(1, $connectTimeout);
     $requestTimeout = max($connectTimeout + 1, $requestTimeout);
@@ -1740,6 +1740,30 @@ function eodhd_quote_realtime(string $ticker): array {
   throw new RuntimeException('EODHD quote unavailable');
 }
 
+function eodhd_file_cache_fallback_max_age(string $ticker): int {
+  $ticker = strtoupper(trim($ticker));
+  if (str_ends_with($ticker, '.FOREX')) {
+    return max(30, min(172800, (int)env('EODHD_FILE_CACHE_FALLBACK_MAX_AGE_FOREX', '172800')));
+  }
+  if (preg_match('/\.(US|SR|DFM|ADX|EGX)$/', $ticker)) {
+    return max(300, min(604800, (int)env('EODHD_FILE_CACHE_FALLBACK_MAX_AGE_DELAYED', '604800')));
+  }
+  return max(60, min(172800, (int)env('EODHD_FILE_CACHE_FALLBACK_MAX_AGE', '86400')));
+}
+
+function eodhd_cached_quote_file_row(string $file, string $ticker, int $maxAge): ?array {
+  if (!is_file($file)) return null;
+  $age = time() - (int)@filemtime($file);
+  if ($age < 0 || $age > $maxAge) return null;
+  $raw = @file_get_contents($file);
+  $d = $raw ? json_decode((string)$raw, true) : null;
+  if (!is_array($d) || !((float)($d['price'] ?? 0) > 0)) return null;
+  $src = strtolower(trim((string)($d['source'] ?? '')));
+  $isCandleFallback = ($src === 'eodhd_intraday') || (!empty($d['raw']['fallback']) && (string)$d['raw']['fallback'] === 'intraday');
+  if ($isCandleFallback && (int)env('EODHD_ALLOW_CANDLE_QUOTE_FALLBACK', '0') !== 1) return null;
+  return $d;
+}
+
 function eodhd_quote_realtime_cached(string $ticker, int $ttl = 3): array {
   $ttl = max(1, min(30, (int)$ttl));
   $ticker = strtoupper(trim($ticker));
@@ -1750,14 +1774,8 @@ function eodhd_quote_realtime_cached(string $ticker, int $ttl = 3): array {
   $file = $dir . '/eod_rt_' . $safe . '.json';
   $now = time();
   if (is_file($file)) {
-    $age = $now - (int)@filemtime($file);
-    if ($age >= 0 && $age <= $ttl) {
-      $raw = @file_get_contents($file);
-      $d = $raw ? json_decode((string)$raw, true) : null;
-      $src = strtolower(trim((string)($d['source'] ?? '')));
-      $isCandleFallback = ($src === 'eodhd_intraday') || (!empty($d['raw']['fallback']) && (string)$d['raw']['fallback'] === 'intraday');
-      if (is_array($d) && (float)($d['price'] ?? 0) > 0 && (!($isCandleFallback && (int)env('EODHD_ALLOW_CANDLE_QUOTE_FALLBACK', '0') !== 1))) return $d;
-    }
+    $d = eodhd_cached_quote_file_row($file, $ticker, $ttl);
+    if ($d) return $d;
   }
   try {
     $row = eodhd_quote_realtime($ticker);
@@ -1766,13 +1784,8 @@ function eodhd_quote_realtime_cached(string $ticker, int $ttl = 3): array {
       return $row;
     }
   } catch (Throwable $e) {
-    if (is_file($file)) {
-      $raw = @file_get_contents($file);
-      $d = $raw ? json_decode((string)$raw, true) : null;
-      $src = strtolower(trim((string)($d['source'] ?? '')));
-      $isCandleFallback = ($src === 'eodhd_intraday') || (!empty($d['raw']['fallback']) && (string)$d['raw']['fallback'] === 'intraday');
-      if (is_array($d) && (float)($d['price'] ?? 0) > 0 && (!($isCandleFallback && (int)env('EODHD_ALLOW_CANDLE_QUOTE_FALLBACK', '0') !== 1))) return $d;
-    }
+    $d = eodhd_cached_quote_file_row($file, $ticker, eodhd_file_cache_fallback_max_age($ticker));
+    if ($d) return $d;
     throw $e;
   }
   throw new RuntimeException('EODHD quote unavailable');
@@ -1803,7 +1816,9 @@ function eodhd_quote_many(array $tickers): array {
 
   try {
     $raw = http_get_json($url, ['Accept: application/json']);
-    if (array_is_list($raw)) {
+    if (isset($raw['value']) && is_array($raw['value'])) {
+      foreach ($raw['value'] as $row) $append($out, is_array($row) ? $row : null, '');
+    } elseif (array_is_list($raw)) {
       foreach ($raw as $row) $append($out, is_array($row) ? $row : null, '');
     } else {
       $selfHandled = false;

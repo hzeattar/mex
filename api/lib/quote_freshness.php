@@ -23,13 +23,43 @@ function qa_source_rank(?string $source): int {
 
 function qa_quote_max_age(string $assetType, bool $strict = false): int {
   $assetType = vp_normalize_asset_type($assetType);
-  if ($assetType === 'crypto') return $strict ? 6 : 12;
-  if ($assetType === 'forex') return $strict ? 7200 : 14400;
-  if ($assetType === 'stocks') return $strict ? 129600 : 172800;
-  if ($assetType === 'arab') return $strict ? 129600 : 172800;
-  if ($assetType === 'commodities') return $strict ? 259200 : 604800;
-  if ($assetType === 'futures') return $strict ? 259200 : 604800;
+  // Max age before a cached quote is considered too stale to use.
+  // Env-overridable so windows can be tightened once real provider keys + a
+  // warming cron keep market_quotes fresh, without forcing a code change.
+  // Defaults are generous enough to survive normal weekend/holiday market closures.
+  $age = static function (string $key, int $default): int {
+    $v = (int)env($key, (string)$default);
+    return $v > 0 ? $v : $default;
+  };
+  // Crypto: cron runs every 60s so max age must exceed that. 90s non-strict, 45s strict.
+  if ($assetType === 'crypto')      return $strict ? $age('QA_MAXAGE_CRYPTO_STRICT', 45)       : $age('QA_MAXAGE_CRYPTO', 90);
+  if ($assetType === 'forex')       return $strict ? $age('QA_MAXAGE_FOREX_STRICT', 259200)    : $age('QA_MAXAGE_FOREX', 259200);
+  if ($assetType === 'stocks')      return $strict ? $age('QA_MAXAGE_STOCKS_STRICT', 604800)   : $age('QA_MAXAGE_STOCKS', 604800);
+  if ($assetType === 'arab')        return $strict ? $age('QA_MAXAGE_ARAB_STRICT', 604800)     : $age('QA_MAXAGE_ARAB', 604800);
+  if ($assetType === 'commodities') return $strict ? $age('QA_MAXAGE_COMMODITIES_STRICT', 259200) : $age('QA_MAXAGE_COMMODITIES', 604800);
+  if ($assetType === 'futures')     return $strict ? $age('QA_MAXAGE_FUTURES_STRICT', 259200)  : $age('QA_MAXAGE_FUTURES', 604800);
   return $strict ? 180 : 360;
+}
+
+function qa_market_is_open(string $assetType): bool {
+  $assetType = vp_normalize_asset_type($assetType);
+  if ($assetType === 'crypto') return true;
+  $dow = (int)gmdate('N'); // 1=Mon … 7=Sun
+  $min = (int)gmdate('G') * 60 + (int)gmdate('i'); // minutes since midnight UTC
+  if ($assetType === 'arab') {
+    // Arab/Gulf markets: Sun-Thu. Friday & Saturday closed.
+    if ($dow === 5 || $dow === 6) return false;
+    // Sun=7 or Mon-Thu=1-4: 07:00-12:30 UTC (covers SA 10-15:30 AST, DU 11-16:30 GST)
+    $open = $dow === 7 || $dow <= 4;
+    return $open && $min >= 420 && $min < 750;
+  }
+  if ($assetType === 'stocks') {
+    // NYSE/NASDAQ: Mon-Fri 13:30-20:00 UTC
+    if ($dow >= 6) return false;
+    return $min >= 810 && $min < 1200;
+  }
+  // Forex, commodities, futures: Mon-Fri 24h (closed Sat & Sun)
+  return $dow <= 5;
 }
 
 function qa_quote_row_ts($row): int {
@@ -60,6 +90,8 @@ function qa_quote_is_usable($row, string $assetType, bool $strict = false): bool
   $price = (float)($row['price'] ?? 0);
   if (!($price > 0)) return false;
   $source = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
+  $symbol = strtoupper(trim((string)($row['symbol'] ?? '')));
+  if (function_exists('quote_source_blocked_for_symbol') && quote_source_blocked_for_symbol($symbol, $assetType, $source)) return false;
   if ($assetType === 'crypto') {
     if (!quote_source_is_liveish($source, $assetType)) return false;
     $updatedAt = qa_quote_row_ts($row);
@@ -82,9 +114,12 @@ function qa_quote_timing_class($row, string $assetType): string {
   if ($source === 'eodhd_intraday' || $source === 'yahoo_chart_live') return 'candle_fallback';
   if ($assetType !== 'crypto' && !quote_source_is_liveish($source, $assetType)) return 'stale';
   if (($assetType !== 'crypto' && $source === 'yahoo') || in_array($assetType, ['stocks','arab'], true) || !empty($row['delayed'])) {
-    return qa_quote_is_usable($row, $assetType, false) ? 'delayed' : 'stale';
+    if (!qa_quote_is_usable($row, $assetType, false)) return 'stale';
+    return qa_market_is_open($assetType) ? 'delayed' : 'market_closed';
   }
-  return qa_quote_is_usable($row, $assetType, false) ? 'live' : 'stale';
+  if (!qa_quote_is_usable($row, $assetType, false)) return 'stale';
+  if ($assetType !== 'crypto' && !qa_market_is_open($assetType)) return 'market_closed';
+  return 'live';
 }
 
 function qa_choose_authoritative_quote(?array $cached, ?array $live, string $assetType, array $opts = []): ?array {

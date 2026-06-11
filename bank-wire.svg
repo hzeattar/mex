@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="Bank wire QR">
+  <rect width="160" height="160" rx="18" fill="#ffffff"/>
+  <rect x="18" y="18" width="36" height="36" fill="#06101f"/><rect x="26" y="26" width="20" height="20" fill="#ffffff"/><rect x="31" y="31" width="10" height="10" fill="#06101f"/>
+  <rect x="106" y="18" width="36" height="36" fill="#06101f"/><rect x="114" y="26" width="20" height="20" fill="#ffffff"/><rect x="119" y="31" width="10" height="10" fill="#06101f"/>
+  <rect x="18" y="106" width="36" height="36" fill="#06101f"/><rect x="26" y="114" width="20" height="20" fill="#ffffff"/><rect x="31" y="119" width="10" height="10" fill="#06101f"/>
+  <path d="M66 22h12v10H66zM86 22h20v8H86zM64 42h34v10H64zM108 46h14v8h-14zM64 66h12v24H64zM84 66h8v8h-8zM100 66h30v8h-30zM136 78h8v16h-8zM68 100h22v8H68zM100 102h12v16h-12zM122 100h18v8h-18zM66 124h8v18h-8zM84 126h28v8H84zM120 128h22v14h-22z" fill="#06101f"/>
+  <text x="80" y="84" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle" fill="#5d7cff">BANK WIRE</text>
+</svg>

@@ -259,7 +259,7 @@ button,input,select,textarea{font:inherit}
   .site-header-landing{padding:12px 0}
   .site-brand-mark{font-size:16px}
   .site-brand-main{font-size:20px}
-  .hero-title{font-size:clamp(40px,14vw,66px)}
+  .hero-title{font-size:clamp(36px,12vw,66px);line-height:1.05}
   .hero-sub{font-size:17px;max-width:640px}
   .hero-actions .btn,.site-actions .btn{min-height:44px;padding:0 18px}
   .hero-platform-row{gap:10px}
@@ -1400,7 +1400,7 @@ html{scroll-behavior:smooth}
 
 /* --- Section --- */
 .mex-section{padding:70px 0}
-.mex-section.alt{background:rgba(93,124,255,.025)}
+.mex-section.alt,.mex-section-alt{background:rgba(93,124,255,.025)}
 .mex-section-head{text-align:center;max-width:720px;margin:0 auto 48px}
 .mex-section-head h2{font-size:clamp(28px,4vw,48px);font-weight:900;letter-spacing:-.02em;line-height:1.05;margin:0 0 12px}
 .mex-section-head p{color:#8ea9d8;font-size:17px;line-height:1.7;margin:0}
@@ -1988,3 +1988,60 @@ html{scroll-behavior:smooth}
   .mex-license-panel{height:82vh;border-radius:12px}
   .mex-license-card{padding:16px}
 }
+
+/* ════════════════════════════════════════════════════════════════
+   MEX premium refinement (mex.ae-style polish) — appended 2026-06
+   Public landing visual upgrade: richer depth, MEX cyan→teal accent,
+   premium buttons & cards. Pure CSS, no markup changes.
+   ════════════════════════════════════════════════════════════════ */
+body.mex-landing-page{
+  background:
+    radial-gradient(1200px 720px at 50% -6%, rgba(40,116,190,.22), transparent 55%),
+    radial-gradient(900px 600px at 100% 8%, rgba(31,208,146,.07), transparent 50%),
+    linear-gradient(180deg,#040b1d,#060f24)!important;
+}
+.mex-landing-page .mex-kicker{
+  letter-spacing:.22em!important;
+  color:#54b9ff!important;
+  font-weight:800!important;
+  text-transform:uppercase;
+}
+.mex-hero-v2 h1{letter-spacing:-.03em!important}
+.mex-hero-v2 h1 .accent{
+  background:linear-gradient(90deg,#5b9bff,#33d3bf)!important;
+  -webkit-background-clip:text!important;background-clip:text!important;
+  -webkit-text-fill-color:transparent!important;
+}
+.mex-landing-page .mex-btn-primary{
+  background:linear-gradient(95deg,#2f6df6,#22b6c9)!important;
+  box-shadow:0 14px 34px rgba(42,120,246,.34)!important;
+  border-radius:12px!important;
+  font-weight:800!important;
+}
+.mex-trust-card-v2{
+  border-radius:18px!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))!important;
+  border:1px solid rgba(120,170,255,.16)!important;
+}
+.mex-trust-card-v2 .mex-trust-ico-v2{color:#5fb0ff!important}
+.mex-stat-card{border:1px solid rgba(120,170,255,.14)!important;border-radius:16px!important}
+.mex-stat-card strong{
+  background:linear-gradient(90deg,#86b9ff,#33d3bf)!important;
+  -webkit-background-clip:text!important;-webkit-text-fill-color:transparent!important;
+}
+
+/* mex.ae-style account tiers */
+.mex-accounts-section .mex-acct-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1100px;margin:0 auto}
+.mex-acct-card{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012));border:1px solid rgba(120,170,255,.16);border-radius:20px;padding:28px 22px;display:flex;flex-direction:column;gap:14px}
+.mex-acct-card.is-featured{border-color:rgba(47,109,246,.55);box-shadow:0 22px 60px rgba(20,60,160,.35);transform:translateY(-6px)}
+.mex-acct-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(95deg,#2f6df6,#22b6c9);color:#fff;font-size:11px;font-weight:800;padding:5px 14px;border-radius:999px;letter-spacing:.04em;white-space:nowrap}
+.mex-acct-tier{font-size:13px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#7db4ff}
+.mex-acct-price{font-size:30px;font-weight:900;color:#fff;line-height:1}
+.mex-acct-price small{font-size:14px;font-weight:600;color:#8ea9d8}
+.mex-acct-feat{list-style:none;margin:0;padding:0;display:grid;gap:11px}
+.mex-acct-feat li{position:relative;padding-left:24px;color:#c4d4ef;font-size:14px;line-height:1.5}
+.mex-acct-feat li::before{content:'';position:absolute;left:0;top:4px;width:14px;height:14px;border-radius:50%;background:rgba(51,211,191,.18);box-shadow:inset 0 0 0 2px #33d3bf}
+.mex-acct-card .mex-btn{margin-top:auto;width:100%;justify-content:center}
+.is-rtl .mex-acct-feat li{padding-left:0;padding-right:24px}
+.is-rtl .mex-acct-feat li::before{left:auto;right:0}
+@media (max-width:860px){.mex-accounts-section .mex-acct-grid{grid-template-columns:1fr;max-width:420px}.mex-acct-card.is-featured{transform:none}}

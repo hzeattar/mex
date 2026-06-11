@@ -1,0 +1,71 @@
+# MEX Performance Optimization - Chart & Price Speed Fixes
+# Place these values in your .env or override them
+
+# ===== EODHD API Optimizations =====
+# زيادة فترة التخزين المؤقت لتقليل الطلبات المتكررة (كانت 1 ثانية - مشكلة رئيسية)
+EODHD_PRICE_TTL=5
+EODHD_API_BASE=https://eodhd.com/api
+
+# السماح باستخدام الشمعات كاحتياطي للأسعار عند عدم توفر السعر المباشر
+EODHD_ALLOW_CANDLE_QUOTE_FALLBACK=1
+
+# ===== Upstream Request Optimizations =====
+# تقليل مهلة الاتصال لتجنب الانتظار الطويل
+UPSTREAM_CONNECT_TIMEOUT=2
+UPSTREAM_TIMEOUT=3
+UPSTREAM_RETRIES=0
+
+# ===== Quotes API Optimizations =====
+# استخدام التخزين المؤقت أولاً للأصول غير الكريبتو (forex, stocks, arab, commodities)
+QUOTES_FOCUS_CACHE_FIRST_NONCRYPTO=1
+
+# تعطيل الطلبات المباشرة للـ watchlist للأصول غير الكريبتو
+QUOTES_WATCHLIST_LIVE_NONCRYPTO=0
+
+# تقليل حدود الطلبات للـ watchlist
+QUOTES_WATCHLIST_LIVE_NONCRYPTO_LIMIT=10
+
+# ===== Candles API Optimizations =====
+# ميزانية الوقت للرسوم البيانية (ms)
+CANDLES_REQUEST_BUDGET_MS=3000
+CANDLES_UPSTREAM_TIMEOUT=2
+CANDLES_UPSTREAM_RETRIES=0
+
+# مزامنة الشمعات مع السعر الحي
+CANDLES_SYNC_LIVE_TAIL=1
+
+# ===== Cache TTL Optimizations =====
+# تقليل فترات التخزين المؤقت لتحديث أسرع
+QUOTES_API_CACHE_TTL_CRYPTO=2
+QUOTES_API_CACHE_TTL_FOREX=2
+QUOTES_API_CACHE_TTL_STOCKS=3
+QUOTES_API_CACHE_TTL_COMMODITIES=3
+
+# ===== Market List Optimizations =====
+# تحسين أداء قائمة الأسواق
+MARKETS_EODHD_LIVE_FAST=1
+MARKETS_EODHD_LIVE_FAST_TTL=5
+MARKETS_RESCUE_SCAN_LIMIT=8
+
+# ===== Non-Crypto Live Provider Max Age =====
+# السماح باستخدام الأسعار المخزنة لفترات أطول
+NONCRYPTO_LIVE_PROVIDER_MAX_AGE=259200
+FOREX_LIVE_PROVIDER_MAX_AGE=259200
+COMMODITIES_LIVE_PROVIDER_MAX_AGE=604800
+FUTURES_LIVE_PROVIDER_MAX_AGE=604800
+
+# ===== Rate Limiting =====
+# تقليل معدل الطلبات لتجنب الحظر
+UPSTREAM_RATE_PER_SEC=10
+UPSTREAM_BURST=20
+
+# ===== Additional Optimizations =====
+# تمكين الاستدعاء المشترك للطلبات (singleflight)
+QUOTES_FOCUS_LIVE_FAST=0
+
+# ===== Notes =====
+# هذه التحسينات تهدف إلى:
+# 1. تقليل الطلبات المتكررة للـ API
+# 2. استخدام التخزين المؤقت بشكل أكثر فعالية
+# 3. تحسين زمن الاستجابة للرسوم البيانية
+# 4. تجنب البطء المشتق من مهلات الاتصال الطويلة

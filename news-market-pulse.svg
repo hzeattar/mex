@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2447d5"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <radialGradient id="r" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1240 140) rotate(136.4) scale(700 500)">
+      <stop stop-color="white" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" rx="48" fill="url(#g)"/>
+  <rect width="1600" height="900" rx="48" fill="url(#r)"/>
+  <rect x="88" y="96" width="584" height="708" rx="34" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.16)"/>
+  <rect x="744" y="96" width="768" height="160" rx="34" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.16)"/>
+  <rect x="744" y="292" width="768" height="240" rx="34" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
+  <rect x="744" y="568" width="368" height="236" rx="34" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
+  <rect x="1144" y="568" width="368" height="236" rx="34" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
+  <circle cx="220" cy="196" r="56" fill="rgba(255,255,255,0.12)"/>
+  <path d="M200 196h40M220 176v40" stroke="white" stroke-width="10" stroke-linecap="round"/>
+  <text x="184" y="330" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="84" font-weight="700">Market Pulse</text>
+  <text x="184" y="404" fill="rgba(255,255,255,0.78)" font-family="Arial, Helvetica, sans-serif" font-size="34">VertexPluse • Client Announcement</text>
+  <text x="184" y="504" fill="rgba(255,255,255,0.86)" font-family="Arial, Helvetica, sans-serif" font-size="28">Professional in-app news cards with image support, pinned highlights,</text>
+  <text x="184" y="548" fill="rgba(255,255,255,0.86)" font-family="Arial, Helvetica, sans-serif" font-size="28">and dashboard ribbons for live client communication.</text>
+  <rect x="184" y="624" width="236" height="62" rx="18" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.24)"/>
+  <text x="228" y="664" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Read update</text>
+</svg>

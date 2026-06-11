@@ -139,7 +139,7 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
     return in_array($src, ['binance','trade_stream','stream','provider_live','twelvedata'], true);
   }
   if ($assetType === 'forex') {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','frankfurter','stooq','twelvedata','fcsapi'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','twelvedata','fcsapi'], true);
   }
   if ($assetType === 'stocks') {
     return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','stooq','twelvedata'], true);
@@ -156,7 +156,8 @@ function quote_source_is_untrusted(?string $source): bool {
   if ($src === '') return true;
   return in_array($src, [
     'seed','seed_fallback','seed_price','seed_default','fallback_static','chart_seed',
-    'seed_candle','yahoo_chart','aggs','stale_cache','cache','synthetic'
+    'seed_candle','yahoo_chart','aggs','stale_cache','cache','synthetic',
+    'frankfurter','fx_fallback'
   ], true);
 }
 
@@ -209,11 +210,11 @@ function quote_frankfurter_row(string $symbol, string $assetType = 'forex', int 
 
 function quote_live_provider_max_age(string $assetType): int {
   $providerType = vp_provider_asset_type($assetType);
-  if ($providerType === 'forex') return max(45, min(300, (int)env('FOREX_LIVE_PROVIDER_MAX_AGE', '75')));
-  if ($providerType === 'commodities') return max(45, min(300, (int)env('COMMODITIES_LIVE_PROVIDER_MAX_AGE', '90')));
-  if ($providerType === 'futures') return max(45, min(300, (int)env('FUTURES_LIVE_PROVIDER_MAX_AGE', '90')));
-  if ($providerType === 'stocks' || $providerType === 'arab') return max(300, min(3600, (int)env('DELAYED_LIVE_PROVIDER_MAX_AGE', '900')));
-  return max(60, min(1800, (int)env('NONCRYPTO_LIVE_PROVIDER_MAX_AGE', '120')));
+  if ($providerType === 'forex') return max(300, min(259200, (int)env('FOREX_LIVE_PROVIDER_MAX_AGE', '259200')));
+  if ($providerType === 'commodities') return max(300, min(604800, (int)env('COMMODITIES_LIVE_PROVIDER_MAX_AGE', '604800')));
+  if ($providerType === 'futures') return max(300, min(604800, (int)env('FUTURES_LIVE_PROVIDER_MAX_AGE', '604800')));
+  if ($providerType === 'stocks' || $providerType === 'arab') return max(3600, min(604800, (int)env('DELAYED_LIVE_PROVIDER_MAX_AGE', '604800')));
+  return max(300, min(604800, (int)env('NONCRYPTO_LIVE_PROVIDER_MAX_AGE', '259200')));
 }
 
 function quote_live_row_age_sec(array $row, int $now = 0): int {
@@ -265,6 +266,24 @@ function quote_try_yahoo_rescue_row(string $symbol, string $assetType, array $me
   } catch (Throwable $e) { /* ignore */ }
 
   return null;
+}
+
+function quote_try_spot_metal_proxy_rescue_row(string $symbol, string $assetType, array $row, array $meta = [], int $now = 0): ?array {
+  $assetType = vp_normalize_asset_type($assetType);
+  if ((int)env('QUOTES_SPOT_METAL_PROXY_RESCUE', '1') !== 1) return null;
+  if (!vp_is_spot_metal_symbol($symbol, $assetType)) return null;
+  $source = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
+  if (!in_array($source, ['eodhd', 'eodhd_rest', 'provider_live'], true)) return null;
+  $primary = (float)($row['price'] ?? 0);
+  if (!($primary > 0)) return null;
+
+  $rescue = quote_try_yahoo_rescue_row($symbol, $assetType, $meta, $now > 0 ? $now : time());
+  $proxy = is_array($rescue) ? (float)($rescue['price'] ?? 0) : 0.0;
+  if (!($proxy > 0)) return null;
+
+  $drift = abs($primary - $proxy) / max(1.0, abs($proxy));
+  $maxDrift = max(0.0001, min(0.15, (float)env('QUOTES_SPOT_METAL_PROXY_MAX_DRIFT', '0.001')));
+  return $drift > $maxDrift ? $rescue : null;
 }
 
 function quote_row_provider_ts(array $row, int $fallback = 0): int {
@@ -354,9 +373,42 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
   $explicitMarket = $market !== null && trim((string)$market) !== '';
 
   $marketKey = ($type !== null && $type !== '') ? quote_storage_market_key($symbol, $type, $market) : null;
+  $rankExpr = "0";
+  if (!empty($flags['source'])) {
+    $rankExpr = "CASE LOWER(source)
+      WHEN 'binance' THEN 100
+      WHEN 'trade_stream' THEN 96
+      WHEN 'stream' THEN 96
+      WHEN 'provider_live' THEN 92
+      WHEN 'eodhd' THEN 91
+      WHEN 'eodhd_rest' THEN 91
+      WHEN 'yahoo' THEN 72
+      WHEN 'yahoo_chart_live' THEN 72
+      WHEN 'massive' THEN 20
+      WHEN 'polygon' THEN 20
+      WHEN 'provider_fallback' THEN 20
+      WHEN 'fx_fallback' THEN 20
+      WHEN 'frankfurter' THEN 20
+      WHEN 'stooq' THEN 20
+      WHEN 'eodhd_intraday' THEN 12
+      WHEN 'cache' THEN 12
+      WHEN 'stale_cache' THEN 12
+      WHEN 'seed' THEN 4
+      WHEN 'seed_fallback' THEN 4
+      WHEN 'seed_price' THEN 4
+      WHEN 'chart_seed' THEN 4
+      WHEN 'seed_candle' THEN 4
+      WHEN 'synthetic' THEN 4
+      WHEN 'aggs' THEN 4
+      ELSE 40 END";
+  }
+  if (!empty($flags['source_priority'])) {
+    $rankExpr = "CASE WHEN source_priority > 0 THEN source_priority ELSE {$rankExpr} END";
+  }
+  $quoteOrderSql = "{$rankExpr} DESC, updated_at DESC, id DESC";
 
   if ($type !== null && $type !== '' && $marketKey !== null && !empty($flags['market'])) {
-    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? AND market=? ORDER BY updated_at DESC, id DESC LIMIT 1");
+    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? AND market=? ORDER BY {$quoteOrderSql} LIMIT 1");
     $st->execute([$symbol, $type, $marketKey]);
     $r = $st->fetch(PDO::FETCH_ASSOC);
     if ($r || $explicitMarket) return $r ?: null;
@@ -364,13 +416,13 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
     // Older imports and early warmers may have stored the row with a blank or
     // non-normalized market key. For generic quote reads, fall back to the
     // newest trusted row for that symbol/type instead of showing "--" in lists.
-    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? ORDER BY updated_at DESC, id DESC LIMIT 1");
+    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? ORDER BY {$quoteOrderSql} LIMIT 1");
     $st->execute([$symbol, $type]);
   } elseif ($type !== null && $type !== '') {
-    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? ORDER BY updated_at DESC, id DESC LIMIT 1");
+    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? AND type=? ORDER BY {$quoteOrderSql} LIMIT 1");
     $st->execute([$symbol, $type]);
   } else {
-    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? ORDER BY updated_at DESC, id DESC LIMIT 1");
+    $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol=? ORDER BY {$quoteOrderSql} LIMIT 1");
     $st->execute([$symbol]);
   }
   $r = $st->fetch(PDO::FETCH_ASSOC);
@@ -442,7 +494,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   $massiveFallbackEnabled = ((int)env('ENABLE_MASSIVE_FALLBACK', '0') === 1) && $preferredProvider === 'massive';
   foreach ($symbols as $sym) {
     $meta = is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [];
-    if ($providerType === 'forex') {
+    if ($providerType === 'forex' && (int)env('ALLOW_REFERENCE_FX_FALLBACK', '0') === 1) {
       $frankfurterRow = quote_frankfurter_row($sym, $assetType, $now);
       if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) {
         $out[$sym] = $frankfurterRow;
@@ -481,7 +533,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
 
   if ($eodhdBySym) {
     try {
-      $ttl = max(1, min(5, (int)($opts['eodhd_ttl'] ?? env('EODHD_PRICE_TTL', '2'))));
+      // OPTIMIZED: Increased EODHD TTL from 2s to 5s to reduce API calls
+      $ttl = max(1, min(10, (int)($opts['eodhd_ttl'] ?? env('EODHD_PRICE_TTL', '5'))));
       $fetchMap = $eodhdBySym;
       $bulk = eodhd_quote_many_cached(array_values(array_unique(array_values($fetchMap))), $ttl);
       foreach ($fetchMap as $sym => $ticker) {
@@ -499,6 +552,10 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
         ];
         if (in_array($providerType, ['forex','commodities','futures'], true) && quote_primary_row_is_stale($liveRow, $assetType, $now)) {
           $rescue = quote_try_yahoo_rescue_row($sym, $assetType, is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [], $now);
+          if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
+        }
+        if ($providerType === 'commodities') {
+          $rescue = quote_try_spot_metal_proxy_rescue_row($sym, $assetType, $liveRow, is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [], $now);
           if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
         }
         $out[$sym] = $liveRow;
@@ -824,7 +881,7 @@ function quote_price_fresh(string $symbol, string $assetType): float {
 
   $preferredProvider = strtolower((string)env('PRICE_PROVIDER', 'eodhd'));
   $massiveFallbackEnabled = ((int)env('ENABLE_MASSIVE_FALLBACK', '0') === 1);
-  if ($providerType === 'forex') {
+  if ($providerType === 'forex' && (int)env('ALLOW_REFERENCE_FX_FALLBACK', '0') === 1) {
     $frankfurterRow = quote_frankfurter_row($symbol, $assetType, $now);
     if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) {
       quote_upsert($symbol, $assetType, (float)$frankfurterRow['price'], (float)$frankfurterRow['change_pct'], (int)$frankfurterRow['updated_at'], ['source'=>'frankfurter','as_of'=>(int)$frankfurterRow['updated_at'],'ingested_at'=>$now]);
@@ -848,6 +905,10 @@ function quote_price_fresh(string $symbol, string $assetType): float {
           ];
           if (in_array($providerType, ['forex','commodities','futures'], true) && quote_primary_row_is_stale($liveRow, $assetType, $now)) {
             $rescue = quote_try_yahoo_rescue_row($symbol, $assetType, $meta, $now);
+            if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
+          }
+          if ($providerType === 'commodities') {
+            $rescue = quote_try_spot_metal_proxy_rescue_row($symbol, $assetType, $liveRow, $meta, $now);
             if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
           }
           $p = (float)($liveRow['price'] ?? 0);
@@ -1094,26 +1155,36 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
   $colSql = implode(',', $cols);
 
   if ($driver === 'mysql') {
+    // Atomic authority guard: prevents a slower/older quote write from overwriting
+    // a newer or stronger live quote under concurrent cron/read requests.
+    if ($flags['source_priority']) {
+      $accept = "(VALUES(updated_at) > COALESCE(updated_at,0)"
+        . " OR (VALUES(updated_at) = COALESCE(updated_at,0) AND COALESCE(VALUES(source_priority),0) >= COALESCE(source_priority,0))"
+        . " OR (COALESCE(VALUES(source_priority),0) >= COALESCE(source_priority,0) + 20 AND VALUES(updated_at) >= COALESCE(updated_at,0) - 1800))";
+    } else {
+      $accept = "(VALUES(updated_at) >= COALESCE(updated_at,0))";
+    }
+
     $updates = [
-      'type=VALUES(type)',
-      'price=VALUES(price)',
-      'change_pct=VALUES(change_pct)',
-      'updated_at=VALUES(updated_at)',
+      "type=IF({$accept}, VALUES(type), type)",
+      "price=IF({$accept}, VALUES(price), price)",
+      "change_pct=IF({$accept}, VALUES(change_pct), change_pct)",
     ];
-    if ($flags['mark_price'])        $updates[] = 'mark_price=COALESCE(VALUES(mark_price), mark_price)';
-    if ($flags['index_price'])       $updates[] = 'index_price=COALESCE(VALUES(index_price), index_price)';
-    if ($flags['funding_rate'])      $updates[] = 'funding_rate=COALESCE(VALUES(funding_rate), funding_rate)';
-    if ($flags['next_funding_time']) $updates[] = 'next_funding_time=COALESCE(VALUES(next_funding_time), next_funding_time)';
-    if ($flags['source'])            $updates[] = "source=COALESCE(NULLIF(VALUES(source),''), source)";
-    if ($flags['market'])            $updates[] = "market=COALESCE(NULLIF(VALUES(market),''), market)";
-    if ($flags['provider'])          $updates[] = "provider=COALESCE(NULLIF(VALUES(provider),''), provider)";
-    if ($flags['provider_ts'])       $updates[] = 'provider_ts=GREATEST(COALESCE(provider_ts,0), COALESCE(VALUES(provider_ts),0))';
-    if ($flags['received_at'])       $updates[] = 'received_at=GREATEST(COALESCE(received_at,0), COALESCE(VALUES(received_at),0))';
-    if ($flags['source_strength'])   $updates[] = 'source_strength=GREATEST(COALESCE(source_strength,0), COALESCE(VALUES(source_strength),0))';
-    if ($flags['is_stale'])          $updates[] = 'is_stale=LEAST(COALESCE(is_stale,0), COALESCE(VALUES(is_stale),0))';
-    if ($flags['as_of'])             $updates[] = 'as_of=GREATEST(COALESCE(as_of,0), COALESCE(VALUES(as_of),0))';
-    if ($flags['ingested_at'])       $updates[] = 'ingested_at=GREATEST(COALESCE(ingested_at,0), COALESCE(VALUES(ingested_at),0))';
-    if ($flags['source_priority'])   $updates[] = 'source_priority=GREATEST(COALESCE(source_priority,0), COALESCE(VALUES(source_priority),0))';
+    if ($flags['mark_price'])        $updates[] = "mark_price=IF({$accept}, COALESCE(VALUES(mark_price), mark_price), mark_price)";
+    if ($flags['index_price'])       $updates[] = "index_price=IF({$accept}, COALESCE(VALUES(index_price), index_price), index_price)";
+    if ($flags['funding_rate'])      $updates[] = "funding_rate=IF({$accept}, COALESCE(VALUES(funding_rate), funding_rate), funding_rate)";
+    if ($flags['next_funding_time']) $updates[] = "next_funding_time=IF({$accept}, COALESCE(VALUES(next_funding_time), next_funding_time), next_funding_time)";
+    if ($flags['source'])            $updates[] = "source=IF({$accept}, COALESCE(NULLIF(VALUES(source),''), source), source)";
+    if ($flags['market'])            $updates[] = "market=IF({$accept}, COALESCE(NULLIF(VALUES(market),''), market), market)";
+    if ($flags['provider'])          $updates[] = "provider=IF({$accept}, COALESCE(NULLIF(VALUES(provider),''), provider), provider)";
+    if ($flags['provider_ts'])       $updates[] = "provider_ts=IF({$accept}, COALESCE(VALUES(provider_ts), provider_ts), provider_ts)";
+    if ($flags['received_at'])       $updates[] = "received_at=IF({$accept}, COALESCE(VALUES(received_at), received_at), received_at)";
+    if ($flags['source_strength'])   $updates[] = "source_strength=IF({$accept}, COALESCE(VALUES(source_strength), source_strength), source_strength)";
+    if ($flags['is_stale'])          $updates[] = "is_stale=IF({$accept}, COALESCE(VALUES(is_stale), is_stale), is_stale)";
+    if ($flags['as_of'])             $updates[] = "as_of=IF({$accept}, COALESCE(VALUES(as_of), as_of), as_of)";
+    if ($flags['ingested_at'])       $updates[] = "ingested_at=IF({$accept}, COALESCE(VALUES(ingested_at), ingested_at), ingested_at)";
+    if ($flags['source_priority'])   $updates[] = "source_priority=IF({$accept}, COALESCE(VALUES(source_priority), source_priority), source_priority)";
+    $updates[] = "updated_at=IF({$accept}, VALUES(updated_at), updated_at)";
 
     $sql = "INSERT INTO market_quotes({$colSql}) VALUES ({$ph}) ON DUPLICATE KEY UPDATE " . implode(',', $updates);
     try {
@@ -1220,7 +1291,7 @@ function quotes_tick(bool $refreshCrypto = true): array {
   $t0 = microtime(true);
 
   // Keep cron fast and avoid overlapping locks on shared hosting.
-  $budget = (float)env('QUOTES_TICK_BUDGET_SEC', '12');
+  $budget = (float)env('QUOTES_TICK_BUDGET_SEC', '18');
   $budget = max(5.0, min(60.0, $budget));
   $maxMarkets = (int)env('QUOTES_TICK_MAX_MARKETS', '1200');
   $maxMarkets = max(50, min(5000, $maxMarkets));
@@ -1264,12 +1335,17 @@ function quotes_tick(bool $refreshCrypto = true): array {
     if ($type === 'crypto') $symbolsCrypto[] = $sym;
     else $nonCryptoSyms[] = $sym;
 
-    // Pre-compute Yahoo mapping for stocks / arab / commodities / futures so we can refresh them in bulk.
-    if (in_array($type, ['stocks','commodities','futures','arab'], true)) {
+    // Pre-compute provider mappings for non-crypto markets so cron can warm the
+    // quote table before the UI asks for it. Forex was previously missing from
+    // this EODHD batch, so major FX pairs could fall back to older reference rows
+    // even while live focus requests returned 200.
+    if (in_array($type, ['forex','stocks','commodities','futures','arab'], true)) {
       $metaArr = market_meta($r['meta'] ?? null);
-      $y = yahoo_ticker_for_market($sym, $type, $metaArr) ?: '';
-      if ($y !== '' && preg_match('/^[A-Z0-9.=\-]{1,20}$/', $y)) {
-        $yahooKeyBySym[$sym] = $y;
+      if (in_array($type, ['stocks','commodities','futures','arab'], true)) {
+        $y = yahoo_ticker_for_market($sym, $type, $metaArr) ?: '';
+        if ($y !== '' && preg_match('/^[A-Z0-9.=\-]{1,20}$/', $y)) {
+          $yahooKeyBySym[$sym] = $y;
+        }
       }
       if (quote_provider_prefers_eodhd($type, $metaArr, $sym)) {
         $e = eodhd_symbol_for_market($sym, $type, $metaArr) ?: '';
@@ -1425,7 +1501,7 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
       } else {
         $used = false;
 
-        if ($providerType === 'forex') {
+        if ($providerType === 'forex' && (int)env('ALLOW_REFERENCE_FX_FALLBACK', '0') === 1) {
           $frankfurterRow = quote_frankfurter_row($sym, $type, $now);
           if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) {
             $price = (float)$frankfurterRow['price'];
@@ -1578,7 +1654,7 @@ function quote_fetch_external(string $symbol, string $type, array $meta = []): ?
     if ($providerType === 'crypto') return binance_price($symbol);
   } catch (Throwable $e) { /* ignore */ }
 
-  if ($providerType === 'forex') {
+  if ($providerType === 'forex' && (int)env('ALLOW_REFERENCE_FX_FALLBACK', '0') === 1) {
     $frankfurterRow = quote_frankfurter_row($symbol, $type, time());
     if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) return (float)$frankfurterRow['price'];
   }
@@ -1599,6 +1675,10 @@ function quote_fetch_external(string $symbol, string $type, array $meta = []): ?
           ];
           if (in_array($providerType, ['forex','commodities','futures'], true) && quote_primary_row_is_stale($liveRow, $type, time())) {
             $rescue = quote_try_yahoo_rescue_row($symbol, $type, $meta, time());
+            if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
+          }
+          if ($providerType === 'commodities') {
+            $rescue = quote_try_spot_metal_proxy_rescue_row($symbol, $type, $liveRow, $meta, time());
             if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
           }
           if ((float)($liveRow['price'] ?? 0) > 0) return (float)$liveRow['price'];

@@ -1,86 +1,20 @@
-# -------------------------------------------------
-# TradoxPlus (public_html) .htaccess — Apache
-# -------------------------------------------------
-
 Options -Indexes
-DirectoryIndex index.php index.html
-
-# Reduce etag overhead
-FileETag None
 
 # -------------------------------------------------
-# Security / Telegram embedding
+# Security headers (safe for bot endpoints)
 # -------------------------------------------------
 <IfModule mod_headers.c>
   Header always unset X-Frame-Options
-  Header always unset ETag
-  Header always set Content-Security-Policy "frame-ancestors https://web.telegram.org https://*.telegram.org https://t.me https://*.t.me tg://*;"
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  Header always set X-Robots-Tag "noindex, nofollow, nosnippet, noarchive"
 </IfModule>
 
 # -------------------------------------------------
-# MIME types (avoid wrong content-type in some servers)
-# -------------------------------------------------
-AddType application/javascript .js
-AddType application/json .json
-AddType text/css .css
-AddType application/pdf .pdf
-
-# -------------------------------------------------
-# PERFORMANCE: Compression (Brotli if available, else Gzip/Deflate)
-# -------------------------------------------------
-<IfModule mod_brotli.c>
-  AddOutputFilterByType BROTLI_COMPRESS text/plain text/html text/css
-  AddOutputFilterByType BROTLI_COMPRESS application/javascript application/json
-  AddOutputFilterByType BROTLI_COMPRESS application/xml text/xml image/svg+xml
-</IfModule>
-
-<IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/plain text/html text/css
-  AddOutputFilterByType DEFLATE application/javascript application/json
-  AddOutputFilterByType DEFLATE application/xml text/xml image/svg+xml
-</IfModule>
-
-<IfModule mod_headers.c>
-  Header append Vary Accept-Encoding
-</IfModule>
-
-# -------------------------------------------------
-# PERFORMANCE: Cache static assets (safe because you use ?v=... on js/css)
-# -------------------------------------------------
-<IfModule mod_expires.c>
-  ExpiresActive On
-
-  ExpiresByType text/css "access plus 365 days"
-  ExpiresByType application/javascript "access plus 365 days"
-  ExpiresByType application/json "access plus 7 days"
-
-  ExpiresByType image/png "access plus 365 days"
-  ExpiresByType image/jpeg "access plus 365 days"
-  ExpiresByType image/gif "access plus 365 days"
-  ExpiresByType image/svg+xml "access plus 365 days"
-  ExpiresByType image/webp "access plus 365 days"
-  ExpiresByType image/x-icon "access plus 365 days"
-
-  ExpiresByType font/woff2 "access plus 365 days"
-  ExpiresByType font/woff "access plus 365 days"
-  ExpiresByType font/ttf "access plus 365 days"
-  ExpiresByType font/otf "access plus 365 days"
-</IfModule>
-
-<IfModule mod_headers.c>
-  <FilesMatch "\.(css|js|png|jpg|jpeg|gif|svg|webp|ico|woff2|woff|ttf|otf)$">
-    Header set Cache-Control "public, max-age=31536000, immutable"
-  </FilesMatch>
-</IfModule>
-
-# -------------------------------------------------
-# IMPORTANT: Do NOT cache HTML/PHP (so updates show immediately in Telegram)
+# IMPORTANT: Do NOT cache bot/webhook responses
 # -------------------------------------------------
 <IfModule mod_headers.c>
-  <FilesMatch "\.(php|html|htm)$">
+  <FilesMatch "\.(php|json)$">
     Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header set Pragma "no-cache"
     Header set Expires "0"
@@ -88,64 +22,44 @@ AddType application/pdf .pdf
 </IfModule>
 
 # -------------------------------------------------
-# IMPORTANT: Do NOT cache API responses (market must be live)
-# Applies to requests that start with /api/
+# Optional: Compression (if module is available)
 # -------------------------------------------------
-<IfModule mod_setenvif.c>
-  SetEnvIf Request_URI "^/api/" IS_API=1
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE application/json
+  AddOutputFilterByType DEFLATE application/javascript text/javascript
+  AddOutputFilterByType DEFLATE text/plain text/html text/css
 </IfModule>
 
 <IfModule mod_headers.c>
-  Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0" env=IS_API
-  Header set Pragma "no-cache" env=IS_API
-  Header set Expires "0" env=IS_API
+  Header append Vary Accept-Encoding
 </IfModule>
+
+# -------------------------------------------------
+# MIME (avoid wrong content-types)
+# -------------------------------------------------
+AddType application/json .json
+AddType application/javascript .js
+AddType text/css .css
 
 # -------------------------------------------------
 # Block secrets / sensitive files
 # -------------------------------------------------
-<FilesMatch "(?i)^(?:\.env(?:\..*)?|composer\.(?:json|lock)|package(?:-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|README\.md|\.gitignore)$">
+<FilesMatch "(?i)^(?:\.env(?:\..*)?)$">
   Require all denied
 </FilesMatch>
 
-<FilesMatch "(?i)\.(?:db|sqlite|sql|log|bak|old|zip|tar|tgz|gz|7z|rar|md|txt|sh)$">
+<FilesMatch "(?i)^(?:composer\.(?:json|lock)|package(?:-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|README\.md|\.gitignore)$">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "(?i)\.(?:db|sqlite|sql|log|bak|old)$">
   Require all denied
 </FilesMatch>
 
 # -------------------------------------------------
-# Routing / Access rules
+# Block direct access to internal directories (if they exist)
 # -------------------------------------------------
 <IfModule mod_rewrite.c>
   RewriteEngine On
-
-  # Serve the platform only from the approved VertexPluse hostnames. This
-  # prevents old parked/default-vhost domains from displaying the live app.
-  RewriteCond %{HTTP_HOST} !^(?:www\.)?vertexpluse\.com$ [NC]
-  RewriteCond %{HTTP_HOST} !^bot\.vertexpluse\.com$ [NC]
-  RewriteRule ^ - [F,L]
-
-  # Prevent direct access to internal libs/data
-  RewriteRule ^api/(lib|data)/ - [F,L]
-
-  # Keep deployment notes, DB/schema dumps, test folders, and old rebuild
-  # workspaces out of the public surface even if files are accidentally left.
-  RewriteRule ^(?:db|docs|tests|ops|current|finalv7|frontend0|phase142|vp124|work_sprint5|work_switcher)(?:/|$) - [F,L]
+  RewriteRule ^(lib|data|vendor|storage|cache|logs)/ - [F,L]
 </IfModule>
-
-# BEGIN cPanel-generated php ini directives, do not edit
-# Manual editing of this file may result in unexpected behavior.
-# To make changes to this file, use the cPanel MultiPHP INI Editor (Home >> Software >> MultiPHP INI Editor)
-# For more information, read our documentation (https://go.cpanel.net/EA4ModifyINI)
-<IfModule php8_module>
-
-</IfModule>
-<IfModule lsapi_module>
-
-</IfModule>
-# END cPanel-generated php ini directives, do not edit
-# php -- BEGIN cPanel-generated handler, do not edit
-# Set the “ea-php82” package as the default “PHP” programming language.
-<IfModule mime_module>
-  AddHandler application/x-httpd-ea-php82 .php .php8 .phtml
-</IfModule>
-# php -- END cPanel-generated handler, do not edit

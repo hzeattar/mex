@@ -11,9 +11,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   $email = trim((string)($_POST['email'] ?? ''));
   $pass = (string)($_POST['password'] ?? '');
   if (admin_credentials_ok($email, $pass)) {
-    $_SESSION['admin_ok'] = true;
-    $_SESSION['admin_email'] = $email;
-    header('Location: /admin/dashboard.php');
+    admin_login_success($email);
+    $next = (string)($_POST['next'] ?? $_GET['next'] ?? '/admin/dashboard.php');
+    if (!str_starts_with($next, '/admin/') || str_contains($next, "\n") || str_contains($next, "\r")) {
+      $next = '/admin/dashboard.php';
+    }
+    header('Location: ' . $next);
     exit;
   }
   $error = 'Invalid credentials';
@@ -37,6 +40,7 @@ $body = $errHtml . "
       <h2>Admin sign in</h2>
       <p>Use the Railway environment credentials for this deployment. Do not expose admin access inside the client app.</p>
       <form method='post' autocomplete='on'>
+        <input type='hidden' name='next' value='" . htmlspecialchars((string)($_GET['next'] ?? '/admin/dashboard.php'), ENT_QUOTES, 'UTF-8') . "'>
         <input name='email' placeholder='Admin email' type='email' required>
         <input name='password' placeholder='Password' type='password' required>
         <button class='btn' type='submit'>Open console</button>

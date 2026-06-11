@@ -25,6 +25,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   }
   setting_set('support.entry', $entry);
 
+  $whatsapp = trim((string)($_POST['support_whatsapp_url'] ?? ''));
+  if ($whatsapp !== '' && !preg_match('~^https?://~i', $whatsapp)) {
+    $whatsapp = '';
+  }
+  setting_set('support.whatsapp_url', $whatsapp);
+
   foreach ($langs as $code => $label) {
     $val = trim((string)($_POST['support_'.$code] ?? ''));
     // allow empty (clear)
@@ -37,6 +43,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $entryCurrent = (string)setting_get('support.entry', '');
+$whatsappCurrent = (string)setting_get('support.whatsapp_url', '');
 
 $current = [];
 foreach ($langs as $code => $label) {
@@ -62,6 +69,12 @@ ob_start();
       <label>Support Entry (router bot username / URL)</label><br>
       <input name="support_entry" value="<?=h($entryCurrent)?>" placeholder="@mexgroup_support_bot">
       <div class="muted small" style="margin-top:6px">Key: <code>support.entry</code> (the Mini App opens this first)</div>
+    </div>
+
+    <div style="grid-column:1/-1">
+      <label>WhatsApp Support URL</label><br>
+      <input name="support_whatsapp_url" value="<?=h($whatsappCurrent)?>" placeholder="https://wa.me/201000000000">
+      <div class="muted small" style="margin-top:6px">Key: <code>support.whatsapp_url</code> (used by the app Support and Account pages)</div>
     </div>
 
     <?php foreach($langs as $code=>$label): ?>

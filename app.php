@@ -52,9 +52,21 @@ $productName = site_setting('site.brand', 'MEX Group');
 $brandName = htmlspecialchars('MEX Group', ENT_QUOTES);
 $brandTagline = htmlspecialchars(site_setting('site.tagline', 'Professional trading & investment platform'), ENT_QUOTES);
 $supportEmail = json_encode(site_setting('site.support_email', 'support@mexgroup.com'), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+
+// Language and direction detection
+$appLang = 'en';
+$appRtl  = false;
+try {
+  if (function_exists('site_locale')) { $appLang = site_locale(); $appRtl = site_is_rtl($appLang); }
+  else {
+    $l = strtolower((string)($_COOKIE['vp_lang'] ?? $_GET['lang'] ?? 'en'));
+    $appLang = in_array($l, ['en','ar','ru','tr','fr','de','es','it','pt','nl','pl','zh','ja','ko','vi'],true) ? $l : 'en';
+    $appRtl  = $appLang === 'ar';
+  }
+} catch (Throwable $_e) {}
 ?>
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="<?php echo htmlspecialchars($appLang, ENT_QUOTES); ?>" dir="<?php echo $appRtl ? 'rtl' : 'ltr'; ?>" class="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -73,16 +85,18 @@ $supportEmail = json_encode(site_setting('site.support_email', 'support@mexgroup
   <style>
     body{margin:0;background:#060A14;color:#e8f0ff;font-family:Inter,system-ui,sans-serif}
     .boot-screen{min-height:100vh;display:grid;place-items:center}
-    .boot-mark{width:48px;height:48px;border-radius:16px;background:linear-gradient(135deg,#5d7cff,#24d28d);display:grid;place-items:center;color:#fff;font-weight:900;font-size:20px;animation:pulse 1.5s ease-in-out infinite}
-    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(.95)}}
+    .boot-mark{position:relative;width:132px;height:38px;border-radius:7px;overflow:hidden;background:#000;box-shadow:0 0 0 1px rgba(128,160,220,.14),0 20px 55px rgba(0,0,0,.32);animation:bootFloat 1.65s ease-in-out infinite}
+    .boot-mark img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+    .boot-mark:after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 0%,transparent 35%,rgba(255,255,255,.34) 48%,transparent 62%,transparent 100%);transform:translateX(-115%);animation:bootSweep 1.25s ease-in-out infinite}
+    @keyframes bootFloat{0%,100%{opacity:.96;transform:translateY(0) scale(1)}50%{opacity:1;transform:translateY(-3px) scale(.985)}}
+    @keyframes bootSweep{0%{transform:translateX(-115%)}62%,100%{transform:translateX(115%)}}
   </style>
 </head>
 <body>
   <div id="app">
     <div class="boot-screen">
       <div style="text-align:center">
-        <div class="boot-mark" style="margin:0 auto 16px">M</div>
-        <strong style="font-size:14px"><?php echo $brandName; ?></strong>
+        <div class="boot-mark" style="margin:0 auto 16px"><img src="/assets/img/mex_global_logo.png" alt="MEX Global"></div>
         <p style="color:rgba(200,220,255,0.5);font-size:12px;margin-top:6px">Loading workspace...</p>
       </div>
     </div>
@@ -96,5 +110,10 @@ $supportEmail = json_encode(site_setting('site.support_email', 'support@mexgroup
   <?php if ($jsFile): ?>
   <script type="module" src="./assets/dist/<?php echo $jsFile; ?>"></script>
   <?php endif; ?>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>

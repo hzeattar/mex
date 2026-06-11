@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="USDT TRC20 QR">
+  <rect width="160" height="160" rx="18" fill="#ffffff"/>
+  <rect x="18" y="18" width="36" height="36" fill="#06101f"/><rect x="26" y="26" width="20" height="20" fill="#ffffff"/><rect x="31" y="31" width="10" height="10" fill="#06101f"/>
+  <rect x="106" y="18" width="36" height="36" fill="#06101f"/><rect x="114" y="26" width="20" height="20" fill="#ffffff"/><rect x="119" y="31" width="10" height="10" fill="#06101f"/>
+  <rect x="18" y="106" width="36" height="36" fill="#06101f"/><rect x="26" y="114" width="20" height="20" fill="#ffffff"/><rect x="31" y="119" width="10" height="10" fill="#06101f"/>
+  <path d="M70 22h12v12H70zM86 22h8v8h-8zM66 42h10v10H66zM84 44h18v8H84zM62 66h8v18h-8zM78 66h12v8H78zM98 62h8v12h-8zM114 66h24v8h-24zM66 90h28v8H66zM102 90h12v12h-12zM122 88h10v20h-10zM70 110h8v8h-8zM84 110h22v8H84zM112 118h30v8h-30zM66 134h18v8H66zM96 132h10v10H96zM118 136h18v8h-18z" fill="#06101f"/>
+  <text x="80" y="82" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle" fill="#18c98f">USDT TRC20</text>
+</svg>

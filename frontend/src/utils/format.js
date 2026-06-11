@@ -19,16 +19,14 @@ export function price(value, type = 'crypto') {
   return n.toFixed(2);
 }
 
-// Adaptive quantity/size formatter: keeps small crypto sizes readable
-// (money() always renders 2dp -> tiny sizes show as 0.00). Strips trailing zeros.
 export function qty(value) {
   const n = Number(value || 0);
-  if (!isFinite(n) || n === 0) return '0';
-  const abs = Math.abs(n);
+  const a = Math.abs(n);
+  if (a === 0) return '0';
+  if (a >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
   let s;
-  if (abs >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (abs >= 1) s = n.toFixed(4);
-  else if (abs >= 0.0001) s = n.toFixed(6);
+  if (a >= 1) s = n.toFixed(4);
+  else if (a >= 0.0001) s = n.toFixed(6);
   else s = n.toFixed(8);
   return s.replace(/\.?0+$/, '');
 }

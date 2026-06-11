@@ -106,7 +106,7 @@ try {
     ],
     'instructions'=>[
       'title'=>$title,
-      'details'=>$instructions !== '' ? $instructions : 'Your deposit request was submitted and is now waiting for admin review.',
+      'details'=>$instructions !== '' ? $instructions : 'Your transfer confirmation was received and is now being processed.',
       'button_label'=>(string)($pm['checkout_label'] ?? ''),
     ]
   ];

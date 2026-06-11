@@ -2,6 +2,7 @@
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/quotes.php';
 require_once __DIR__ . '/market_resolver.php';
+require_once __DIR__ . '/quote_store.php';
 
 if (!function_exists('vp_pricecore_cache_dir')) {
   function vp_pricecore_cache_dir(): string {
@@ -16,7 +17,7 @@ if (!function_exists('vp_pricecore_symbols_from_raw')) {
     $out = [];
     foreach (preg_split('/\s*,\s*/', $symbolsRaw) as $s) {
       $s = strtoupper(trim((string)$s));
-      if ($s !== '' && preg_match('/^[A-Z0-9:._\-]{2,32}$/', $s)) $out[] = $s;
+      if ($s !== '' && preg_match('/^[A-Z0-9:._\-]{1,32}$/', $s)) $out[] = $s;
     }
     return array_values(array_unique($out));
   }
@@ -124,11 +125,9 @@ if (!function_exists('vp_pricecore_market_rows')) {
     $symbols = array_values(array_unique(array_filter($symbols)));
     if (!$symbols) return [];
     try {
-      $marks = implode(',', array_fill(0, count($symbols), '?'));
-      $st = db()->prepare("SELECT symbol, type, seed_price, meta FROM markets WHERE symbol IN ($marks)");
-      $st->execute($symbols);
+      $rows = function_exists('qa_market_meta_by_symbols') ? qa_market_meta_by_symbols($symbols) : [];
       $out = [];
-      foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+      foreach ($rows as $row) {
         $sym = strtoupper((string)($row['symbol'] ?? ''));
         if ($sym === '') continue;
         $out[$sym] = [
@@ -193,7 +192,8 @@ if (!function_exists('vp_pricecore_prefetch_group')) {
         'ttl' => 1,
         'yahoo_ttl' => 1,
         'massive_ttl' => 1,
-        'eodhd_ttl' => 1,
+        // OPTIMIZED: Increased EODHD TTL from 1s to 3s to reduce API calls
+        'eodhd_ttl' => 3,
         'direct_budget' => $directBudget,
         'direct_yahoo_budget' => $directBudget,
         'chart_budget' => $chartBudget,
@@ -210,7 +210,7 @@ if (!function_exists('vp_pricecore_fetch_rows')) {
   function vp_pricecore_fetch_rows(array $symbols, string $typeHint = '', string $marketHint = 'spot', array $opts = []): array {
     $symbols = array_values(array_unique(array_filter(array_map(static function($s){
       $s = strtoupper(trim((string)$s));
-      return ($s !== '' && preg_match('/^[A-Z0-9:._\-]{2,32}$/', $s)) ? $s : '';
+      return ($s !== '' && preg_match('/^[A-Z0-9:._\-]{1,32}$/', $s)) ? $s : '';
     }, $symbols))));
     if (!$symbols) return [];
 

@@ -143,7 +143,9 @@ $forexPairs = [
     .hero-main-title .accent{background:linear-gradient(135deg,#5d7cff,#00c087);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .hero-main-sub{max-width:560px;font-size:19px;line-height:1.7;color:#c6d8f3;margin:0 0 32px}
     .hero-btns{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:28px}
-    .hero-platforms{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+    .store-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .store-badge{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1px solid rgba(93,124,255,.2);background:rgba(7,14,30,.8);color:#7a9bc8;font-size:13px;font-weight:700;text-decoration:none;transition:.18s}
+    .store-badge:hover{border-color:rgba(93,124,255,.4);color:#d5e3ff;background:rgba(93,124,255,.1)}
     .hero-platform-pill{display:inline-flex;align-items:center;gap:10px;padding:10px 16px;border-radius:14px;background:rgba(10,20,44,.78);border:1px solid rgba(135,166,220,.12);color:#c6d8f3;font-size:14px;font-weight:800;transition:.2s}
     .hero-platform-pill:hover{border-color:rgba(93,124,255,.35)}
     .hero-platform-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(93,124,255,.3),rgba(0,192,135,.2));font-size:14px}
@@ -226,21 +228,17 @@ $forexPairs = [
     .platform-steps{display:flex;flex-direction:column;gap:20px;margin-bottom:32px}
     .platform-step{display:flex;align-items:flex-start;gap:16px}
     .platform-step-num{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#5d7cff,#00c087);color:#fff;font-size:18px;font-weight:900;flex-shrink:0}
-    .platform-step h4{margin:0 0 4px;font-size:17px;font-weight:800;color:#e2e8f0}
+    .markets-on-desktop{display:inline-flex}
+    @media (max-width:1040px){
+      .mex-header-nav.is-open .markets-on-desktop{display:none}
+    }
     .platform-step p{margin:0;color:#7a9bc8;font-size:14px;line-height:1.6}
-    .platform-visual{position:relative;display:grid;place-items:center;min-height:420px}
-    .phone-group{position:relative;width:340px;height:420px}
-    .phone-main{position:absolute;left:50%;top:0;transform:translateX(-50%);width:220px;height:380px;border-radius:30px;background:linear-gradient(180deg,#13264f,#0b1735);box-shadow:0 32px 90px rgba(0,0,0,.4);border:1px solid rgba(135,166,220,.12);overflow:hidden}
-    .phone-main::before{content:'';position:absolute;inset:12px;border-radius:22px;background:linear-gradient(180deg,rgba(93,124,255,.08),rgba(0,192,135,.04))}
-    .phone-main::after{content:'';position:absolute;left:20px;right:20px;bottom:40px;height:140px;border-radius:18px;background:linear-gradient(180deg,rgba(93,124,255,.2),rgba(0,192,135,.12));clip-path:polygon(0 78%,8% 55%,18% 72%,28% 35%,40% 58%,52% 28%,64% 52%,76% 18%,88% 42%,100% 12%,100% 100%,0 100%)}
-    .phone-mini{position:absolute;border-radius:22px;background:linear-gradient(180deg,#12254c,#091428);border:1px solid rgba(135,166,220,.1);box-shadow:0 18px 50px rgba(0,0,0,.3)}
-    .phone-mini.left{left:0;top:60px;width:120px;height:200px;transform:rotate(-8deg);animation:phoneFloat 5s ease-in-out infinite}
-    .phone-mini.right{right:0;top:100px;width:108px;height:190px;transform:rotate(8deg);animation:phoneFloat 5s ease-in-out 1s infinite}
-    @keyframes phoneFloat{0%,100%{transform:translateY(0) rotate(var(--rot,0deg))}50%{transform:translateY(-6px) rotate(var(--rot,0deg))}}
-    .phone-mini.left{--rot:-8deg}
-    .phone-mini.right{--rot:8deg}
-    .phone-glow{position:absolute;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(0,228,155,.15),transparent 60%);left:50%;bottom:-40px;transform:translateX(-50%);animation:glowPulse 4s ease-in-out infinite}
-    @keyframes glowPulse{0%,100%{opacity:.5;transform:translateX(-50%) scale(1)}50%{opacity:.8;transform:translateX(-50%) scale(1.1)}}
+    .platform-img-wrapper{position:relative;border-radius:18px;overflow:hidden}
+    .platform-img-wrapper img{display:block;width:100%;transition:transform .4s ease}
+    .platform-img-wrapper:hover img{transform:scale(1.03)}
+    .platform-img-glow{position:absolute;inset:0;pointer-events:none;border-radius:18px;background:linear-gradient(180deg,transparent 60%,rgba(93,124,255,.12));transition:opacity .3s}
+    .platform-img-wrapper:hover .platform-img-glow{opacity:.6}
+
 
     /* ── Accounts Cards ── */
     .accounts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px}
@@ -336,10 +334,18 @@ $forexPairs = [
     </a>
     <nav class="mex-header-nav">
       <a class="mex-nav-link is-active" href="/?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_home')); ?></a>
-      <a class="mex-nav-link" href="/markets.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_markets')); ?></a>
+      <a class="mex-nav-link markets-on-desktop" href="/markets.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_markets')); ?></a>
       <a class="mex-nav-link" href="/features.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_features')); ?></a>
       <a class="mex-nav-link" href="/about.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_about')); ?></a>
       <a class="mex-nav-link" href="/contact.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_contact')); ?></a>
+      <div class="mex-mobile-auth-bridge">
+        <?php if($isLoggedIn): ?>
+          <a class="mex-btn mex-btn-primary mex-btn-sm" style="width:100%;margin-top:6px" href="/app.php#/home"><?php echo _h($txt('nav_openapp')); ?></a>
+        <?php else: ?>
+          <a class="mex-btn mex-btn-soft mex-btn-sm" style="width:100%;margin-bottom:6px" href="/login.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_login')); ?></a>
+          <a class="mex-btn mex-btn-primary mex-btn-sm" style="width:100%" href="/register.php?lang=<?php echo _h($lang); ?>"><?php echo _h($txt('nav_create')); ?></a>
+        <?php endif; ?>
+      </div>
     </nav>
     <div class="mex-header-actions">
       <div class="mex-lang-wrap">
@@ -397,8 +403,16 @@ $forexPairs = [
         <a class="mex-btn mex-btn-soft" style="min-height:52px;padding:0 28px;font-size:16px" href="<?php echo $isLoggedIn?'/app.php#/trade':'/register.php?lang='._h($lang).'&next='.rawurlencode('/app.php#/trade'); ?>"><?php echo _h($txt('hero_cta_second')); ?></a>
       </div>
       <div class="hero-platforms">
-        <div class="hero-platform-pill"><div class="hero-platform-icon">📱</div> MultiBank App</div>
-        <div class="hero-platform-pill"><div class="hero-platform-icon">📊</div> MetaTrader 4 & 5</div>
+        <div class="hero-platform-pill">
+          <div class="hero-platform-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+          </div> MultiBank App
+        </div>
+        <div class="hero-platform-pill">
+          <div class="hero-platform-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          </div> MetaTrader 4 & 5
+        </div>
       </div>
     </div>
     <div class="hero-visual-side">
@@ -484,22 +498,30 @@ $forexPairs = [
   <div style="width:min(1100px,calc(100% - 32px));margin:0 auto">
     <div class="trust-grid">
       <div class="trust-card">
-        <div class="trust-ico">📈</div>
+        <div class="trust-ico">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>
+        </div>
         <h3><?php echo _h($txt('multi')); ?></h3>
         <p><?php echo _h($txt('multi_text')); ?></p>
       </div>
       <div class="trust-card">
-        <div class="trust-ico">💰</div>
+        <div class="trust-ico">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
         <h3><?php echo _h($txt('pricing')); ?></h3>
         <p><?php echo _h($txt('pricing_text')); ?></p>
       </div>
       <div class="trust-card">
-        <div class="trust-ico">🔒</div>
+        <div class="trust-ico">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
         <h3><?php echo _h($txt('secure')); ?></h3>
         <p><?php echo _h($txt('secure_text')); ?></p>
       </div>
       <div class="trust-card">
-        <div class="trust-ico">🤖</div>
+        <div class="trust-ico">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+        </div>
         <h3><?php echo _h($txt('copy')); ?></h3>
         <p><?php echo _h($txt('copy_text')); ?></p>
       </div>
@@ -516,7 +538,18 @@ $forexPairs = [
         <div class="platform-steps">
           <div class="platform-step">
             <div class="platform-step-num">1</div>
-            <div><h4><?php echo _h($txt('step1_title')); ?></h4><p><?php echo _h($txt('step1_text')); ?></p></div>
+            <div><h4><?php echo _h($txt('step1_title')); ?></h4><p><?php echo _h($txt('step1_text')); ?></p>
+              <div class="store-badges">
+                <a href="/register.php?lang=<?php echo _h($lang); ?>" class="store-badge" aria-label="App Store">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                  App Store
+                </a>
+                <a href="/register.php?lang=<?php echo _h($lang); ?>" class="store-badge" aria-label="Google Play">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 20.5v-17c0-.6.4-1 1-1 .2 0 .5.1.7.2l14.8 8.5c.5.3.6.9.4 1.4-.1.1-.2.2-.3.3L4.7 21.3c-.4.3-1 .2-1.3-.2-.2-.2-.4-.4-.4-.6zM16.2 12l-3.5-2V7l7 4-7 4v-3l3.5-2z"/></svg>
+                  Google Play
+                </a>
+              </div>
+            </div>
           </div>
           <div class="platform-step">
             <div class="platform-step-num">2</div>
@@ -529,12 +562,10 @@ $forexPairs = [
         </div>
         <a class="mex-btn mex-btn-primary" href="<?php echo $isLoggedIn?'/app.php#/home':'/register.php?lang='._h($lang); ?>"><?php echo _h($txt('open_live')); ?></a>
       </div>
-      <div class="platform-visual">
-        <div class="phone-group">
-          <div class="phone-glow"></div>
-          <div class="phone-main"></div>
-          <div class="phone-mini left"></div>
-          <div class="phone-mini right"></div>
+      <div class="platform-visual" data-platform-visual>
+        <div class="platform-img-wrapper">
+          <img src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=800&auto=format&fit=crop" alt="Trading platform dark" loading="lazy" style="width:100%;height:auto;border-radius:18px;border:1px solid rgba(93,124,255,.15);box-shadow:0 24px 60px rgba(0,0,0,.4)">
+          <div class="platform-img-glow"></div>
         </div>
       </div>
     </div>
@@ -548,35 +579,41 @@ $forexPairs = [
   <div style="width:min(1100px,calc(100% - 32px));margin:0 auto">
     <div class="accounts-grid">
       <div class="account-card standard">
-        <div class="account-icon">📊</div>
+        <div class="account-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        </div>
         <h3><?php echo $rtl?'تجريبي':'Demo'; ?><span>$10,000</span></h3>
         <p><?php echo _h($txt('accounts_sub')); ?></p>
         <div class="account-points">
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('free_forever')); ?></div>
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('full_markets')); ?></div>
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('no_card')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('free_forever')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('full_markets')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('no_card')); ?></div>
         </div>
         <a class="mex-btn mex-btn-soft" style="margin-top:auto;width:100%" href="<?php echo $isLoggedIn?'/app.php#/home':'/register.php?lang='._h($lang); ?>"><?php echo _h($txt('try_demo')); ?></a>
       </div>
       <div class="account-card pro">
-        <div class="account-icon">⚡</div>
+        <div class="account-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
         <h3><?php echo $rtl?'قياسي':'Standard'; ?><span><?php echo $rtl?'من $50':'From $50'; ?></span></h3>
         <p><?php echo $rtl?'217+ أداة برافعة حتى 1:500':'217+ instruments with leverage up to 1:500'; ?></p>
         <div class="account-points">
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('instant_exec')); ?></div>
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('flex_lev')); ?></div>
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('support_247')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('instant_exec')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('flex_lev')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('support_247')); ?></div>
         </div>
         <a class="mex-btn mex-btn-primary" style="margin-top:auto;width:100%" href="<?php echo $isLoggedIn?'/app.php#/deposit':'/register.php?lang='._h($lang); ?>"><?php echo _h($txt('open_live')); ?></a>
       </div>
       <div class="account-card ecn">
-        <div class="account-icon">🎯</div>
+        <div class="account-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        </div>
         <h3><?php echo $rtl?'احترافي':'Pro'; ?><span><?php echo $rtl?'من $1,000':'From $1,000'; ?></span></h3>
         <p><?php echo _h($txt('tight_spreads')).' & '.mb_strtolower(_h($txt('pro_tools'))); ?></p>
         <div class="account-points">
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('tight_spreads')); ?></div>
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('pro_tools')); ?></div>
-          <div class="account-point"><i>✓</i> <?php echo _h($txt('acc_manager')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('tight_spreads')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('pro_tools')); ?></div>
+          <div class="account-point"><i><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i> <?php echo _h($txt('acc_manager')); ?></div>
         </div>
         <a class="mex-btn mex-btn-soft" style="margin-top:auto;width:100%" href="<?php echo $isLoggedIn?'/app.php#/deposit':'/register.php?lang='._h($lang); ?>"><?php echo $rtl?'افتح حساب برو':'Open Pro Account'; ?></a>
       </div>
@@ -603,7 +640,9 @@ $forexPairs = [
 
 <!-- ══ CTA ══════════════════════════════════════════════════════════════ -->
 <section class="mex-cta-section mex-reveal">
-  <div class="rocket-ico">🚀</div>
+  <div class="rocket-ico">
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+  </div>
   <h2><?php echo $rtl?'مستعد للبدء؟':'Want to get started?'; ?></h2>
   <p><?php echo _h($txt('cta_sub')); ?></p>
   <div class="mex-cta-btns">
@@ -652,18 +691,21 @@ $forexPairs = [
 (function(){
   /* Hamburger */
   var hamburger = document.getElementById('mex-hamburger');
+  var nav = document.querySelector('.mex-header-nav');
   var header = document.getElementById('mex-header');
-  if(hamburger && header){
+  if(hamburger && nav){
     hamburger.addEventListener('click', function(){
-      header.classList.toggle('menu-open');
+      var open = nav.classList.toggle('is-open');
       hamburger.classList.toggle('is-active');
-      document.body.style.overflow = header.classList.contains('menu-open') ? 'hidden' : '';
+      document.body.style.overflow = open ? 'hidden' : '';
+      if(header) header.classList.toggle('menu-open', open);
     });
-    header.querySelectorAll('.mex-header-nav a, .mex-header-actions a').forEach(function(link){
+    nav.querySelectorAll('a, button').forEach(function(link){
       link.addEventListener('click', function(){
-        header.classList.remove('menu-open');
+        nav.classList.remove('is-open');
         hamburger.classList.remove('is-active');
         document.body.style.overflow = '';
+        if(header) header.classList.remove('menu-open');
       });
     });
   }

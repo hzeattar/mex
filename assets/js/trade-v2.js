@@ -96,10 +96,10 @@
     return { '1m':60, '3m':180, '5m':300, '15m':900, '30m':1800, '1h':3600, '4h':14400, '1d':86400 }[tf] || 60;
   }
   function pollMs(type){
-    if(document.hidden) return 15000;
-    if(type === 'crypto') return 1000;
-    if(type === 'forex' || type === 'commodities' || type === 'futures') return 2400;
-    return 12000;
+    if(document.hidden) return 20000;
+    if(type === 'crypto') return 2000;
+    if(type === 'forex' || type === 'commodities' || type === 'futures') return 4000;
+    return 15000;
   }
   function apiUrl(path){
     if(/^https?:\/\//i.test(path)) return path;
@@ -838,9 +838,9 @@
 
   function startLoops(){
     clearTimers();
-    schedule(() => { if(!document.hidden) loadQuote().catch(() => {}); }, pollMs(state.type));
-    schedule(() => { if(!document.hidden) loadMarkets(false).catch(() => {}); }, state.type === 'crypto' ? 10000 : 16000);
-    schedule(() => { if(!document.hidden) loadPortfolio(false).catch(() => {}); }, 8000);
+    schedule(()=>{ if(!document.hidden) loadQuote().catch(()=>{}); }, pollMs(state.type));
+    schedule(()=>{ if(!document.hidden) loadMarkets(false).catch(()=>{}); }, state.type==='crypto' ? 15000 : 20000);
+    schedule(()=>{ if(!document.hidden) loadPortfolio(false).catch(()=>{}); }, 12000);
   }
 
   function mount(){
@@ -906,12 +906,16 @@
   }
 
   window.addEventListener('hashchange', scheduleMount);
+  let __trVisDebounce = 0;
   document.addEventListener('visibilitychange', () => {
     if(document.hidden) return;
-    if(routeIsTrade()) {
-      loadQuote().catch(() => {});
-      loadPortfolio(false).catch(() => {});
-    }
+    clearTimeout(__trVisDebounce);
+    __trVisDebounce = setTimeout(() => {
+      if(routeIsTrade()){
+        loadQuote().catch(() => {});
+        loadPortfolio(false).catch(() => {});
+      }
+    }, 400);
   }, { passive:true });
   document.addEventListener('DOMContentLoaded', scheduleMount);
   scheduleMount();

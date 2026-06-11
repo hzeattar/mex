@@ -145,12 +145,14 @@ if ($usdReq > 0) {
 $feeRate = trade_fee_rate($marketType, $orderType);
 $fee = trade_calc_fee($notional, $feeRate);
 
-// Feature flag: demo trading must be enabled
-$flag = $pdo->prepare('SELECT enabled FROM feature_flags WHERE flag_key=?');
-$flag->execute(['demo_trading']);
-$demoEnabled = (int)($flag->fetchColumn() ?: 1);
-if ($demoEnabled !== 1) {
-  json_response(['ok'=>false,'error'=>'Trading disabled'], 403);
+// Feature flag: demo trading must be enabled. Real trading must not be blocked by demo flag.
+if (!$isReal) {
+  $flag = $pdo->prepare('SELECT enabled FROM feature_flags WHERE flag_key=?');
+  $flag->execute(['demo_trading']);
+  $demoEnabled = (int)($flag->fetchColumn() ?: 1);
+  if ($demoEnabled !== 1) {
+    json_response(['ok'=>false,'error'=>'Demo trading disabled'], 403);
+  }
 }
 
 $demoCur = (string)env('DEMO_CURRENCY', 'USDT_DEMO');
@@ -224,7 +226,7 @@ try {
     ]);
   } catch (Throwable $e2) {}
 
-  json_response(['ok'=>true,'order_id'=>$orderId,'fill_price'=>$fill]);
+  json_response(['ok'=>true,'order_id'=>$orderId,'position_id'=>$positionId,'fill_price'=>$fill,'market_type'=>$marketType,'asset_type'=>$assetType,'mode'=>$mode]);
 } catch (Throwable $e) {
   $pdo->rollBack();
   json_response(['ok'=>false,'error'=>$e->getMessage()], 400);

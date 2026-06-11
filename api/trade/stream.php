@@ -32,7 +32,7 @@ $symbols = [];
 if (trim($symbolsRaw) !== '') {
   foreach (explode(',', $symbolsRaw) as $s) {
     $s = strtoupper(trim($s));
-    if ($s !== '' && preg_match('/^[A-Z0-9:._-]{2,32}$/', $s)) $symbols[] = $s;
+    if ($s !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $s)) $symbols[] = $s;
   }
   $symbols = array_values(array_unique($symbols));
 }
@@ -99,7 +99,7 @@ if (!$lite && $uid > 0) {
     // Strip @R@/@D@ prefix for upstream price sources and UI.
     $symUi = (str_starts_with($symDb,'@R@') || str_starts_with($symDb,'@D@')) ? substr($symDb,3) : $symDb;
     $symUi = strtoupper($symUi);
-    if ($symUi !== '' && preg_match('/^[A-Z0-9:._-]{2,32}$/', $symUi)) $posSymbols[] = $symUi;
+    if ($symUi !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $symUi)) $posSymbols[] = $symUi;
   }
   $posSymbols = array_values(array_unique($posSymbols));
 }
@@ -133,7 +133,7 @@ $resolveStreamQuoteType = static function(string $sym) use (&$resolveStreamConte
 $resolveStreamReturnType = static function(string $sym) use (&$marketInfoBySymbol, $reqType): string {
   $raw = strtolower((string)($marketInfoBySymbol[$sym]['type'] ?? ''));
   if ($raw === 'fx') return 'forex';
-  if ($raw === 'indices') return 'forex';
+  if ($raw === 'indices') return 'indices';
   if ($raw === 'perpetual' || $raw === 'perp') return 'futures';
   if ($raw !== '') return $raw;
   return vp_normalize_asset_type((string)$reqType);
@@ -652,7 +652,7 @@ $symbolForCandles = strtoupper(trim($symbolForCandles));
 if ($symbolForCandles === '' && $symbols) $symbolForCandles = $symbols[0];
 
 $candles = [];
-if ($candlesEnabled && $symbolForCandles !== '' && preg_match('/^[A-Z0-9:._-]{2,32}$/', $symbolForCandles)) {
+if ($candlesEnabled && $symbolForCandles !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $symbolForCandles)) {
   $end = $now;
   $start = $end - ($tf * $limit * 3);
 

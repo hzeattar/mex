@@ -5,9 +5,10 @@ require_once __DIR__ . '/../lib/schema.php';
 
 $uid = require_auth();
 $pdo = db();
+$driver = db_driver();
 $cols = ['id','provider','method_code','currency','amount','status','external_ref','created_at','updated_at'];
 foreach (['confirmed_at','admin_note','details_json'] as $c) {
-  try { if (schema_column_exists('deposits', $c)) $cols[] = $c; } catch (Throwable $e) {}
+  try { if (schema_column_exists($pdo, 'deposits', $c, $driver)) $cols[] = $c; } catch (Throwable $e) {}
 }
 $stmt = $pdo->prepare('SELECT '.implode(',', $cols).' FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 100');
 $stmt->execute([$uid]);

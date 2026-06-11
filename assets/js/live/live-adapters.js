@@ -19,7 +19,7 @@
       const res = await fetch(finalPath, {
         credentials:'same-origin',
         signal: controller.signal,
-        cache:'no-store',
+        cache:'default',
         headers:{'Accept':'application/json'}
       });
       const txt = await res.text();

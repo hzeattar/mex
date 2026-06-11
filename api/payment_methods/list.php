@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../lib/common.php';
+require_once __DIR__ . '/../lib/funding_showcase_seed.php';
 require_method('GET');
-$pdo = db();
 
 $kind = strtolower(trim((string)($_GET['kind'] ?? 'deposit')));
 $currency = strtoupper(trim((string)($_GET['currency'] ?? '*')));
@@ -10,6 +10,71 @@ $scope = strtolower(trim((string)($_GET['scope'] ?? 'real')));
 if (!in_array($kind, ['deposit','withdraw'], true)) $kind = 'deposit';
 if (!in_array($lang, ['en','ar','ru'], true)) $lang = 'en';
 if (!in_array($scope, ['real','demo','both'], true)) $scope = 'real';
+
+// --- Response cache -----------------------------------------------------------
+// Payment methods are global (not per-user) and change rarely. Serving a fresh
+// copy required a cross-region DB connection + ~6 queries + the showcase seed
+// probe on EVERY wallet/funding page load, which made the payments panel slow.
+// A short server-side file cache (keyed by the public inputs only) lets cache
+// hits skip the DB entirely.
+$pmCacheDir = __DIR__ . '/../data/cache';
+if (!is_dir($pmCacheDir)) @mkdir($pmCacheDir, 0777, true);
+$pmCacheTtl = max(0, min(300, (int)((string)env('PAYMENT_METHODS_CACHE_TTL', '90'))));
+$pmBrowserTtl = 20;
+$pmCacheFile = $pmCacheDir . '/paymethods_v1_' . preg_replace('/[^a-z0-9_\-]/i', '_', $kind . '_' . $currency . '_' . $lang . '_' . $scope) . '.json';
+if ($pmCacheTtl > 0 && is_file($pmCacheFile)) {
+  $pmAge = time() - (int)@filemtime($pmCacheFile);
+  if ($pmAge >= 0 && $pmAge < $pmCacheTtl) {
+    $pmCached = (string)@file_get_contents($pmCacheFile);
+    if ($pmCached !== '') {
+      http_response_code(200);
+      header('Content-Type: application/json; charset=utf-8');
+      header("Cache-Control: public, max-age={$pmBrowserTtl}, s-maxage={$pmBrowserTtl}");
+      header('X-MEX-Cache: hit');
+      echo $pmCached;
+      exit;
+    }
+  }
+}
+
+$pdo = db();
+// Showcase seed only fills missing demo/QA rows; its "is it needed?" probe costs
+// several DB round-trips, so throttle it to at most once per few minutes per
+// container instead of running it on every request.
+$pmSeedFlag = sys_get_temp_dir() . '/mex_funding_seed_ok';
+if (!is_file($pmSeedFlag) || (time() - (int)@filemtime($pmSeedFlag)) >= 300) {
+  try { funding_showcase_seed_methods($pdo); @touch($pmSeedFlag); }
+  catch (Throwable $e) { error_log('[payment_methods/list] showcase seed failed: ' . $e->getMessage()); }
+}
+
+function payment_methods_field_value($fields, array $keys): string {
+  $keys = array_map(static fn($k) => strtolower((string)$k), $keys);
+  $pick = static function($label, $value) use ($keys): string {
+    $label = strtolower((string)$label);
+    if (!in_array($label, $keys, true)) return '';
+    if (is_array($value)) {
+      foreach (['value','text','default','url'] as $k) {
+        if (isset($value[$k]) && trim((string)$value[$k]) !== '') return trim((string)$value[$k]);
+      }
+      return '';
+    }
+    return trim((string)$value);
+  };
+  if (is_array($fields)) {
+    foreach ($fields as $key => $value) {
+      if (is_string($key)) {
+        $found = $pick($key, $value);
+        if ($found !== '') return $found;
+      }
+      if (is_array($value)) {
+        $label = $value['key'] ?? $value['name'] ?? $value['id'] ?? $value['label'] ?? '';
+        $found = $pick($label, $value);
+        if ($found !== '') return $found;
+      }
+    }
+  }
+  return '';
+}
 
 if ($currency === '' || $currency === '*' || $currency === 'ALL') {
   $rows = $pdo->prepare("SELECT id, kind, code, provider, currency, title_en, title_ar, title_ru, desc_en, desc_ar, desc_ru, image_url,
@@ -64,6 +129,14 @@ foreach ($items as $r) {
     $decoded = json_decode($rawFields, true);
     if (is_array($decoded)) $fields = $decoded;
   }
+  $paymentAddress = trim((string)($r['payment_address'] ?? ''));
+  if ($paymentAddress === '') {
+    $paymentAddress = payment_methods_field_value($fields, ['payment_address','wallet_address','deposit_address','address','bank_account','account_number','iban']);
+  }
+  $paymentQr = trim((string)($r['payment_qr_url'] ?? ''));
+  if ($paymentQr === '') {
+    $paymentQr = payment_methods_field_value($fields, ['payment_qr_url','qr_url','qr_image','qr','payment_qr']);
+  }
   $out[] = [
     'id' => (int)$r['id'],
     'code' => $r['code'],
@@ -80,11 +153,19 @@ foreach ($items as $r) {
     'checkout_label' => (string)($r['checkout_label'] ?? ''),
     'method_group' => (string)($r['method_group'] ?? ''),
     'category_key' => (string)($r['category_key'] ?? ''),
-    'payment_address' => (string)($r['payment_address'] ?? ''),
-    'payment_qr_url' => (string)($r['payment_qr_url'] ?? ''),
+    'payment_address' => $paymentAddress,
+    'payment_qr_url' => $paymentQr,
     'proof_required' => !empty($r['proof_required']),
     'expires_hours' => max(1, (int)($r['expires_hours'] ?? 24)),
   ];
 }
 
-json_response(['ok'=>true,'items'=>$out,'categories'=>$categories]);
+$pmPayload = ['ok'=>true,'items'=>$out,'categories'=>$categories];
+$pmJson = json_encode($pmPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if ($pmJson !== false && $pmCacheTtl > 0) { @file_put_contents($pmCacheFile, $pmJson, LOCK_EX); }
+http_response_code(200);
+header('Content-Type: application/json; charset=utf-8');
+header("Cache-Control: public, max-age={$pmBrowserTtl}, s-maxage={$pmBrowserTtl}");
+header('X-MEX-Cache: miss');
+echo $pmJson !== false ? $pmJson : json_encode($pmPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+exit;

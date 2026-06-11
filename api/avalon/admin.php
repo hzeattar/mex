@@ -43,7 +43,7 @@ try {
         $body['markets'] ?? 'crypto',
         $body['assets'] ?? 'BTC,ETH',
         $body['is_featured'] ? 1 : 0,
-        $body['is_ai'] ? 1 : 1,
+        !empty($body['is_ai']) ? 1 : 0,
         $uid
       ]);
       
@@ -117,9 +117,8 @@ try {
                           closed_at = NOW(),
                           close_reason = ?,
                           current_price = ?,
-                          pnl_percent = ((? - entry_price) / entry_price * 100) * (side = 'BUY' ? 1 : -1)
-                      WHERE id = ?")-
-003eexecute([
+                          pnl_percent = ((? - entry_price) / NULLIF(entry_price,0) * 100) * CASE WHEN side = 'BUY' THEN 1 ELSE -1 END
+                      WHERE id = ?")->execute([
         $body['close_reason'] ?? 'manual',
         $body['exit_price'],
         $body['exit_price'],

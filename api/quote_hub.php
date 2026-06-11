@@ -23,7 +23,7 @@ $list = [];
 if ($symbolsRaw !== '') {
   foreach (preg_split('/\s*,\s*/', $symbolsRaw) as $s) {
     $s = strtoupper(trim((string)$s));
-    if ($s !== '' && preg_match('/^[A-Z0-9:._\-]{2,32}$/', $s)) {
+    if ($s !== '' && preg_match('/^[A-Z0-9:._\-]{1,32}$/', $s)) {
       $list[] = $s;
     }
   }
@@ -190,7 +190,8 @@ try {
     'ttl' => $type === 'crypto' ? 1 : 1,
     'yahoo_ttl' => 1,
     'massive_ttl' => 1,
-    'eodhd_ttl' => in_array($type, ['stocks','arab'], true) ? 2 : 1,
+    // OPTIMIZED: Increased EODHD TTL from 1-2s to 3s to reduce API calls
+    'eodhd_ttl' => in_array($type, ['stocks','arab'], true) ? 3 : 3,
     'direct_budget' => $directBudget,
     'direct_yahoo_budget' => $directBudget,
     'chart_budget' => $chartBudget,

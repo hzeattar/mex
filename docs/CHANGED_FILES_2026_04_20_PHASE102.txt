@@ -1,5 +1,0 @@
-api/lib/marketdata.php
-api/lib/quotes.php
-api/quotes.php
-api/trade/candles.php
-docs/HANDOFF_2026_04_20_PHASE102_EODHD_PROVIDER_REBUILD.md

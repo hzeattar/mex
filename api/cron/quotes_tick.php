@@ -13,7 +13,7 @@ require_once __DIR__ . '/../lib/common.php';
 
 // Keep this cron responsive on shared hosting
 @ignore_user_abort(true);
-@set_time_limit((int)env('QUOTES_TICK_MAX_EXEC', '15'));
+@set_time_limit((int)env('QUOTES_TICK_MAX_EXEC', '25'));
 
 
 // Single-instance lock (prevents overlapping cron runs causing SQLite "database is locked")
@@ -54,7 +54,12 @@ function cron_input_token_qt(): string {
 }
 
 $token = cron_input_token_qt();
-if ($token === '' || !hash_equals((string)env('CRON_KEY', ''), $token)) {
+// Trusted in-container warmer: the startup script runs this via CLI with
+// CRON_LOCAL_RUN=1 set in the container environment. External HTTP requests
+// cannot set that env var, so this bypass is local-only and lets the bundled
+// warmer run even when no external CRON_KEY is configured.
+$cliLocal = (PHP_SAPI === 'cli') && (trim((string)getenv('CRON_LOCAL_RUN')) === '1');
+if (!$cliLocal && ($token === '' || !hash_equals((string)env('CRON_KEY', ''), $token))) {
   http_response_code(403);
   echo "Forbidden";
   exit;

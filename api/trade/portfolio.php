@@ -5,9 +5,30 @@ require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
 require_once __DIR__ . '/../lib/trade_mode.php';
 
-header('Cache-Control: private, max-age=5, no-store');
-
 $uid = require_auth();
+$fast = ((int)($_GET['fast'] ?? 1) === 1);
+$cacheTtl = $fast ? 1 : 2; // short TTL: 1-2 seconds
+$cacheKey = 'portfolio_' . (int)$uid . '_' . ($fast ? 'fast' : 'full') . '_' . (trade_mode_for_user(db(), $uid) ?? 'demo');
+$cacheDir = dirname(__DIR__) . '/data/cache';
+if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
+$cacheFile = $cacheDir . '/' . sha1($cacheKey) . '.json';
+if (is_file($cacheFile)) {
+  $age = time() - (int)@filemtime($cacheFile);
+  if ($age >= 0 && $age <= $cacheTtl) {
+    $raw = @file_get_contents($cacheFile);
+    if ($raw !== false && $raw !== '') {
+      $cached = json_decode($raw, true);
+      if (is_array($cached)) {
+        header('Content-Type: application/json; charset=utf-8');
+        // Allow short client-side freshness; stale-while-revalidate for 5s
+        header('Cache-Control: private, max-age=' . $cacheTtl . ', stale-while-revalidate=5');
+        echo $raw;
+        exit;
+      }
+    }
+  }
+}
+
 $realCur = strtoupper((string)env('REAL_CURRENCY', 'USDT'));
 $demoCur = strtoupper((string)env('DEMO_CURRENCY', 'USDT_DEMO'));
 $pdo = db();
@@ -45,6 +66,33 @@ function positions_time_select(PDO $pdo): string {
 
 $posTimeSel = positions_time_select($pdo);
 
+function trade_optional_select(PDO $pdo, string $table, array $columns): string {
+  $driver = function_exists('db_driver') ? db_driver() : '';
+  $parts = [];
+  foreach ($columns as $col => $default) {
+    $name = is_int($col) ? (string)$default : (string)$col;
+    $fallback = is_int($col) ? '0' : (string)$default;
+    try {
+      $exists = function_exists('schema_column_exists')
+        ? schema_column_exists($pdo, $table, $name, $driver)
+        : true;
+    } catch (Throwable $e) {
+      $exists = true;
+    }
+    $parts[] = $exists ? $name : ($fallback . ' AS ' . $name);
+  }
+  return $parts ? ', ' . implode(', ', $parts) : '';
+}
+
+$posCopySel = trade_optional_select($pdo, 'positions', [
+  'source_signal_id' => '0',
+  'copy_subscription_id' => '0',
+  'copied_from_admin' => '0',
+]);
+$orderMetaSel = trade_optional_select($pdo, 'orders', [
+  'meta' => "''",
+]);
+
 function sym_strip_prefix(string $s): string {
   if (str_starts_with($s, '@R@') || str_starts_with($s, '@D@')) return substr($s, 3);
   return $s;
@@ -71,10 +119,10 @@ foreach ($rowsW as $row) {
 
 // positions (open only)
 if ($mode === 'real') {
-  $ps = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,qty,entry_price,leverage,margin_initial,liquidation_price,tp_price,sl_price,status,{$posTimeSel},closed_at FROM positions WHERE user_id=? AND status='open' AND symbol LIKE ?");
+  $ps = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,qty,entry_price,leverage,margin_initial,liquidation_price,tp_price,sl_price,status,{$posTimeSel},closed_at{$posCopySel} FROM positions WHERE user_id=? AND status='open' AND symbol LIKE ?");
   $ps->execute([$uid, $realPrefix.'%']);
 } else {
-  $ps = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,qty,entry_price,leverage,margin_initial,liquidation_price,tp_price,sl_price,status,{$posTimeSel},closed_at FROM positions WHERE user_id=? AND status='open' AND symbol NOT LIKE ?");
+  $ps = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,qty,entry_price,leverage,margin_initial,liquidation_price,tp_price,sl_price,status,{$posTimeSel},closed_at{$posCopySel} FROM positions WHERE user_id=? AND status='open' AND symbol NOT LIKE ?");
   $ps->execute([$uid, $realPrefix.'%']);
 }
 $positions = $ps->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -169,19 +217,40 @@ foreach ($positions as $p) {
     'unrealized_pnl'=>$pnl,
     'roe_pct'=>$roe,
     'created_at'=>$p['created_at'] ?? null,
-    'closed_at'=>$p['closed_at'] ?? null
+    'closed_at'=>$p['closed_at'] ?? null,
+    'source_signal_id'=>(int)($p['source_signal_id'] ?? 0),
+    'copy_subscription_id'=>(int)($p['copy_subscription_id'] ?? 0),
+    'copied_from_admin'=>(int)($p['copied_from_admin'] ?? 0),
+    'source'=>((int)($p['copy_subscription_id'] ?? 0) > 0 || (int)($p['copied_from_admin'] ?? 0) > 0) ? 'trading_bot' : ''
   ];
 }
 
 // orders
 if ($mode === 'real') {
-  $os = $pdo->prepare('SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at FROM orders WHERE user_id = ? AND symbol LIKE ? ORDER BY id DESC LIMIT 50');
+  $os = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at{$orderMetaSel} FROM orders WHERE user_id = ? AND symbol LIKE ? ORDER BY id DESC LIMIT 50");
   $os->execute([$uid, $realPrefix.'%']);
 } else {
-  $os = $pdo->prepare('SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at FROM orders WHERE user_id = ? AND symbol NOT LIKE ? ORDER BY id DESC LIMIT 50');
+  $os = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at{$orderMetaSel} FROM orders WHERE user_id = ? AND symbol NOT LIKE ? ORDER BY id DESC LIMIT 50");
   $os->execute([$uid, $realPrefix.'%']);
 }
 $orders = $os->fetchAll(PDO::FETCH_ASSOC) ?: [];
+foreach ($orders as &$orow) {
+  $meta = [];
+  $rawMeta = trim((string)($orow['meta'] ?? ''));
+  if ($rawMeta !== '') {
+    $decoded = json_decode($rawMeta, true);
+    if (is_array($decoded)) $meta = $decoded;
+  }
+  $copySub = (int)($meta['subscription_id'] ?? $meta['copy_subscription_id'] ?? 0);
+  $sourceSignal = (int)($meta['signal_id'] ?? $meta['source_signal_id'] ?? 0);
+  if ($copySub > 0 || strtolower((string)($meta['source'] ?? '')) === 'trading_bot') {
+    $orow['copy_subscription_id'] = $copySub;
+    $orow['source_signal_id'] = $sourceSignal;
+    $orow['copied_from_admin'] = 1;
+    $orow['source'] = 'trading_bot';
+  }
+}
+unset($orow);
 
 // realized pnl (closed orders)
 if ($mode === 'real') {
@@ -220,14 +289,21 @@ $activeWallet = ($mode === 'real') ? ($wallet[$realCur] ?? []) : ($wallet[$demoC
 $availableBalance = (float)($activeWallet['available'] ?? $bal);
 $walletHolds = (float)($activeWallet['holds'] ?? 0.0);
 $activeContractAmount = $mode === 'real' ? $investInUse : 0.0;
-$inUseBalance = $walletHolds + $openMargin + $activeContractAmount;
+// In-use reflects funds locked INSIDE the trading wallet (pending-withdrawal holds + open
+// position margin). Active Earn/Invest contracts are funded by debiting the wallet balance,
+// so that principal already left the wallet and must NOT be re-added here — doing so inflated
+// the dashboard "Total balance" above the real wallet balance shown in the header. The
+// invested principal is surfaced separately via `active_contract_amount` and the Earn page.
+$inUseBalance = $walletHolds + $openMargin;
 $pnlTotalLive = $realized + $unreal;
 $pnl24Live = $realized24 + $unreal;
+// Total balance == trading wallet equity == cash balance (available + holds) + open-margin + unrealised PnL.
+// This now equals bootstrap wallet balance (+ live PnL), keeping the header and dashboard consistent.
 $totalBalance = $availableBalance + $inUseBalance + $unreal;
 
 $plans = $pdo->query('SELECT id,name,term_days,roi_percent,min_amount,max_amount,risk FROM invest_plans ORDER BY roi_percent DESC LIMIT 2')->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-json_response([
+$response = [
   'ok'=>true,
   'mode'=>$mode,
   'wallet'=>$wallet,
@@ -249,4 +325,11 @@ json_response([
     'active_contract_amount'=>$activeContractAmount,
   ],
   'top_plans'=>$plans
-]);
+];
+
+$jsonPayload = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if ($jsonPayload !== false) {
+  @file_put_contents($cacheFile, $jsonPayload, LOCK_EX);
+}
+
+json_response($response);

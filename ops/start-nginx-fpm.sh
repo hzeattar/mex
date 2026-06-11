@@ -36,23 +36,66 @@ if ! kill -0 "$FPM_PID" 2>/dev/null; then
   exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# Background market-quote warmer.
-# Railway runs a single web container without a cron daemon, so stored market
-# quotes would go stale and the markets list would fall back to seed prices for
-# a large share of symbols. This loop refreshes ALL supported quotes (crypto,
-# forex, stocks, commodities, futures, arab) roughly every minute by calling
-# the CLI cron entrypoints, which read CRON_KEY from the environment.
-# ---------------------------------------------------------------------------
-(
-  sleep 12
-  while true; do
-    php /app/api/cron/quotes_warm.php per_type=150 >/dev/null 2>&1 || true
-    php /app/api/cron/quotes_tick.php crypto=1 >/dev/null 2>&1 || true
-    sleep 55
-  done
-) &
-echo "[start] background quote warmer started (pid $!)"
-
 echo "[start] PHP-FPM started, nginx listening on ${PORT} with internal PHP-FPM upstream 127.0.0.1:9070"
+
+# --- In-container market-quote cache warmer --------------------------------
+# Railway runs a single web container with no separate scheduler. Without a
+# warmer, every watchlist request fell through to a slow synchronous provider
+# fetch (5-9s) which saturated PHP-FPM and produced 503s on the home page.
+# This detached loop keeps the market_quotes cache warm so the read endpoints
+# serve instantly from cache. The cron scripts authenticate via CRON_KEY from
+# the environment, hold their own flock (safe alongside any external cron), and
+# self-limit execution time. Failures are isolated and never touch nginx/FPM.
+# Disable by setting IN_CONTAINER_CRON=0.
+if [ "${IN_CONTAINER_CRON:-1}" != "0" ]; then
+  (
+    # Authorize the local CLI cron runs without needing an external CRON_KEY.
+    # This flag is only visible to processes spawned by this script (the trusted
+    # in-container warmer); external HTTP requests cannot set it.
+    export CRON_LOCAL_RUN=1
+    # Keep the markets.php HTTP response cache warm (this is separate from the
+    # market_quotes DB cache): the home/trade price lists then always have a
+    # recent cached copy to serve instantly, refreshed via stale-while-revalidate.
+    warm_http() {
+      curl -fsS -m 8 "http://127.0.0.1:${PORT}$1" >/dev/null 2>&1 \
+        || wget -q -T 8 -O /dev/null "http://127.0.0.1:${PORT}$1" 2>/dev/null \
+        || nice -n 19 php -r '@file_get_contents("http://127.0.0.1:".getenv("PORT").$argv[1]);' "$1" >/dev/null 2>&1 \
+        || true
+    }
+    sleep 20  # let php-fpm + DB settle before the first warm
+    # Warm one non-crypto asset class per cycle (round-robin) so a single run
+    # never warms all six classes at once and starves the web container. Crypto
+    # is refreshed every cycle via the light quotes_tick. per_type caps how many
+    # symbols each warm fetches so the run completes well within the timeout
+    # (the home/trade watchlists only show the top pairs). Everything runs at the
+    # lowest CPU priority (nice -n 19) so user requests always win the CPU.
+    # One-time startup diagnostic so we can confirm the cron actually runs and
+    # persists (visible in `railway logs`). Output is truncated to stay concise.
+    echo "[warm] diag quotes_tick: $(nice -n 19 timeout 30 php /app/api/cron/quotes_tick.php 2>&1 | head -c 300)" >&2
+    echo "[warm] diag quotes_warm forex: $(nice -n 19 timeout 70 php /app/api/cron/quotes_warm.php types=forex per_type=24 2>&1 | head -c 300)" >&2
+    echo "[warm] diag stored: $(php -r "require '/app/api/lib/common.php'; require '/app/api/lib/quotes.php'; foreach(['EURUSD','USDJPY','USDCHF','GBPUSD'] as \$s){ \$r=quote_get(\$s,'forex'); echo \$s.'[p='.(\$r['price']??'NULL').',src='.(\$r['source']??'NULL').'] '; }" 2>&1 | head -c 400)" >&2
+    set -- forex stocks arab commodities futures
+    idx=1
+    count=$#
+    while true; do
+      # Light crypto/simulated refresh every cycle.
+      nice -n 19 timeout 30 php /app/api/cron/quotes_tick.php >/dev/null 2>&1 || true
+      # One non-crypto class per cycle (warmed roughly every count*interval).
+      nctype=$(eval "echo \${$idx}")
+      nice -n 19 timeout 70 php /app/api/cron/quotes_warm.php "types=$nctype" "per_type=24" >/dev/null 2>&1 || true
+      # Refresh the hottest markets.php response caches (home + trade crypto) so
+      # the first organic visitor each cycle is served instantly instead of being
+      # stuck on a rebuild; markets.php keeps them live via stale-while-revalidate.
+      warm_http "/api/markets.php?scope=home&supported=1&lite=1&with_quotes=1&rescue=1&limit=30"
+      warm_http "/api/markets.php?type=crypto&scope=trade&supported=1&lite=1&with_quotes=1&rescue=1&rescue_noncrypto=1&limit=36"
+      for dt in crypto forex stocks commodities futures arab; do
+        warm_http "/api/markets.php?type=${dt}&scope=trade&supported=1&lite=1&with_quotes=0&fast_list=1&show_unpriced=1&limit=80"
+      done
+      idx=$((idx + 1)); [ "$idx" -gt "$count" ] && idx=1
+      sleep 75
+    done
+  ) &
+  echo "[start] in-container quote-cache warmer started (pid $!), low-priority staggered"
+fi
+
 exec nginx -c /tmp/nginx.conf -g 'daemon off;'
