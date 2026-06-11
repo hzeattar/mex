@@ -288,29 +288,46 @@ if ($isDaemon) {
       $totalUpserted = 0;
       $typeCounts = [];
 
+      // Fast types must never starve behind slow EODHD passes.
+      $fastTypes = ['crypto', 'forex'];
+      $runFastDue = function (string $currentType) use (
+        &$lastCycleByType, $intervals, $symbolsByType, $metaByTypeSymbol,
+        &$totalWritten, &$totalUpserted, &$typeCounts, $fastTypes
+      ): void {
+        foreach ($fastTypes as $ft) {
+          if ($ft === $currentType || empty($symbolsByType[$ft])) continue;
+          if ((time() - ($lastCycleByType[$ft] ?? 0)) < ($intervals[$ft] ?? 15)) continue;
+          $r = feed_worker_fetch_type($ft, $symbolsByType[$ft], $metaByTypeSymbol[$ft] ?? []);
+          $lastCycleByType[$ft] = time();
+          echo "[feed-worker] $ft (interleaved): {$r['written']}/{$r['count']} written\n"; flush();
+          $totalWritten += $r['written'];
+          $totalUpserted += $r['upserted'];
+          $typeCounts[$ft] = $r['written'];
+        }
+      };
+
       foreach ($typesToFetch as $type) {
         $symbols = $symbolsByType[$type] ?? [];
         $meta = $metaByTypeSymbol[$type] ?? [];
-        $res = feed_worker_fetch_type($type, $symbols, $meta);
+        // Chunk slow non-crypto passes (120-symbol EODHD batches can take
+        // 30-60s) so crypto/forex stay near-real-time between chunks.
+        $chunkSize = max(5, (int)env('FEED_CHUNK_SIZE', '25'));
+        $chunks = ($type === 'crypto' || count($symbols) <= $chunkSize)
+          ? [$symbols]
+          : array_chunk($symbols, $chunkSize);
+        $res = ['count' => 0, 'written' => 0, 'upserted' => 0];
+        foreach ($chunks as $chunk) {
+          $r = feed_worker_fetch_type($type, $chunk, $meta);
+          $res['count'] += $r['count'];
+          $res['written'] += $r['written'];
+          $res['upserted'] += $r['upserted'];
+          $runFastDue($type);
+        }
         echo "[feed-worker] $type: {$res['written']}/{$res['count']} written\n"; flush();
         $cycleResults[$type] = $res;
         $totalWritten += $res['written'];
         $totalUpserted += $res['upserted'];
         $typeCounts[$type] = $res['written'];
-
-        // Keep crypto near-real-time: slow provider passes (stocks/forex) can
-        // take 10-20s, so re-fetch crypto between type fetches whenever its
-        // interval has already elapsed again.
-        if ($type !== 'crypto'
-            && (time() - ($lastCycleByType['crypto'] ?? 0)) >= ($intervals['crypto'] ?? 3)
-            && !empty($symbolsByType['crypto'])) {
-          $cRes = feed_worker_fetch_type('crypto', $symbolsByType['crypto'], $metaByTypeSymbol['crypto'] ?? []);
-          $lastCycleByType['crypto'] = time();
-          echo "[feed-worker] crypto (interleaved): {$cRes['written']}/{$cRes['count']} written\n"; flush();
-          $totalWritten += $cRes['written'];
-          $totalUpserted += $cRes['upserted'];
-          $typeCounts['crypto'] = $cRes['written'];
-        }
       }
 
       quote_central_manifest_write([
