@@ -105,9 +105,14 @@ function vp_boot_kyc(PDO $pdo, int $uid): ?array {
   }
 }
 
+function vp_boot_lang(): string {
+  $lang = strtolower(trim((string)($_GET['lang'] ?? ($_COOKIE['vp_lang'] ?? 'en'))));
+  return in_array($lang, ['en', 'ar', 'ru'], true) ? $lang : 'en';
+}
+
 function vp_boot_level(PDO $pdo, int $uid): array {
   try {
-    return vp_resolve_user_level($pdo, $uid, 'en');
+    return vp_resolve_user_level($pdo, $uid, vp_boot_lang());
   } catch (Throwable $e) {
     return [
       'current' => null,

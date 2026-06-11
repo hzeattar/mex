@@ -258,6 +258,14 @@ function bindShell(app) {
   if (!window.__mexShellGlobalListenersBound) {
     window.__mexShellGlobalListenersBound = true;
     document.addEventListener('click', (e) => {
+      const logoutLink = e.target?.closest?.('a[href="/logout.php"]');
+      if (logoutLink) {
+        e.preventDefault();
+        fetch('/api/auth/logout.php', { method: 'POST', credentials: 'include' })
+          .catch(() => {})
+          .finally(() => { window.location.href = '/'; });
+        return;
+      }
       closeModeMenus();
       closeTradeBalancePopover();
       if (!e.target?.closest?.('#account-popover-panel') && !e.target?.closest?.('[data-account-trigger]')) {
@@ -414,7 +422,7 @@ function accountPopoverMarkup() {
       ${whatsappReady
         ? `<a href="${escAttr(whatsappUrl)}" target="_blank" rel="noopener">${icons.whatsapp || icons.support}<span>WhatsApp</span></a>`
         : `<button type="button" disabled>${icons.whatsapp || icons.support}<span>${t('shell.whatsapp_setup', 'WhatsApp setup')}</span></button>`}
-      <a href="/logout.php" class="is-danger">${icons.lock}<span>${t('shell.logout', 'Logout')}</span></a>
+      <a href="/logout.php" class="is-danger" data-logout>${icons.lock}<span>${t('shell.logout', 'Logout')}</span></a>
     </div>`;
 }
 
