@@ -82,6 +82,17 @@ try {
   <?php if ($cssFile): ?>
   <link rel="stylesheet" href="./assets/dist/<?php echo $cssFile; ?>" />
   <?php endif; ?>
+  <?php
+    // Preload the likely-first route chunks so the router does not pay an
+    // extra network round-trip after main.js executes.
+    $preloadKeys = ['src/views/home.js', 'src/views/trade.js', 'src/utils/marketIcon.js'];
+    foreach ($preloadKeys as $pk) {
+      $pf = $manifest[$pk]['file'] ?? null;
+      if ($pf) {
+        echo '  <link rel="modulepreload" href="./assets/dist/' . htmlspecialchars($pf, ENT_QUOTES) . '" />' . "\n";
+      }
+    }
+  ?>
   <style>
     body{margin:0;background:#060A14;color:#e8f0ff;font-family:Inter,system-ui,sans-serif}
     .boot-screen{min-height:100vh;display:grid;place-items:center}

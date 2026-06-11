@@ -39,9 +39,10 @@ http {
   gzip_min_length 256;
   gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
 
-  # Proxy cache for API responses
-  proxy_cache_path /tmp/nginx_cache levels=1:2 keys_zone=api_cache:10m max_size=100m inactive=10m use_temp_path=off;
-  proxy_cache_key "$scheme$request_method$host$request_uri";
+  # FastCGI micro-cache for public API responses (proxy_cache_* is ignored
+  # with fastcgi_pass, so fastcgi_cache_* must be used here).
+  fastcgi_cache_path /tmp/nginx_cache levels=1:2 keys_zone=api_cache:10m max_size=100m inactive=10m use_temp_path=off;
+  fastcgi_cache_key "$scheme$request_method$host$request_uri";
 
   server {
     listen [::]:${PORT} ipv6only=off default_server;
@@ -86,16 +87,20 @@ ${EXTRA_LISTEN}
       return 200 "ok\n";
     }
 
-    # Cacheable API endpoints - short-lived for snappy UX
-    location ~ ^/api/(markets|public_prices|ping|feature_flags|summary|level)\.php$ {
+    # Cacheable public API endpoints - short-lived micro-cache for snappy UX.
+    # Only anonymous, session-free market data belongs here. Responses that
+    # set cookies are never cached by nginx (Set-Cookie is not ignored).
+    location ~ ^/api/(markets|public_prices|ping|feature_flags)\.php$ {
       try_files $uri =404;
 
-      # Cache successful API responses for 5 seconds
-      proxy_cache api_cache;
-      proxy_cache_valid 200 5s;
-      proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
-      proxy_cache_background_update on;
-      proxy_cache_lock on;
+      fastcgi_cache api_cache;
+      fastcgi_cache_valid 200 5s;
+      fastcgi_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+      fastcgi_cache_background_update on;
+      fastcgi_cache_lock on;
+      fastcgi_cache_lock_timeout 3s;
+      fastcgi_ignore_headers Cache-Control Expires;
+      fastcgi_cache_methods GET HEAD;
       add_header X-Cache-Status $upstream_cache_status always;
 
       fastcgi_param  QUERY_STRING       $query_string;
