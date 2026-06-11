@@ -30,7 +30,7 @@ $fast   = ((int)($_GET['fast'] ?? 0) === 1);
 $forceRefresh = ((int)($_GET['refresh'] ?? 0) === 1);
 
 if ($symbol === '') json_response(['ok'=>false,'error'=>'Missing symbol'], 422);
-$limit = max(10, min(500, $limit));
+$limit = max(10, min(1000, $limit));
 $uid = session_user_id();
 if ($uid <= 0 && $limit > 100) {
   json_response(['ok'=>false,'error'=>'login_required','message'=>'Guest access limited to 100 candles','guest_limit'=>100], 401);
@@ -224,9 +224,9 @@ function candles_cache_load(string $symbol, string $market, string $tf, string $
 }
 function candles_cache_save(string $symbol, string $market, string $tf, array $candles, string $type = ''): void {
   $kind = vp_normalize_asset_type($type ?: 'generic');
-  $keepDays = 14;
-  if (in_array($kind, ['stocks','arab','futures','commodities'], true)) $keepDays = 180;
-  elseif ($kind === 'forex') $keepDays = 120;
+  $keepDays = 90;
+  if (in_array($kind, ['stocks','arab','futures','commodities'], true)) $keepDays = 365;
+  elseif ($kind === 'forex') $keepDays = 365;
   $cut = time() - ($keepDays * 24 * 3600);
   $by = [];
   foreach ($candles as $c) {
@@ -484,7 +484,7 @@ function candles_sync_live_tail(array $items, string $symbol, string $market, st
         'close' => $live,
         'volume' => 0.0,
       ];
-      return array_slice($items, -500);
+      return array_slice($items, -1500);
     }
 
     $open = (float)($last['open'] ?? $live);
@@ -702,8 +702,8 @@ try {
 
     $endMs = 0;
     if ($end > 0) {
-      // cap lookback to ~60 days
-      $min = time() - (60 * 86400);
+      // cap lookback to ~365 days
+      $min = time() - (365 * 86400);
       if ($end < $min) $end = $min;
       $endMs = $end * 1000;
     }

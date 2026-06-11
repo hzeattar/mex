@@ -13,6 +13,22 @@ let candleSeries = null;
 let volumeSeries = null;
 let ma7Series = null;
 let ma25Series = null;
+let lineSeries = null;
+let areaSeries = null;
+let ema20Series = null;
+let bollUpperSeries = null;
+let bollMidSeries = null;
+let bollLowerSeries = null;
+let chartLegendEl = null;
+let chartSeriesKey = '';          // `${SYMBOL}|${tf}` the rendered series belongs to
+let allCandles = [];              // full merged dataset for the current key (oldest -> newest)
+let chartHistory = { loading: false, done: false, nextAt: 0 };
+let chartType = (() => { try { return localStorage.getItem('vp_chart_type') || 'candles'; } catch (_e) { return 'candles'; } })();
+let chartIndicators = (() => {
+  try { return Object.assign({ ma: true, ema: false, boll: false }, JSON.parse(localStorage.getItem('vp_chart_ind') || '{}')); }
+  catch (_e) { return { ma: true, ema: false, boll: false }; }
+})();
+let lastFlashPrice = 0;
 let sseClean = null;
 let activeQuoteTimer = null;
 let activeQuoteController = null;
@@ -74,7 +90,7 @@ const FALLBACK_MARKETS = {
   ],
 };
 
-const TFS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
+const TFS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '12h', '1d', '1w'];
 
 export function render(params) {
   if (params.symbol) set('symbol', params.symbol.toUpperCase());
@@ -103,7 +119,7 @@ export function render(params) {
       <div class="flex gap-1 p-2 overflow-x-auto border-b border-line" id="type-tabs">
         ${getTypes().map(tp => `<button class="btn-xs ${tp.key === type ? 'bg-accent/20 text-accent border-accent/40' : 'text-muted border-line'} border rounded-md whitespace-nowrap" data-type-tab="${tp.key}">${tp.label}</button>`).join('')}
       </div>
-      <div class="flex-1 overflow-auto p-1" id="symbol-list"><div class="p-4 mobile-menu-centered-loader"><div class="loading-spinner mx-auto"></div></div></div>
+      <div class="flex-1 overflow-auto p-1" id="symbol-list">${symbolListSkeleton()}</div>
     </aside>
 
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -291,8 +307,22 @@ export function cleanup() {
     chart = null;
     candleSeries = null;
     volumeSeries = null;
+    ma7Series = null;
+    ma25Series = null;
+    lineSeries = null;
+    areaSeries = null;
+    ema20Series = null;
+    bollUpperSeries = null;
+    bollMidSeries = null;
+    bollLowerSeries = null;
+    chartLegendEl = null;
     lastCandle = null;
   }
+  chartSeriesKey = '';
+  allCandles = [];
+  chartHistory = { loading: false, done: false, nextAt: 0 };
+  lastFlashPrice = 0;
+  document.body.classList.remove('chart-fullscreen-open');
   if (sseClean) {
     sseClean();
     sseClean = null;
@@ -557,6 +587,13 @@ function updatePrice(container, q, runId = tradeRunId) {
   if (livePrice) {
     livePrice.textContent = p > 0 ? price(p, assetType) : '--';
     livePrice.className = `text-xs font-mono font-bold ${liveTrend}`;
+    if (p > 0 && lastFlashPrice > 0 && p !== lastFlashPrice) {
+      const dir = p > lastFlashPrice ? 'price-flash-up' : 'price-flash-down';
+      livePrice.classList.remove('price-flash-up', 'price-flash-down');
+      void livePrice.offsetWidth; // restart animation
+      livePrice.classList.add(dir);
+    }
+    if (p > 0) lastFlashPrice = p;
   }
   if (liveChange) {
     liveChange.textContent = pct(chg);
@@ -1085,18 +1122,224 @@ function normalizeCandleRows(candles) {
     .sort((a, b) => a.time - b.time);
 }
 
-function applyChartData(candles, { fit = false } = {}) {
+function symbolListSkeleton(rows = 9) {
+  let html = '';
+  for (let i = 0; i < rows; i++) {
+    html += `<div class="symbol-skeleton-row">
+      <div class="skeleton-block w-7 h-7 rounded-full shrink-0"></div>
+      <div class="flex-1 min-w-0">
+        <div class="skeleton-block h-2.5 w-16 rounded mb-1.5"></div>
+        <div class="skeleton-block h-2 w-10 rounded"></div>
+      </div>
+      <div class="skeleton-block h-2.5 w-12 rounded"></div>
+    </div>`;
+  }
+  return html;
+}
+
+function currentChartKey() {
+  return `${String(get('symbol') || '').toUpperCase()}|${get('tf')}`;
+}
+
+function mergeCandleSets(base, incoming) {
+  const by = new Map();
+  (base || []).forEach(c => by.set(c.time, c));
+  (incoming || []).forEach(c => by.set(c.time, c));
+  return Array.from(by.values()).sort((a, b) => a.time - b.time);
+}
+
+function applyChartData(candles, { fit = false, key = currentChartKey() } = {}) {
   if (!candleSeries || !volumeSeries) return false;
   const data = normalizeCandleRows(candles);
   if (!data.length) return false;
+  if (chartSeriesKey === key && allCandles.length) {
+    // Incoming is the latest window; merge it with retained older history.
+    allCandles = mergeCandleSets(allCandles, data);
+  } else {
+    allCandles = data;
+    chartHistory = { loading: false, done: false, nextAt: 0 };
+  }
+  chartSeriesKey = key;
+  renderChartSeries({ fit });
+  return true;
+}
+
+function renderChartSeries({ fit = false, preserveRange = false } = {}) {
+  if (!chart || !candleSeries || !volumeSeries) return;
+  const data = allCandles;
+  if (!data.length) return;
+  let savedRange = null;
+  if (preserveRange) { try { savedRange = chart.timeScale().getVisibleRange(); } catch (_e) {} }
   candleSeries.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
+  const lineData = data.map(c => ({ time: c.time, value: c.close }));
+  if (lineSeries) lineSeries.setData(lineData);
+  if (areaSeries) areaSeries.setData(lineData);
   volumeSeries.setData(data.map(c => ({ time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' })));
   const closes = data.map(d => ({ time: d.time, close: d.close }));
-  if (ma7Series) ma7Series.setData(calcMA(closes, 7));
-  if (ma25Series) ma25Series.setData(calcMA(closes, 25));
+  if (ma7Series) ma7Series.setData(chartIndicators.ma ? calcMA(closes, 7) : []);
+  if (ma25Series) ma25Series.setData(chartIndicators.ma ? calcMA(closes, 25) : []);
+  if (ema20Series) ema20Series.setData(chartIndicators.ema ? calcEMA(closes, 20) : []);
+  if (bollUpperSeries && bollMidSeries && bollLowerSeries) {
+    const bands = chartIndicators.boll ? calcBoll(closes, 20, 2) : { upper: [], mid: [], lower: [] };
+    bollUpperSeries.setData(bands.upper);
+    bollMidSeries.setData(bands.mid);
+    bollLowerSeries.setData(bands.lower);
+  }
   lastCandle = { ...data[data.length - 1] };
-  if (fit && chart) chart.timeScale().fitContent();
-  return true;
+  if (savedRange) { try { chart.timeScale().setVisibleRange(savedRange); } catch (_e) {} }
+  else if (fit) chart.timeScale().fitContent();
+  updateChartLegend(null);
+}
+
+function clearChartForSwitch(container) {
+  chartSeriesKey = '';
+  lastCandle = null;
+  allCandles = [];
+  chartHistory = { loading: false, done: false, nextAt: 0 };
+  try {
+    if (candleSeries) candleSeries.setData([]);
+    if (volumeSeries) volumeSeries.setData([]);
+    if (ma7Series) ma7Series.setData([]);
+    if (ma25Series) ma25Series.setData([]);
+    if (lineSeries) lineSeries.setData([]);
+    if (areaSeries) areaSeries.setData([]);
+    if (ema20Series) ema20Series.setData([]);
+    if (bollUpperSeries) bollUpperSeries.setData([]);
+    if (bollMidSeries) bollMidSeries.setData([]);
+    if (bollLowerSeries) bollLowerSeries.setData([]);
+  } catch (_e) {}
+  updateChartLegend(null);
+  if (chart) showChartOverlay(container);
+}
+
+function showChartOverlay(container) {
+  const box = $('#chart-box', container);
+  if (!box) return;
+  let ov = box.querySelector('.chart-loading-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'chart-loading-overlay';
+    ov.innerHTML = '<div class="loading-spinner"></div>';
+    box.appendChild(ov);
+  }
+  ov.classList.add('is-visible');
+}
+
+function hideChartOverlay(container) {
+  const box = $('#chart-box', container);
+  const ov = box ? box.querySelector('.chart-loading-overlay') : null;
+  if (ov) ov.classList.remove('is-visible');
+}
+
+function updateChartLegend(candle) {
+  if (!chartLegendEl) return;
+  const c = candle || lastCandle;
+  if (!c || !(c.open > 0)) { chartLegendEl.innerHTML = ''; return; }
+  const type = get('type');
+  const chg = c.open > 0 ? ((c.close - c.open) / c.open) * 100 : 0;
+  const cls = c.close >= c.open ? 'is-up' : 'is-down';
+  chartLegendEl.innerHTML =
+    `<span>O <b>${price(c.open, type)}</b></span>` +
+    `<span>H <b>${price(c.high, type)}</b></span>` +
+    `<span>L <b>${price(c.low, type)}</b></span>` +
+    `<span>C <b class="${cls}">${price(c.close, type)}</b></span>` +
+    `<span class="${cls}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>`;
+}
+
+function setChartType(type) {
+  if (!['candles', 'line', 'area'].includes(type)) return;
+  chartType = type;
+  try { localStorage.setItem('vp_chart_type', type); } catch (_e) {}
+  if (candleSeries) candleSeries.applyOptions({ visible: type === 'candles' });
+  if (lineSeries) lineSeries.applyOptions({ visible: type === 'line' });
+  if (areaSeries) areaSeries.applyOptions({ visible: type === 'area' });
+  syncChartToolbar();
+}
+
+function toggleChartIndicator(name) {
+  if (!(name in chartIndicators)) return;
+  chartIndicators[name] = !chartIndicators[name];
+  try { localStorage.setItem('vp_chart_ind', JSON.stringify(chartIndicators)); } catch (_e) {}
+  renderChartSeries({ preserveRange: true });
+  syncChartToolbar();
+}
+
+function syncChartToolbar() {
+  const bar = chart && chartLegendEl ? chartLegendEl.parentElement?.querySelector('.chart-toolbar') : null;
+  if (!bar) return;
+  bar.querySelectorAll('[data-chart-type]').forEach(b => b.classList.toggle('active', b.dataset.chartType === chartType));
+  bar.querySelectorAll('[data-chart-ind]').forEach(b => b.classList.toggle('active', !!chartIndicators[b.dataset.chartInd]));
+}
+
+function toggleChartFullscreen(container) {
+  const box = $('#chart-box', container);
+  if (!box) return;
+  const on = !box.classList.contains('chart-fullscreen');
+  box.classList.toggle('chart-fullscreen', on);
+  document.body.classList.toggle('chart-fullscreen-open', on);
+  setTimeout(() => {
+    if (chart && box) chart.applyOptions({ width: Math.max(320, box.clientWidth), height: Math.max(260, box.clientHeight) });
+  }, 60);
+}
+
+async function loadOlderCandles(container) {
+  if (!chart || chartHistory.loading || chartHistory.done) return;
+  if (!allCandles.length || allCandles.length < 50) return;
+  const now = Date.now();
+  if (now < chartHistory.nextAt) return;
+  const key = currentChartKey();
+  if (chartSeriesKey !== key) return;
+  chartHistory.loading = true;
+  try {
+    const symbol = get('symbol');
+    const type = get('type');
+    const tf = get('tf');
+    const oldest = allCandles[0].time;
+    const data = await api(
+      `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=500&end=${oldest - 1}`,
+      { timeout: 12000, retry: 0, cacheTtl: 0 }
+    );
+    if (chartSeriesKey !== key || currentChartKey() !== key) return;
+    const older = normalizeCandleRows(data?.items || []).filter(c => c.time < oldest);
+    if (!older.length) { chartHistory.done = true; return; }
+    allCandles = mergeCandleSets(older, allCandles);
+    renderChartSeries({ preserveRange: true });
+    if (older.length < 20) chartHistory.done = true;
+  } catch (_e) {
+    // transient failure: retry later via cooldown
+  } finally {
+    chartHistory.loading = false;
+    chartHistory.nextAt = Date.now() + 1500;
+  }
+}
+
+const CHART_TYPE_ICONS = {
+  candles: '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M4.5 1h1v2H7v8H5.5v3h-1v-3H3V3h1.5V1zM4 4v6h2V4H4zm6.5-1h1v3H13v5h-1.5v4h-1v-4H9V6h1.5V3zM10 7v3h2V7h-2z"/></svg>',
+  line: '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12l4-5 3 3 6-7"/></svg>',
+  area: '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M1 13l4-6 3 3 6-7v10H1z" opacity="0.5"/><path d="M1 12l4-5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+};
+
+function buildChartToolbar(container) {
+  const bar = document.createElement('div');
+  bar.className = 'chart-toolbar';
+  bar.innerHTML =
+    ['candles', 'line', 'area'].map(tp =>
+      `<button type="button" data-chart-type="${tp}" title="${tp}">${CHART_TYPE_ICONS[tp]}</button>`
+    ).join('') +
+    '<span class="chart-toolbar-sep"></span>' +
+    '<button type="button" data-chart-ind="ma" title="MA 7/25">MA</button>' +
+    '<button type="button" data-chart-ind="ema" title="EMA 20">EMA</button>' +
+    '<button type="button" data-chart-ind="boll" title="Bollinger Bands">BOLL</button>' +
+    '<span class="chart-toolbar-sep"></span>' +
+    '<button type="button" data-chart-fullscreen="1" title="Fullscreen">⛶</button>';
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.chartType) setChartType(btn.dataset.chartType);
+    else if (btn.dataset.chartInd) toggleChartIndicator(btn.dataset.chartInd);
+    else if (btn.dataset.chartFullscreen) toggleChartFullscreen(container);
+  });
+  return bar;
 }
 
 async function initChart(container, candles, runId = tradeRunId) {
@@ -1130,6 +1373,16 @@ async function initChart(container, candles, runId = tradeRunId) {
     wickDownColor: '#f6465d',
     wickVisible: true,
     borderVisible: true,
+    visible: chartType === 'candles',
+  });
+  lineSeries = chart.addLineSeries({
+    color: '#5d7cff', lineWidth: 2, priceLineVisible: false,
+    crosshairMarkerVisible: true, visible: chartType === 'line',
+  });
+  areaSeries = chart.addAreaSeries({
+    lineColor: '#5d7cff', lineWidth: 2,
+    topColor: 'rgba(93,124,255,0.30)', bottomColor: 'rgba(93,124,255,0.02)',
+    priceLineVisible: false, crosshairMarkerVisible: true, visible: chartType === 'area',
   });
   volumeSeries = chart.addHistogramSeries({ 
     priceFormat: { type: 'volume' }, 
@@ -1138,11 +1391,40 @@ async function initChart(container, candles, runId = tradeRunId) {
   });
   chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
 
-  // Moving Averages
+  // Indicators
   ma7Series = chart.addLineSeries({ color: 'rgba(255,193,7,0.55)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
   ma25Series = chart.addLineSeries({ color: 'rgba(93,124,255,0.55)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  ema20Series = chart.addLineSeries({ color: 'rgba(0,229,255,0.55)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  bollUpperSeries = chart.addLineSeries({ color: 'rgba(186,104,200,0.45)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  bollMidSeries = chart.addLineSeries({ color: 'rgba(186,104,200,0.30)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  bollLowerSeries = chart.addLineSeries({ color: 'rgba(186,104,200,0.45)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+
+  // Overlay UI: OHLC legend (top-left) + toolbar (top-right)
+  chartLegendEl = document.createElement('div');
+  chartLegendEl.className = 'chart-legend';
+  el.appendChild(chartLegendEl);
+  el.appendChild(buildChartToolbar(container));
+  syncChartToolbar();
+
+  chart.subscribeCrosshairMove((param) => {
+    if (!param || !param.time) { updateChartLegend(null); return; }
+    let c = null;
+    try {
+      const sd = param.seriesData && param.seriesData.get(candleSeries);
+      if (sd && sd.open !== undefined) c = sd;
+    } catch (_e) {}
+    if (!c) c = allCandles.find(x => x.time === param.time) || null;
+    updateChartLegend(c);
+  });
+
+  // Infinite history: pull older pages when user scrolls near the left edge.
+  chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+    if (!range || range.from > 12) return;
+    loadOlderCandles(container).catch(() => {});
+  });
 
   applyChartData(candles, { fit: true });
+  hideChartOverlay(container);
 
   resizeObserver = new ResizeObserver(() => {
     if (!chart || !el) return;
@@ -1201,6 +1483,8 @@ function switchSymbol(container, symbol, type) {
   const tf = get('tf');
   stopActiveQuote();
   stopChartRefresh();
+  clearChartForSwitch(container);
+  lastFlashPrice = 0;
   set('symbol', sym);
   set('type', nextTypeRaw);
   set('activeQuote', null);
@@ -1242,6 +1526,7 @@ function switchTimeframe(container, tf) {
   const type = get('type');
   syncTradeUrl(symbol, type, tf);
   stopChartRefresh();
+  clearChartForSwitch(container);
   const chartReady = loadChartLib();
   loadChartData(container, symbol, type, tf, runId, chartReady);
   startChartRefresh(container, symbol, type, tf, runId, chartReady);
@@ -1390,25 +1675,38 @@ function startChartRefresh(container, symbol, type, tf, runId = tradeRunId, char
 async function loadChartData(container, symbol, type, tf, runId = tradeRunId, chartReady = loadChartLib(), options = {}) {
   const chartBox = $('#chart-box', container);
   const hasChart = Boolean(chart && candleSeries);
+  const reqKey = `${String(symbol || '').toUpperCase()}|${tf}`;
   if (chartBox && !options.silent && !hasChart) {
     chartBox.innerHTML = '<div class="absolute inset-0 flex items-center justify-center"><div class="text-center"><div class="loading-spinner mx-auto"></div><p class="text-[10px] text-muted mt-2">Loading chart...</p></div></div>';
+  } else if (hasChart && !options.silent) {
+    showChartOverlay(container);
   }
   try {
     const refreshParam = options.refresh ? '&refresh=1' : '';
-    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=500&fast=1${refreshParam}&_=${Date.now()}`;
+    // No cache-buster param: lets the nginx micro-cache share identical candle
+    // responses across users (the request itself is already no-store client-side).
+    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=500&fast=1${refreshParam}`;
     const candles = await api(url, { timeout: options.silent ? 10000 : 14000, retry: 1, cacheTtl: 0, cache: 'no-store' });
     await chartReady;
     if (!isCurrentRun(runId, symbol, type)) return;
+    if (reqKey !== currentChartKey()) return; // stale response for a previous symbol/timeframe
     if (candles?.items?.length) {
-      if (chart && candleSeries) applyChartData(candles.items, { fit: !options.silent && !options.refresh });
-      else await initChart(container, candles.items, runId);
+      if (chart && candleSeries) {
+        applyChartData(candles.items, { fit: !options.silent && !options.refresh, key: reqKey });
+        hideChartOverlay(container);
+      } else {
+        await initChart(container, candles.items, runId);
+      }
     } else if (!hasChart && !options.silent) {
       renderChartFallback(container, 'Chart data is still loading from the market provider.');
+    } else if (hasChart && !options.silent) {
+      hideChartOverlay(container);
     }
   } catch (e) {
     if (!isCurrentRun(runId, symbol, type)) return;
     console.error('Chart:', e);
     if (!hasChart && !options.silent) renderChartFallback(container, 'Chart stream is delayed. Live price and order ticket remain active.');
+    else if (hasChart && !options.silent) hideChartOverlay(container);
   }
 }
 
@@ -1928,6 +2226,9 @@ function syncOrderField(container, field, value) {
 
 function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetType = get('type')) {
   if (!isCurrentRun(runId) || !candleSeries || !lastCandle || !(priceValue > 0)) return;
+  // Never paint a quote onto another symbol/timeframe's candles (prevents the
+  // spike/distortion seen for a few seconds while switching assets).
+  if (!chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
   const bucket = currentBucketTime(sourceTime, assetType);
   if (bucket <= lastCandle.time) {
     lastCandle.close = priceValue;
@@ -1937,6 +2238,14 @@ function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetT
     lastCandle = { time: bucket, open: lastCandle.close, high: Math.max(lastCandle.close, priceValue), low: Math.min(lastCandle.close, priceValue), close: priceValue, volume: 0 };
   }
   candleSeries.update({ time: lastCandle.time, open: lastCandle.open, high: lastCandle.high, low: lastCandle.low, close: lastCandle.close });
+  if (lineSeries) lineSeries.update({ time: lastCandle.time, value: lastCandle.close });
+  if (areaSeries) areaSeries.update({ time: lastCandle.time, value: lastCandle.close });
+  // Keep the merged dataset tail in sync so legend/pagination stay accurate.
+  if (allCandles.length) {
+    const tail = allCandles[allCandles.length - 1];
+    if (tail.time === lastCandle.time) allCandles[allCandles.length - 1] = { ...lastCandle };
+    else if (lastCandle.time > tail.time) allCandles.push({ ...lastCandle });
+  }
 }
 
 function currentBucketTime(sourceTime = 0, assetType = get('type')) {
@@ -1948,7 +2257,11 @@ function currentBucketTime(sourceTime = 0, assetType = get('type')) {
 }
 
 function tfSeconds(tf) {
-  return ({ '1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400 })[tf] || 60;
+  return ({
+    '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800,
+    '1h': 3600, '2h': 7200, '4h': 14400, '6h': 21600, '8h': 28800, '12h': 43200,
+    '1d': 86400, '3d': 259200, '1w': 604800,
+  })[tf] || 60;
 }
 
 function loadChartLib() {
@@ -1964,6 +2277,40 @@ function calcMA(closes, period) {
     result.push({ time: closes[i].time, value: sum / period });
   }
   return result;
+}
+
+function calcEMA(closes, period) {
+  if (closes.length < period) return [];
+  const k = 2 / (period + 1);
+  let ema = 0;
+  for (let i = 0; i < period; i++) ema += closes[i].close;
+  ema /= period;
+  const out = [{ time: closes[period - 1].time, value: ema }];
+  for (let i = period; i < closes.length; i++) {
+    ema = closes[i].close * k + ema * (1 - k);
+    out.push({ time: closes[i].time, value: ema });
+  }
+  return out;
+}
+
+function calcBoll(closes, period = 20, mult = 2) {
+  const upper = [], mid = [], lower = [];
+  for (let i = period - 1; i < closes.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < period; j++) sum += closes[i - j].close;
+    const avg = sum / period;
+    let varSum = 0;
+    for (let j = 0; j < period; j++) {
+      const d = closes[i - j].close - avg;
+      varSum += d * d;
+    }
+    const sd = Math.sqrt(varSum / period);
+    const t = closes[i].time;
+    mid.push({ time: t, value: avg });
+    upper.push({ time: t, value: avg + mult * sd });
+    lower.push({ time: t, value: avg - mult * sd });
+  }
+  return { upper, mid, lower };
 }
 
 

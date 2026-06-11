@@ -1,4 +1,4 @@
-import{f as v,s as y,j as l,t as e,m as d,g as s,c as f,e as k,l as N,k as I,p as Y,h as E}from"./main-BQgegzNP.js";let m=[];function tt(){const t=l("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",a=l("level")||{},n=Q();a.current,a.next;const o=l("mode");return`
+import{f as v,s as y,j as l,t as e,m as d,g as s,c as f,e as k,l as N,k as I,p as Y,h as E}from"./main-u5esQJR_.js";let m=[];function tt(){const t=l("invest.tab")||localStorage.getItem("vp_earn_tab")||"copy",a=l("level")||{},n=Q();a.current,a.next;const o=l("mode");return`
     <div class="space-y-4 animate-fade-in earn-page">
       <div class="earn-balance-bar">
         <span class="text-[10px] text-muted uppercase tracking-wider">${e("balance.available","Available Balance")}</span>

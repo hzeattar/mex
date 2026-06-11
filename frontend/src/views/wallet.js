@@ -1,8 +1,9 @@
 // Wallet / Assets View
 import { money, esc } from '../utils/format.js';
-import { api } from '../services/api.js';
+import { api, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 import { get } from '../state/store.js';
+import { t } from '../utils/i18n.js';
 
 export function render() {
   const level = get('level') || {};
@@ -67,8 +68,12 @@ export function render() {
     </div>`;
 }
 
-export function mount(container) {
-  loadWallet(container);
+export function mount(container, params = {}) {
+  if (params.stripe === 'success' && Number(params.deposit) > 0) {
+    syncStripeDeposit(container, Number(params.deposit));
+  } else {
+    loadWallet(container);
+  }
   container.querySelector('#refresh-wallet')?.addEventListener('click', () => loadWallet(container));
   // Toggle balance visibility
   container.addEventListener('click', (e) => {
@@ -82,6 +87,28 @@ export function mount(container) {
       el.style.userSelect = isHidden ? '' : 'none';
     });
   });
+}
+
+async function syncStripeDeposit(container, depositId) {
+  const ledgerEl = container.querySelector('#ledger-table');
+  if (ledgerEl) ledgerEl.innerHTML = `<p class="text-muted text-sm text-center py-8">${t('funding.verifying_payment', 'Verifying card payment...')}</p>`;
+  let status = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await postApi('/deposits/stripe_sync.php', { deposit_id: depositId }, { timeout: 15000 });
+      status = String(res?.status || '');
+      if (status === 'confirmed' || status === 'failed') break;
+    } catch (_e) { /* retry */ }
+    await new Promise(r => setTimeout(r, 2500));
+  }
+  if (ledgerEl) {
+    if (status === 'confirmed') {
+      ledgerEl.innerHTML = `<p class="text-green text-sm text-center py-4 font-bold">${t('funding.deposit_confirmed', 'Payment confirmed. Funds credited to your wallet.')}</p>`;
+    } else if (status === 'failed') {
+      ledgerEl.innerHTML = `<p class="text-red text-sm text-center py-4">${t('funding.deposit_failed', 'Payment was not completed.')}</p>`;
+    }
+  }
+  loadWallet(container);
 }
 
 async function loadWallet(container) {
