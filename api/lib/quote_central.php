@@ -169,7 +169,22 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
 }
 
 function quote_central_bundle_read(string $type, int $maxAge = 30): array {
-  // Bundle read: get all for type from DB (most reliable cross-container)
+  // Fast path: check file-based bundle cache first (avoids DB query per request)
+  $bundleCacheDir = __DIR__ . '/../data/cache/central_bundle';
+  if (!is_dir($bundleCacheDir)) @mkdir($bundleCacheDir, 0777, true);
+  $bundleCacheFile = $bundleCacheDir . '/' . strtolower($type) . '.json';
+  if (is_file($bundleCacheFile)) {
+    $age = time() - (int)@filemtime($bundleCacheFile);
+    if ($age <= $maxAge) {
+      $raw = @file_get_contents($bundleCacheFile);
+      if ($raw !== false) {
+        $cached = json_decode($raw, true);
+        if (is_array($cached) && count($cached) > 0) return $cached;
+      }
+    }
+  }
+
+  // DB fallback
   try {
     quote_central_ensure_table();
     $pdo = db();
@@ -187,6 +202,10 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
         if ($ts > 0 && (time() - $ts) > $maxAge) continue;
       }
       $out[$sym] = $data;
+    }
+    // Write to file cache for subsequent reads
+    if (count($out) > 0) {
+      @file_put_contents($bundleCacheFile, json_encode($out), LOCK_EX);
     }
     return $out;
   } catch (Throwable $e) {

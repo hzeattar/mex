@@ -35,7 +35,7 @@ if (!$types) {
 
 $cacheKey = sha1(json_encode([$route, $preferred, $types, $forceLive ? 'live' : 'warm'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 $cacheFile = $cacheDir . '/market_snapshot_' . $cacheKey . '.json';
-$cacheTtl = ($route === 'trade') ? 2 : 3;
+$cacheTtl = ($route === 'trade') ? 3 : 5;
 if (!$force && is_file($cacheFile)) {
   $age = time() - (int)@filemtime($cacheFile);
   if ($age >= 0 && $age <= $cacheTtl) {
