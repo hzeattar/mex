@@ -66,6 +66,8 @@ export function render(params = {}) {
 export function mount(container, params = {}) {
   const activeTab = resolveTab(params);
 
+  reconcileStripeReturn(container, params);
+
   const onFundingClick = (e) => {
     const tab = e.target.closest('[data-funding-tab]');
     if (tab) {
@@ -155,6 +157,56 @@ export function mount(container, params = {}) {
 
   loadMethods(container, activeTab);
   container.querySelector('#funding-form')?.addEventListener('submit', (e) => handleSubmit(e, container, activeTab));
+}
+
+function reconcileStripeReturn(container, params) {
+  const ret = params && params.stripe;
+  if (!ret) return;
+  // Clear the one-shot stripe params so reload / re-navigation does not re-trigger.
+  try { window.history.replaceState(null, '', window.location.pathname + '#/wallet'); } catch (_e) {}
+
+  const banner = document.createElement('div');
+  banner.className = 'stripe-return-banner';
+  container.prepend(banner);
+
+  if (ret !== 'success') {
+    banner.classList.add('is-cancel');
+    banner.innerHTML = `<div><strong>${t('funding.payment_canceled', 'Card payment was canceled.')}</strong><small>${t('funding.payment_canceled_copy', 'You can start a new deposit whenever you are ready.')}</small></div>`;
+    return;
+  }
+
+  const depositId = Number(params.deposit || 0);
+  banner.classList.add('is-pending');
+  banner.innerHTML = `<span class="stripe-return-spin"></span><div><strong>${t('funding.verifying_payment', 'Verifying card payment...')}</strong></div>`;
+
+  (async () => {
+    let status = '';
+    if (depositId > 0) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const res = await postApi('/deposits/stripe_sync.php', { deposit_id: depositId }, { timeout: 15000 });
+          status = String(res?.status || '');
+          if (status === 'confirmed' || status === 'failed') break;
+        } catch (_e) { /* retry */ }
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    }
+    if (status === 'confirmed') {
+      banner.className = 'stripe-return-banner is-success';
+      banner.innerHTML = `<div><strong>${t('funding.deposit_confirmed', 'Payment confirmed. Funds credited to your wallet.')}</strong></div>`;
+      try {
+        const data = await api('/bootstrap.php');
+        if (data && data.wallet) set('wallet', data.wallet);
+      } catch (_e) { /* ignore */ }
+      navigate('wallet', { action: 'history' });
+    } else if (status === 'failed') {
+      banner.className = 'stripe-return-banner is-cancel';
+      banner.innerHTML = `<div><strong>${t('funding.deposit_failed', 'Payment was not completed.')}</strong></div>`;
+    } else {
+      banner.className = 'stripe-return-banner';
+      banner.innerHTML = `<div><strong>${t('funding.payment_processing', 'Payment is processing. Your balance will update shortly.')}</strong></div>`;
+    }
+  })();
 }
 
 export function cleanup() {

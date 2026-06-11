@@ -18,7 +18,16 @@
 declare(strict_types=1);
 
 @ignore_user_abort(true);
-@set_time_limit((int)max(30, (int)(getenv('FEED_WORKER_MAX_EXEC') ?: '120')));
+// Daemon mode must run with NO execution-time cap. The 120s cap is only meant for
+// the single-cycle (cron/web) invocation; applying it to the long-running daemon
+// caused a fatal "Maximum execution time exceeded" (exit 255) every couple of
+// minutes -> the Railway crash-loop. Detect --daemon from argv up front.
+$__feedArgv = (array)($_SERVER['argv'] ?? []);
+@set_time_limit(in_array('--daemon', $__feedArgv, true) ? 0 : (int)max(30, (int)(getenv('FEED_WORKER_MAX_EXEC') ?: '120')));
+// Headroom so the soft memory break (in the daemon loop) always fires BEFORE
+// PHP's hard limit -> avoids fatal "Allowed memory size exhausted" (exit 255)
+// crash-loops that eventually exhaust Railway's restart retries.
+@ini_set('memory_limit', (string)(getenv('FEED_WORKER_PHP_MEM') ?: '512M'));
 
 // Flush output immediately in daemon mode for Railway logs
 if (PHP_SAPI === 'cli') {
@@ -260,11 +269,17 @@ if ($isDaemon) {
   while (true) {
     if ($maxCycles > 0 && $cycleCount >= $maxCycles) break;
 
-    // Check memory
+    // Soft memory ceiling: when exceeded, break for a clean restart (the
+    // process manager relaunches us). Default 384MB sits well under the PHP
+    // hard limit (512M) so we never trip a fatal "memory exhausted" (exit 255).
     $mem = memory_get_usage(true);
-    $memLimit = (int)env('FEED_WORKER_MEM_LIMIT', '134217728'); // 128MB
-    if ($mem > $memLimit) break;
+    $memLimit = (int)env('FEED_WORKER_MEM_LIMIT', '402653184'); // 384MB
+    if ($mem > $memLimit) {
+      echo "[feed-worker] mem soft-limit reached ($mem > $memLimit), exiting for clean restart\n"; flush();
+      break;
+    }
 
+    try {
     $now = time();
 
     // Only fetch types whose interval has elapsed
@@ -344,6 +359,17 @@ if ($isDaemon) {
           'total_written' => $totalWritten, 'ts' => time(),
         ]);
       } catch (Throwable $e) {}
+    }
+
+    } catch (Throwable $cycleErr) {
+      // A transient DB/upstream error must NOT kill the daemon. Log and keep
+      // cycling (previously these bubbled to the global handler -> exit 255 ->
+      // crash-loop that eventually exhausted Railway's restart retries).
+      try { tp_log('cron', 'ERROR', 'feed_worker_cycle_error', ['err' => $cycleErr->getMessage(), 'file' => $cycleErr->getFile(), 'line' => $cycleErr->getLine()]); } catch (Throwable $ignored) {}
+      try { error_log('[feed-worker] cycle error (continuing): ' . $cycleErr->getMessage() . ' @ ' . $cycleErr->getFile() . ':' . $cycleErr->getLine()); } catch (Throwable $ignored) {}
+      echo "[feed-worker] cycle error (continuing): " . $cycleErr->getMessage() . "\n"; flush();
+      try { if (function_exists('gc_collect_cycles')) gc_collect_cycles(); } catch (Throwable $ignored) {}
+      sleep(2);
     }
 
     $cycleCount++;

@@ -62,6 +62,18 @@ defineRoute('account', () => import('./views/account.js'));
 async function boot() {
   const app = document.getElementById('app');
 
+  // Stripe Checkout returns to /app.php?stripe=...&deposit=... (Stripe forbids URL
+  // fragments in success_url). Convert that query into the SPA hash route.
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    const stripeRet = sp.get('stripe');
+    if (stripeRet) {
+      const dep = sp.get('deposit') || '';
+      const q = `stripe=${encodeURIComponent(stripeRet)}${dep ? `&deposit=${encodeURIComponent(dep)}` : ''}`;
+      window.history.replaceState(null, '', window.location.pathname + `#/wallet?${q}`);
+    }
+  } catch (_e) {}
+
   // ── Phase 1: Instant skeleton shell (no API wait) ──────────────────
   set('booted', true);
   renderShell(app);

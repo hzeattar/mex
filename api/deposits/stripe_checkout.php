@@ -102,9 +102,10 @@ $amountMinor = stripe_amount_to_minor_units($amount);
 try {
   $session = \Stripe\Checkout\Session::create([
     'mode' => 'payment',
+    'payment_method_types' => ['card'],
     'client_reference_id' => $externalRef,
-    'success_url' => $appUrl . '/app.php#/wallet?stripe=success&deposit=' . $depositId,
-    'cancel_url' => $appUrl . '/app.php#/deposit?stripe=cancel&deposit=' . $depositId,
+    'success_url' => $appUrl . '/app.php?stripe=success&deposit=' . $depositId,
+    'cancel_url' => $appUrl . '/app.php?stripe=cancel&deposit=' . $depositId,
     'line_items' => [[
       'quantity' => 1,
       'price_data' => [

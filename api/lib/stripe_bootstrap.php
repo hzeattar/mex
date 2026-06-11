@@ -27,7 +27,12 @@ function stripe_require_ready(): void {
     json_response(['ok' => false, 'error' => 'Stripe secret key is missing'], 503);
   }
   \Stripe\Stripe::setApiKey($secret);
-  \Stripe\Stripe::setApiVersion('2026-02-25.clover');
+  // Only pin an explicit API version when provided; otherwise use the version the
+  // installed SDK is aligned with (avoids "invalid API version" / shape mismatches).
+  $apiVersion = trim((string)env('STRIPE_API_VERSION', ''));
+  if ($apiVersion !== '') {
+    \Stripe\Stripe::setApiVersion($apiVersion);
+  }
 }
 
 function stripe_checkout_currency(): string {
@@ -40,11 +45,15 @@ function stripe_amount_to_minor_units(float $amount): int {
 }
 
 function stripe_app_url(): string {
-  $url = trim((string)(env('APP_URL', '') ?: env('SITE_URL', '')));
+  // Prefer SITE_URL (clean origin); APP_URL may include a trailing /app.php entry script.
+  $url = trim((string)(env('SITE_URL', '') ?: env('APP_URL', '')));
   if ($url === '') {
     $host = (string)($_SERVER['HTTP_HOST'] ?? '');
     $url = $host !== '' ? ('https://' . $host) : '';
   }
+  $url = rtrim($url, '/');
+  // Drop a trailing front-controller so we never build /app.php/app.php URLs.
+  $url = preg_replace('#/(?:app|index)\.php$#i', '', $url) ?? $url;
   return rtrim($url, '/');
 }
 
