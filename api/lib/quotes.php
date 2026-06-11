@@ -1244,9 +1244,28 @@ function quote_price(string $symbol, string $assetOrMarket, ?string $maybeAssetT
         // ignore
       }
 
-      $mpArr = binance_futures_mark_price_cached($symbol, $ttl);
-      $mark = (float)($mpArr['mark_price'] ?? 0);
-      if ($mark <= 0) throw new RuntimeException('No mark price');
+      $mark = 0.0;
+      $mpArr = null;
+      try {
+        $mpArr = binance_futures_mark_price_cached($symbol, $ttl);
+        $mark = (float)($mpArr['mark_price'] ?? 0);
+      } catch (Throwable $e) {
+        // Binance futures may be geo-blocked (HTTP 451) on some hosts.
+        $mark = 0.0;
+      }
+      if ($mark <= 0) {
+        // Fallback 1: any cached mark/last price in quotes table (even stale).
+        try {
+          $q = $q ?? quote_get($symbol, $assetType, 'perp');
+          $mp = $q ? (float)($q['mark_price'] ?? 0) : 0.0;
+          if ($mp <= 0 && $q) $mp = (float)($q['price'] ?? 0);
+          if ($mp > 0) return $mp;
+        } catch (Throwable $e) {
+          // ignore
+        }
+        // Fallback 2: spot price for the same symbol.
+        return quote_price_fresh($symbol, 'crypto');
+      }
 
       // Best-effort: persist to quotes table so the UI can reuse it.
       try {

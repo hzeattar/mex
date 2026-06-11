@@ -522,9 +522,13 @@ function renderWithdrawFields(container, selected) {
   const panel = container.querySelector('#withdraw-fields-panel');
   if (!panel) return;
   if (!selected) {
+    panel.dataset.methodId = '';
     panel.innerHTML = `<p class="text-muted text-sm">${t('funding.select_withdraw_method_first', 'Select a withdrawal method first.')}</p>`;
     return;
   }
+  const selectedId = methodId(selected);
+  if (panel.dataset.methodId === selectedId && panel.querySelector('[data-withdraw-field]')) return;
+  panel.dataset.methodId = selectedId;
   const fields = normalizeInputFields(selected.fields || []);
   if (!fields.length) {
     panel.innerHTML = `<label class="block">

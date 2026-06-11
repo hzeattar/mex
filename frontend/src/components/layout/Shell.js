@@ -73,13 +73,13 @@ export function renderShell(app) {
           </a>
         </div>
         <div class="trade-mobile-balances hidden" id="trade-mobile-balances">
-          <span><small>Available</small><b id="trade-mob-available">${money(wallet.available || 0)}</b></span>
-          <span><small>PnL 24</small><b id="trade-mob-pnl24">${money(0)}</b></span>
+          <span><small>${t('shell.available', 'Available')}</small><b id="trade-mob-available">${money(wallet.available || 0)}</b></span>
+          <span><small>${t('shell.pnl24', 'PnL 24')}</small><b id="trade-mob-pnl24">${money(0)}</b></span>
           <button type="button" id="trade-mobile-balance-more" aria-label="More balances">${t('common.more', 'More')}</button>
           <div class="trade-mobile-balance-popover hidden" id="trade-mobile-balance-popover">
-            <span><small>Total</small><b id="trade-mob-total">${money(wallet.balance || wallet.available || 0)}</b></span>
-            <span><small>In use</small><b id="trade-mob-inuse">${money(wallet.holds || 0)}</b></span>
-            <span><small>PnL total</small><b id="trade-mob-pnltotal">${money(0)}</b></span>
+            <span><small>${t('shell.total', 'Total')}</small><b id="trade-mob-total">${money(wallet.balance || wallet.available || 0)}</b></span>
+            <span><small>${t('shell.in_use', 'In use')}</small><b id="trade-mob-inuse">${money(wallet.holds || 0)}</b></span>
+            <span><small>${t('shell.pnl_total', 'PnL total')}</small><b id="trade-mob-pnltotal">${money(0)}</b></span>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -107,7 +107,7 @@ export function renderShell(app) {
             <button class="icon-btn icon-btn-sm" id="markets-drawer-close">${icons.back || icons.close}</button>
             <strong>${t('nav.menu', 'Menu')}</strong>
           </div>
-          <div class="mobile-menu-wallet"><small>${esc(wallet.currency)}</small><strong>${money(wallet.available)}</strong><span>${mode === 'real' ? 'Live workspace' : 'Demo workspace'}</span></div>
+          <div class="mobile-menu-wallet"><small>${esc(wallet.currency)}</small><strong>${money(wallet.available)}</strong><span>${mode === 'real' ? t('workspace.real', 'Live workspace') : t('workspace.demo', 'Demo workspace')}</span></div>
           <div class="mobile-menu-quick">
             ${[...NAV, ...NAV_MORE].map(n => `<a href="#/${n.route}" data-nav="${n.route}"><span>${icons[n.icon] || ''}</span><strong>${t(n.key, n.label)}</strong></a>`).join('')}
           </div>
@@ -211,7 +211,7 @@ function refreshShellBalance() {
   if (bal) bal.textContent = money(wallet.balance || wallet.available || 0);
   const drawerWallet = document.querySelector('.mobile-menu-wallet');
   if (drawerWallet) {
-    drawerWallet.innerHTML = `<small>${esc(wallet.currency || 'USDT')}</small><strong>${money(wallet.available || wallet.balance || 0)}</strong><span>${get('mode') === 'real' ? 'Live workspace' : 'Demo workspace'}</span>`;
+    drawerWallet.innerHTML = `<small>${esc(wallet.currency || 'USDT')}</small><strong>${money(wallet.available || wallet.balance || 0)}</strong><span>${get('mode') === 'real' ? t('workspace.real', 'Live workspace') : t('workspace.demo', 'Demo workspace')}</span>`;
   }
   setText('trade-mob-available', money(metrics.available_balance ?? wallet.available ?? wallet.balance ?? 0));
   setText('trade-mob-pnl24', money(metrics.pnl_24_live ?? 0));

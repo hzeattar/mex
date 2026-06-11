@@ -1,4 +1,6 @@
 // Formatting utilities
+import { t } from './i18n.js';
+
 export function money(value, decimals = 2) {
   const n = Number(value || 0);
   if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
@@ -39,10 +41,10 @@ export function pct(value) {
 
 export function timeAgo(ts) {
   const diff = Math.floor(Date.now() / 1000 - ts);
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 60) return t('time.just_now', 'Just now');
+  if (diff < 3600) return t('time.m_ago', '{n}m ago').replace('{n}', Math.floor(diff / 60));
+  if (diff < 86400) return t('time.h_ago', '{n}h ago').replace('{n}', Math.floor(diff / 3600));
+  return t('time.d_ago', '{n}d ago').replace('{n}', Math.floor(diff / 86400));
 }
 
 export function esc(str) {

@@ -236,9 +236,26 @@ function contractCard(c) {
   </article>`;
 }
 
+function copyStatusLabel(raw) {
+  const s = String(raw || 'active').toLowerCase();
+  const map = {
+    active: t('bot.status_active', 'Active'),
+    armed: t('bot.status_armed', 'Armed'),
+    copied: t('bot.status_copied', 'Copied'),
+    open: t('bot.status_open', 'Open'),
+    running: t('bot.status_running', 'Running'),
+    pending: t('bot.status_pending', 'Pending'),
+    closed: t('bot.status_closed', 'Closed'),
+    canceled: t('bot.status_canceled', 'Canceled'),
+    cancelled: t('bot.status_canceled', 'Canceled'),
+    expired: t('bot.status_expired', 'Expired'),
+  };
+  return map[s] || String(raw || '').toUpperCase();
+}
+
 function copyHistoryCard(item) {
   const symbol = item.symbol || item.market_symbol || '--';
-  const status = String(item.status || 'active').toUpperCase();
+  const status = copyStatusLabel(item.status);
   const active = copyIsActive(item);
   const openPositions = Array.isArray(item.open_positions) ? item.open_positions : [];
   const closedPositions = Array.isArray(item.closed_positions) ? item.closed_positions : [];
@@ -248,7 +265,7 @@ function copyHistoryCard(item) {
       <span class="avalon-mini-mark" aria-hidden="true">&#129302;</span>
       <div class="min-w-0">
         <h3>${esc(item.bot_name || item.bot_name_en || `Avalon ${symbol} AI Bot`)}</h3>
-        <p>${esc(symbol)} - ${esc(item.status_group || t('bot.copy_subscription', 'copy subscription'))}</p>
+        <p>${esc(symbol)} - ${esc(item.status_group ? copyStatusLabel(item.status_group) : t('bot.copy_subscription', 'copy subscription'))}</p>
       </div>
       <span class="status-chip">${esc(status)}</span>
     </div>
@@ -275,7 +292,7 @@ function contractHistoryCard(item) {
     <div class="flex items-center justify-between gap-3">
       <div>
         <h3>${esc(item.plan_name || t('earn.contract', 'Contract'))}</h3>
-        <p>${esc(item.status || t('trade.active', 'active'))} &middot; ${Number(item.is_perpetual || 0) ? t('earn.perpetual', 'Perpetual') : t('earn.term', 'Term')}</p>
+        <p>${esc(copyStatusLabel(item.status))} &middot; ${Number(item.is_perpetual || 0) ? t('earn.perpetual', 'Perpetual') : t('earn.term', 'Term')}</p>
       </div>
       <span class="status-chip status-chip-live">${esc(item.product_kind || t('earn.contract', 'contract'))}</span>
     </div>
@@ -308,10 +325,10 @@ function openCopyDialog(id, container) {
         ${metric(t('trade.entry', 'Entry'), priceValue(sig.entry ?? sig.entry_price))}
         ${metric('SL', priceValue(sig.sl ?? sig.stop_loss))}
         ${metric('TP', priceValue(sig.tp1 ?? sig.take_profit_1))}
-        ${metric('Share', `${Number(sig.copy_profit_share_pct || 0)}%`)}
+        ${metric(t('bot.share', 'Share'), `${Number(sig.copy_profit_share_pct || 0)}%`)}
       </div>
       <label class="block">
-        <span class="text-xs text-muted">Copy amount (USDT)</span>
+        <span class="text-xs text-muted">${t('bot.copy_amount_usdt', 'Copy amount (USDT)')}</span>
         <input class="input mt-1" name="amount" type="number" min="${minAmount}" step="0.01" value="${minAmount}" required />
       </label>
       <p class="dialog-note">${t('bot.copy_dialog_note', 'This uses your Real wallet and may reserve funds until the copy is closed or expires.')}</p>

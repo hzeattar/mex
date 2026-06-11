@@ -27,7 +27,9 @@ export function onBeforeRoute(fn) {
 
 export async function startRouter(container) {
   routeContainer = container;
+  let navSeq = 0;
   const handler = async () => {
+    const myNav = ++navSeq;
     const { path, params } = currentPath();
     const route = routes.get(path) || routes.get('home');
     if (!route) return;
@@ -38,6 +40,7 @@ export async function startRouter(container) {
 
     try {
       if (!route.module) route.module = await route.loader();
+      if (myNav !== navSeq) return; // a newer navigation superseded this one
       if (currentRoute && currentRoute.cleanup) currentRoute.cleanup();
       container.innerHTML = '';
       currentRoute = route.module;

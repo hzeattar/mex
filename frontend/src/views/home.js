@@ -390,7 +390,7 @@ function renderConvertedBalances(container) {
   const fxNote = container.querySelector('#home-fx-note');
   if (fxNote) {
     const source = fx.source ? ` - ${fx.source}` : '';
-    fxNote.textContent = selected === 'USD' ? 'Showing account base currency' : `Converted estimate${source}`;
+    fxNote.textContent = selected === 'USD' ? t('home.base_currency_note', 'Showing account base currency') : `${t('home.converted_estimate', 'Converted estimate')}${source}`;
     fxNote.classList.toggle('is-error', Boolean(fx.error));
   }
   const select = container.querySelector('#home-fx-select');
@@ -503,7 +503,7 @@ function renderContractRailCards(contracts) {
     return `<article class="pro-contract-card pro-earn-card">
       <div class="pro-contract-badge">${t('earn.contract', 'Contract')}</div>
       <strong>${esc(plan.name || plan.name_en || t('earn.level_contract', 'Level contract'))}</strong>
-      <small>${duration > 0 ? `${duration} ${t('earn.day_term', 'day term')}` : t('earn.flexible_term', 'Flexible term')} - ${esc(required)} ${t('level.level', 'level')}</small>
+      <small>${duration > 0 ? `${duration} ${t('earn.day_term', 'day term')}` : t('earn.flexible_term', 'Flexible term')} - ${t('level.label', 'Level')}: ${esc(required)}</small>
       <div class="pro-contract-rate"><span>${t('earn.target_return', 'Target return')}</span><b>${roi > 0 ? roi.toFixed(2) + '%' : t('earn.managed', 'Managed')}</b></div>
       <a href="#/invest" class="btn-ghost btn-sm w-full mt-3">${t('earn.view_contract', 'View contract')}</a>
     </article>`;
@@ -878,15 +878,15 @@ function homeCurrencyConverter() {
   `).join('');
   return `<div class="home-fx-converter" aria-label="Local balance converter">
     <label class="home-fx-select-wrap">
-      <span>Local currency</span>
+      <span>${t('home.local_currency', 'Local currency')}</span>
       <select id="home-fx-select">${options}</select>
     </label>
     <div class="home-fx-preview">
-      <small>Converted total</small>
+      <small>${t('home.converted_total', 'Converted total')}</small>
       <b id="home-fx-total">${money(0)} USDT</b>
       <em id="home-fx-rate">1 USDT = 1 USD</em>
     </div>
-    <p id="home-fx-note">Showing account base currency</p>
+    <p id="home-fx-note">${t('home.base_currency_note', 'Showing account base currency')}</p>
   </div>`;
 }
 

@@ -531,7 +531,25 @@ function binance_futures_mark_price_cached(string $symbol, int $ttl = 2): array 
     }
   }
 
-  $d = binance_futures_mark_price($symbol);
+  // Negative cache: if fapi recently returned HTTP 451 (geo-block), skip the
+  // doomed HTTP round-trip entirely so perp pricing falls back to spot fast.
+  $blockedFlag = $dir . '/f_mark_blocked.flag';
+  if (is_file($blockedFlag)) {
+    $bAge = $now - (int)@filemtime($blockedFlag);
+    if ($bAge >= 0 && $bAge <= 900) {
+      throw new RuntimeException('Binance futures geo-blocked (cached)');
+    }
+    @unlink($blockedFlag);
+  }
+
+  try {
+    $d = binance_futures_mark_price($symbol);
+  } catch (Throwable $e) {
+    if (strpos($e->getMessage(), '451') !== false) {
+      @file_put_contents($blockedFlag, '1', LOCK_EX);
+    }
+    throw $e;
+  }
   if (is_array($d) && isset($d['mark_price'])) {
     @file_put_contents($file, json_encode($d, JSON_UNESCAPED_SLASHES), LOCK_EX);
   }

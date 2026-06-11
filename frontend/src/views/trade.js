@@ -1723,7 +1723,7 @@ async function placeOrder(side, container, formRoot) {
 
   try {
     setOrderBusy(root, true);
-    showOrderStatus(root, `Sending ${side === 'BUY' ? 'buy' : 'sell'} order...`, 'info');
+    showOrderStatus(root, side === 'BUY' ? t('trade.order.sending_buy', 'Sending buy order...') : t('trade.order.sending_sell', 'Sending sell order...'), 'info');
     const res = await api('/trade/place_order.php', {
       method: 'POST',
       body: {
@@ -1912,7 +1912,7 @@ function setMobileSubmitSide(container, side) {
     btn.textContent = side === 'BUY' ? t('trade.order.buy_now', 'شراء الآن') : t('trade.order.sell_now', 'بيع الآن');
     btn.className = `${side === 'BUY' ? 'btn-buy' : 'btn-sell'} w-full py-3`;
   }
-  if (label) label.textContent = `${side} order`;
+  if (label) label.textContent = side === 'BUY' ? t('trade.order.buy_order', 'BUY order') : t('trade.order.sell_order', 'SELL order');
 }
 
 function syncOrderField(container, field, value) {
