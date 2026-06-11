@@ -423,9 +423,12 @@ function db(): PDO {
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
       PDO::ATTR_TIMEOUT => $connectTimeout,
     ];
+    // Persistent connections: default ON for classic hosting, default OFF on
+    // Railway (containers restart often), but allow explicit DB_PERSISTENT=1
+    // opt-in on Railway — it saves a full TCP+auth handshake per request,
+    // which matters a lot when MySQL is reached over the network.
     $persistentRaw = strtolower(trim((string)env('DB_PERSISTENT', $railway ? '0' : '1')));
-    $persistentEnabled = !$railway
-      && PHP_SAPI !== 'cli'
+    $persistentEnabled = PHP_SAPI !== 'cli'
       && !in_array($persistentRaw, ['0', 'false', 'no', 'off'], true);
     if ($persistentEnabled) {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
