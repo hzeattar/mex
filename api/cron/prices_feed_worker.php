@@ -296,6 +296,20 @@ if ($isDaemon) {
         $totalWritten += $res['written'];
         $totalUpserted += $res['upserted'];
         $typeCounts[$type] = $res['written'];
+
+        // Keep crypto near-real-time: slow provider passes (stocks/forex) can
+        // take 10-20s, so re-fetch crypto between type fetches whenever its
+        // interval has already elapsed again.
+        if ($type !== 'crypto'
+            && (time() - ($lastCycleByType['crypto'] ?? 0)) >= ($intervals['crypto'] ?? 3)
+            && !empty($symbolsByType['crypto'])) {
+          $cRes = feed_worker_fetch_type('crypto', $symbolsByType['crypto'], $metaByTypeSymbol['crypto'] ?? []);
+          $lastCycleByType['crypto'] = time();
+          echo "[feed-worker] crypto (interleaved): {$cRes['written']}/{$cRes['count']} written\n"; flush();
+          $totalWritten += $cRes['written'];
+          $totalUpserted += $cRes['upserted'];
+          $typeCounts['crypto'] = $cRes['written'];
+        }
       }
 
       quote_central_manifest_write([
