@@ -5,14 +5,55 @@ declare(strict_types=1);
  * Quote Central — Single Source of Truth for price reads.
  *
  * This layer NEVER hits upstream providers. It only reads/writes
- * a local shared cache that is populated exclusively by the
+ * a shared cache that is populated exclusively by the
  * prices_feed_worker.php process.
+ *
+ * Storage priority:
+ *   1. DB table `central_quotes` (shared across Railway services via MySQL)
+ *   2. File-based cache in data/central/ (fast local reads, single-process only)
  *
  * All user-facing endpoints (SSE, quotes.php, trade/stream.php, etc.)
  * MUST read from here instead of calling quote_bulk_live() directly.
  */
 
 require_once __DIR__ . '/common.php';
+
+// ── DB-backed central cache (shared across containers) ──────────────────────
+
+function quote_central_ensure_table(): void {
+  static $ensured = false;
+  if ($ensured) return;
+  $ensured = true;
+  $pdo = db();
+  $pdo->exec("CREATE TABLE IF NOT EXISTS central_quotes (
+    symbol VARCHAR(30) NOT NULL,
+    type VARCHAR(20) NOT NULL,
+    price DOUBLE NOT NULL DEFAULT 0,
+    change_pct DOUBLE NOT NULL DEFAULT 0,
+    source VARCHAR(60) NOT NULL DEFAULT '',
+    central_ts INT UNSIGNED NOT NULL DEFAULT 0,
+    updated_at INT UNSIGNED NOT NULL DEFAULT 0,
+    payload JSON DEFAULT NULL,
+    PRIMARY KEY (symbol, type),
+    INDEX idx_central_ts (central_ts),
+    INDEX idx_type (type)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+function quote_central_ensure_manifest_table(): void {
+  static $ensured = false;
+  if ($ensured) return;
+  $ensured = true;
+  $pdo = db();
+  $pdo->exec("CREATE TABLE IF NOT EXISTS central_manifest (
+    id INT UNSIGNED NOT NULL DEFAULT 1,
+    payload JSON DEFAULT NULL,
+    updated_at INT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+// ── File-based cache (local per-container) ──────────────────────────────────
 
 function quote_central_dir(): string {
   static $dir = null;
@@ -30,76 +71,132 @@ function quote_central_bundle_file(string $type): string {
   return quote_central_dir() . '/bundle_' . strtolower(vp_normalize_asset_type($type)) . '.json';
 }
 
-function quote_central_manifest_file(): string {
-  return quote_central_dir() . '/_manifest.json';
-}
+// ── Read functions (try file first, then DB) ────────────────────────────────
 
-/**
- * Read a single symbol's latest price from central cache.
- * Returns null if not found or stale beyond $maxAge seconds.
- */
 function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?array {
+  $symbol = strtoupper(trim($symbol));
+  $type = vp_normalize_asset_type($type);
+
+  // Try file cache first (fastest)
   $file = quote_central_file($symbol, $type);
-  if (!is_file($file)) return null;
-  $raw = @file_get_contents($file);
-  if ($raw === false || $raw === '') return null;
-  $data = json_decode($raw, true);
-  if (!is_array($data)) return null;
-  $price = (float)($data['price'] ?? 0);
-  if (!($price > 0)) return null;
-  if ($maxAge > 0) {
-    $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
-    if ($ts > 0 && (time() - $ts) > $maxAge) return null;
+  if (is_file($file)) {
+    $raw = @file_get_contents($file);
+    if ($raw !== false && $raw !== '') {
+      $data = json_decode($raw, true);
+      if (is_array($data) && (float)($data['price'] ?? 0) > 0) {
+        if ($maxAge <= 0) return $data;
+        $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
+        if ($ts <= 0 || (time() - $ts) <= $maxAge) return $data;
+      }
+    }
   }
-  return $data;
+
+  // Fallback to DB (shared across containers)
+  try {
+    quote_central_ensure_table();
+    $pdo = db();
+    $st = $pdo->prepare("SELECT payload FROM central_quotes WHERE symbol = ? AND type = ?");
+    $st->execute([$symbol, $type]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return null;
+    $payload = $row['payload'] ?? null;
+    if (!$payload) return null;
+    $data = json_decode($payload, true);
+    if (!is_array($data) || !(float)($data['price'] ?? 0) > 0) return null;
+    if ($maxAge > 0) {
+      $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
+      if ($ts > 0 && (time() - $ts) > $maxAge) return null;
+    }
+    // Warm the local file cache from DB
+    quote_central_write_file($symbol, $type, $data);
+    return $data;
+  } catch (Throwable $e) {
+    return null;
+  }
 }
 
-/**
- * Read multiple symbols from central cache.
- * Returns [symbol => data, ...] for found symbols only.
- */
 function quote_central_get_many(array $symbols, string $type, int $maxAge = 30): array {
   $out = [];
   $type = vp_normalize_asset_type($type);
+  $missing = [];
+
+  // Try file cache first
   foreach ($symbols as $sym) {
     $sym = strtoupper(trim((string)$sym));
     if ($sym === '') continue;
-    $row = quote_central_get($sym, $type, $maxAge);
-    if ($row !== null) $out[$sym] = $row;
-  }
-  return $out;
-}
-
-/**
- * Read all prices for a given asset type from the bundle file.
- * Bundle files are written by the worker for bulk reads (SSE, snapshots).
- */
-function quote_central_bundle_read(string $type, int $maxAge = 30): array {
-  $file = quote_central_bundle_file($type);
-  if (!is_file($file)) return [];
-  $raw = @file_get_contents($file);
-  if ($raw === false || $raw === '') return [];
-  $data = json_decode($raw, true);
-  if (!is_array($data)) return [];
-  $out = [];
-  foreach ($data as $sym => $row) {
-    if (!is_array($row)) continue;
-    $price = (float)($row['price'] ?? 0);
-    if (!($price > 0)) continue;
-    if ($maxAge > 0) {
-      $ts = (int)($row['central_ts'] ?? $row['updated_at'] ?? 0);
-      if ($ts > 0 && (time() - $ts) > $maxAge) continue;
+    $file = quote_central_file($sym, $type);
+    if (is_file($file)) {
+      $raw = @file_get_contents($file);
+      if ($raw !== false && $raw !== '') {
+        $data = json_decode($raw, true);
+        if (is_array($data) && (float)($data['price'] ?? 0) > 0) {
+          if ($maxAge <= 0) { $out[$sym] = $data; continue; }
+          $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
+          if ($ts <= 0 || (time() - $ts) <= $maxAge) { $out[$sym] = $data; continue; }
+        }
+      }
     }
-    $out[$sym] = $row;
+    $missing[] = $sym;
   }
+
+  // Fetch missing from DB
+  if ($missing) {
+    try {
+      quote_central_ensure_table();
+      $pdo = db();
+      $in = implode(',', array_fill(0, count($missing), '?'));
+      $st = $pdo->prepare("SELECT symbol, payload FROM central_quotes WHERE symbol IN ($in) AND type = ?");
+      $params = array_merge($missing, [$type]);
+      $st->execute($params);
+      while ($row = $st->fetch(PDO::FETCH_ASSOC)) {
+        $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+        $payload = $row['payload'] ?? null;
+        if (!$sym || !$payload) continue;
+        $data = json_decode($payload, true);
+        if (!is_array($data) || !(float)($data['price'] ?? 0) > 0) continue;
+        if ($maxAge > 0) {
+          $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
+          if ($ts > 0 && (time() - $ts) > $maxAge) continue;
+        }
+        $out[$sym] = $data;
+        // Warm file cache
+        quote_central_write_file($sym, $type, $data);
+      }
+    } catch (Throwable $e) {}
+  }
+
   return $out;
 }
 
-/**
- * Write a single symbol's price to central cache.
- * Called only by the feed worker.
- */
-function quote_central_write(string $symbol, string $type, array $data): void {
+function quote_central_bundle_read(string $type, int $maxAge = 30): array {
+  // Bundle read: get all for type from DB (most reliable cross-container)
+  try {
+    quote_central_ensure_table();
+    $pdo = db();
+    $st = $pdo->prepare("SELECT symbol, payload FROM central_quotes WHERE type = ?");
+    $st->execute([$type]);
+    $out = [];
+    while ($row = $st->fetch(PDO::FETCH_ASSOC)) {
+      $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+      $payload = $row['payload'] ?? null;
+      if (!$sym || !$payload) continue;
+      $data = json_decode($payload, true);
+      if (!is_array($data) || !(float)($data['price'] ?? 0) > 0) continue;
+      if ($maxAge > 0) {
+        $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
+        if ($ts > 0 && (time() - $ts) > $maxAge) continue;
+      }
+      $out[$sym] = $data;
+    }
+    return $out;
+  } catch (Throwable $e) {
+    return [];
+  }
+}
+
+// ── Write functions (write to both file AND DB) ─────────────────────────────
+
+function quote_central_write_file(string $symbol, string $type, array $data): void {
   $file = quote_central_file($symbol, $type);
   $data['symbol'] = strtoupper(trim($symbol));
   $data['type'] = vp_normalize_asset_type($type);
@@ -108,43 +205,90 @@ function quote_central_write(string $symbol, string $type, array $data): void {
   if ($json !== false) @file_put_contents($file, $json, LOCK_EX);
 }
 
-/**
- * Write a bundle (all symbols for a type) to central cache.
- * Called only by the feed worker after each cycle.
- */
+function quote_central_write(string $symbol, string $type, array $data): void {
+  $symbol = strtoupper(trim($symbol));
+  $type = vp_normalize_asset_type($type);
+  $data['symbol'] = $symbol;
+  $data['type'] = $type;
+  if (empty($data['central_ts'])) $data['central_ts'] = time();
+
+  // Write to file cache
+  quote_central_write_file($symbol, $type, $data);
+
+  // Write to DB (shared across containers)
+  try {
+    quote_central_ensure_table();
+    $pdo = db();
+    $payload = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $st = $pdo->prepare("INSERT INTO central_quotes (symbol, type, price, change_pct, source, central_ts, updated_at, payload)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE price=VALUES(price), change_pct=VALUES(change_pct), source=VALUES(source),
+        central_ts=VALUES(central_ts), updated_at=VALUES(updated_at), payload=VALUES(payload)");
+    $st->execute([
+      $symbol, $type,
+      (float)($data['price'] ?? 0),
+      (float)($data['change_pct'] ?? 0),
+      (string)($data['source'] ?? ''),
+      (int)($data['central_ts'] ?? time()),
+      (int)($data['updated_at'] ?? time()),
+      $payload,
+    ]);
+  } catch (Throwable $e) {}
+}
+
 function quote_central_bundle_write(string $type, array $bySymbol): void {
+  $type = vp_normalize_asset_type($type);
+  // Write bundle file
   $file = quote_central_bundle_file($type);
   $json = json_encode($bySymbol, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
   if ($json !== false) @file_put_contents($file, $json, LOCK_EX);
+  // Individual writes already handle DB via quote_central_write
 }
 
-/**
- * Write the manifest (metadata about what's in the cache).
- * Called only by the feed worker.
- */
 function quote_central_manifest_write(array $meta): void {
-  $file = quote_central_manifest_file();
   $meta['updated_at'] = time();
+
+  // Write to file
+  $file = quote_central_dir() . '/_manifest.json';
   $json = json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
   if ($json !== false) @file_put_contents($file, $json, LOCK_EX);
+
+  // Write to DB
+  try {
+    quote_central_ensure_manifest_table();
+    $pdo = db();
+    $payload = json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $st = $pdo->prepare("INSERT INTO central_manifest (id, payload, updated_at) VALUES (1, ?, ?)
+      ON DUPLICATE KEY UPDATE payload=VALUES(payload), updated_at=VALUES(updated_at)");
+    $st->execute([$payload, time()]);
+  } catch (Throwable $e) {}
 }
 
-/**
- * Read the manifest.
- */
 function quote_central_manifest_read(): array {
-  $file = quote_central_manifest_file();
-  if (!is_file($file)) return [];
-  $raw = @file_get_contents($file);
-  if ($raw === false) return [];
-  $data = json_decode($raw, true);
-  return is_array($data) ? $data : [];
+  // Try DB first (shared)
+  try {
+    quote_central_ensure_manifest_table();
+    $pdo = db();
+    $st = $pdo->query("SELECT payload FROM central_manifest WHERE id = 1");
+    $row = $st ? $st->fetch(PDO::FETCH_ASSOC) : null;
+    if ($row && $row['payload']) {
+      $data = json_decode($row['payload'], true);
+      if (is_array($data)) return $data;
+    }
+  } catch (Throwable $e) {}
+
+  // Fallback to file
+  $file = quote_central_dir() . '/_manifest.json';
+  if (is_file($file)) {
+    $raw = @file_get_contents($file);
+    if ($raw !== false) {
+      $data = json_decode($raw, true);
+      if (is_array($data)) return $data;
+    }
+  }
+  return [];
 }
 
-/**
- * Check if the central cache is warm enough to serve as the primary source.
- * Returns true if the manifest shows a recent successful worker cycle.
- */
 function quote_central_is_warm(string $type = ''): bool {
   $manifest = quote_central_manifest_read();
   $lastRun = (int)($manifest['updated_at'] ?? 0);
@@ -158,10 +302,6 @@ function quote_central_is_warm(string $type = ''): bool {
   return true;
 }
 
-/**
- * Build a quote_authority-compatible items array from central cache.
- * This allows drop-in replacement in SSE, quotes.php, etc.
- */
 function quote_central_items(array $symbols, string $type, int $maxAge = 30): array {
   $type = vp_normalize_asset_type($type);
   $central = quote_central_get_many($symbols, $type, $maxAge);
