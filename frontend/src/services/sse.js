@@ -153,8 +153,11 @@ function startPolling(symbols, type, onUpdate, onError, seq, options) {
     const timeoutMs = Math.max(3000, Number(options.timeout || 10000));
     const timeout = setTimeout(() => { try { pollController?.abort(); } catch(e){} }, timeoutMs);
     try {
-      const url = '/api/quotes.php?symbols=' + encodeURIComponent(list.join(',')) + '&type=' + encodeURIComponent(type) + '&visible=1&purpose=watchlist&_=' + Date.now();
-      const data = await api(url, { timeout: timeoutMs, retry: 0, cacheTtl: 500, cache: 'no-store', signal: pollController.signal });
+      // Cache-only fast path behind the nginx 1s micro-cache; no cache-buster
+      // so concurrent users with the same list share one PHP execution.
+      // NOTE: api() prepends '/api' — the old '/api/quotes.php' path here 404'd.
+      const url = '/quote_focus.php?symbols=' + encodeURIComponent(list.join(',')) + '&type=' + encodeURIComponent(type);
+      const data = await api(url, { timeout: timeoutMs, retry: 0, cacheTtl: 0, cache: 'no-store', signal: pollController.signal });
       if (seq === pollSeq && data && data.items && onUpdate) onUpdate(data.items);
     } catch (e) {
       if (e.name !== 'AbortError' && onError) onError(e);

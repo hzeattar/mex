@@ -126,6 +126,44 @@ ${EXTRA_LISTEN}
       fastcgi_pass 127.0.0.1:9070;
     }
 
+    # Active-quote fast path: 1s micro-cache so every concurrent user polling
+    # the same symbol shares a single PHP execution per second.
+    location = /api/quote_focus.php {
+      try_files $uri =404;
+
+      fastcgi_cache api_cache;
+      fastcgi_cache_valid 200 1s;
+      fastcgi_cache_use_stale error timeout updating http_500 http_503;
+      fastcgi_cache_background_update on;
+      fastcgi_cache_lock on;
+      fastcgi_cache_lock_timeout 2s;
+      fastcgi_ignore_headers Cache-Control Expires;
+      fastcgi_cache_methods GET HEAD;
+      add_header X-Cache-Status $upstream_cache_status always;
+
+      fastcgi_param  QUERY_STRING       $query_string;
+      fastcgi_param  REQUEST_METHOD     $request_method;
+      fastcgi_param  CONTENT_TYPE       $content_type;
+      fastcgi_param  CONTENT_LENGTH     $content_length;
+      fastcgi_param  SCRIPT_FILENAME    $document_root$fastcgi_script_name;
+      fastcgi_param  SCRIPT_NAME        $fastcgi_script_name;
+      fastcgi_param  REQUEST_URI        $request_uri;
+      fastcgi_param  DOCUMENT_URI       $document_uri;
+      fastcgi_param  DOCUMENT_ROOT      $document_root;
+      fastcgi_param  SERVER_PROTOCOL    $server_protocol;
+      fastcgi_param  REMOTE_ADDR        $remote_addr;
+      fastcgi_param  REMOTE_PORT        $remote_port;
+      fastcgi_param  SERVER_ADDR        $server_addr;
+      fastcgi_param  SERVER_PORT        $server_port;
+      fastcgi_param  SERVER_NAME        $server_name;
+      fastcgi_param  HTTPS              $https if_not_empty;
+
+      fastcgi_read_timeout 15s;
+      fastcgi_buffers 16 16k;
+      fastcgi_buffer_size 32k;
+      fastcgi_pass 127.0.0.1:9070;
+    }
+
     location / {
       try_files $uri $uri/ /index.php?$query_string;
     }

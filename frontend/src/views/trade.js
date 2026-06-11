@@ -411,7 +411,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
     if (!isCurrentRun(runId, active, get('type'))) return;
     updateSymbolListPrices(container, items);
   }, null, {
-    interval: isCrypto ? 12000 : 10000,
+    interval: isCrypto ? 6000 : 5000,
     initialDelay: 900,
     fallbackAfter: 3000,
     maxSymbols: max,
@@ -423,20 +423,25 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
 function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   stopActiveQuote();
   const quoteType = normalizeType(type) === 'favorites' ? 'crypto' : normalizeType(type);
-  // Crypto: fast 4.5s poll, short timeout (WebSocket-backed sources)
-  // Non-crypto uses paid EODHD snapshots; keep focus quotes noticeably quicker than the watchlist.
-  const interval   = quoteType === 'crypto' ? 2500 : 4000;
-  const reqTimeout = quoteType === 'crypto' ? 2000 : 8000;
-  const reqRetry   = quoteType === 'crypto' ? 0    : 0;
+  // Fast path: /quote_focus.php reads only the central cache (worker-fed) and
+  // sits behind a 1s nginx micro-cache shared by all users, so polling can be
+  // aggressive without load concerns. No cache-buster: shared cache key.
+  const interval = quoteType === 'crypto' ? 1500 : 2500;
+  const focusUrl = `/quote_focus.php?symbols=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}`;
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
     activeQuoteController = new AbortController();
     try {
-      const liveParams = quoteType === 'crypto' ? '' : '&fresh=1&strict_live=1';
-      const url = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus${liveParams}&_=${Date.now()}`;
-      const data = await api(url, { timeout: quoteType === 'crypto' ? 1800 : Math.min(reqTimeout, 5000), retry: reqRetry, signal: activeQuoteController.signal, cacheTtl: 500, cache: 'no-store' });
+      let data = await api(focusUrl, { timeout: 2500, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
+      let item = data?.items?.[0];
+      if (!(Number(item?.price || 0) > 0)) {
+        // Cold symbol: fall back to the legacy focus path (may warm caches).
+        const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus&_=${Date.now()}`;
+        data = await api(fbUrl, { timeout: quoteType === 'crypto' ? 1800 : 2500, retry: 0, signal: activeQuoteController.signal, cacheTtl: 500, cache: 'no-store' });
+        item = data?.items?.[0];
+      }
       if (!isCurrentRun(runId, symbol, type)) return;
-      if (data?.items?.[0]) updatePrice(container, data.items[0], runId);
+      if (item) updatePrice(container, item, runId);
     } catch (_e) {
       // Abort/timeout errors are normal during cleanup — don't surface to UI.
       if (isCurrentRun(runId, symbol, type)) markDisconnected(container);
