@@ -46,6 +46,34 @@ if ($centralWarm && !$bypassCentral && $list) {
   // If central cache has insufficient coverage, fall through to legacy path
 }
 
+// ── Fresh/strict_live fast path ──────────────────────────────────────────
+// Even "fresh" requests can be served from the central cache when the feed
+// worker has updated the symbol within its own refresh cadence — going
+// upstream cannot return anything newer than what the worker just wrote,
+// it only adds 1-3s of provider latency. Tight per-type freshness windows
+// keep this honest: crypto refreshes every ~3s, forex/commodities ~15s.
+if ($centralWarm && $bypassCentral && $list) {
+  $freshWindow = match ($typeAlias) {
+    'crypto' => max(2, min(30, (int)env('QUOTES_FRESH_CENTRAL_MAX_AGE_CRYPTO', '8'))),
+    'forex', 'commodities', 'futures' => max(5, min(120, (int)env('QUOTES_FRESH_CENTRAL_MAX_AGE_FOREX', '25'))),
+    default => max(10, min(300, (int)env('QUOTES_FRESH_CENTRAL_MAX_AGE_OTHER', '60'))),
+  };
+  $items = quote_central_items($list, $typeAlias, $freshWindow);
+  $liveItems = array_values(array_filter($items, static function ($it) use ($freshWindow) {
+    return (float)($it['price'] ?? 0) > 0 && (int)($it['age_sec'] ?? PHP_INT_MAX) <= $freshWindow;
+  }));
+  if (count($liveItems) === count($list)) {
+    json_response([
+      'ok' => true,
+      'items' => $items,
+      'authority' => 'central',
+      'mode' => 'central_fresh',
+      'source' => 'central',
+    ]);
+  }
+  // Cache not fresh enough for this symbol set — fall through to upstream
+}
+
 function quotes_focus_cache_max_age(string $assetType): int {
   $assetType = vp_normalize_asset_type($assetType);
   return match ($assetType) {
