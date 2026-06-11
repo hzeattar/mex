@@ -84,19 +84,33 @@ try {
   $quoteMarketJoin = !empty($flags['market']) ? " AND COALESCE(q.market,'spot')='spot'" : '';
 
   $rowsByType = [];
+  // Single query for all types instead of per-type queries
+  $allQueryTypes = [];
   foreach ($types as $type) {
-    $queryType = $type === 'commodities' ? ['commodities','metals'] : [$type];
-    $placeholders = implode(',', array_fill(0, count($queryType), '?'));
-    $sql = "SELECT m.id, m.symbol, m.name, m.type, m.status, m.sort_order, m.tv_symbol, m.seed_price, m.meta,
-                   q.price AS q_price, q.change_pct AS q_change, q.updated_at AS q_updated, {$selSource}
-            FROM markets m
-            LEFT JOIN market_quotes q ON q.symbol = m.symbol AND q.type = (CASE WHEN m.type='metals' THEN 'commodities' ELSE m.type END) {$quoteMarketJoin} AND q.updated_at > 0
-            WHERE m.status='active' AND m.type IN ({$placeholders})
-            ORDER BY m.sort_order ASC, m.id ASC";
-    $st = $pdo->prepare($sql);
-    $st->execute($queryType);
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    $rowsByType[$type] = $rows;
+    $qt = $type === 'commodities' ? ['commodities','metals'] : [$type];
+    $allQueryTypes = array_merge($allQueryTypes, $qt);
+  }
+  $allQueryTypes = array_unique($allQueryTypes);
+  $placeholders = implode(',', array_fill(0, count($allQueryTypes), '?'));
+  $sql = "SELECT m.id, m.symbol, m.name, m.type, m.status, m.sort_order, m.tv_symbol, m.seed_price, m.meta,
+                 q.price AS q_price, q.change_pct AS q_change, q.updated_at AS q_updated, {$selSource}
+          FROM markets m
+          LEFT JOIN market_quotes q ON q.symbol = m.symbol AND q.type = (CASE WHEN m.type='metals' THEN 'commodities' ELSE m.type END) {$quoteMarketJoin} AND q.updated_at > 0
+          WHERE m.status='active' AND m.type IN ({$placeholders})
+          ORDER BY m.sort_order ASC, m.id ASC";
+  $st = $pdo->prepare($sql);
+  $st->execute($allQueryTypes);
+  $allRows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  // Partition rows by type
+  foreach ($types as $type) {
+    $rowsByType[$type] = [];
+  }
+  foreach ($allRows as $row) {
+    $rowType = vp_normalize_asset_type((string)($row['type'] ?? ''));
+    if ($rowType === 'metals') $rowType = 'commodities';
+    if (isset($rowsByType[$rowType])) {
+      $rowsByType[$rowType][] = $row;
+    }
   }
 
   $pools = [];
