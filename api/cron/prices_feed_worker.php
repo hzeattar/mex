@@ -20,10 +20,21 @@ declare(strict_types=1);
 @ignore_user_abort(true);
 @set_time_limit((int)max(30, (int)(getenv('FEED_WORKER_MAX_EXEC') ?: '120')));
 
+// Flush output immediately in daemon mode for Railway logs
+if (PHP_SAPI === 'cli') {
+  @ini_set('output_buffering', '0');
+  @ini_set('implicit_flush', '1');
+}
+
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/quote_central.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
+
+// Clear any output buffering from common.php
+while (ob_get_level() > 0) @ob_end_flush();
+
+echo "[feed-worker] Libs loaded, initializing...\n"; flush();
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 function feed_worker_input_token(): string {
@@ -60,15 +71,15 @@ if (!is_dir($locksDir)) @mkdir($locksDir, 0775, true);
 $lockFp = @fopen($locksDir . '/feed_worker.lock', 'c+');
 if ($lockFp) {
   if (!flock($lockFp, LOCK_EX | LOCK_NB)) {
-    $out = ['ok' => true, 'locked' => true, 'busy' => true, 'ts' => time()];
-    if (!$isDaemon) {
-      try { tp_status_write('feed_worker', $out); } catch (Throwable $e) {}
-      json_response($out);
-    }
-    // In daemon mode, wait for the lock
+    echo "[feed-worker] Lock busy, another instance is running. Waiting...\n"; flush();
     flock($lockFp, LOCK_EX);
+    echo "[feed-worker] Lock acquired.\n"; flush();
+  } else {
+    echo "[feed-worker] Lock acquired immediately.\n"; flush();
   }
 }
+
+echo "[feed-worker] isDaemon=" . ($isDaemon ? 'true' : 'false') . "\n"; flush();
 
 // ── Cycle intervals (seconds) ─────────────────────────────────────────────
 $intervals = [
@@ -240,6 +251,7 @@ function feed_worker_cycle(): array {
 // ── Main ──────────────────────────────────────────────────────────────────
 if ($isDaemon) {
   // Daemon mode: run cycles continuously
+  echo "[feed-worker] Entering daemon mode...\n"; flush();
   $cycleCount = 0;
   $maxCycles = (int)env('FEED_WORKER_MAX_CYCLES', '0'); // 0 = unlimited
   $lastCycleByType = [];
@@ -256,6 +268,7 @@ if ($isDaemon) {
 
     // Only fetch types whose interval has elapsed
     [$symbolsByType, $metaByTypeSymbol] = feed_worker_collect_symbols();
+    echo "[feed-worker] Collected symbols: " . json_encode(array_map('count', $symbolsByType)) . "\n"; flush();
     $typesToFetch = [];
 
     foreach ($types as $type) {
@@ -268,6 +281,7 @@ if ($isDaemon) {
     }
 
     if ($typesToFetch) {
+      echo "[feed-worker] Fetching types: " . implode(',', $typesToFetch) . "\n"; flush();
       $cycleResults = [];
       $totalWritten = 0;
       $totalUpserted = 0;
@@ -277,6 +291,7 @@ if ($isDaemon) {
         $symbols = $symbolsByType[$type] ?? [];
         $meta = $metaByTypeSymbol[$type] ?? [];
         $res = feed_worker_fetch_type($type, $symbols, $meta);
+        echo "[feed-worker] $type: {$res['written']}/{$res['count']} written\n"; flush();
         $cycleResults[$type] = $res;
         $totalWritten += $res['written'];
         $totalUpserted += $res['upserted'];
