@@ -2,6 +2,7 @@
 require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/quotes.php';
 require_once __DIR__ . '/lib/market_resolver.php';
+require_once __DIR__ . '/lib/quote_authority.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -70,6 +71,18 @@ foreach ($list as $sym) {
     $row = quote_get($sym, $type);
     if (is_array($row)) $warmBySymbol[$sym] = $row;
   } catch (Throwable $e) {}
+}
+
+$cachedBySymbol = [];
+foreach ($warmBySymbol as $sym => $row) {
+  $cachedBySymbol[$sym] = [
+    'symbol' => $sym,
+    'type' => $type,
+    'price' => (float)($row['price'] ?? 0),
+    'change_pct' => (float)($row['change_pct'] ?? 0),
+    'updated_at' => (int)($row['updated_at'] ?? 0),
+    'source' => (string)($row['source'] ?? $row['provider'] ?? ''),
+  ];
 }
 
 $buildItem = static function(string $sym, ?array $row, string $type, string $market, int $nowTs): ?array {
@@ -190,16 +203,21 @@ $directRow = static function(string $sym, string $type, array $meta, ?array $war
 $liveMap = [];
 if (!$single) {
   try {
-    $liveMap = quote_bulk_live($list, $type, $metaBySymbol, [
+    $liveCandidatesByType = qa_live_candidates_grouped([$type => $list], $cachedBySymbol, [
+      'force_live' => $force,
+      'strict_live_noncrypto' => $singleFocus || $focus || $visible,
+    ]);
+    $liveSymbols = $liveCandidatesByType[$type] ?? [];
+    $liveMap = $liveSymbols ? quote_bulk_live($liveSymbols, $type, $metaBySymbol, [
       'ttl' => 1,
       'yahoo_ttl' => 1,
       'massive_ttl' => 1,
       'eodhd_ttl' => 1,
-      'direct_budget' => count($list),
-      'direct_yahoo_budget' => count($list),
-      'chart_budget' => min(2, count($list)),
+      'direct_budget' => count($liveSymbols),
+      'direct_yahoo_budget' => count($liveSymbols),
+      'chart_budget' => min(2, count($liveSymbols)),
       'allow_direct_batch' => true,
-    ]);
+    ]) : [];
   } catch (Throwable $e) {
     $liveMap = [];
   }
@@ -208,7 +226,7 @@ if (!$single) {
 $items = [];
 $liveCount = 0;
 foreach ($list as $sym) {
-  $warm = is_array($warmBySymbol[$sym] ?? null) ? $warmBySymbol[$sym] : null;
+  $warm = is_array($cachedBySymbol[$sym] ?? null) ? $cachedBySymbol[$sym] : (is_array($warmBySymbol[$sym] ?? null) ? $warmBySymbol[$sym] : null);
   $meta = is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [];
   $live = $single ? null : (is_array($liveMap[$sym] ?? null) ? $liveMap[$sym] : null);
   $normLive = $buildItem($sym, $live, $type, $market, $nowTs);

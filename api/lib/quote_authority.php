@@ -9,6 +9,45 @@ require_once __DIR__ . '/quote_cache_policy.php';
 require_once __DIR__ . '/quote_store.php';
 require_once __DIR__ . '/quote_batch.php';
 
+function qa_live_candidates_grouped(array $symbolsByType, array $cachedBySymbol = [], array $opts = []): array {
+  $out = [];
+  $forceLive = !empty($opts['force_live']);
+  $strictLiveNonCrypto = !empty($opts['strict_live_noncrypto']);
+
+  foreach ($symbolsByType as $assetType => $symbols) {
+    $assetType = vp_normalize_asset_type((string)$assetType);
+    if ($assetType === '' || $assetType === 'all') continue;
+
+    foreach ((array)$symbols as $sym) {
+      $sym = strtoupper(trim((string)$sym));
+      if ($sym === '') continue;
+
+      if ($forceLive || ($strictLiveNonCrypto && $assetType !== 'crypto')) {
+        $out[$assetType][] = $sym;
+        continue;
+      }
+
+      $cached = is_array($cachedBySymbol[$sym] ?? null) ? $cachedBySymbol[$sym] : null;
+      if (!is_array($cached)) {
+        $out[$assetType][] = $sym;
+        continue;
+      }
+
+      if (qa_quote_is_usable($cached, $assetType, false)) {
+        continue;
+      }
+
+      $out[$assetType][] = $sym;
+    }
+  }
+
+  foreach ($out as $type => $list) {
+    $out[$type] = array_values(array_unique($list));
+  }
+
+  return $out;
+}
+
 function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): array {
   $typeAlias = vp_normalize_asset_type($typeAlias ?: '');
   $symbols = array_values(array_unique(array_filter(array_map('strtoupper', $symbols))));
@@ -29,13 +68,16 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
     $symbolsByType[$resolved][] = $sym;
   }
 
+  $cachedBySymbol = qa_quote_rows_by_symbols($symbols, ($typeAlias && $typeAlias !== 'all') ? $typeAlias : null);
   $liveBySymbol = [];
   $allowLive = array_key_exists('allow_live', $opts) ? (bool)$opts['allow_live'] : true;
   if ($allowLive) {
-    $liveBySymbol = qa_live_map_grouped($symbolsByType, $metaBySymbol, $opts);
+    $liveCandidatesByType = qa_live_candidates_grouped($symbolsByType, $cachedBySymbol, $opts);
+    if ($liveCandidatesByType) {
+      $liveBySymbol = qa_live_map_grouped($liveCandidatesByType, $metaBySymbol, $opts);
+    }
   }
 
-  $cachedBySymbol = qa_quote_rows_by_symbols($symbols, ($typeAlias && $typeAlias !== 'all') ? $typeAlias : null);
   $items = [];
   foreach ($symbols as $sym) {
     $assetType = $resolvedTypeBySymbol[$sym] ?? ($typeAlias ?: 'crypto');
@@ -145,8 +187,8 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
     $metaBySymbol[$sym] = market_meta($row['meta'] ?? null);
   }
 
-  $liveBySymbol = $withLive ? qa_live_map_grouped($symbolsByType, $metaBySymbol, $opts) : [];
   $storedByType = [];
+  $cachedBySymbol = [];
   foreach ($symbolsByType as $type => $symbolsForType) {
     $storedByType[$type] = qa_quote_rows_by_symbols($symbolsForType, $type);
   }
@@ -161,6 +203,23 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
       $stored = is_array($storedByType[$type][$sym] ?? null) ? $storedByType[$type][$sym] : null;
       if (is_array($stored) && (float)($stored['price'] ?? 0) > 0) $cached = $stored;
     }
+    $cachedBySymbol[$sym] = $cached;
+  }
+
+  $liveBySymbol = [];
+  if ($withLive) {
+    $liveCandidatesByType = qa_live_candidates_grouped($symbolsByType, $cachedBySymbol, $opts);
+    if ($liveCandidatesByType) {
+      $liveBySymbol = qa_live_map_grouped($liveCandidatesByType, $metaBySymbol, $opts);
+    }
+  }
+
+  foreach ($rows as $row) {
+    $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+    $type = vp_normalize_asset_type((string)($row['type'] ?? ''));
+    if ($sym === '' || $type === '') continue;
+
+    $cached = is_array($cachedBySymbol[$sym] ?? null) ? $cachedBySymbol[$sym] : qa_cached_quote_from_market_row($row, $type);
     $live = is_array($liveBySymbol[$sym] ?? null) ? $liveBySymbol[$sym] : null;
     $chosen = qa_choose_authoritative_quote($cached, $live, $type, [
       'allow_crypto_seed' => $allowCryptoSeed,

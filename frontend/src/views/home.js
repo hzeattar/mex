@@ -244,7 +244,7 @@ async function loadHomeData(container) {
     })
     .catch(() => null);
 
-  api('/markets.php?scope=home&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=30', { timeout: 0, retry: 1, cacheTtl: 15000 })
+  api('/markets.php?scope=home&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=50', { timeout: 0, retry: 1, cacheTtl: 15000 })
     .then((markets) => {
       if (markets && markets.items) {
         container.__homeAllMarkets = markets.items;
@@ -524,8 +524,15 @@ function normalizeHomeMarketType(type) {
 }
 
 async function hydrateMarketQuotes(container, items) {
+  const refreshTargets = (items || []).filter((item) => {
+    const price = Number(item?.price || item?.q_price || 0);
+    if (!(price > 0)) return true;
+    const state = quoteState(item);
+    return state === 'stale' || state === 'unavailable';
+  });
+  if (!refreshTargets.length) return;
   const groups = new Map();
-  items.forEach((item) => {
+  refreshTargets.forEach((item) => {
     const symbol = String(item.symbol || '').toUpperCase();
     const type = item.type || 'crypto';
     if (!symbol) return;
@@ -542,7 +549,7 @@ async function hydrateMarketQuotes(container, items) {
       const chunk = unique.slice(i, i + chunkSize);
       const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
         timeout: type === 'crypto' ? 2600 : 3400,
-        cacheTtl: 0,
+        cacheTtl: 500,
         cache: 'no-store',
       }).catch(() => null);
       if (data?.items?.length) {
@@ -577,7 +584,7 @@ async function warmMissingHomeQuotes(container, missing) {
       const chunk = unique.slice(i, i + chunkSize);
       const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
         timeout: type === 'crypto' ? 2600 : 3400,
-        cacheTtl: 0,
+        cacheTtl: 500,
         cache: 'no-store',
       }).catch(() => null);
       if (data?.items?.length) data.items.forEach((q) => applyQuoteToMarketCard(container, q, type));
@@ -593,7 +600,7 @@ async function warmMissingHomeQuotes(container, missing) {
       const chunk = rescueList.slice(i, i + rescueChunkSize);
       const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
         timeout: type === 'crypto' ? 2600 : 3400,
-        cacheTtl: 0,
+        cacheTtl: 500,
         cache: 'no-store',
       }).catch(() => null);
       if (data?.items?.length) data.items.forEach((q) => applyQuoteToMarketCard(container, q, type));

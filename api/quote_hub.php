@@ -2,6 +2,7 @@
 require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/quotes.php';
 require_once __DIR__ . '/lib/market_resolver.php';
+require_once __DIR__ . '/lib/quote_authority.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -165,6 +166,18 @@ foreach ($list as $sym) {
   } catch (Throwable $e) {}
 }
 
+$cachedBySymbol = [];
+foreach ($warmBySymbol as $sym => $row) {
+  $cachedBySymbol[$sym] = [
+    'symbol' => $sym,
+    'type' => $type,
+    'price' => (float)($row['price'] ?? 0),
+    'change_pct' => (float)($row['change_pct'] ?? 0),
+    'updated_at' => (int)($row['updated_at'] ?? 0),
+    'source' => (string)($row['source'] ?? $row['provider'] ?? ''),
+  ];
+}
+
 $allowDirectBatch = !$force
   ? ($visible && !$single && $batchCount <= (in_array($type, ['forex','commodities','futures'], true) ? 6 : 5))
   : false;
@@ -186,16 +199,23 @@ if ($type === 'crypto') {
 
 $liveMap = [];
 try {
-  $liveMap = quote_bulk_live($list, $type, $metaBySymbol, [
-    'ttl' => $type === 'crypto' ? 1 : 1,
-    'yahoo_ttl' => 1,
-    'massive_ttl' => 1,
-    'eodhd_ttl' => in_array($type, ['stocks','arab'], true) ? 2 : 1,
-    'direct_budget' => $directBudget,
-    'direct_yahoo_budget' => $directBudget,
-    'chart_budget' => $chartBudget,
-    'allow_direct_batch' => $allowDirectBatch,
+  $liveCandidatesByType = qa_live_candidates_grouped([$type => $list], $cachedBySymbol, [
+    'force_live' => $force,
+    'strict_live_noncrypto' => $singleFocus || $focus || $visible,
   ]);
+  $liveSymbols = $liveCandidatesByType[$type] ?? [];
+  if ($liveSymbols) {
+    $liveMap = quote_bulk_live($liveSymbols, $type, $metaBySymbol, [
+      'ttl' => $type === 'crypto' ? 1 : 1,
+      'yahoo_ttl' => 1,
+      'massive_ttl' => 1,
+      'eodhd_ttl' => in_array($type, ['stocks','arab'], true) ? 2 : 1,
+      'direct_budget' => $directBudget,
+      'direct_yahoo_budget' => $directBudget,
+      'chart_budget' => $chartBudget,
+      'allow_direct_batch' => $allowDirectBatch,
+    ]);
+  }
 } catch (Throwable $e) {
   $liveMap = [];
 }
@@ -218,7 +238,7 @@ foreach ($list as $sym) {
     } catch (Throwable $e) {}
   }
   if (!$chosen) {
-    $warm = is_array($warmBySymbol[$sym] ?? null) ? $warmBySymbol[$sym] : null;
+    $warm = is_array($cachedBySymbol[$sym] ?? null) ? $cachedBySymbol[$sym] : (is_array($warmBySymbol[$sym] ?? null) ? $warmBySymbol[$sym] : null);
     if ($warmRowUsable($warm, $type, $nowTs, $strictWarm)) {
       $chosen = $normalizeItem($sym, $type, $market, $warm, $nowTs);
       if ($chosen) $warmCount++;

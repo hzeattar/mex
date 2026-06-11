@@ -93,7 +93,7 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'NZDUSD','name'=>'NZ Dollar / US Dollar',          'type'=>'forex','tv_symbol'=>'FX:NZDUSD','sort_order'=>112,'seed_price'=>0.584,'icon'=>'forex'],
     ['symbol'=>'EURGBP','name'=>'Euro / British Pound',           'type'=>'forex','tv_symbol'=>'FX:EURGBP','sort_order'=>114,'seed_price'=>0.863,'icon'=>'forex'],
     ['symbol'=>'EURJPY','name'=>'Euro / Japanese Yen',            'type'=>'forex','tv_symbol'=>'FX:EURJPY','sort_order'=>116,'seed_price'=>166.4,'icon'=>'forex'],
-    ['symbol'=>'GBPJPY','name'=>'British Pound / Japanese Yen',   'type'=>'forex','tv_symbol'=>'FX:GBPJPY','sort_order'=>118,'seed_price'=>17.55.8,'icon'=>'forex'],
+    ['symbol'=>'GBPJPY','name'=>'British Pound / Japanese Yen',   'type'=>'forex','tv_symbol'=>'FX:GBPJPY','sort_order'=>118,'seed_price'=>192.8,'icon'=>'forex'],
     ['symbol'=>'EURCAD','name'=>'Euro / Canadian Dollar',         'type'=>'forex','tv_symbol'=>'FX:EURCAD','sort_order'=>120,'seed_price'=>1.583,'icon'=>'forex'],
     ['symbol'=>'EURAUD','name'=>'Euro / Australian Dollar',       'type'=>'forex','tv_symbol'=>'FX:EURAUD','sort_order'=>122,'seed_price'=>1.766,'icon'=>'forex'],
     ['symbol'=>'EURCHF','name'=>'Euro / Swiss Franc',             'type'=>'forex','tv_symbol'=>'FX:EURCHF','sort_order'=>124,'seed_price'=>0.918,'icon'=>'forex'],
@@ -105,13 +105,13 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'AUDCAD','name'=>'Australian Dollar / Canadian Dollar','type'=>'forex','tv_symbol'=>'FX:AUDCAD','sort_order'=>136,'seed_price'=>0.896,'icon'=>'forex'],
     ['symbol'=>'AUDCHF','name'=>'Australian Dollar / Swiss Franc','type'=>'forex','tv_symbol'=>'FX:AUDCHF','sort_order'=>138,'seed_price'=>0.52,'icon'=>'forex'],
     ['symbol'=>'AUDNZD','name'=>'Australian Dollar / NZ Dollar',  'type'=>'forex','tv_symbol'=>'FX:AUDNZD','sort_order'=>140,'seed_price'=>1.118,'icon'=>'forex'],
-    ['symbol'=>'AUDJPY','name'=>'Australian Dollar / Japanese Yen','type'=>'forex','tv_symbol'=>'FX:AUDJPY','sort_order'=>142,'seed_price'=>84.2.2,'icon'=>'forex'],
+    ['symbol'=>'AUDJPY','name'=>'Australian Dollar / Japanese Yen','type'=>'forex','tv_symbol'=>'FX:AUDJPY','sort_order'=>142,'seed_price'=>84.2,'icon'=>'forex'],
     ['symbol'=>'CADJPY','name'=>'Canadian Dollar / Japanese Yen', 'type'=>'forex','tv_symbol'=>'FX:CADJPY','sort_order'=>144,'seed_price'=>105.1,'icon'=>'forex'],
-    ['symbol'=>'CHFJPY','name'=>'Swiss Franc / Japanese Yen',     'type'=>'forex','tv_symbol'=>'FX:CHFJPY','sort_order'=>146,'seed_price'=>17.51.2,'icon'=>'forex'],
-    ['symbol'=>'NZDJPY','name'=>'NZ Dollar / Japanese Yen',       'type'=>'forex','tv_symbol'=>'FX:NZDJPY','sort_order'=>148,'seed_price'=>84.2.0,'icon'=>'forex'],
+    ['symbol'=>'CHFJPY','name'=>'Swiss Franc / Japanese Yen',     'type'=>'forex','tv_symbol'=>'FX:CHFJPY','sort_order'=>146,'seed_price'=>181.2,'icon'=>'forex'],
+    ['symbol'=>'NZDJPY','name'=>'NZ Dollar / Japanese Yen',       'type'=>'forex','tv_symbol'=>'FX:NZDJPY','sort_order'=>148,'seed_price'=>84.2,'icon'=>'forex'],
     ['symbol'=>'CADCHF','name'=>'Canadian Dollar / Swiss Franc',  'type'=>'forex','tv_symbol'=>'FX:CADCHF','sort_order'=>150,'seed_price'=>0.58,'icon'=>'forex'],
     ['symbol'=>'NZDCAD','name'=>'NZ Dollar / Canadian Dollar',    'type'=>'forex','tv_symbol'=>'FX:NZDCAD','sort_order'=>152,'seed_price'=>0.801,'icon'=>'forex'],
-    ['symbol'=>'USDMXN','name'=>'US Dollar / Mexican Peso',       'type'=>'forex','tv_symbol'=>'FX:USDMXN','sort_order'=>160,'seed_price'=>17.5.9,'icon'=>'forex'],
+    ['symbol'=>'USDMXN','name'=>'US Dollar / Mexican Peso',       'type'=>'forex','tv_symbol'=>'FX:USDMXN','sort_order'=>160,'seed_price'=>18.9,'icon'=>'forex'],
     ['symbol'=>'USDSEK','name'=>'US Dollar / Swedish Krona',      'type'=>'forex','tv_symbol'=>'FX:USDSEK','sort_order'=>162,'seed_price'=>9.8,'icon'=>'forex'],
     ['symbol'=>'USDNOK','name'=>'US Dollar / Norwegian Krone',    'type'=>'forex','tv_symbol'=>'FX:USDNOK','sort_order'=>164,'seed_price'=>10.4,'icon'=>'forex'],
     ['symbol'=>'USDPLN','name'=>'US Dollar / Polish Zloty',       'type'=>'forex','tv_symbol'=>'FX:USDPLN','sort_order'=>166,'seed_price'=>3.85,'icon'=>'forex'],
@@ -187,7 +187,7 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'WHEAT', 'name'=>'Wheat',               'type'=>'commodities','tv_symbol'=>'CBOT:ZW1!', 'yahoo_ticker'=>'ZW=F', 'sort_order'=>320,'seed_price'=>520, 'icon'=>'commodity'],
     ['symbol'=>'CORN',  'name'=>'Corn',                'type'=>'commodities','tv_symbol'=>'CBOT:ZC1!', 'yahoo_ticker'=>'ZC=F', 'sort_order'=>322,'seed_price'=>420, 'icon'=>'commodity'],
     ['symbol'=>'SOYBEAN','name'=>'Soybeans',           'type'=>'commodities','tv_symbol'=>'CBOT:ZS1!', 'yahoo_ticker'=>'ZS=F', 'sort_order'=>324,'seed_price'=>1050,'icon'=>'commodity'],
-    ['symbol'=>'SUGAR', 'name'=>'Sugar #11',           'type'=>'commodities','tv_symbol'=>'ICEUS:SB1!','yahoo_ticker'=>'SB=F', 'sort_order'=>326,'seed_price'=>17.5.2,'icon'=>'commodity'],
+    ['symbol'=>'SUGAR', 'name'=>'Sugar #11',           'type'=>'commodities','tv_symbol'=>'ICEUS:SB1!','yahoo_ticker'=>'SB=F', 'sort_order'=>326,'seed_price'=>18.2,'icon'=>'commodity'],
     ['symbol'=>'COTTON','name'=>'Cotton #2',           'type'=>'commodities','tv_symbol'=>'ICEUS:CT1!','yahoo_ticker'=>'CT=F', 'sort_order'=>328,'seed_price'=>68,  'icon'=>'commodity'],
     ['symbol'=>'COFFEE','name'=>'Coffee "C"',          'type'=>'commodities','tv_symbol'=>'ICEUS:KC1!','yahoo_ticker'=>'KC=F', 'sort_order'=>330,'seed_price'=>2.15, 'icon'=>'commodity'],
     ['symbol'=>'COCOA', 'name'=>'Cocoa',               'type'=>'commodities','tv_symbol'=>'ICEUS:CC1!','yahoo_ticker'=>'CC=F', 'sort_order'=>332,'seed_price'=>8500,'icon'=>'commodity'],
@@ -204,7 +204,7 @@ function vp_supported_market_defs(): array {
     ['symbol'=>'RBOB', 'name'=>'RBOB Gasoline',          'type'=>'commodities','tv_symbol'=>'NYMEX:RB1!','yahoo_ticker'=>'RB=F','sort_order'=>354,'seed_price'=>2.05,'icon'=>'oil'],
     ['symbol'=>'OATS', 'name'=>'Oats',                   'type'=>'commodities','tv_symbol'=>'CBOT:ZO1!','yahoo_ticker'=>'ZO=F','sort_order'=>356,'seed_price'=>340,'icon'=>'commodity'],
     ['symbol'=>'RICE', 'name'=>'Rough Rice',             'type'=>'commodities','tv_symbol'=>'CBOT:ZR1!','yahoo_ticker'=>'ZR=F','sort_order'=>358,'seed_price'=>16.5,'icon'=>'commodity'],
-    ['symbol'=>'MILK', 'name'=>'Class III Milk',         'type'=>'commodities','tv_symbol'=>'CME:DC1!', 'yahoo_ticker'=>'DC=F','sort_order'=>360,'seed_price'=>17.5.0,'icon'=>'commodity'],
+    ['symbol'=>'MILK', 'name'=>'Class III Milk',         'type'=>'commodities','tv_symbol'=>'CME:DC1!', 'yahoo_ticker'=>'DC=F','sort_order'=>360,'seed_price'=>17.5,'icon'=>'commodity'],
     ['symbol'=>'FEEDER_CATTLE','name'=>'Feeder Cattle',  'type'=>'commodities','tv_symbol'=>'CME:GF1!', 'yahoo_ticker'=>'GF=F','sort_order'=>362,'seed_price'=>260,'icon'=>'commodity'],
 
     // ── FUTURES (30+) ───────────────────────────────────────────────────────
@@ -277,6 +277,52 @@ function vp_supported_market_defs(): array {
   ];
 }
 
+function vp_supported_market_limit(string $typeAlias): ?int {
+  return match (vp_normalize_asset_type($typeAlias)) {
+    'crypto' => 50,
+    'forex' => 30,
+    'stocks' => 20,
+    'commodities' => 20,
+    'arab' => 10,
+    default => null,
+  };
+}
+
+function vp_supported_market_bootstrap_limit(string $typeAlias, string $scope): int {
+  $typeAlias = vp_normalize_asset_type($typeAlias);
+  $scope = strtolower(trim($scope));
+  if ($scope === 'home') {
+    return match ($typeAlias) {
+      'crypto' => 50,
+      'forex' => 30,
+      'stocks' => 20,
+      'commodities' => 20,
+      'arab' => 10,
+      default => 20,
+    };
+  }
+
+  if ($scope === 'trade') {
+    return match ($typeAlias) {
+      'crypto' => 50,
+      'forex' => 30,
+      'stocks' => 20,
+      'commodities' => 20,
+      'arab' => 10,
+      default => 20,
+    };
+  }
+
+  return match ($typeAlias) {
+    'crypto' => 50,
+    'forex' => 30,
+    'stocks' => 20,
+    'commodities' => 20,
+    'arab' => 10,
+    default => 20,
+  };
+}
+
 function vp_supported_home_symbols(): array {
   return ['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','USDCAD','AAPL','MSFT','NVDA','TSLA','AMZN','GOOGL','XAUUSD','XAGUSD','USOIL','UKOIL','ES_F','NQ_F','GC_F','ZN_F','2222','1120'];
 }
@@ -294,7 +340,19 @@ function vp_supported_defs_for(string $typeAlias, string $scope = ''): array {
     $defs = array_values(array_filter($defs, static fn($d) => vp_normalize_asset_type((string)$d['type']) === $typeAlias));
   }
   usort($defs, static fn($a, $b) => ((int)($a['sort_order'] ?? 999)) <=> ((int)($b['sort_order'] ?? 999)));
-  return $defs;
+  $counts = ['crypto' => 0, 'forex' => 0, 'stocks' => 0, 'commodities' => 0, 'arab' => 0];
+  $out = [];
+  foreach ($defs as $def) {
+    $defType = vp_normalize_asset_type((string)($def['type'] ?? ''));
+    if ($defType === '') continue;
+    $limit = vp_supported_market_bootstrap_limit($defType, $scope);
+    if ($limit !== null) {
+      $counts[$defType] = ($counts[$defType] ?? 0) + 1;
+      if ($counts[$defType] > $limit) continue;
+    }
+    $out[] = $def;
+  }
+  return $out;
 }
 
 function vp_build_supported_market_row(array $def, int $idBase = 970000): array {
@@ -838,7 +896,7 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
 function vp_fallback_futures_markets(): array {
   return [
     ['symbol'=>'ES_F',  'name'=>'E-mini S&P 500 Future',     'tv_symbol'=>'CME_MINI:ES1!',   'yahoo_ticker'=>'ES=F',  'sort_order'=>10, 'seed_price'=>5950.0],
-    ['symbol'=>'NQ_F',  'name'=>'E-mini Nasdaq 100 Future',  'tv_symbol'=>'CME_MINI:NQ1!',   'yahoo_ticker'=>'NQ=F',  'sort_order'=>12, 'seed_price'=>16.50.0],
+    ['symbol'=>'NQ_F',  'name'=>'E-mini Nasdaq 100 Future',  'tv_symbol'=>'CME_MINI:NQ1!',   'yahoo_ticker'=>'NQ=F',  'sort_order'=>12, 'seed_price'=>21500.0],
     ['symbol'=>'YM_F',  'name'=>'E-mini Dow Future',         'tv_symbol'=>'CBOT_MINI:YM1!',  'yahoo_ticker'=>'YM=F',  'sort_order'=>14, 'seed_price'=>39280.0],
     ['symbol'=>'RTY_F', 'name'=>'E-mini Russell 2000 Future','tv_symbol'=>'CME_MINI:RTY1!',  'yahoo_ticker'=>'RTY=F', 'sort_order'=>16, 'seed_price'=>2055.0],
     ['symbol'=>'NKD_F', 'name'=>'Nikkei 225 Future',         'tv_symbol'=>'OSE:NK2251!',     'yahoo_ticker'=>'NKD=F', 'sort_order'=>18, 'seed_price'=>38750.0],
@@ -1200,17 +1258,16 @@ try {
 
   $authoritativeQuotes = [];
   if ($otherRows) {
-    // Non-crypto lists must stay fast and cache-first. Warmers/focus quotes
-    // refresh them, while the list endpoint only reads trusted stored prices.
+    // Non-crypto lists stay cache-first; live escalation belongs to focused
+    // quote endpoints and background warmers, not the list bootstrap path.
     $authoritativeQuotes = array_replace(
       $authoritativeQuotes,
       qa_overlay_market_rows($otherRows, array_merge($quoteBaseOpts, ['with_live' => false]))
     );
   }
   if ($cryptoRows) {
-    // Keep market lists cache-first. Provider calls belong to the focused
-    // quote endpoint and cron warmers; doing them here can block first paint
-    // and create canceled request storms on slow mobile networks.
+    // Crypto is the only group that may use live escalation here, and only
+    // when the caller explicitly asks for a live market bootstrap.
     $authoritativeQuotes = array_replace(
       $authoritativeQuotes,
       qa_overlay_market_rows($cryptoRows, array_merge($quoteBaseOpts, [

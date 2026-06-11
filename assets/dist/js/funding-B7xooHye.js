@@ -1,4 +1,4 @@
-import{n as me,s as ge,i as g,j as c,g as u,m as p,f as i,k as he,h as ye,c as be}from"./main-CrCNAud6.js";const A=globalThis.__MEX_FUNDING_CACHE__||(globalThis.__MEX_FUNDING_CACHE__=new Map),ve=45e3,G=[{key:"deposit",label:"Deposit",icon:c.deposit},{key:"withdraw",label:"Withdraw",icon:c.withdraw},{key:"history",label:"History",icon:c.wallet}];function Ge(e={}){const t=ie(e),s=g("wallet")||{};g("kyc");const n=g("level")||{},r=g("mode")==="real"?"real":"demo",a=r==="real"?s.real||{}:s.demo||{};return n.current,`
+import{n as me,s as ge,i as g,j as c,g as u,m as p,f as i,k as he,h as ye,c as be}from"./main-CQ9GDTgp.js";const A=globalThis.__MEX_FUNDING_CACHE__||(globalThis.__MEX_FUNDING_CACHE__=new Map),ve=45e3,G=[{key:"deposit",label:"Deposit",icon:c.deposit},{key:"withdraw",label:"Withdraw",icon:c.withdraw},{key:"history",label:"History",icon:c.wallet}];function Ge(e={}){const t=ie(e),s=g("wallet")||{};g("kyc");const n=g("level")||{},r=g("mode")==="real"?"real":"demo",a=r==="real"?s.real||{}:s.demo||{};return n.current,`
     <div class="funds-workspace animate-fade-in" data-active-funding-tab="${u(t)}">
       <section class="funds-hero-pro">
         <div>

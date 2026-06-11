@@ -1,4 +1,4 @@
-import{j as l,i,c as m,f as n,m as r}from"./main-CrCNAud6.js";function b(){const e=i("level")||{},a=e.current||{},t=e.next||{},s=i("kyc")||{};return`
+import{j as l,i,c as m,f as n,m as r}from"./main-CQ9GDTgp.js";function b(){const e=i("level")||{},a=e.current||{},t=e.next||{},s=i("kyc")||{};return`
     <div class="space-y-5 animate-fade-in wallet-page">
       <section class="wallet-hero">
         <div>

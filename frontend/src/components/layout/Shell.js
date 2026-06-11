@@ -449,7 +449,7 @@ async function loadMarketsList() {
   if (!list) return;
   try {
     if (!_marketsCache) {
-      const data = await api('/markets.php?type=crypto&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=36', { timeout: 0, retry: 1, cacheTtl: 15000 });
+      const data = await api('/markets.php?type=crypto&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=50', { timeout: 0, retry: 1, cacheTtl: 15000 });
       _marketsCache = data?.items || data?.markets || data || [];
     }
     renderMarketsList(_marketsCache, '');

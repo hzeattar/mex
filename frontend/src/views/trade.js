@@ -346,7 +346,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
     activeQuoteController = new AbortController();
     try {
       const url = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&purpose=focus&_=${Date.now()}`;
-      const data = await api(url, { timeout: type === 'crypto' ? 2400 : 2600, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
+      const data = await api(url, { timeout: type === 'crypto' ? 2400 : 2600, signal: activeQuoteController.signal, cacheTtl: 500, cache: 'no-store' });
       if (!isCurrentRun(runId, symbol, type)) return;
       if (data?.items?.[0]) updatePrice(container, data.items[0], runId);
     } catch (_e) {
@@ -482,7 +482,7 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId) {
     const chunk = unique.slice(i, i + chunkSize);
     const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
       timeout: type === 'crypto' ? 2600 : 3400,
-      cacheTtl: 0,
+      cacheTtl: 500,
       cache: 'no-store',
     }).catch(() => null);
     if (!isCurrentRun(runId)) return;
@@ -499,7 +499,7 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId) {
     const chunk = rescueList.slice(i, i + rescueChunkSize);
     const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
       timeout: type === 'crypto' ? 2600 : 3400,
-      cacheTtl: 0,
+      cacheTtl: 500,
       cache: 'no-store',
     }).catch(() => null);
     if (!isCurrentRun(runId)) return;
@@ -1604,7 +1604,16 @@ function calcMA(closes, period) {
 function marketListUrl(type) {
   const resolved = normalizeType(type || 'crypto');
   const actual = resolved === 'favorites' ? 'crypto' : resolved;
-  return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=36`;
+  const limitByType = {
+    crypto: 50,
+    forex: 30,
+    stocks: 20,
+    commodities: 20,
+    arab: 10,
+    futures: 20,
+  };
+  const limit = limitByType[actual] || 20;
+  return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=${limit}`;
 }
 
 async function loadMarketItems(type, runId = tradeRunId, force = false) {

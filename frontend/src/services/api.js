@@ -3,9 +3,31 @@ const BASE = '/api';
 const activeControllers = new Set();
 const pendingGet = new Map();
 const responseCache = new Map();
+const transientQueryParams = new Set(['_', 'nocache', 'cacheBust', 'cache_bust']);
 
 function cacheKeyFor(path) {
-  return String(path || '');
+  const raw = String(path || '');
+  if (!raw) return raw;
+  try {
+    const absolute = /^https?:\/\//i.test(raw);
+    const url = absolute ? new URL(raw) : new URL(raw, 'http://local');
+    const params = new URLSearchParams(url.search);
+    transientQueryParams.forEach((name) => params.delete(name));
+    const sorted = [...params.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) => {
+      if (leftKey === rightKey) return leftValue.localeCompare(rightValue);
+      return leftKey.localeCompare(rightKey);
+    });
+    const search = sorted.length
+      ? `?${sorted.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&')}`
+      : '';
+    return `${absolute ? url.origin : ''}${url.pathname}${search}`;
+  } catch (_error) {
+    return raw
+      .replace(/[?&](?:_|nocache|cacheBust|cache_bust)=[^&]*/g, '')
+      .replace(/\?&/, '?')
+      .replace(/&&+/g, '&')
+      .replace(/[?&]$/, '');
+  }
 }
 
 function defaultCacheTtl(path) {

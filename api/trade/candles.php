@@ -17,6 +17,7 @@ require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/quote_authority.php';
 require_once __DIR__ . '/../lib/marketdata.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
+require_once __DIR__ . '/../lib/quote_central.php';
 
 $symbol = strtoupper(trim((string)($_GET['symbol'] ?? '')));
 $typeRaw   = strtolower(trim((string)($_GET['type'] ?? 'crypto'))); // crypto|forex|stocks|commodities|arab|futures
@@ -35,11 +36,11 @@ if ($uid <= 0 && $limit > 100) {
 if ($uid <= 0) $limit = min($limit, 100);
 
 $GLOBALS['CANDLES_REQUEST_STARTED_AT'] = microtime(true);
-$GLOBALS['CANDLES_REQUEST_BUDGET_MS'] = max(900, min(10000, (int)env('CANDLES_REQUEST_BUDGET_MS', '4500')));
+$GLOBALS['CANDLES_REQUEST_BUDGET_MS'] = max(2000, min(15000, (int)env('CANDLES_REQUEST_BUDGET_MS', '6000')));
 $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
-  'connect_timeout' => max(1, min(3, (int)env('CANDLES_UPSTREAM_CONNECT_TIMEOUT', '1'))),
-  'timeout' => max(2, min(5, (int)env('CANDLES_UPSTREAM_TIMEOUT', '2'))),
-  'retries' => max(0, min(1, (int)env('CANDLES_UPSTREAM_RETRIES', '0'))),
+  'connect_timeout' => max(1, min(2, (int)env('CANDLES_UPSTREAM_CONNECT_TIMEOUT', '1'))),
+  'timeout' => max(1, min(4, (int)env('CANDLES_UPSTREAM_TIMEOUT', '2'))),
+  'retries' => 0,
 ];
 
 $mr = [];
@@ -383,7 +384,17 @@ function candles_sync_live_tail(array $items, string $symbol, string $market, st
   if ((int)env('CANDLES_SYNC_LIVE_TAIL', '0') !== 1) return $items;
   if (candles_request_over_budget((int)env('CANDLES_LIVE_TAIL_RESERVE_MS', '1000'))) return $items;
   try {
-    $live = (float)quote_price($symbol, $market, $assetType);
+    // Read from central cache first (no upstream hit), fallback to quote_price
+    $live = 0.0;
+    if (function_exists('quote_central_get')) {
+      $centralRow = quote_central_get($symbol, $assetType, 30);
+      if ($centralRow && (float)($centralRow['price'] ?? 0) > 0) {
+        $live = (float)$centralRow['price'];
+      }
+    }
+    if (!($live > 0)) {
+      $live = (float)quote_price($symbol, $market, $assetType);
+    }
     if (!($live > 0)) return $items;
 
     $nowBucket = (int)(floor(time() / $step) * $step);
@@ -685,31 +696,7 @@ try {
   $preferAggsForSymbol = $hasAggsProvider && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $typeRaw ?: $providerType)));
   $triedYahooChart = false;
 
-  if (strtolower((string)env('PRICE_PROVIDER', 'eodhd')) === 'eodhd' && ($type === 'arab' || in_array($providerType, ['stocks','forex'], true) || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
-    try {
-      $eSymbol = eodhd_symbol_for_market($symbol, $type, $meta) ?: eodhd_symbol_for_market($symbol, $providerType, $meta);
-      if ($eSymbol) {
-        $items = eodhd_intraday_candles($eSymbol, $tf, $limit);
-        if (count($items) > 0) {
-          $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
-          $merged = array_merge($cachedAll, $items);
-          $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
-          candles_cache_save($symbol,$market,$tf, $merged, $type);
-          json_response(['ok'=>true,'items'=>$out,'source'=>'eodhd_intraday','warm'=>false]);
-        }
-      }
-    } catch (Throwable $e) {
-      // fall through
-    }
-  }
-
-  if (candles_request_over_budget(1400)) {
-    candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
-  }
-
-  // Keep charts aligned with the same source family as quotes:
-  // - Yahoo first for stocks / arab / futures / non-spot commodity contracts
-  // - Massive/Polygon aggs first for forex and spot metals, with Yahoo fallback if aggs fail.
+  // ── Yahoo FIRST for non-crypto intraday (faster and more reliable than EODHD) ──
   if (!$preferAggsForSymbol && in_array($providerType, ['stocks','arab','futures','commodities','forex'], true)) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
@@ -733,8 +720,40 @@ try {
         }
       }
     } catch (Throwable $e) {
-      // fall through to aggs / synthetic
+      // fall through to EODHD / aggs / synthetic
     }
+  }
+
+  if (candles_request_over_budget(1800)) {
+    candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
+  }
+
+  // ── EODHD intraday fallback (with strict timeout to avoid eating the whole budget) ──
+  if (strtolower((string)env('PRICE_PROVIDER', 'eodhd')) === 'eodhd' && ($type === 'arab' || in_array($providerType, ['stocks','forex'], true) || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
+    // Set a tight per-provider timeout for EODHD intraday so it doesn't consume the whole budget
+    $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'];
+    $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+      'connect_timeout' => 1,
+      'timeout' => max(1, min(2, (int)env('CANDLES_EODHD_INTRADAY_TIMEOUT', '2'))),
+      'retries' => 0,
+    ];
+    try {
+      $eSymbol = eodhd_symbol_for_market($symbol, $type, $meta) ?: eodhd_symbol_for_market($symbol, $providerType, $meta);
+      if ($eSymbol) {
+        $items = eodhd_intraday_candles($eSymbol, $tf, $limit);
+        if (count($items) > 0) {
+          $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout; // restore
+          $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
+          $merged = array_merge($cachedAll, $items);
+          $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
+          candles_cache_save($symbol,$market,$tf, $merged, $type);
+          json_response(['ok'=>true,'items'=>$out,'source'=>'eodhd_intraday','warm'=>false]);
+        }
+      }
+    } catch (Throwable $e) {
+      // fall through
+    }
+    $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout; // restore
   }
 
   if (candles_request_over_budget(1200)) {

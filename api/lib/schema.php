@@ -80,30 +80,42 @@ function schema_env(string $key, string $default = ''): string {
 
 /** schema helpers for upgrades (shared hosting safe) */
 function schema_table_exists(PDO $pdo, string $table, string $driver): bool {
+  static $cache = [];
+  $cacheKey = $table . ':' . strtolower($driver);
+  if (isset($cache[$cacheKey])) return $cache[$cacheKey];
   $driver = strtolower($driver);
   if ($driver === 'mysql') {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?");
     $stmt->execute([$table]);
-    return (int)$stmt->fetchColumn() > 0;
+    $result = (int)$stmt->fetchColumn() > 0;
+  } else {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?");
+    $stmt->execute([$table]);
+    $result = (int)$stmt->fetchColumn() > 0;
   }
-  $stmt = $pdo->prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?");
-  $stmt->execute([$table]);
-  return (int)$stmt->fetchColumn() > 0;
+  $cache[$cacheKey] = $result;
+  return $result;
 }
 
 function schema_column_exists(PDO $pdo, string $table, string $column, string $driver): bool {
+  static $cache = [];
+  $cacheKey = $table . '.' . $column . ':' . strtolower($driver);
+  if (isset($cache[$cacheKey])) return $cache[$cacheKey];
   $driver = strtolower($driver);
   if ($driver === 'mysql') {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?");
     $stmt->execute([$table, $column]);
-    return (int)$stmt->fetchColumn() > 0;
+    $result = (int)$stmt->fetchColumn() > 0;
+  } else {
+    $stmt = $pdo->query("PRAGMA table_info(" . $table . ")");
+    $cols = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    $result = false;
+    foreach ($cols as $c) {
+      if (($c['name'] ?? '') === $column) { $result = true; break; }
+    }
   }
-  $stmt = $pdo->query("PRAGMA table_info(" . $table . ")");
-  $cols = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-  foreach ($cols as $c) {
-    if (($c['name'] ?? '') === $column) return true;
-  }
-  return false;
+  $cache[$cacheKey] = $result;
+  return $result;
 }
 
 function schema_add_column(PDO $pdo, string $table, string $columnDefMySQL, string $columnDefSQLite, string $driver): void {
