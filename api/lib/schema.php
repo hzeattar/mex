@@ -83,6 +83,21 @@ function schema_table_exists(PDO $pdo, string $table, string $driver): bool {
   static $cache = [];
   $cacheKey = $table . ':' . strtolower($driver);
   if (isset($cache[$cacheKey])) return $cache[$cacheKey];
+  // File-based cross-request cache (10 min TTL, avoids repeated information_schema queries)
+  $fileCacheDir = __DIR__ . '/../data/cache/schema';
+  if (!is_dir($fileCacheDir)) @mkdir($fileCacheDir, 0777, true);
+  $fileCacheKey = 'tbl_' . $table . '_' . strtolower($driver);
+  $fileCachePath = $fileCacheDir . '/' . $fileCacheKey . '.json';
+  if (is_file($fileCachePath)) {
+    $age = time() - (int)@filemtime($fileCachePath);
+    if ($age < 600) {
+      $raw = @file_get_contents($fileCachePath);
+      if ($raw !== false) {
+        $d = json_decode($raw, true);
+        if (is_array($d) && isset($d['v'])) { $cache[$cacheKey] = (bool)$d['v']; return (bool)$d['v']; }
+      }
+    }
+  }
   $driver = strtolower($driver);
   if ($driver === 'mysql') {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?");
@@ -94,6 +109,7 @@ function schema_table_exists(PDO $pdo, string $table, string $driver): bool {
     $result = (int)$stmt->fetchColumn() > 0;
   }
   $cache[$cacheKey] = $result;
+  @file_put_contents($fileCachePath, json_encode(['v' => $result]), LOCK_EX);
   return $result;
 }
 
@@ -101,19 +117,33 @@ function schema_column_exists(PDO $pdo, string $table, string $column, string $d
   static $cache = [];
   $cacheKey = $table . '.' . $column . ':' . strtolower($driver);
   if (isset($cache[$cacheKey])) return $cache[$cacheKey];
-  $driver = strtolower($driver);
-  if ($driver === 'mysql') {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?");
-    $stmt->execute([$table, $column]);
-    $result = (int)$stmt->fetchColumn() > 0;
-  } else {
-    $stmt = $pdo->query("PRAGMA table_info(" . $table . ")");
-    $cols = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-    $result = false;
-    foreach ($cols as $c) {
-      if (($c['name'] ?? '') === $column) { $result = true; break; }
+  // File-based cross-request cache — uses bulk table introspection for efficiency
+  $fileCacheDir = __DIR__ . '/../data/cache/schema';
+  if (!is_dir($fileCacheDir)) @mkdir($fileCacheDir, 0777, true);
+  $bulkCachePath = $fileCacheDir . '/cols_' . $table . '_' . strtolower($driver) . '.json';
+  $bulkCache = null;
+  if (is_file($bulkCachePath)) {
+    $age = time() - (int)@filemtime($bulkCachePath);
+    if ($age < 600) {
+      $raw = @file_get_contents($bulkCachePath);
+      if ($raw !== false) { $bulkCache = json_decode($raw, true); }
     }
   }
+  if (!is_array($bulkCache)) {
+    $driver = strtolower($driver);
+    if ($driver === 'mysql') {
+      $stmt = $pdo->prepare("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?");
+      $stmt->execute([$table]);
+      $bulkCache = array_flip(array_map('strtolower', $stmt->fetchAll(PDO::FETCH_COLUMN) ?: []));
+    } else {
+      $stmt = $pdo->query("PRAGMA table_info(" . $table . ")");
+      $cols = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+      $bulkCache = [];
+      foreach ($cols as $c) { $bulkCache[strtolower((string)($c['name'] ?? ''))] = true; }
+    }
+    @file_put_contents($bulkCachePath, json_encode($bulkCache), LOCK_EX);
+  }
+  $result = isset($bulkCache[strtolower($column)]);
   $cache[$cacheKey] = $result;
   return $result;
 }
