@@ -438,8 +438,7 @@ function updateLevelOverview(container) {
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
     if (!rail.__levelScrolledOnce) {
-      const card = rail.querySelector('[data-current-level-card="1"]');
-      if (card) rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
+      scrollCurrentLevelRail(rail);
       rail.__levelScrolledOnce = true;
     } else {
       rail.scrollLeft = oldScrollLeft;
@@ -817,16 +816,11 @@ function renderLevelRail(level, ctx) {
   });
 
   const cards = [];
-  // Reorder: completed (before) → current → locked (after).
-  // This way the slider shows: old → current → new.
-  const reordered = [];
-  for (let i = 0; i < currentIndex; i++) reordered.push({ lvl: list[i], index: i, rel: 'before' });
-  if (currentIndex >= 0) reordered.push({ lvl: list[currentIndex], index: currentIndex, rel: 'current' });
-  for (let i = currentIndex + 1; i < list.length; i++) reordered.push({ lvl: list[i], index: i, rel: 'after' });
-
-  reordered.forEach(({ lvl, index, rel }) => {
+  // Build cards in natural order (completed → current → locked).
+  // Then scroll the rail so the current card is first visible.
+  list.forEach((lvl, index) => {
     if (!lvl || typeof lvl !== 'object') return;
-    const isCurrent = rel === 'current';
+    const isCurrent = index === currentIndex || ((currentId && Number(lvl.id) === Number(currentId)) || (currentCode && String(lvl.level_code || '').toLowerCase() === currentCode) || (currentKey && levelIdentity(lvl) === currentKey));
     const isCompleted = currentIndex >= 0 && index < currentIndex;
     const min = levelMinimum(lvl);
     const progress = isCurrent ? ctx.levelProgress : (isCompleted ? 100 : 0);
@@ -1180,5 +1174,10 @@ function scrollCurrentLevelRail(rail) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
+  // Use two rAFs to ensure the browser has fully laid out the new cards.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      rail.scrollTo({ left: Math.max(0, card.offsetLeft - 8), behavior: 'auto' });
+    });
+  });
 }

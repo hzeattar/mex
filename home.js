@@ -417,8 +417,7 @@ function updateLevelOverview(container) {
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
     if (!rail.__levelScrolledOnce) {
-      const card = rail.querySelector('[data-current-level-card="1"]');
-      if (card) rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
+      scrollCurrentLevelRail(rail);
       rail.__levelScrolledOnce = true;
     } else {
       rail.scrollLeft = oldScrollLeft;
@@ -784,6 +783,8 @@ function renderLevelRail(level, ctx) {
   });
 
   const cards = [];
+  // Build cards in natural order (completed → current → locked).
+  // Then scroll the rail so the current card is first visible.
   list.forEach((lvl, index) => {
     if (!lvl || typeof lvl !== 'object') return;
     const isCurrent = index === currentIndex || ((currentId && Number(lvl.id) === Number(currentId)) || (currentCode && String(lvl.level_code || '').toLowerCase() === currentCode) || (currentKey && levelIdentity(lvl) === currentKey));
@@ -1126,5 +1127,10 @@ function scrollCurrentLevelRail(rail) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
+  // Use two rAFs to ensure the browser has fully laid out the new cards.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      rail.scrollTo({ left: Math.max(0, card.offsetLeft - 8), behavior: 'auto' });
+    });
+  });
 }
