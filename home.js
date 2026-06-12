@@ -1127,10 +1127,9 @@ function scrollCurrentLevelRail(rail) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  // Use two rAFs to ensure the browser has fully laid out the new cards.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      rail.scrollTo({ left: Math.max(0, card.offsetLeft - 8), behavior: 'auto' });
-    });
-  });
+  // Reset scroll to 0 so offsetLeft is measured from the true left edge,
+  // then scroll to the card's position.
+  rail.scrollLeft = 0;
+  const target = Math.max(0, card.offsetLeft - 8);
+  rail.scrollTo({ left: target, behavior: 'auto' });
 }
