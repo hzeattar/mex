@@ -178,6 +178,13 @@ export function mount(container) {
       langTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
       return;
     }
+    const langClose = e.target.closest('[data-home-lang-close]');
+    if (langClose) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeHomeLang(container);
+      return;
+    }
     const langOption = e.target.closest('[data-home-set-locale]');
     if (langOption) {
       e.preventDefault();
@@ -966,7 +973,13 @@ function languageSwitcher() {
       <i>${icons.chevronDown}</i>
     </button>
     <div class="home-lang-overlay hidden" data-home-lang-overlay></div>
-    <div class="home-lang-dropdown hidden" data-home-lang-dropdown>${options}</div>
+    <div class="home-lang-dropdown hidden" data-home-lang-dropdown>
+      <div class="home-lang-dropdown-header">
+        <strong>${t('lang.select_language', 'Select Language')}</strong>
+        <button type="button" class="home-lang-close" data-home-lang-close aria-label="Close">✕</button>
+      </div>
+      ${options}
+    </div>
   </div>`;
 }
 
@@ -1161,16 +1174,15 @@ function scrollCurrentLevelRail(rail, smooth = false) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  // In RTL: scroll so current card is the first visible card at the right edge
-  // (nearest completed levels remain scrollable to the left)
   const isRTL = getComputedStyle(rail).direction === 'rtl';
   const railRect = rail.getBoundingClientRect();
   const cardRect = card.getBoundingClientRect();
   let scrollTarget;
   if (isRTL) {
-    scrollTarget = rail.scrollLeft + (railRect.right - cardRect.right);
+    // Center the current card in the rail
+    scrollTarget = rail.scrollLeft + (railRect.right - cardRect.right) - (railRect.width / 2) + (cardRect.width / 2);
   } else {
-    scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left);
+    scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left) - (railRect.width / 2) + (cardRect.width / 2);
   }
   if (smooth) {
     rail.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });

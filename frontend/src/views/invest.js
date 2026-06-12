@@ -96,6 +96,10 @@ function renderContent(container) {
   const gate = earnGate();
   const content = tab === 'copy' ? copyView() : contractsView();
   el.innerHTML = gate ? gatedWrap(content, gate) : content;
+  // Update tab active states
+  container.querySelectorAll('[data-earn-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.earnTab === tab);
+  });
 }
 
 function copyView() {
