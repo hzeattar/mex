@@ -3000,14 +3000,10 @@
 .pro-earn-rail .copy-card,
 .pro-earn-rail .pro-contract-card,
 .pro-earn-rail .pro-earn-empty-card {
-  scroll-snap-align: start;
   flex: 0 0 285px;
   width: 285px;
   border: 1px solid rgba(132,164,225,.15);
   border-radius: 17px;
-}
-.pro-level-rail-card.is-current {
-  scroll-snap-align: center;
 }
 .pro-level-rail-card {
   background: rgba(5,12,26,.52);
