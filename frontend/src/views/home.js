@@ -230,6 +230,10 @@ export function mount(container) {
 
   loadHomeData(container);
   loadHomeFx(container, selectedHomeCurrency());
+
+  // Soft-refresh balances/portfolio every 8s while on home (cache-backed, low cost)
+  container.__homeRefreshTimer = setInterval(() => { loadHomeData(container); }, 8000);
+  homeDisposers.push(() => { if (container.__homeRefreshTimer) { clearInterval(container.__homeRefreshTimer); container.__homeRefreshTimer = null; } });
 }
 
 export function cleanup() {
@@ -798,14 +802,12 @@ function renderLevelRail(level, ctx) {
   });
 
   const cards = [];
-  // Reorder: current first, then locked (after), then completed (before)
-  // This way the slider starts on the current level
+  // Reorder: completed (before) → current → locked (after).
+  // This way the slider shows: old → current → new.
   const reordered = [];
+  for (let i = 0; i < currentIndex; i++) reordered.push({ lvl: list[i], index: i, rel: 'before' });
   if (currentIndex >= 0) reordered.push({ lvl: list[currentIndex], index: currentIndex, rel: 'current' });
-  // Add locked (after current)
   for (let i = currentIndex + 1; i < list.length; i++) reordered.push({ lvl: list[i], index: i, rel: 'after' });
-  // Add completed (before current) - reverse so nearest completed is right after current visually
-  for (let i = currentIndex - 1; i >= 0; i--) reordered.push({ lvl: list[i], index: i, rel: 'before' });
 
   reordered.forEach(({ lvl, index, rel }) => {
     if (!lvl || typeof lvl !== 'object') return;
@@ -1147,8 +1149,8 @@ function scrollCurrentLevelRail(rail, smooth = false) {
   if (!card) return;
   const railRect = rail.getBoundingClientRect();
   const cardRect = card.getBoundingClientRect();
-  // How far the card's left edge is from the rail's left edge (accounting for current scroll)
-  const scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left) - 8;
+  // Center the current card in the rail view
+  const scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left) - (railRect.width / 2) + (cardRect.width / 2);
   if (smooth) {
     rail.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
   } else {

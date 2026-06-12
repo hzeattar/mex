@@ -517,9 +517,6 @@ function renderDepositTransferPanel(container, selected, amount, isStripe, valid
         <strong>${t('funding.transfer_instructions', 'Transfer instructions')}</strong>
         <p>${esc(selected.instructions)}</p>
       </div>` : ''}
-      <div class="transfer-target-grid">
-        ${renderTransferTargetGrid(selected)}
-      </div>
       ${renderMissingFundingDetails(selected)}
     </div>`;
   if (hasValidAmount) startCountdown(container, deadline);
