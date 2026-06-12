@@ -1147,10 +1147,17 @@ function scrollCurrentLevelRail(rail, smooth = false) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
+  // In RTL: scroll so current card is the first visible card at the right edge
+  // (nearest completed levels remain scrollable to the left)
+  const isRTL = getComputedStyle(rail).direction === 'rtl';
   const railRect = rail.getBoundingClientRect();
   const cardRect = card.getBoundingClientRect();
-  // Center the current card in the rail view
-  const scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left) - (railRect.width / 2) + (cardRect.width / 2);
+  let scrollTarget;
+  if (isRTL) {
+    scrollTarget = rail.scrollLeft + (railRect.right - cardRect.right);
+  } else {
+    scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left);
+  }
   if (smooth) {
     rail.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
   } else {
