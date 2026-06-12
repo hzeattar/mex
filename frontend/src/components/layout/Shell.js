@@ -225,7 +225,7 @@ function refreshShellBalance() {
 }
 
 function bindShell(app) {
-  delegate(app, '[data-nav]', 'click', (e, el) => { e.preventDefault(); closeMarketsDrawer(); navigate(el.dataset.nav); });
+  delegate(app, '[data-nav]', 'click', (e, el) => { e.preventDefault(); closeMarketsDrawer(); closeAccountPopover(); navigate(el.dataset.nav); });
   delegate(app, '[data-account-trigger]', 'click', (e) => {
     e.preventDefault();
     e.stopPropagation();

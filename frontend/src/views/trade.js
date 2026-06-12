@@ -223,6 +223,7 @@ function renderOrderPanel() {
         <span><small>${t('trade.available','Available')}</small><strong data-avail-bal>--</strong></span>
         <span><small>${t('trade.est_units','Est. Units')}</small><strong data-est-units>--</strong></span>
         <span><small>${t('trade.notional','Notional')}</small><strong data-est-notional>--</strong></span>
+        <span><small>${isPerp ? t('trade.margin_req','Margin Req.') : t('trade.margin_spot','Amount')}</small><strong data-margin-req>--</strong></span>
     </div>
     <label class="block">
       <span class="text-[10px] text-muted">${t('trade.margin_amount','Margin / Amount (USDT)')}</span>
@@ -604,6 +605,7 @@ function updatePrice(container, q, runId = tradeRunId) {
   $$('[data-spread-val]', container).forEach(el => { el.textContent = p > 0 ? `${t('trade.spread','Spread')}: ${price(p * 0.0001, assetType)}` : `${t('trade.spread','Spread')}: --`; });
   updateOrderInfo(container);
   updateLiveCandle(p, runId, Number(q.provider_updated_at || q.updated_at || q.cache_updated_at || 0), normalizeType(q.type || assetType));
+  updateLivePnL(container, String(q.symbol || get('symbol')).toUpperCase(), p);
 }
 
 function updateOrderInfo(container) {
@@ -627,6 +629,11 @@ function updateOrderInfo(container) {
     if (notionalEl) notionalEl.textContent = amt > 0 ? `${money(notional)} USDT` : '--';
     const balanceEl = $('[data-avail-bal]', form);
     if (balanceEl) balanceEl.textContent = `${money(wallet.available || 0)} ${wallet.currency || ''}`;
+    const marginReqEl = $('[data-margin-req]', form);
+    if (marginReqEl) {
+      const marginReq = amt > 0 ? (marketType === 'perp' ? (amt / effectiveLev) : amt) : 0;
+      marginReqEl.textContent = amt > 0 ? `${money(marginReq)} USDT` : '--';
+    }
   });
 }
 
@@ -899,18 +906,80 @@ function tradePositionInfo(pos) {
   return { pnl, cleanSymbol, posType, mark, id, side };
 }
 
+// Calculate live unrealized P&L from current market price
+function calcLivePnL(pos, currentPrice) {
+  const entry = Number(pos.entry_price || pos.open_price || 0);
+  if (!entry || !currentPrice) return Number(pos.pnl || pos.unrealized_pnl || 0);
+  const side = String(pos.side || 'buy').toUpperCase() === 'SELL' ? -1 : 1;
+  const isPerp = String(pos.market_type || '').toLowerCase() === 'perp';
+  const margin = Number(pos.margin_initial || pos.margin || 0);
+  const leverage = Number(pos.leverage || 1);
+  const unitsQty = Number(pos.qty || pos.amount || pos.size || pos.units || 0);
+  if (isPerp && margin > 0) {
+    return side * leverage * margin * (currentPrice - entry) / entry;
+  } else if (unitsQty > 0) {
+    return side * unitsQty * (currentPrice - entry);
+  }
+  return Number(pos.pnl || pos.unrealized_pnl || 0);
+}
+
+// Update live P&L cells in the activity panel for positions matching symbol
+function updateLivePnL(container, symbol, currentPrice) {
+  if (!container.__tradePositions?.length || !(currentPrice > 0)) return;
+  const cleanSym = String(symbol || '').replace('@R@', '').replace('@D@', '').toUpperCase();
+  const body = $('#activity-body', container);
+  let anyUpdated = false;
+  container.__tradePositions.forEach(pos => {
+    const posSymbol = String(pos.symbol || '').replace('@R@', '').replace('@D@', '').toUpperCase();
+    if (posSymbol !== cleanSym) return;
+    const id = String(pos.position_id || pos.id || '');
+    if (!id) return;
+    const livePnl = calcLivePnL(pos, currentPrice);
+    pos.pnl = livePnl;
+    pos.mark_price = currentPrice;
+    anyUpdated = true;
+    if (!body) return;
+    const cssId = window.CSS?.escape ? window.CSS.escape(id) : id.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+    // Update mobile card
+    const card = body.querySelector(`[data-pos-card="${cssId}"]`);
+    if (card) {
+      const pnlCell = card.querySelector('[data-pos-pnl-cell]');
+      if (pnlCell) { pnlCell.textContent = money(livePnl); pnlCell.className = livePnl >= 0 ? 'text-buy' : 'text-sell'; }
+      const markCell = card.querySelector('[data-pos-mark-cell]');
+      if (markCell) markCell.textContent = price(currentPrice, pos.asset_type || get('type'));
+    }
+    // Update desktop table row
+    const row = body.querySelector(`[data-pos-row="${cssId}"]`);
+    if (row) {
+      const pnlCell = row.querySelector('[data-pos-pnl-cell]');
+      if (pnlCell) { pnlCell.textContent = money(livePnl); pnlCell.className = livePnl >= 0 ? 'text-buy' : 'text-sell'; }
+      const markCell = row.querySelector('[data-pos-mark-cell]');
+      if (markCell) markCell.textContent = price(currentPrice, pos.asset_type || get('type'));
+    }
+  });
+  // Update mobile balance strip: recalculate total live PnL
+  if (anyUpdated) {
+    let totalLivePnl = 0;
+    (container.__tradePositions || []).forEach(p => { totalLivePnl += Number(p.pnl || p.unrealized_pnl || 0); });
+    const pnl24El = document.getElementById('trade-mob-pnl24');
+    const pnlTotalEl = document.getElementById('trade-mob-pnltotal');
+    if (pnl24El) { pnl24El.textContent = money(totalLivePnl); pnl24El.className = totalLivePnl >= 0 ? 'text-buy' : 'text-sell'; }
+    if (pnlTotalEl) { pnlTotalEl.textContent = money(totalLivePnl); pnlTotalEl.className = totalLivePnl >= 0 ? 'text-buy' : 'text-sell'; }
+  }
+}
+
 function tradePositionRow(pos) {
   const { pnl, cleanSymbol, posType, mark, id, side } = tradePositionInfo(pos);
   const isPerp = String(pos.market_type || '').toLowerCase() === 'perp';
-  return `<tr class="border-t border-line/50 hover:bg-panel/50">
+  return `<tr class="border-t border-line/50 hover:bg-panel/50" data-pos-row="${escAttr(id)}">
     <td class="px-3 py-1.5 font-semibold">${esc(cleanSymbol)}</td>
     <td>${sideBadge(side)}</td>
     <td class="text-muted">${isPerp ? t('trade.perp', 'Perp') : t('trade.spot', 'Spot')}</td>
     <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
-    <td class="text-right font-mono">${mark > 0 ? price(mark, posType) : '--'}</td>
+    <td class="text-right font-mono"><span data-pos-mark-cell>${mark > 0 ? price(mark, posType) : '--'}</span></td>
     <td class="text-right font-mono">${qty(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
     <td class="text-right font-mono">${isPerp ? `${esc(String(pos.leverage || 1))}x` : '<span class="text-muted text-[9px]">—</span>'}</td>
-    <td class="text-right font-mono ${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</td>
+    <td class="text-right font-mono"><span class="${pnl >= 0 ? 'text-buy' : 'text-sell'}" data-pos-pnl-cell>${money(pnl)}</span></td>
     <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">${t('common.close', 'Close')}</button>` : ''}</td>
   </tr>`;
 }
@@ -918,7 +987,7 @@ function tradePositionRow(pos) {
 function tradePositionCard(pos) {
   const { pnl, cleanSymbol, posType, mark, id, side } = tradePositionInfo(pos);
   const isPerp = String(pos.market_type || '').toLowerCase() === 'perp';
-  return `<article class="trade-position-card">
+  return `<article class="trade-position-card" data-pos-card="${escAttr(id)}">
     <div class="flex items-start justify-between gap-2">
       <div>
         <strong>${esc(cleanSymbol)}</strong>
@@ -928,9 +997,9 @@ function tradePositionCard(pos) {
     </div>
     <div class="trade-position-metrics">
       <span><small>${t('trade.entry', 'Entry')}</small><strong>${price(pos.entry_price || pos.open_price, posType)}</strong></span>
-      <span><small>${t('trade.mark', 'Mark')}</small><strong>${mark > 0 ? price(mark, posType) : '--'}</strong></span>
+      <span><small>${t('trade.mark', 'Mark')}</small><strong data-pos-mark-cell>${mark > 0 ? price(mark, posType) : '--'}</strong></span>
       <span><small>${t('trade.size', 'Size')}</small><strong>${qty(pos.qty || pos.amount || pos.size || pos.units || 0)}</strong></span>
-      <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}">${money(pnl)}</strong></span>
+      <span><small>PnL</small><strong class="${pnl >= 0 ? 'text-buy' : 'text-sell'}" data-pos-pnl-cell>${money(pnl)}</strong></span>
       <span><small>${t('trade.margin', 'Margin')}</small><strong>${money(pos.margin_initial || pos.margin || 0)}</strong></span>
       ${isPerp ? `<span><small>${t('trade.leverage', 'Leverage')}</small><strong>${esc(String(pos.leverage || 1))}x</strong></span>` : ''}
       ${isPerp && pos.liquidation_price ? `<span><small>${t('trade.liq_price', 'Liq. Price')}</small><strong class="text-sell">${price(pos.liquidation_price, posType)}</strong></span>` : ''}

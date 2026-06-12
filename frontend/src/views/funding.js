@@ -938,15 +938,26 @@ function methodCategory(method) {
 }
 
 function methodIcon(m) {
-  if (String(m?.image_url || '').trim()) return `<img src="${escAttr(m.image_url)}" alt="">`;
+  if (String(m?.image_url || '').trim()) return `<img src="${escAttr(m.image_url)}" alt="" style="width:32px;height:32px;object-fit:contain;border-radius:6px;">`;
+  // Provider-specific logo from well-known CDN
+  const raw = [m?.provider, m?.code, m?.title, m?.name].filter(Boolean).join(' ').toLowerCase();
+  if (/visa/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24" fill="none"><rect width="38" height="24" rx="4" fill="#1A1F71"/><path d="M15.5 16.5h-2.3l1.43-8.9h2.3L15.5 16.5zm-4.85-8.9L8.6 13.3l-.28-1.4-.82-4.14s-.1-.66-.95-.66H3.08l-.04.16s1.45.3 2.13.94c.6.56.81 1.43.81 1.43l1.45 7.07h2.42l3.7-8.9H10.65zM33.8 16.5h2.14L34.07 7.6H32.2c-.72 0-.9.56-.9.56L27.8 16.5h2.43l.48-1.33h2.97l.12 1.33zm-2.59-3.2l1.23-3.37.69 3.37h-1.92zm-3.34-3.86l.33-1.93S27.3 7 26.1 7c-1.3 0-4.5.58-4.5 3.4 0 2.65 3.7 2.68 3.7 4.07 0 1.4-3.33 1.15-4.42.27l-.35 2.04s.96.47 2.44.47c1.48 0 4.76-.77 4.76-3.52 0-2.68-3.73-2.93-3.73-4.07 0-1.13 2.61-1 3.87-.42z" fill="white"/></svg>`;
+  if (/mastercard|master/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#252525"/><circle cx="15" cy="12" r="7" fill="#EB001B"/><circle cx="23" cy="12" r="7" fill="#F79E1B"/><path d="M19 6.8a7 7 0 0 1 0 10.4A7 7 0 0 1 19 6.8z" fill="#FF5F00"/></svg>`;
+  if (/stripe|card/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#635bff"/><path d="M17.6 10.3c0-.7.6-1 1.5-1 1.3 0 3 .4 4.2 1.1V7.1A11.2 11.2 0 0 0 19 6.5c-3.4 0-5.6 1.8-5.6 4.7 0 4.6 6.3 3.8 6.3 5.8 0 .8-.7 1.1-1.7 1.1-1.4 0-3.3-.6-4.7-1.4v3.3c1.6.7 3.2 1 4.7 1 3.5 0 5.9-1.7 5.9-4.8-.1-4.9-6.3-4-6.3-5.9z" fill="white"/></svg>`;
+  if (/btc|bitcoin/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#F7931A"/><path d="M21.8 11.9c.4-.3.7-.8.6-1.5-.2-1.6-1.8-2-3.2-2h-3.5l-.9 6h3.7c1.5 0 3-.7 3.3-2.5.1-.8-.1-1.5-.5-1.9l.5-.1zm-4.6-1.8h1.6c.5 0 1 .1 1.1.6.1.5-.4.8-.9.8h-1.5l.3-1.4zm1.9 3.8h-1.7l.3-1.6h1.6c.5 0 1.1.1 1.1.7.1.6-.5.9-1.3.9z" fill="white"/></svg>`;
+  if (/eth|ethereum/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#627EEA"/><path d="M19 7.5V13l4 1.8L19 7.5z" fill="white" opacity="0.6"/><path d="M19 7.5l-4 6.3 4-1.8V7.5z" fill="white"/><path d="M19 16.5v-1.9l4-2.3-4 4.2z" fill="white" opacity="0.6"/><path d="M19 16.5l-4-4.2 4 2.3v1.9z" fill="white"/></svg>`;
+  if (/usdt|tether/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#26A17B"/><path d="M20.5 12.1c-.1 0-.6.1-1.5.1s-1.4 0-1.5-.1v-.8h3v.8zm0-2.1h-3V9h-2v1H13v1.2h1.5c.1.4.1.8 0 1.2v.2c-.1.6-.1 1.3.1 1.9.3.7 1 1 2.4 1s2-.3 2.4-1c.2-.6.2-1.3.1-1.9v-.2c0-.4 0-.8-.1-1.2H22V9h-1.5z" fill="white"/></svg>`;
+  if (/bank|wire|iban|swift/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#1e3a5f"/><path d="M9 17h20v1.5H9zm2-6.5h2.5v6H11zm4 0H17v6h-2zm4 0h2.5v6H19zm4 0h2.5v6H23zM19 6l10 3.5H9L19 6z" fill="white" opacity="0.9"/></svg>`;
+  if (/crypto_bot|bot|telegram/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#229ED9"/><path d="M8 12.5l2.5 1.5L16 9l-8 3.5zm3.5 2.5l.5 3.5 2.5-2.5-3-1zm4.5-2l4.5-7-9.5 5.5 5 1.5z" fill="white"/></svg>`;
   return categoryIcon(methodCategory(m));
 }
 
 function categoryIcon(key, configured = '') {
   if (configured) return `<b>${esc(configured)}</b>`;
-  if (key === 'card') return icons.wallet;
-  if (key === 'bank') return icons.wallet;
-  if (key === 'crypto' || key === 'crypto_bot') return icons.deposit;
+  if (key === 'card') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h2M15 15h2"/></svg>`;
+  if (key === 'bank') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 10h18M5 10V6M8 10V6M11 10V6M14 10V6M17 10V6M19 10V6M12 3 3 6h18L12 3z"/></svg>`;
+  if (key === 'crypto') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 8h4a2 2 0 1 1 0 4H9V8zm0 4h5a2 2 0 1 1 0 4H9v-4z"/><path d="M12 6v2M12 16v2"/></svg>`;
+  if (key === 'crypto_bot') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M8 9V6a4 4 0 0 1 8 0v3"/><circle cx="9" cy="14" r="1.5" fill="currentColor"/><circle cx="15" cy="14" r="1.5" fill="currentColor"/></svg>`;
   return icons.wallet;
 }
 
