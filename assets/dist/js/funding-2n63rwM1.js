@@ -1,4 +1,4 @@
-import{j as $,k as f,h as u,t as n,m as p,g as l,l as G,c as J,s as Z,n as ee,i as _e}from"./main-MqBaq7k6.js";const A=globalThis.__MEX_FUNDING_CACHE__||(globalThis.__MEX_FUNDING_CACHE__=new Map),be=45e3;let C=[];const te=[{key:"deposit",label:"funding.deposit",fallback:"Deposit",icon:f.deposit},{key:"withdraw",label:"funding.withdraw",fallback:"Withdraw",icon:f.withdraw},{key:"history",label:"funding.history",fallback:"History",icon:f.wallet}];function Ge(e={}){const t=ue(e),r=$("wallet")||{};$("kyc");const i=$("level")||{},s=$("mode")==="real"?"real":"demo",a=s==="real"?r.real||{}:r.demo||{};return i.current,`
+import{j as $,k as f,h as u,t as n,m as p,g as l,l as G,c as J,s as Z,n as ee,i as _e}from"./main-BtlORFUg.js";const A=globalThis.__MEX_FUNDING_CACHE__||(globalThis.__MEX_FUNDING_CACHE__=new Map),be=45e3;let C=[];const te=[{key:"deposit",label:"funding.deposit",fallback:"Deposit",icon:f.deposit},{key:"withdraw",label:"funding.withdraw",fallback:"Withdraw",icon:f.withdraw},{key:"history",label:"funding.history",fallback:"History",icon:f.wallet}];function Ge(e={}){const t=ue(e),r=$("wallet")||{};$("kyc");const i=$("level")||{},s=$("mode")==="real"?"real":"demo",a=s==="real"?r.real||{}:r.demo||{};return i.current,`
     <div class="funds-workspace animate-fade-in" data-active-funding-tab="${u(t)}">
       <section class="funds-hero-pro">
         <div>
@@ -87,9 +87,6 @@ import{j as $,k as f,h as u,t as n,m as p,g as l,l as G,c as J,s as Z,n as ee,i 
           </div>
         </form>
       </div>
-
-      <aside class="funding-side-stack">
-      </aside>
     </section>`}function $e(){return`
     <section class="card funding-history-workspace">
       <div class="panel-headline-row">

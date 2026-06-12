@@ -273,9 +273,6 @@ function renderFundingWorkspace(kind) {
           </div>
         </form>
       </div>
-
-      <aside class="funding-side-stack">
-      </aside>
     </section>`;
 }
 
