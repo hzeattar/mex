@@ -1129,8 +1129,10 @@ function scrollCurrentLevelRail(rail) {
   const gap = 12;
   const cardW = 285;
   const target = Math.max(0, idx * (cardW + gap));
-  // Use setTimeout to ensure the browser has fully laid out the new cards.
-  setTimeout(() => {
-    rail.scrollLeft = target;
-  }, 50);
+  // Defer scroll until the browser has fully laid out the new cards.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      rail.scrollLeft = target;
+    });
+  });
 }
