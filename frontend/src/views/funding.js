@@ -275,18 +275,6 @@ function renderFundingWorkspace(kind) {
       </div>
 
       <aside class="funding-side-stack">
-        <section class="card funding-sidebar-card funding-guide-card">
-          <div class="panel-headline">
-            <span class="badge-green">${isDeposit ? t('funding.secure_checklist', 'Secure checklist') : t('funding.payout_checklist', 'Payout checklist')}</span>
-            <h2>${isDeposit ? t('funding.before_confirm', 'Before you confirm') : t('funding.before_request', 'Before you request')}</h2>
-          </div>
-          <div class="funding-checklist">
-            ${checkItem(t('funding.check_method_only', 'Use the selected category and method only'), true)}
-            ${checkItem(isDeposit ? t('funding.check_exact_amount', 'Send the exact amount shown') : t('funding.check_balance_cover', 'Balance must cover payout amount'), true)}
-            ${checkItem(isDeposit ? t('funding.check_receipt', 'Upload a clear receipt when required') : t('funding.check_destination', 'Provide payout destination'), true)}
-            ${checkItem(t('funding.check_real_required', 'Real mode required'), get('mode') === 'real')}
-          </div>
-        </section>
       </aside>
     </section>`;
 }
@@ -524,14 +512,10 @@ function renderDepositTransferPanel(container, selected, amount, isStripe, valid
 
 function renderFundingRouteSummary(method, isStripe = false) {
   const max = method.max_amount ? money(method.max_amount) : t('funding.flexible', 'Flexible');
-  const proof = isStripe ? t('funding.not_needed', 'Not needed') : (method.proof_required ? t('funding.receipt_required', 'Receipt required') : t('funding.optional', 'Optional'));
-  const windowLabel = isStripe ? t('funding.checkout', 'Checkout') : `${Math.max(1, Number(method.expires_hours || 24))}h`;
   return `<div class="funding-route-summary" aria-label="Selected funding route summary">
     ${routeSummaryPill(t('funding.section', 'Section'), fallbackCategoryLabel(methodCategory(method)))}
     ${routeSummaryPill(t('funding.currency', 'Currency'), method.currency || 'USDT')}
     ${routeSummaryPill(t('funding.limits', 'Limits'), `${money(method.min_amount || 0)} - ${max}`)}
-    ${routeSummaryPill(t('funding.proof', 'Proof'), proof)}
-    ${routeSummaryPill(t('funding.window', 'Window'), windowLabel)}
   </div>`;
 }
 

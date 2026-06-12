@@ -1175,7 +1175,8 @@ function scrollCurrentLevelRail(rail) {
   const idx = cards.indexOf(card);
   const gap = 12;
   const cardW = 285;
-  const target = Math.max(0, idx * (cardW + gap));
+  // Center the current card so both previous and next levels remain visible.
+  const target = Math.max(0, idx * (cardW + gap) - (rail.clientWidth / 2) + (cardW / 2));
   // Defer scroll until the browser has fully laid out the new cards.
   setTimeout(() => {
     rail.scrollLeft = target;
