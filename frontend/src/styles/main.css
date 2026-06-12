@@ -2953,7 +2953,15 @@
   background: linear-gradient(90deg, #7f96c8, #18c98f);
   box-shadow: 0 0 20px rgba(24,201,143,.22);
 }
-.pro-level-rail,
+.pro-level-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: 14px calc(50% - 142.5px) 3px;
+  -webkit-overflow-scrolling: touch;
+}
 .pro-earn-rail,
 .pro-action-list-horizontal {
   display: flex;
@@ -2997,6 +3005,11 @@
   width: 285px;
   border: 1px solid rgba(132,164,225,.15);
   border-radius: 17px;
+}
+.pro-level-rail-card.is-current {
+  scroll-snap-align: center;
+}
+.pro-level-rail-card {
   background: rgba(5,12,26,.52);
   padding: 14px;
   min-height: 150px;
