@@ -132,7 +132,7 @@ export function render() {
 export function mount(container) {
   updateBalanceOverview(container, get('portfolio'));
 
-  // Auto-scroll to current level card on initial mount (instant)
+  // Scroll to current level card once on initial mount (instant, left-positioned)
   requestAnimationFrame(() => {
     const rail = container.querySelector('.pro-level-rail');
     if (rail) scrollCurrentLevelRail(rail, false);
@@ -406,6 +406,7 @@ function updateLevelOverview(container) {
   if (bar) bar.style.width = `${levelProgress}%`;
   const rail = container.querySelector('.pro-level-rail');
   if (rail) {
+    const oldScrollLeft = rail.scrollLeft;
     rail.innerHTML = renderLevelRail(level, {
       currentLevel,
       nextLevel,
@@ -415,8 +416,13 @@ function updateLevelOverview(container) {
       levelProgress,
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
-    // Auto-scroll to the current level card after data renders
-    requestAnimationFrame(() => scrollCurrentLevelRail(rail, true));
+    if (!rail.__levelScrolledOnce) {
+      const card = rail.querySelector('[data-current-level-card="1"]');
+      if (card) rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
+      rail.__levelScrolledOnce = true;
+    } else {
+      rail.scrollLeft = oldScrollLeft;
+    }
   }
 }
 
@@ -746,8 +752,8 @@ function renderLevelRail(level, ctx) {
   const normalized = levels.length ? levels : [
     ctx.currentLevel,
     ctx.nextLevel,
-    { name: 'Platinum', min_deposit_total: ctx.nextRequired ? ctx.nextRequired * 2 : 50000, perks: 'Higher contract limits and priority support' },
-    { name: 'VIP', min_deposit_total: ctx.nextRequired ? ctx.nextRequired * 4 : 100000, perks: 'Dedicated execution review and premium limits' },
+    { name: 'Platinum', level_code: 'platinum', sort_order: 998, min_deposit_total: Math.max(1, ctx.nextRequired ? ctx.nextRequired * 2 : 50000), perks: 'Higher contract limits and priority support' },
+    { name: 'VIP', level_code: 'vip', sort_order: 999, min_deposit_total: Math.max(1, ctx.nextRequired ? ctx.nextRequired * 4 : 100000), perks: 'Dedicated execution review and premium limits' },
   ].filter(Boolean);
 
   const listMap = new Map();
@@ -1116,17 +1122,9 @@ function botDirectionChip(direction) {
  * @param {Element} rail  - the .pro-level-rail element
  * @param {boolean} smooth - use smooth scrolling (true after data refresh, false on mount)
  */
-function scrollCurrentLevelRail(rail, smooth = false) {
+function scrollCurrentLevelRail(rail) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  const railRect = rail.getBoundingClientRect();
-  const cardRect = card.getBoundingClientRect();
-  // How far the card's left edge is from the rail's left edge (accounting for current scroll)
-  const scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left) - 8;
-  if (smooth) {
-    rail.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
-  } else {
-    rail.scrollLeft = Math.max(0, scrollTarget);
-  }
+  rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
 }

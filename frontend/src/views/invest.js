@@ -42,14 +42,16 @@ export function render() {
 
 export function mount(container) {
   loadInvest(container);
-  // Auto-scroll level strip to current level
-  setTimeout(() => {
-    const strip = container.querySelector('.level-strip');
-    const currentPill = strip?.querySelector('.level-pill.is-current');
-    if (strip && currentPill) {
-      currentPill.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+  // Position level strip to current level once on mount (instant)
+  const strip = container.querySelector('.level-strip');
+  if (strip) {
+    const currentPill = strip.querySelector('.level-pill.is-current');
+    if (currentPill) {
+      requestAnimationFrame(() => {
+        strip.scrollTo({ left: currentPill.offsetLeft - 8, behavior: 'auto' });
+      });
     }
-  }, 100);
+  }
   investDisposers.push(delegate(container, '[data-earn-tab]', 'click', (_e, el) => {
     set('invest.tab', el.dataset.earnTab);
     localStorage.setItem('vp_earn_tab', el.dataset.earnTab);

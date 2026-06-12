@@ -427,6 +427,7 @@ function updateLevelOverview(container) {
   if (bar) bar.style.width = `${levelProgress}%`;
   const rail = container.querySelector('.pro-level-rail');
   if (rail) {
+    const oldScrollLeft = rail.scrollLeft;
     rail.innerHTML = renderLevelRail(level, {
       currentLevel,
       nextLevel,
@@ -436,8 +437,13 @@ function updateLevelOverview(container) {
       levelProgress,
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
-    // Auto-scroll to the current level card after data renders
-    requestAnimationFrame(() => scrollCurrentLevelRail(rail, true));
+    if (!rail.__levelScrolledOnce) {
+      const card = rail.querySelector('[data-current-level-card="1"]');
+      if (card) rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
+      rail.__levelScrolledOnce = true;
+    } else {
+      rail.scrollLeft = oldScrollLeft;
+    }
   }
 }
 
@@ -1170,23 +1176,9 @@ function botDirectionChip(direction) {
  * @param {Element} rail  - the .pro-level-rail element
  * @param {boolean} smooth - use smooth scrolling (true after data refresh, false on mount)
  */
-function scrollCurrentLevelRail(rail, smooth = false) {
+function scrollCurrentLevelRail(rail) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  const isRTL = getComputedStyle(rail).direction === 'rtl';
-  const railRect = rail.getBoundingClientRect();
-  const cardRect = card.getBoundingClientRect();
-  let scrollTarget;
-  if (isRTL) {
-    // Center the current card in the rail
-    scrollTarget = rail.scrollLeft + (railRect.right - cardRect.right) - (railRect.width / 2) + (cardRect.width / 2);
-  } else {
-    scrollTarget = rail.scrollLeft + (cardRect.left - railRect.left) - (railRect.width / 2) + (cardRect.width / 2);
-  }
-  if (smooth) {
-    rail.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
-  } else {
-    rail.scrollLeft = Math.max(0, scrollTarget);
-  }
+  rail.scrollLeft = Math.max(0, card.offsetLeft - 8);
 }

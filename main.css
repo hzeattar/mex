@@ -2854,7 +2854,15 @@
   background: linear-gradient(90deg, #7f96c8, #18c98f);
   box-shadow: 0 0 20px rgba(24,201,143,.22);
 }
-.pro-level-rail,
+.pro-level-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 14px 2px 3px;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: none;
+}
 .pro-earn-rail,
 .pro-action-list-horizontal {
   display: flex;
@@ -4687,8 +4695,8 @@
   .funding-history-table-wrapper { display: none !important; }
 }
 
-/* ── Levels rail: scroll snap ────────────────────────────────────────── */
-.pro-level-rail { scroll-behavior: smooth; }
+/* ── Levels rail: smooth scroll disabled, user-driven only ────────────────── */
+.pro-level-rail { scroll-behavior: auto; }
 .pro-level-rail-card[data-current-level-card="1"] {
   outline: 2px solid var(--color-accent, #6366f1);
   outline-offset: 2px;
