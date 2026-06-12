@@ -211,8 +211,8 @@
   .chart-legend .is-down, .chart-legend b.is-down { color: #f6465d; }
   .chart-toolbar {
     @apply absolute z-10 flex items-center gap-1;
-    top: 6px;
-    right: 8px;
+    bottom: 6px;
+    left: 8px;
   }
   .chart-toolbar button {
     @apply grid place-items-center rounded border border-line text-muted transition-colors;
