@@ -39,6 +39,13 @@ function vp_get_customer_levels(PDO $pdo, string $lang = 'en', bool $activeOnly 
       'min_deposit_total' => (float)($r['min_deposit_total'] ?? 0),
       'sort_order' => (int)($r['sort_order'] ?? 0),
       'status' => (string)($r['status'] ?? 'active'),
+      'features' => [
+        'trading' => (bool)(($r['feat_trading'] ?? 1) ? true : false),
+        'copy_bot' => (bool)(($r['feat_copy_bot'] ?? 0) ? true : false),
+        'contracts' => (bool)(($r['feat_contracts'] ?? 0) ? true : false),
+        'support' => (bool)(($r['feat_support'] ?? 0) ? true : false),
+        'portfolio_manager' => (bool)(($r['feat_portfolio_manager'] ?? 0) ? true : false),
+      ],
     ];
   }, $rows);
 }

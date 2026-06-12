@@ -3044,6 +3044,32 @@
   padding: 0;
   list-style: none;
 }
+.pro-level-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.pro-level-feat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(24,201,143,.12);
+  color: rgba(207,225,255,.9);
+  font-size: 11px;
+  border: 1px solid rgba(24,201,143,.25);
+}
+.pro-level-feat small {
+  font-size: 10px;
+  font-weight: 700;
+}
+.pro-level-rail-card.is-locked .pro-level-feat {
+  background: rgba(132,164,225,.10);
+  border-color: rgba(132,164,225,.20);
+  color: rgba(132,164,225,.65);
+}
 .pro-level-benefits li {
   position: relative;
   padding-left: 14px;

@@ -828,7 +828,8 @@ function renderLevelRail(level, ctx) {
       progress,
       state: isCurrent ? 'current' : (isCompleted ? 'completed' : 'locked'),
       isCurrent,
-      perks: levelPerks(lvl, defaultLevelPerks(title, isCurrent, ctx.mode))
+      perks: levelPerks(lvl, defaultLevelPerks(title, isCurrent, ctx.mode)),
+      features: lvl.features || {}
     }));
   });
 
@@ -843,14 +844,22 @@ function levelMinimum(level) {
   return Number(level?.min_deposit_total || level?.min_total_deposit || level?.required_deposit || 0);
 }
 
-function levelProgramCard({ label, title, sub, progress, state, perks, isCurrent }) {
+function levelProgramCard({ label, title, sub, progress, state, perks, isCurrent, features }) {
   const pctValue = progress == null ? null : Math.max(0, Math.min(100, Number(progress) || 0));
   const perkItems = Array.isArray(perks) ? perks : [String(perks || '')].filter(Boolean);
+  const feats = features || {};
+  const featIcons = [];
+  if (feats.trading) featIcons.push({ key: 'trading', icon: '📈', label: t('feat.trading', 'Trading') });
+  if (feats.copy_bot) featIcons.push({ key: 'copy_bot', icon: '🤖', label: t('feat.copy_bot', 'Copy Bot') });
+  if (feats.contracts) featIcons.push({ key: 'contracts', icon: '📋', label: t('feat.contracts', 'Contracts') });
+  if (feats.support) featIcons.push({ key: 'support', icon: '🎧', label: t('feat.support', 'Support') });
+  if (feats.portfolio_manager) featIcons.push({ key: 'portfolio_manager', icon: '👔', label: t('feat.portfolio_manager', 'Manager') });
   return `<article class="pro-level-rail-card is-${escAttr(state || 'locked')}"${isCurrent ? ' data-current-level-card="1"' : ''}>
     <div class="pro-level-card-row"><span>${esc(label)}</span>${pctValue == null ? '' : `<b>${pctValue}%</b>`}</div>
     <strong>${esc(title)}</strong>
     <small>${esc(sub || '')}</small>
     ${pctValue == null ? '' : `<div class="pro-mini-progress"><i style="width:${pctValue}%"></i></div>`}
+    ${featIcons.length ? `<div class="pro-level-features">${featIcons.map(f => `<span class="pro-level-feat ${f.key}" title="${esc(f.label)}">${f.icon} <small>${esc(f.label)}</small></span>`).join('')}</div>` : ''}
     <ul class="pro-level-benefits">
       ${perkItems.slice(0, 5).map((item) => `<li>${esc(item)}</li>`).join('')}
     </ul>

@@ -21,6 +21,11 @@ function vp_feature_bootstrap(PDO $pdo, string $driver): void {
         perks_en MEDIUMTEXT NULL,
         perks_ar MEDIUMTEXT NULL,
         perks_ru MEDIUMTEXT NULL,
+        feat_trading TINYINT(1) NOT NULL DEFAULT 1,
+        feat_copy_bot TINYINT(1) NOT NULL DEFAULT 0,
+        feat_contracts TINYINT(1) NOT NULL DEFAULT 0,
+        feat_support TINYINT(1) NOT NULL DEFAULT 0,
+        feat_portfolio_manager TINYINT(1) NOT NULL DEFAULT 0,
         min_deposit_total DECIMAL(20,8) NOT NULL DEFAULT 0,
         sort_order INT NOT NULL DEFAULT 0,
         status VARCHAR(16) NOT NULL DEFAULT 'active',
@@ -38,6 +43,11 @@ function vp_feature_bootstrap(PDO $pdo, string $driver): void {
         perks_en TEXT,
         perks_ar TEXT,
         perks_ru TEXT,
+        feat_trading INTEGER NOT NULL DEFAULT 1,
+        feat_copy_bot INTEGER NOT NULL DEFAULT 0,
+        feat_contracts INTEGER NOT NULL DEFAULT 0,
+        feat_support INTEGER NOT NULL DEFAULT 0,
+        feat_portfolio_manager INTEGER NOT NULL DEFAULT 0,
         min_deposit_total REAL NOT NULL DEFAULT 0,
         sort_order INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'active',
@@ -48,6 +58,15 @@ function vp_feature_bootstrap(PDO $pdo, string $driver): void {
   try {
     if (!$isMysql) $pdo->exec("CREATE INDEX IF NOT EXISTS idx_customer_level_status ON customer_levels(status, sort_order, min_deposit_total)");
   } catch (Throwable $e) {}
+
+  // Migrate level feature columns if table already exists
+  if (schema_table_exists($pdo, 'customer_levels', $driver)) {
+    foreach (['feat_trading','feat_copy_bot','feat_contracts','feat_support','feat_portfolio_manager'] as $featCol) {
+      if (!schema_column_exists($pdo, 'customer_levels', $featCol, $driver)) {
+        schema_add_column($pdo, 'customer_levels', "{$featCol} TINYINT(1) NOT NULL DEFAULT 0", "{$featCol} INTEGER NOT NULL DEFAULT 0", $driver);
+      }
+    }
+  }
 
   if (schema_table_exists($pdo, 'invest_plans', $driver)) {
     if (!schema_column_exists($pdo, 'invest_plans', 'product_kind', $driver)) {
@@ -121,50 +140,21 @@ function vp_feature_bootstrap(PDO $pdo, string $driver): void {
   }
 
   $now = time();
+  // Seed: [code, name_en, name_ar, name_ru, min_deposit, sort_order, perks_en, perks_ar, perks_ru, feat_trading, feat_copy_bot, feat_contracts, feat_support, feat_portfolio_manager]
   $seed = [
-    ['starter', 'Starter', 'المبتدئ', 'Starter', 0, 10, "Market dashboard
-Basic signals
-Demo trading workspace", "لوحة الأسواق
-إشارات أساسية
-حساب تجريبي", "Market dashboard
-Basic signals
-Demo trading workspace"],
-    ['silver', 'Silver', 'فضي', 'Silver', 5000, 20, "Copy trading access
-Standard contracts
-Priority funding queue", "نسخ صفقات
-عقود قياسية
-أولوية تمويل", "Copy trading access
-Standard contracts
-Priority funding queue"],
-    ['gold', 'Gold', 'ذهبي', 'Gold', 25000, 30, "Premium copy desk
-Higher contract caps
-Dedicated account guidance", "منصة نسخ بريميوم
-حدود عقود أعلى
-إرشاد حساب مخصص", "Premium copy desk
-Higher contract caps
-Dedicated account guidance"],
-    ['platinum', 'Platinum', 'بلاتيني', 'Platinum', 75000, 40, "Advanced contracts
-Reduced profit share
-Fast KYC and withdrawal review", "عقود متقدمة
-نسبة مشاركة أقل
-مراجعة أسرع", "Advanced contracts
-Reduced profit share
-Fast KYC and withdrawal review"],
-    ['vip', 'VIP', 'كبار العملاء', 'VIP', 150000, 50, "Private desk
-VIP contracts
-Custom risk limits", "منصة خاصة
-عقود VIP
-حدود مخاطر مخصصة", "Private desk
-VIP contracts
-Custom risk limits"],
+    ['starter',  'Starter',  'المبتدئ',      'Starter',   0,      10, "Trading only\nBasic signals\nDemo workspace", "تداول فقط\nإشارات أساسية\nحساب تجريبي", "Trading only\nBasic signals\nDemo workspace",            1,0,0,0,0],
+    ['silver',   'Silver',   'فضي',          'Silver',    5000,   20, "Trading\nCopy trading bot\nStandard support", "تداول\nبوت نسخ الصفقات\nدعم قياسي", "Trading\nCopy trading bot\nStandard support",              1,1,0,0,0],
+    ['gold',     'Gold',     'ذهبي',          'Gold',      25000,  30, "Trading\nCopy bot\nAdvanced contracts\nPriority support", "تداول\nبوت نسخ\nعقود متقدمة\nدعم أولوي", "Trading\nCopy bot\nAdvanced contracts\nPriority support",   1,1,1,1,0],
+    ['platinum', 'Platinum', 'بلاتيني',      'Platinum',  75000,  40, "Trading\nCopy bot\nContracts\nDedicated support\nPortfolio manager", "تداول\nبوت نسخ\nعقود\nدعم مخصص\nمدير محفظة", "Trading\nCopy bot\nContracts\nDedicated support\nPortfolio manager", 1,1,1,1,1],
+    ['vip',      'VIP',      'كبار العملاء', 'VIP',       150000, 50, "All features\nVIP contracts\nPrivate desk\nCustom limits", "جميع المزايا\nعقود VIP\nمنصة خاصة\nحدود مخصصة", "All features\nVIP contracts\nPrivate desk\nCustom limits",       1,1,1,1,1],
   ];
   $existingLevels = 0;
   try { $existingLevels = (int)($pdo->query("SELECT COUNT(*) FROM customer_levels")->fetchColumn() ?: 0); } catch (Throwable $e) { $existingLevels = 0; }
   if ($existingLevels === 0) {
-    foreach ($seed as [$code,$en,$ar,$ru,$min,$sort,$perksEn,$perksAr,$perksRu]) {
+    foreach ($seed as [$code,$en,$ar,$ru,$min,$sort,$perksEn,$perksAr,$perksRu,$ft,$fcb,$fc,$fs,$fpm]) {
       try {
-        $sql = "INSERT INTO customer_levels(level_code,name_en,name_ar,name_ru,perks_en,perks_ar,perks_ru,min_deposit_total,sort_order,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'active',?,?)";
-        $pdo->prepare($sql)->execute([$code,$en,$ar,$ru,$perksEn,$perksAr,$perksRu,$min,$sort,$now,$now]);
+        $sql = "INSERT INTO customer_levels(level_code,name_en,name_ar,name_ru,perks_en,perks_ar,perks_ru,feat_trading,feat_copy_bot,feat_contracts,feat_support,feat_portfolio_manager,min_deposit_total,sort_order,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        $pdo->prepare($sql)->execute([$code,$en,$ar,$ru,$perksEn,$perksAr,$perksRu,$ft,$fcb,$fc,$fs,$fpm,$min,$sort,'active',$now,$now]);
       } catch (Throwable $e) {}
     }
   }
