@@ -1124,11 +1124,13 @@ function scrollCurrentLevelRail(rail) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  // Calculate scroll position from card index to avoid stale offsetLeft.
   const cards = Array.from(rail.children);
   const idx = cards.indexOf(card);
   const gap = 12;
   const cardW = 285;
   const target = Math.max(0, idx * (cardW + gap));
-  rail.scrollTo({ left: target, behavior: 'auto' });
+  // Use setTimeout to ensure the browser has fully laid out the new cards.
+  setTimeout(() => {
+    rail.scrollLeft = target;
+  }, 50);
 }
