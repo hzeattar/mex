@@ -74,11 +74,11 @@ export function renderShell(app) {
         </div>
         <div class="trade-mobile-balances hidden" id="trade-mobile-balances">
           <span><small>${t('shell.available', 'Available')}</small><b id="trade-mob-available">${money(wallet.available || 0)}</b></span>
-          <span><small>${t('shell.pnl24', 'PnL 24')}</small><b id="trade-mob-pnl24">${money(0)}</b></span>
           <button type="button" id="trade-mobile-balance-more" aria-label="More balances">${t('common.more', 'More')}</button>
           <div class="trade-mobile-balance-popover hidden" id="trade-mobile-balance-popover">
             <span><small>${t('shell.total', 'Total')}</small><b id="trade-mob-total">${money(wallet.balance || wallet.available || 0)}</b></span>
             <span><small>${t('shell.in_use', 'In use')}</small><b id="trade-mob-inuse">${money(wallet.holds || 0)}</b></span>
+            <span><small>${t('shell.pnl24', 'PnL 24')}</small><b id="trade-mob-pnl24">${money(0)}</b></span>
             <span><small>${t('shell.pnl_total', 'PnL total')}</small><b id="trade-mob-pnltotal">${money(0)}</b></span>
           </div>
         </div>
