@@ -417,7 +417,7 @@ function updateLevelOverview(container) {
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
     if (rail.scrollLeft === 0) {
-      scrollCurrentLevelRail(rail);
+      setTimeout(() => scrollCurrentLevelRail(rail), 300);
     }
   }
 }
