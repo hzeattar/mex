@@ -172,7 +172,9 @@ export function mount(container) {
       e.stopPropagation();
       const menu = langTrigger.closest('[data-home-lang-menu]');
       const drop = menu?.querySelector('[data-home-lang-dropdown]');
+      const overlay = menu?.querySelector('[data-home-lang-overlay]');
       const open = drop?.classList.toggle('hidden') === false;
+      overlay?.classList.toggle('hidden', !open);
       langTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
       return;
     }
@@ -954,14 +956,17 @@ function languageSwitcher() {
       <b>${esc(LANG_NAMES[locale] || locale.toUpperCase())}</b>
       <i>${icons.chevronDown}</i>
     </button>
+    <div class="home-lang-overlay hidden" data-home-lang-overlay></div>
     <div class="home-lang-dropdown hidden" data-home-lang-dropdown>${options}</div>
   </div>`;
 }
 
 function closeHomeLang(container) {
   const dropdown = container.querySelector('[data-home-lang-dropdown]');
+  const overlay = container.querySelector('[data-home-lang-overlay]');
   const trigger = container.querySelector('[data-home-lang-trigger]');
   if (dropdown) dropdown.classList.add('hidden');
+  if (overlay) overlay.classList.add('hidden');
   if (trigger) trigger.setAttribute('aria-expanded', 'false');
 }
 
