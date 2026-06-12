@@ -214,6 +214,11 @@
     bottom: 6px;
     left: 8px;
   }
+  @media (max-width: 1023px) {
+    .chart-toolbar {
+      bottom: 52px;
+    }
+  }
   .chart-toolbar button {
     @apply grid place-items-center rounded border border-line text-muted transition-colors;
     height: 22px;
