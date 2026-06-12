@@ -437,11 +437,8 @@ function updateLevelOverview(container) {
       levelProgress,
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
-    if (!rail.__levelScrolledOnce) {
+    if (rail.scrollLeft === 0) {
       scrollCurrentLevelRail(rail);
-      rail.__levelScrolledOnce = true;
-    } else {
-      rail.scrollLeft = oldScrollLeft;
     }
   }
 }
