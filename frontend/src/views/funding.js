@@ -388,8 +388,10 @@ function renderCategoryTabs(container) {
   }
   el.innerHTML = categories.map(cat => {
     const bonus = container.__fundingBonuses?.[cat.key];
-    const bonusCard = bonus ? `
-      <span class="bonus-card">+${parseFloat(bonus.amount || 0)}% ${t('funding.bonus', 'Bonus')}</span>
+    // Fallback: show default crypto bonus until API bonus loads
+    const showBonus = bonus || (cat.key === 'crypto' ? { amount: 10 } : null);
+    const bonusCard = showBonus ? `
+      <span class="bonus-card">+${parseFloat(showBonus.amount || 0)}% ${t('funding.bonus', 'Bonus')}</span>
     ` : '';
     return `
     <button type="button" class="${cat.key === selected ? 'active' : ''}" data-funding-category="${escAttr(cat.key)}">
