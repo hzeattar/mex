@@ -158,10 +158,28 @@ export function cleanup() {
   fundingDisposers = [];
 }
 
+function renderPaymentLogosStrip() {
+  const logos = [
+    { name: 'Visa',      icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#1A1F71"/\u003e\u003cpath d="M19.6 21.4L21.4 10.6H24.2L22.4 21.4H19.6ZM32.8 10.8C32.2 10.6 31.4 10.4 30.4 10.4C28 10.4 26.2 11.6 26.2 13.4C26.2 14.8 27.4 15.6 28.4 16.2C29.4 16.8 29.8 17.2 29.8 17.6C29.8 18.2 29 18.6 28.2 18.6C27.2 18.6 26.6 18.4 25.8 18L25.4 17.8L25 20.6C25.8 21 27 21.2 28.2 21.2C30.8 21.2 32.6 20 32.6 18C32.6 16.8 31.8 16 30.6 15.4C29.6 14.8 29 14.4 29 14C29 13.6 29.4 13.2 30.2 13.2C31 13.2 31.6 13.4 32.2 13.6L32.6 13.8L32.8 10.8ZM38.4 10.6H36.4C35.8 10.6 35.4 10.8 35.2 11.4L31.4 21.4H34.2L34.6 20.2H37.8L38.2 21.4H40.6L38.4 10.6ZM35.4 18.2L36.6 14.6L37.4 18.2H35.4ZM23.4 10.6L20.8 18.2L20.4 16.4C19.8 14.4 18.2 12.4 16.4 11.4L18.8 21.4H21.6L25.6 10.6H23.4ZM14.4 10.6H10.6L10.6 10.8C13.8 11.6 16 13.8 16.8 16.4L16 11.4C15.8 10.8 15.4 10.6 14.4 10.6Z" fill="white"/\u003e\u003c/svg\u003e' },
+    { name: 'Mastercard',icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#F5F5F5"/\u003e\u003ccircle cx="18" cy="16" r="8" fill="#EB001B"/\u003e\u003ccircle cx="30" cy="16" r="8" fill="#F79E1B"/\u003e\u003cpath d="M24 10.4C25.8 11.8 27 13.8 27 16C27 18.2 25.8 20.2 24 21.6C22.2 20.2 21 18.2 21 16C21 13.8 22.2 11.8 24 10.4Z" fill="#FF5F00"/\u003e\u003c/svg\u003e' },
+    { name: 'Crypto',    icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#0B0E11"/\u003e\u003ccircle cx="24" cy="16" r="8" stroke="#F0B90B" stroke-width="2"/\u003e\u003cpath d="M24 10V22M18 16H30" stroke="#F0B90B" stroke-width="2" stroke-linecap="round"/\u003e\u003c/svg\u003e' },
+    { name: 'Amex',      icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#016FD0"/\u003e\u003cpath d="M8 10H16L20 16L16 22H8L12 16L8 10ZM28 10H40V13H32V14.5H38V17.5H32V19H40V22H28V10ZM20 10H28L24 16L28 22H20L24 16L20 10Z" fill="white"/\u003e\u003c/svg\u003e' },
+    { name: 'Bank',      icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#1A2332"/\u003e\u003cpath d="M24 6L8 14H40L24 6ZM12 16V24H16V16H12ZM20 16V24H24V16H20ZM28 16V24H32V16H28ZM36 16V24H40V16H36ZM8 26H40V28H8V26Z" fill="#8FA0D2"/\u003e\u003c/svg\u003e' },
+  ];
+  return `
+    <div class="payment-logos-strip">
+      <div class="payment-logos-row">
+        ${logos.map(l => `<span class="payment-logo" title="${escAttr(l.name)}">${l.icon}</span>`).join('')}
+      </div>
+      <p class="payment-logos-caption">${t('funding.payment_methods_secure', 'We support all payment methods securely and quickly')}</p>
+    </div>`;
+}
+
 function renderFundingWorkspace(kind) {
   const isDeposit = kind === 'deposit';
   return `
     <section class="funding-flow-shell">
+      ${renderPaymentLogosStrip()}
       <div class="funding-flow-main card ${isDeposit ? 'deposit-console-card' : ''}">
         <div class="panel-headline funding-panel-title">
           <span class="${isDeposit ? 'badge-green' : 'badge-accent'}">${isDeposit ? 'Deposit ticket' : 'Withdrawal ticket'}</span>
