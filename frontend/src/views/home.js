@@ -1175,7 +1175,7 @@ function scrollCurrentLevelRail(rail) {
   const gap = 12;
   const cardW = 285;
   const doScroll = () => {
-    const vw = rail.clientWidth || window.innerWidth;
+    const vw = rail.clientWidth || rail.getBoundingClientRect().width || window.innerWidth || 360;
     if (!vw) return;
     const cardLeft = idx * (cardW + gap);
     const target = Math.max(0, cardLeft - (vw / 2) + (cardW / 2));

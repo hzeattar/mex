@@ -167,7 +167,7 @@
         <div>
           <span class="mex-license-kicker">Regulated entity</span>
           <strong>MEX GLOBAL FINANCIAL SERVICES LLC</strong>
-          <p>Licensed in the United Arab Emirates by the Securities and Commodities Authority for ECMA activities and global market access.</p>
+          <p>MEX Global Financial Services LLC of the UAE is regulated by the Capital Market Authority of the UAE, as a Category 1 Trading Broker for Over-the-Counter Derivatives Contracts and Foreign Exchange Spot Markets, under ECMA license number 20200000031.</p>
         </div>
         <button type="button" class="mex-license-btn" data-license-open>View certificate</button>
       </div>`;

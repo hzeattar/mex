@@ -343,7 +343,6 @@ function renderMethodCards(container) {
     return `<button type="button" class="method-card ${id === container.__fundingSelectedMethodId ? 'active' : ''}" data-method="${escAttr(id)}">
       <span class="method-icon">${methodIcon(m)}</span>
       <strong>${esc(m.title || m.name || m.code || 'Method')}</strong>
-      <small>${esc([fallbackCategoryLabel(methodCategory(m)), m.currency].filter(Boolean).join(' - '))}</small>
       <span class="method-card-badges">${methodBadges(m)}</span>
       <em>${money(m.min_amount || 0)}${m.max_amount ? ` - ${money(m.max_amount)}` : '+'}</em>
     </button>`;
@@ -554,12 +553,10 @@ function emptyTransferPanel(title, text) {
 
 function methodBadges(method) {
   const badges = [];
-  if (String(method?.image_url || '').trim()) badges.push('Logo');
+  if (method?.bonus_amount || method?.bonus_type) badges.push('Bonus');
   if (methodQrUrl(method)) badges.push('QR');
-  if (String(method?.payment_address || '').trim() || displayFields(method?.fields || {}).length) badges.push('Details');
   if (method?.proof_required) badges.push('Receipt');
-  if (!badges.length) badges.push('Needs setup');
-  return badges.slice(0, 4).map(label => `<b>${esc(label)}</b>`).join('');
+  return badges.slice(0, 3).map(label => `<b>${esc(label)}</b>`).join('');
 }
 
 function renderMethodPaymentPreview(method, isDeposit) {

@@ -1090,7 +1090,6 @@
   .method-card strong {
     @apply mt-2 block text-sm font-black;
   }
-  .method-card small,
   .method-card em {
     @apply mt-1 block truncate text-[11px] not-italic text-muted;
   }
@@ -1908,7 +1907,6 @@
   font-weight: 950;
   margin-top: 10px;
 }
-.method-grid-rail .method-card small,
 .method-grid-rail .method-card em {
   font-size: 11px;
   margin-top: 4px;

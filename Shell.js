@@ -138,9 +138,9 @@ export function renderShell(app) {
         <div class="license-modal-panel">
           <div class="license-modal-head">
             <div>
-              <span>🇦🇪 Regulated entity</span>
-              <strong>MEX Global Financial Services LLC</strong>
-              <small>SCA License No. LIC-0005622</small>
+              <span>${t('license.regulated_entity','Regulated entity')}</span>
+              <strong>${t('license.company_name','MEX GLOBAL FINANCIAL SERVICES LLC')}</strong>
+              <small>${t('license.company_desc','MEX Global Financial Services LLC of the UAE is regulated by the Capital Market Authority of the UAE, as a Category 1 Trading Broker for Over-the-Counter Derivatives Contracts and Foreign Exchange Spot Markets, under ECMA license number 20200000031.')}</small>
             </div>
             <button type="button" class="icon-btn icon-btn-sm" data-license-close>${icons.close}</button>
           </div>
@@ -425,11 +425,11 @@ function licenseMiniCard() {
   return `<div class="mobile-menu-license">
     <div>
       <span class="uae-flag-badge" aria-label="UAE">🇦🇪</span>
-      <span>Regulated entity</span>
-      <strong>MEX Global Financial Services LLC</strong>
-      <small>SCA license certificate available for review.</small>
+      <span>${t('license.regulated_entity','Regulated entity')}</span>
+      <strong>${t('license.company_name','MEX GLOBAL FINANCIAL SERVICES LLC')}</strong>
+      <small>${t('license.company_desc','MEX Global Financial Services LLC of the UAE is regulated by the Capital Market Authority of the UAE, as a Category 1 Trading Broker for Over-the-Counter Derivatives Contracts and Foreign Exchange Spot Markets, under ECMA license number 20200000031.')}</small>
     </div>
-    <button type="button" data-open-license>View license</button>
+    <button type="button" data-open-license>${t('license.view_license','View license')}</button>
   </div>`;
 }
 
