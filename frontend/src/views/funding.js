@@ -43,6 +43,8 @@ export function render(params = {}) {
       </section>
 
       <section class="funding-promo-banner" data-promo-banner>
+        <div class="promo-coin-float">${icons.coin}</div>
+        <div class="promo-coin-float promo-coin-float--alt">${icons.coin}</div>
         <div class="promo-banner-content">
           <span class="promo-badge">+10%</span>
           <span class="promo-text">${t('funding.bonus_crypto', 'Get 10% bonus on every crypto deposit')}</span>
@@ -333,6 +335,14 @@ async function loadMethods(container, kind) {
     container.__fundingCategories = categories;
     container.__fundingCategory = categories[0]?.key || '';
     container.__fundingSelectedMethodId = '';
+    // Pre-load bonuses per category
+    container.__fundingBonuses = {};
+    await Promise.all(categories.map(async (cat) => {
+      try {
+        const b = await api(`/wallet/bonuses.php?method_key=${encodeURIComponent(cat.key)}`, { timeout: 4000 });
+        if (b?.ok && b.bonus) container.__fundingBonuses[cat.key] = b.bonus;
+      } catch (_e) {}
+    }));
     renderCategoryTabs(container);
     renderMethodCards(container);
     updateSelectedMethod(container);
@@ -376,13 +386,16 @@ function renderCategoryTabs(container) {
     el.innerHTML = `<div class="empty-state empty-state--compact">${t('funding.no_sections', 'No active funding sections are configured by admin.')}</div>`;
     return;
   }
-  el.innerHTML = categories.map(cat => `
+  el.innerHTML = categories.map(cat => {
+    const bonus = container.__fundingBonuses?.[cat.key];
+    const bonusBadge = bonus ? `<span class="bonus-badge">+${parseFloat(bonus.amount || 0)}% ${t('funding.bonus', 'Bonus')}</span>` : '';
+    return `
     <button type="button" class="${cat.key === selected ? 'active' : ''}" data-funding-category="${escAttr(cat.key)}">
       <i>${cat.icon || icons.wallet}</i>
-      <strong>${esc(cat.label)}</strong>
+      <strong>${esc(cat.label)}${bonusBadge}</strong>
       <small>${esc(cat.hint || '')}</small>
-    </button>
-  `).join('');
+    </button>`;
+  }).join('');
 }
 
 function renderMethodCards(container) {
