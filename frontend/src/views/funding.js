@@ -42,6 +42,14 @@ export function render(params = {}) {
         </div>
       </section>
 
+      <section class="funding-promo-banner" data-promo-banner>
+        <div class="promo-banner-content">
+          <span class="promo-badge">+10%</span>
+          <span class="promo-text">${t('funding.bonus_crypto', 'Get 10% bonus on every crypto deposit')}</span>
+          <button type="button" data-dismiss-promo aria-label="Dismiss">${icons.close}</button>
+        </div>
+      </section>
+
       <section class="funds-tabs-pro" role="tablist" aria-label="Funding workspace tabs">
         ${TABS.map(tab => `
           <button type="button" class="${tab.key === activeTab ? 'active' : ''}" data-funding-tab="${tab.key}" role="tab" aria-selected="${tab.key === activeTab ? 'true' : 'false'}">
@@ -90,6 +98,14 @@ export function mount(container, params = {}) {
     if (method) {
       container.__fundingSelectedMethodId = method.dataset.method || '';
       updateSelectedMethod(container);
+      return;
+    }
+
+    const dismissPromo = e.target.closest('[data-dismiss-promo]');
+    if (dismissPromo) {
+      e.preventDefault();
+      const banner = container.querySelector('[data-promo-banner]');
+      if (banner) banner.style.display = 'none';
       return;
     }
 

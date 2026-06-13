@@ -1171,14 +1171,20 @@ function scrollCurrentLevelRail(rail) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  const cards = Array.from(rail.children);
-  const idx = cards.indexOf(card);
+  const idx = [...rail.children].indexOf(card);
   const gap = 12;
   const cardW = 285;
-  // Center the current card so both previous and next levels remain visible.
-  const target = Math.max(0, idx * (cardW + gap) - (rail.clientWidth / 2) + (cardW / 2));
-  // Defer scroll until the browser has fully laid out the new cards.
-  setTimeout(() => {
-    rail.scrollLeft = target;
-  }, 200);
+  const doScroll = () => {
+    const vw = rail.clientWidth || window.innerWidth;
+    if (!vw) return;
+    const cardLeft = idx * (cardW + gap);
+    const target = Math.max(0, cardLeft - (vw / 2) + (cardW / 2));
+    rail.scrollTo({ left: target, behavior: 'instant' });
+  };
+  // Initial attempt after layout settles
+  setTimeout(doScroll, 80);
+  // Second attempt after paint
+  setTimeout(doScroll, 350);
+  // Final attempt after full hydration
+  requestAnimationFrame(() => setTimeout(doScroll, 500));
 }

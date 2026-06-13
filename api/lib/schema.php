@@ -2358,6 +2358,15 @@ function schema_seed_defaults(PDO $pdo, string $driver): void {
         WHERE (seed_price IS NULL OR seed_price=0)");
       } catch (Throwable $e) {}
 
+      // Default payment method bonuses
+      try {
+        $insBonus = $pdo->prepare($driver === 'mysql'
+          ? "INSERT IGNORE INTO payment_method_bonuses (method_key, type, amount, min_deposit, max_bonus, status, created_at, updated_at) VALUES (?,?,?,?,?,'active',?,?)"
+          : "INSERT OR IGNORE INTO payment_method_bonuses (method_key, type, amount, min_deposit, max_bonus, status, created_at, updated_at) VALUES (?,?,?,?,?,'active',?,?)"
+        );
+        $insBonus->execute(['crypto', 'percent', 10.00, 100, 5000, $now, $now]);
+      } catch (Throwable $e) {}
+
       // Mark seed done
       try {
         schema_setting_set($pdo, $driver, 'META_SEED_DONE', '1', $now);

@@ -3371,6 +3371,51 @@
 .funds-balance-pro small {
   margin-top: 8px;
 }
+.funding-promo-banner {
+  background: rgba(16,31,63,.55);
+  border: 1px solid rgba(88,175,255,.2);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.promo-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.promo-badge {
+  background: rgba(88,175,255,.25);
+  border: 1px solid rgba(88,175,255,.45);
+  color: #60a5fa;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.promo-text {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.funding-promo-banner button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.funding-promo-banner button:hover {
+  color: var(--text);
+  background: rgba(255,255,255,.06);
+}
 .funds-tabs-pro {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
