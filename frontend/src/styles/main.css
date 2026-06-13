@@ -1881,6 +1881,58 @@
 .method-grid-rail .method-card {
   min-width: 185px;
   flex: 0 0 185px;
+  border: 1px solid rgba(137,160,210,.15);
+  border-radius: 12px;
+  background: rgba(5,12,26,.62);
+  padding: 14px;
+  transition: border-color .22s ease, background .22s ease, transform .18s ease, box-shadow .22s ease;
+}
+.method-grid-rail .method-card:hover {
+  border-color: rgba(79,124,255,.40);
+  background: rgba(79,124,255,.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(79,124,255,.14);
+}
+.method-grid-rail .method-card.active {
+  border-color: rgba(24,201,143,.45);
+  background: rgba(24,201,143,.10);
+  box-shadow: 0 6px 18px rgba(24,201,143,.14), inset 0 1px 0 rgba(24,201,143,.08);
+}
+.method-grid-rail .method-card .method-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+.method-grid-rail .method-card strong {
+  font-size: 13px;
+  font-weight: 950;
+  margin-top: 10px;
+}
+.method-grid-rail .method-card small,
+.method-grid-rail .method-card em {
+  font-size: 11px;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.method-grid-rail .method-card .method-card-badges {
+  margin-top: 8px;
+}
+.method-grid-rail .method-card .method-card-badges b {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(79,124,255,.14);
+  color: rgba(160,190,255,.85);
+}
+.method-grid-rail .method-card em {
+  margin-top: 6px;
+  display: block;
+  font-weight: 800;
+  font-size: 11px;
+  color: rgba(160,190,255,.85);
 }
 .deposit-method-details {
   border-color: rgba(79,124,255,.18);
@@ -3374,15 +3426,26 @@
 .funding-promo-banner {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(79,124,255,.28);
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(12,24,47,.98), rgba(8,17,34,.98));
-  padding: 14px 18px;
-  min-height: 56px;
+  border: 1px solid rgba(250,204,21,.18);
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% -10%, rgba(250,204,21,.12), transparent),
+    linear-gradient(155deg, rgba(18,32,8,.96), rgba(10,18,4,.98));
+  padding: 16px 22px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(250,204,21,.08),
+    0 6px 24px rgba(0,0,0,.28),
+    0 0 0 1px rgba(250,204,21,.06);
+  animation: promoGlow 3.2s ease-in-out infinite;
+}
+@keyframes promoGlow {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(250,204,21,.08), 0 6px 24px rgba(0,0,0,.28), 0 0 0 1px rgba(250,204,21,.06); }
+  50% { box-shadow: inset 0 1px 0 rgba(250,204,21,.14), 0 6px 28px rgba(0,0,0,.32), 0 0 14px rgba(250,204,21,.18), 0 0 0 1px rgba(250,204,21,.10); }
 }
 .funding-promo-banner .promo-banner-content {
   position: relative;
@@ -3397,19 +3460,25 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(79,124,255,.95), rgba(24,201,143,.95));
-  color:#fff;
+  background: linear-gradient(135deg, rgba(250,204,21,.95), rgba(234,179,8,.95));
+  color:#0a1004;
   font-size: 12px;
   font-weight: 950;
   letter-spacing: .4px;
   border-radius: 24px;
-  padding: 5px 12px;
+  padding: 5px 13px;
   line-height: 1;
-  text-shadow: 0 1px 0 rgba(0,0,0,.25);
-  border: 1px solid rgba(255,255,255,.12);
+  text-shadow: none;
+  border: 1px solid rgba(250,204,21,.35);
+  box-shadow: 0 2px 8px rgba(250,204,21,.25), 0 0 12px rgba(250,204,21,.18);
+  animation: promoBadgePulse 2s ease-in-out infinite;
+}
+@keyframes promoBadgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
 }
 .funding-promo-banner .promo-text {
-  color: var(--text);
+  color: #f0e6a8;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: .2px;
@@ -3434,15 +3503,20 @@
 }
 .funding-promo-banner .promo-coin-float {
   position: absolute;
-  width: 44px;
-  height: 44px;
-  opacity: .18;
+  width: 56px;
+  height: 56px;
+  opacity: .12;
   pointer-events: none;
   z-index: 0;
+  animation: promoCoinFloat 3.5s ease-in-out infinite;
 }
 .funding-promo-banner .promo-coin-float svg { width: 100%; height: 100%; }
-.funding-promo-banner .promo-coin-float { top: 8px; left: 12px; }
-.funding-promo-banner .promo-coin-float--alt { top: 10px; right: 44px; transform: scale(.85); opacity: .12; }
+.funding-promo-banner .promo-coin-float { top: 4px; left: 14px; }
+.funding-promo-banner .promo-coin-float--alt { top: 8px; right: 52px; transform: scale(.75); opacity: .08; animation-delay: -1.7s; }
+@keyframes promoCoinFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(8deg); }
+}
 .funds-tabs-pro {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3568,57 +3642,71 @@
 .funding-category-rail {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 .funding-category-rail button {
   min-width: 0;
-  min-height: 78px;
+  min-height: 86px;
   border: 1px solid rgba(137,160,210,.13);
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(5,12,26,.58);
-  padding: 10px;
+  padding: 12px;
   color: var(--text);
   text-align: left;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  column-gap: 10px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 11px;
+  row-gap: 3px;
   align-items: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+  transition: border-color .25s ease, background .25s ease, transform .18s ease, box-shadow .25s ease;
+}
+.funding-category-rail button:hover {
+  border-color: rgba(79,124,255,.35);
+  background: rgba(79,124,255,.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(79,124,255,.12);
 }
 .bonus-card {
   display: inline-block;
   margin-top: 4px;
-  background: rgba(16,30,60,.6);
-  border: 1px solid rgba(45,212,191,.35);
-  color: #2dd4bf;
-  padding: 1px 7px;
-  border-radius: 6px;
+  background: rgba(250,204,21,.12);
+  border: 1px solid rgba(250,204,21,.45);
+  color: #facc15;
+  padding: 2px 8px;
+  border-radius: 7px;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: .3px;
   text-transform: uppercase;
-  box-shadow: inset 0 0 8px rgba(45,212,191,.1), 0 0 6px rgba(45,212,191,.08);
+  box-shadow: inset 0 0 10px rgba(250,204,21,.12), 0 0 8px rgba(250,204,21,.12);
   animation: bonusCardGlow 2.2s ease-in-out infinite;
   vertical-align: middle;
 }
 @keyframes bonusCardGlow {
-  0%, 100% { box-shadow: inset 0 0 8px rgba(45,212,191,.1), 0 0 6px rgba(45,212,191,.08); border-color: rgba(45,212,191,.35); }
-  50% { box-shadow: inset 0 0 14px rgba(45,212,191,.25), 0 0 16px rgba(45,212,191,.2); border-color: rgba(45,212,191,.65); }
+  0%, 100% { box-shadow: inset 0 0 10px rgba(250,204,21,.12), 0 0 8px rgba(250,204,21,.12); border-color: rgba(250,204,21,.45); }
+  50% { box-shadow: inset 0 0 18px rgba(250,204,21,.28), 0 0 18px rgba(250,204,21,.22); border-color: rgba(250,204,21,.75); }
 }
 .funding-category-rail button i {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   grid-row: span 2;
   display: grid;
   place-items: center;
   border: 1px solid rgba(137,160,210,.14);
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(79,124,255,.10);
   overflow: hidden;
+  transition: background .25s ease, border-color .25s ease, transform .25s ease;
+}
+.funding-category-rail button:hover i {
+  background: rgba(79,124,255,.22);
+  border-color: rgba(79,124,255,.35);
+  transform: scale(1.06);
 }
 .funding-category-rail button img {
   width: 100%;
@@ -3626,8 +3714,8 @@
   object-fit: cover;
 }
 .funding-category-rail button svg {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
 }
 .funding-category-rail button strong,
 .funding-category-rail button small {
@@ -3648,8 +3736,18 @@
   line-height: 1.35;
 }
 .funding-category-rail button.active {
-  border-color: rgba(24,201,143,.32);
-  background: rgba(24,201,143,.08);
+  border-color: rgba(24,201,143,.42);
+  background: rgba(24,201,143,.10);
+  box-shadow: 0 6px 18px rgba(24,201,143,.14), inset 0 1px 0 rgba(24,201,143,.08);
+}
+.funding-category-rail button.active i {
+  background: rgba(24,201,143,.18);
+  border-color: rgba(24,201,143,.38);
+}
+.funding-category-rail button.active .bonus-card {
+  background: rgba(250,204,21,.20);
+  border-color: rgba(250,204,21,.65);
+  box-shadow: inset 0 0 12px rgba(250,204,21,.18), 0 0 10px rgba(250,204,21,.16);
 }
 .method-details-head {
   display: flex;
