@@ -388,11 +388,14 @@ function renderCategoryTabs(container) {
   }
   el.innerHTML = categories.map(cat => {
     const bonus = container.__fundingBonuses?.[cat.key];
-    const bonusBadge = bonus ? `<span class="bonus-badge">+${parseFloat(bonus.amount || 0)}% ${t('funding.bonus', 'Bonus')}</span>` : '';
+    const bonusCard = bonus ? `
+      <span class="bonus-card">+${parseFloat(bonus.amount || 0)}% ${t('funding.bonus', 'Bonus')}</span>
+    ` : '';
     return `
     <button type="button" class="${cat.key === selected ? 'active' : ''}" data-funding-category="${escAttr(cat.key)}">
       <i>${cat.icon || icons.wallet}</i>
-      <strong>${esc(cat.label)}${bonusBadge}</strong>
+      <strong>${esc(cat.label)}</strong>
+      ${bonusCard}
       <small>${esc(cat.hint || '')}</small>
     </button>`;
   }).join('');
