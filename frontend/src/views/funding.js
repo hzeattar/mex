@@ -345,6 +345,9 @@ function buildCategories(adminCategories, methods) {
     if (categories.some(cat => cat.key === key)) return;
     categories.push({ key, label: fallbackCategoryLabel(key), hint: fallbackCategoryHint(key), icon: categoryIcon(key) });
   });
+  // Enforce user-priority: card → bank → crypto → crypto_bot → everything else
+  const priority = { card: 1, bank: 2, crypto: 3, crypto_bot: 4, manual: 99 };
+  categories.sort((a, b) => (priority[a.key] || 99) - (priority[b.key] || 99));
   return categories;
 }
 

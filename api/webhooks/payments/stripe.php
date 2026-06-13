@@ -87,10 +87,10 @@ try {
 
   if (in_array($type, ['checkout.session.expired', 'checkout.session.async_payment_failed'], true)) {
     $details['checkout_status'] = $type === 'checkout.session.expired' ? 'expired' : 'failed';
-    $upd = $pdo->prepare("UPDATE deposits SET status='failed', details_json=?, updated_at=? WHERE id=? AND status='pending'");
+    $upd = $pdo->prepare("UPDATE deposits SET status='cancelled', details_json=?, updated_at=? WHERE id=? AND status='pending'");
     $upd->execute([json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $now, $depositId]);
     $pdo->commit();
-    json_response(['ok' => true, 'status' => 'failed']);
+    json_response(['ok' => true, 'status' => 'cancelled']);
   }
 
   if ($paymentStatus !== 'paid') {

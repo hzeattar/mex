@@ -645,6 +645,37 @@ function schema_install(PDO $pdo, string $driver): void {
       UNIQUE(method_id, country_code)
     );"
   );
+
+  // Payment method bonuses (admin-managed deposit bonuses per method/category)
+  $pdo->exec($driver === 'mysql' ?
+    "CREATE TABLE IF NOT EXISTS payment_method_bonuses (
+      id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+      method_id BIGINT UNSIGNED NULL,
+      method_key VARCHAR(32) NULL,
+      type VARCHAR(16) NOT NULL DEFAULT 'percent',
+      amount DECIMAL(18,8) NOT NULL DEFAULT 0,
+      min_deposit DECIMAL(18,8) NOT NULL DEFAULT 0,
+      max_bonus DECIMAL(18,8) NOT NULL DEFAULT 0,
+      status VARCHAR(16) NOT NULL DEFAULT 'active',
+      created_at INT NOT NULL DEFAULT 0,
+      updated_at INT NOT NULL DEFAULT 0,
+      KEY idx_status (status),
+      KEY idx_method (method_id, method_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" :
+    "CREATE TABLE IF NOT EXISTS payment_method_bonuses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      method_id INTEGER NULL,
+      method_key TEXT NULL,
+      type TEXT NOT NULL DEFAULT 'percent',
+      amount DECIMAL(18,8) NOT NULL DEFAULT 0,
+      min_deposit DECIMAL(18,8) NOT NULL DEFAULT 0,
+      max_bonus DECIMAL(18,8) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    );"
+  );
+
   // Deposits
   $pdo->exec($driver === 'mysql' ?
     "CREATE TABLE IF NOT EXISTS deposits (
