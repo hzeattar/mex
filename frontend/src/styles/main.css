@@ -3372,8 +3372,77 @@
   margin-top: 8px;
 }
 .funding-promo-banner {
-  display: none;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(79,124,255,.28);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(12,24,47,.98), rgba(8,17,34,.98));
+  padding: 14px 18px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
+.funding-promo-banner .promo-banner-content {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.funding-promo-banner .promo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(79,124,255,.95), rgba(24,201,143,.95));
+  color:#fff;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .4px;
+  border-radius: 24px;
+  padding: 5px 12px;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.12);
+}
+.funding-promo-banner .promo-text {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+.funding-promo-banner [data-dismiss-promo] {
+  position: absolute;
+  top: 8px;
+  inset-inline-end: 10px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(5,11,24,.45);
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.funding-promo-banner [data-dismiss-promo]:hover {
+  background: rgba(5,11,24,.7);
+  color: #fff;
+}
+.funding-promo-banner .promo-coin-float {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  opacity: .18;
+  pointer-events: none;
+  z-index: 0;
+}
+.funding-promo-banner .promo-coin-float svg { width: 100%; height: 100%; }
+.funding-promo-banner .promo-coin-float { top: 8px; left: 12px; }
+.funding-promo-banner .promo-coin-float--alt { top: 10px; right: 44px; transform: scale(.85); opacity: .12; }
 .funds-tabs-pro {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
