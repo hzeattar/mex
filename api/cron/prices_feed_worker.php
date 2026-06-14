@@ -23,7 +23,8 @@ declare(strict_types=1);
 // caused a fatal "Maximum execution time exceeded" (exit 255) every couple of
 // minutes -> the Railway crash-loop. Detect --daemon from argv up front.
 $__feedArgv = (array)($_SERVER['argv'] ?? []);
-@set_time_limit(in_array('--daemon', $__feedArgv, true) ? 0 : (int)max(30, (int)(getenv('FEED_WORKER_MAX_EXEC') ?: '120')));
+$__feedDaemonRequested = in_array('--daemon', $__feedArgv, true) || strtolower(trim((string)getenv('WORKER_MODE'))) === 'feed';
+@set_time_limit($__feedDaemonRequested ? 0 : (int)max(30, (int)(getenv('FEED_WORKER_MAX_EXEC') ?: '120')));
 // Headroom so the soft memory break (in the daemon loop) always fires BEFORE
 // PHP's hard limit -> avoids fatal "Allowed memory size exhausted" (exit 255)
 // crash-loops that eventually exhaust Railway's restart retries.
@@ -58,10 +59,28 @@ function feed_worker_input_token(): string {
       if (str_starts_with($arg, 'token=')) return trim(substr($arg, 6));
       if (str_starts_with($arg, '--token=')) return trim(substr($arg, 8));
       if ($arg === '--daemon') continue;
+      if (str_starts_with($arg, 'types=') || str_starts_with($arg, '--types=')) continue;
+      if (str_starts_with($arg, 'type=') || str_starts_with($arg, '--type=')) continue;
+      if (str_starts_with($arg, 'per_type=') || str_starts_with($arg, '--per_type=')) continue;
+      if (str_starts_with($arg, 'limit=') || str_starts_with($arg, '--limit=')) continue;
       return $arg;
     }
     $envTok = trim((string)(getenv('CRON_KEY') ?: ''));
     if ($envTok !== '') return $envTok;
+  }
+  return '';
+}
+
+function feed_worker_arg(string $name): string {
+  $web = trim((string)($_GET[$name] ?? ''));
+  if ($web !== '') return $web;
+  if (PHP_SAPI !== 'cli') return '';
+  global $argv;
+  foreach ((array)($argv ?? []) as $arg) {
+    $arg = trim((string)$arg);
+    if ($arg === '') continue;
+    if (str_starts_with($arg, $name . '=')) return trim(substr($arg, strlen($name) + 1));
+    if (str_starts_with($arg, '--' . $name . '=')) return trim(substr($arg, strlen($name) + 3));
   }
   return '';
 }
@@ -72,6 +91,7 @@ if (PHP_SAPI === 'cli') {
   foreach ((array)($argv ?? []) as $arg) {
     if (trim((string)$arg) === '--daemon') { $isDaemon = true; break; }
   }
+  if (!$isDaemon && strtolower(trim((string)getenv('WORKER_MODE'))) === 'feed') $isDaemon = true;
 }
 
 // Single-instance lock (prevents overlapping runs)
@@ -101,9 +121,25 @@ $intervals = [
 ];
 
 $types = ['crypto', 'forex', 'commodities', 'futures', 'stocks', 'arab'];
+$requestedTypesRaw = trim(feed_worker_arg('types') ?: feed_worker_arg('type') ?: (string)getenv('FEED_TYPES'));
+if ($requestedTypesRaw !== '') {
+  $requestedTypes = [];
+  foreach (preg_split('/\s*,\s*/', $requestedTypesRaw) as $rawType) {
+    $t = vp_normalize_asset_type((string)$rawType);
+    if ($t !== '' && in_array($t, $types, true) && !in_array($t, $requestedTypes, true)) $requestedTypes[] = $t;
+  }
+  if ($requestedTypes) $types = $requestedTypes;
+}
+$feedPerTypeLimit = (int)(feed_worker_arg('per_type') ?: feed_worker_arg('limit') ?: getenv('FEED_PER_TYPE_LIMIT') ?: 200);
+$feedPerTypeLimit = max(1, min(300, $feedPerTypeLimit));
 
-// ── Collect all active symbols ────────────────────────────────────────────
+// ── Collect all active symbols — cached 30s to avoid full scan every tick ─
 function feed_worker_collect_symbols(): array {
+  static $cache = null;
+  static $cacheTime = 0;
+  $now = time();
+  if ($cache !== null && ($now - $cacheTime) < 30) return $cache;
+
   $pdo = db();
   $symbolsByType = [];
   $metaByTypeSymbol = [];
@@ -124,7 +160,10 @@ function feed_worker_collect_symbols(): array {
     ];
   }
 
-  return [$symbolsByType, $metaByTypeSymbol];
+  $result = [$symbolsByType, $metaByTypeSymbol];
+  $cache = $result;
+  $cacheTime = time();
+  return $result;
 }
 
 // ── Fetch prices for one type and write to central cache ──────────────────
@@ -134,7 +173,8 @@ function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbo
   if (!$symbols) return ['count' => 0, 'written' => 0, 'upserted' => 0];
 
   $now = time();
-  $perType = max(10, min(300, (int)env('FEED_PER_TYPE_LIMIT', '200')));
+  global $feedPerTypeLimit;
+  $perType = max(1, min(300, (int)($feedPerTypeLimit ?? env('FEED_PER_TYPE_LIMIT', '200'))));
   $symbols = array_slice($symbols, 0, $perType);
 
   $metaForProvider = [];
@@ -265,6 +305,7 @@ if ($isDaemon) {
   $cycleCount = 0;
   $maxCycles = (int)env('FEED_WORKER_MAX_CYCLES', '0'); // 0 = unlimited
   $lastCycleByType = [];
+  $cycleErrBackoff = 2; // start at 2s, doubles on each error, capped at 32s
 
   while (true) {
     if ($maxCycles > 0 && $cycleCount >= $maxCycles) break;
@@ -359,6 +400,7 @@ if ($isDaemon) {
           'total_written' => $totalWritten, 'ts' => time(),
         ]);
       } catch (Throwable $e) {}
+      $cycleErrBackoff = 2; // reset backoff on successful cycle
     }
 
     } catch (Throwable $cycleErr) {
@@ -369,7 +411,9 @@ if ($isDaemon) {
       try { error_log('[feed-worker] cycle error (continuing): ' . $cycleErr->getMessage() . ' @ ' . $cycleErr->getFile() . ':' . $cycleErr->getLine()); } catch (Throwable $ignored) {}
       echo "[feed-worker] cycle error (continuing): " . $cycleErr->getMessage() . "\n"; flush();
       try { if (function_exists('gc_collect_cycles')) gc_collect_cycles(); } catch (Throwable $ignored) {}
-      sleep(2);
+      // Exponential backoff: 2s → 4s → 8s → max 32s to avoid tight error loops on DB outages
+      sleep($cycleErrBackoff);
+      $cycleErrBackoff = min(32, $cycleErrBackoff * 2);
     }
 
     $cycleCount++;

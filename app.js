@@ -2860,8 +2860,8 @@ const btnDelete = h('button',{class:'btn secondary', onclick:()=>{
 
   overlay.addEventListener('pointercancel', ()=>{ drag=null; });
 
-  // allow delete key on desktop
-  window.addEventListener('keydown', (e)=>{
+  // allow delete key on desktop — stored so cleanup can remove it
+  const __chartKeydownHandler = (e)=>{
     if (e.key==='Delete' || e.key==='Backspace'){
       if (selectedIdx!=null){
         drawings.splice(selectedIdx,1);
@@ -2870,7 +2870,8 @@ const btnDelete = h('button',{class:'btn secondary', onclick:()=>{
         redrawOverlay();
       }
     }
-  });
+  };
+  window.addEventListener('keydown', __chartKeydownHandler);
 
 // OHLC + Price label
   const ohlc = h('div',{class:'muted small', style:'position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.22);backdrop-filter:blur(8px);padding:6px 8px;border-radius:10px;'});
@@ -3160,6 +3161,7 @@ window.__tp_chart_cleanup = ()=>{
   try{ window.removeEventListener('orientationchange', orientationResizeHandler); }catch(e){}
   try{ if(window.visualViewport){ window.visualViewport.removeEventListener('resize', viewportResizeHandler); } }catch(e){}
   try{ document.removeEventListener('visibilitychange', chartVisibleHandler); }catch(e){}
+  try{ window.removeEventListener('keydown', __chartKeydownHandler); }catch(e){}
 };
 
   // Ensure cleanup runs on route change too
@@ -10067,7 +10069,8 @@ try{
     body:{
       id: pos.id,
       qty,
-      mode: (state && state.tradeMode) ? state.tradeMode : 'demo'
+      mode: (state && state.tradeMode) ? state.tradeMode : 'demo',
+      client_price: safeNum(pos.mark_price, 0) || mark
     }
   });
 }catch(err){
@@ -10077,7 +10080,8 @@ try{
       method:'POST',
       body:{
         qty,
-        mode: (state && state.tradeMode) ? state.tradeMode : 'demo'
+        mode: (state && state.tradeMode) ? state.tradeMode : 'demo',
+        client_price: safeNum(pos.mark_price, 0) || mark
       }
     });
   }catch(err2){

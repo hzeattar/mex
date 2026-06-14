@@ -7,6 +7,7 @@ require_once __DIR__ . '/ledger.php';
 require_once __DIR__ . '/risk.php';
 require_once __DIR__ . '/trade_mode.php';
 require_once __DIR__ . '/affiliates.php';
+require_once __DIR__ . '/quote_snapshot.php';
 
 class TradeCloseException extends RuntimeException {
   public int $httpStatus;
@@ -125,11 +126,39 @@ function trade_close_cached_price(string $symbol, string $assetType, string $mar
   ];
 }
 
-function trade_close_resolve_price(string $symbol, string $assetType, string $marketType): array {
+function trade_close_resolve_price(string $symbol, string $assetType, string $marketType, string $mode = 'demo', string $positionSide = 'BUY', float $clientPrice = 0.0): array {
   $symbol = strtoupper(trim($symbol));
   $marketType = strtolower(trim($marketType ?: 'spot'));
   if (!in_array($marketType, ['spot','perp'], true)) $marketType = 'spot';
   $quoteAssetType = trade_close_quote_asset_type($symbol, $assetType);
+  $mode = strtolower(trim($mode)) === 'real' ? 'real' : 'demo';
+  $positionSide = strtoupper(trim($positionSide));
+  $closeSide = $positionSide === 'SELL' ? 'BUY' : 'SELL';
+
+  $snapshot = qs_snapshot($symbol, $quoteAssetType, $marketType, ['mode' => 'execution']);
+  if (!empty($snapshot['execution_allowed'])) {
+    return trade_close_snapshot_result($snapshot, $closeSide);
+  }
+  if ($mode === 'real') {
+    $refreshed = trade_close_try_refresh_execution_snapshot($symbol, $assetType, $quoteAssetType, $marketType, $closeSide);
+    if ($refreshed) return $refreshed;
+    throw new TradeCloseException('Live executable price unavailable. Please wait for the quote to refresh.', 409, 'price_not_executable', [
+      'symbol' => $symbol,
+      'asset_type' => $assetType,
+      'quote_asset_type' => $quoteAssetType,
+      'market_type' => $marketType,
+      'quote' => qs_public_item($snapshot),
+    ]);
+  }
+  if ((float)($snapshot['price'] ?? 0) > 0) {
+    return [
+      'price' => (float)($snapshot['price'] ?? 0),
+      'source' => (string)($snapshot['source'] ?? 'display_snapshot'),
+      'age_sec' => isset($snapshot['age_sec']) ? (int)$snapshot['age_sec'] : 0,
+      'cached' => true,
+      'snapshot' => qs_meta($snapshot),
+    ];
+  }
 
   $cached = trade_close_cached_price($symbol, $quoteAssetType, $marketType);
   if ($cached && (float)$cached['price'] > 0) return $cached;
@@ -151,11 +180,21 @@ function trade_close_resolve_price(string $symbol, string $assetType, string $ma
     try {
       $live = (float)quote_price($symbol, $attemptMarket ?: 'spot', $attemptAsset ?: 'crypto');
       if ($live > 0) {
+        $fallbackSnapshot = qs_snapshot_from_row($symbol, $attemptAsset ?: 'crypto', $attemptMarket ?: 'spot', [
+          'symbol' => $symbol,
+          'type' => $attemptAsset ?: 'crypto',
+          'market' => $attemptMarket ?: 'spot',
+          'price' => $live,
+          'change_pct' => 0,
+          'updated_at' => time(),
+          'source' => 'demo_live_fallback',
+        ], ['mode' => 'display']);
         return [
           'price' => $live,
           'source' => $attemptMarket === $marketType ? 'live' : 'live_' . $attemptMarket . '_fallback',
           'age_sec' => 0,
           'cached' => false,
+          'snapshot' => qs_meta($fallbackSnapshot),
         ];
       }
     } catch (Throwable $e) {
@@ -173,6 +212,7 @@ function trade_close_resolve_price(string $symbol, string $assetType, string $ma
         'source' => (string)($row['source'] ?? 'bulk_live'),
         'age_sec' => 0,
         'cached' => false,
+        'snapshot' => qs_meta(qs_snapshot_from_row($symbol, $quoteAssetType ?: 'crypto', $marketType, $row, ['mode' => 'display'])),
       ];
     }
   } catch (Throwable $e) {
@@ -192,12 +232,55 @@ function trade_close_resolve_price(string $symbol, string $assetType, string $ma
     error_log('[trade_close] price unavailable for ' . $symbol . ': ' . implode(' | ', $errors));
   }
 
+  // Last resort: use client-supplied price for demo mode (safe — no real funds at risk)
+  if ($clientPrice > 0 && $mode !== 'real') {
+    return [
+      'price' => $clientPrice,
+      'source' => 'client_fallback',
+      'age_sec' => 0,
+      'cached' => false,
+    ];
+  }
+
   throw new TradeCloseException('Price unavailable. Please wait for the live quote to refresh.', 409, 'price_unavailable', [
     'symbol' => $symbol,
     'asset_type' => $assetType,
     'quote_asset_type' => $quoteAssetType,
     'market_type' => $marketType,
   ]);
+}
+
+function trade_close_snapshot_result(array $snapshot, string $closeSide): array {
+  return [
+    'price' => qs_execution_price($snapshot, $closeSide),
+    'source' => (string)($snapshot['source'] ?? 'quote_snapshot'),
+    'age_sec' => (int)($snapshot['age_sec'] ?? 0),
+    'cached' => false,
+    'snapshot' => qs_meta($snapshot),
+  ];
+}
+
+function trade_close_try_refresh_execution_snapshot(string $symbol, string $assetType, string $quoteAssetType, string $marketType, string $closeSide): ?array {
+  $attempts = [[$marketType, $quoteAssetType]];
+  if ($marketType !== 'spot') $attempts[] = ['spot', $quoteAssetType];
+  if ($quoteAssetType !== $assetType) $attempts[] = [$marketType, $assetType ?: 'crypto'];
+
+  foreach ($attempts as [$attemptMarket, $attemptAsset]) {
+    try {
+      $live = (float)quote_price($symbol, $attemptMarket ?: 'spot', $attemptAsset ?: 'crypto');
+      if ($live <= 0) continue;
+      $snapshot = qs_snapshot($symbol, $quoteAssetType, $marketType, ['mode' => 'execution']);
+      if (!empty($snapshot['execution_allowed'])) return trade_close_snapshot_result($snapshot, $closeSide);
+    } catch (Throwable $e) {}
+  }
+
+  try {
+    quote_bulk_live([$symbol], $quoteAssetType ?: 'crypto', [], ['ttl' => 1, 'persist' => true]);
+    $snapshot = qs_snapshot($symbol, $quoteAssetType, $marketType, ['mode' => 'execution']);
+    if (!empty($snapshot['execution_allowed'])) return trade_close_snapshot_result($snapshot, $closeSide);
+  } catch (Throwable $e) {}
+
+  return null;
 }
 
 function trade_close_position(PDO $pdo, int $uid, int $positionId, array $opts = []): array {
@@ -219,8 +302,11 @@ function trade_close_position(PDO $pdo, int $uid, int $positionId, array $opts =
   $assetType = (string)($prePos['asset_type'] ?? 'crypto');
   $marketType = strtolower((string)($prePos['market_type'] ?? 'spot'));
   if (!in_array($marketType, ['spot','perp'], true)) $marketType = 'spot';
+  $preMode = str_starts_with($symbolDb, '@R@') ? 'real' : 'demo';
+  $preSide = strtoupper((string)($prePos['side'] ?? 'BUY'));
 
-  $priceInfo = trade_close_resolve_price($symbolUi, $assetType, $marketType);
+  $clientPrice = (float)($opts['client_price'] ?? 0);
+  $priceInfo = trade_close_resolve_price($symbolUi, $assetType, $marketType, $preMode, $preSide, $clientPrice);
   $mark = (float)$priceInfo['price'];
 
   $qtyClose = (float)($opts['qty'] ?? 0);
@@ -304,6 +390,7 @@ function trade_close_position(PDO $pdo, int $uid, int $positionId, array $opts =
       'pnl' => $pnl,
       'reason' => $closeReason,
       'price_source' => $priceInfo['source'] ?? '',
+      'quote_snapshot' => is_array($priceInfo['snapshot'] ?? null) ? $priceInfo['snapshot'] : null,
     ]);
 
     if ($closeFee > 0) {
@@ -323,6 +410,19 @@ function trade_close_position(PDO $pdo, int $uid, int $positionId, array $opts =
     }
 
     $pnlUsd = $pnl - $closeFee;
+    $orderMeta = [];
+    try {
+      $metaSt = $pdo->prepare("SELECT meta FROM orders WHERE user_id=? AND position_id=? AND side <> 'CLOSE' ORDER BY id DESC LIMIT 1");
+      $metaSt->execute([$uid, $positionId]);
+      $rawMeta = trim((string)($metaSt->fetchColumn() ?: ''));
+      if ($rawMeta !== '') {
+        $decoded = json_decode($rawMeta, true);
+        if (is_array($decoded)) $orderMeta = $decoded;
+      }
+    } catch (Throwable $ignoredMeta) {}
+    $orderMeta['close_reason'] = $closeReason;
+    $orderMeta['close_quote_snapshot'] = is_array($priceInfo['snapshot'] ?? null) ? $priceInfo['snapshot'] : null;
+    $orderMetaJson = json_encode($orderMeta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $updO = $pdo->prepare("UPDATE orders
       SET status='closed',
           pnl_usd=?,
@@ -330,15 +430,16 @@ function trade_close_position(PDO $pdo, int $uid, int $positionId, array $opts =
           closed_at=?,
           fee_paid=COALESCE(fee_paid,0)+?,
           limit_price=CASE WHEN limit_price IS NULL OR limit_price=0 THEN ? ELSE limit_price END,
+          meta=?,
           updated_at=?
       WHERE user_id=? AND position_id=? AND side <> 'CLOSE'");
-    $updO->execute([$pnlUsd, $closeReason, $closedAt, $closeFee, $mark, $closedAt, $uid, $positionId]);
+    $updO->execute([$pnlUsd, $closeReason, $closedAt, $closeFee, $mark, $orderMetaJson, $closedAt, $uid, $positionId]);
 
     if ($updO->rowCount() === 0) {
-      $meta = json_encode(['source' => 'trade_close', 'reason' => $closeReason], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+      $meta = json_encode(['source' => 'trade_close', 'reason' => $closeReason, 'close_quote_snapshot' => is_array($priceInfo['snapshot'] ?? null) ? $priceInfo['snapshot'] : null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
       $o = $pdo->prepare('INSERT INTO orders(user_id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,reduce_only,client_order_id,position_id,pnl_usd,close_reason,closed_at,fee_paid,meta,updated_at,status,created_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-      $o->execute([$uid,$symbolDb,$assetType,$marketType,$side,'MARKET',$qtyClose,$mark,$entry,null,null,null,$leverage,1,null,$positionId,$pnlUsd,$closeReason,$closedAt,$closeFee,$meta,$closedAt,'closed',$closedAt]);
+      $o->execute([$uid,$symbolDb,$assetType,$marketType,$side,'MARKET',$qtyClose,$mark,$mark,null,null,null,$leverage,1,null,$positionId,$pnlUsd,$closeReason,$closedAt,$closeFee,$meta,$closedAt,'closed',$closedAt]);
     }
 
     if ($qtyClose + 1e-12 >= $qty) {

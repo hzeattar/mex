@@ -15,6 +15,7 @@ try {
   $res = trade_close_position(db(), $uid, $id, [
     'qty' => (float)($body['qty'] ?? 0),
     'reason' => 'manual',
+    'client_price' => (float)($body['client_price'] ?? 0),
   ]);
   json_response($res);
 } catch (TradeCloseException $e) {
