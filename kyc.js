@@ -106,6 +106,13 @@ export function render() {
             </label>
 
             <label class="block">
+              <span class="text-xs text-muted">Back Document Photo</span>
+              <input type="file" name="back" id="kyc-back"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                class="input mt-1 py-1.5" />
+            </label>
+
+            <label class="block">
               <span class="text-xs text-muted">Selfie with Document</span>
               <input type="file" name="selfie" id="kyc-selfie"
                 accept="image/jpeg,image/png,image/webp"
@@ -132,7 +139,7 @@ export function mount(container) {
   container.querySelector('#kyc-form')?.addEventListener('submit', (e) => submitKyc(e, container));
 
   // Client-side file size validation (10 MB limit per file)
-  ['kyc-front','kyc-selfie','kyc-contract'].forEach(id => {
+  ['kyc-front','kyc-back','kyc-selfie','kyc-contract'].forEach(id => {
     container.querySelector(`#${id}`)?.addEventListener('change', (e) => {
       const file = e.target.files?.[0];
       if (file && file.size > 10 * 1024 * 1024) {
