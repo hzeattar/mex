@@ -6,6 +6,7 @@ import { $, $$, delegate } from '../../utils/dom.js';
 import { icons } from '../common/Icons.js';
 import { t, translateDom } from '../../utils/i18n.js';
 import { api } from '../../services/api.js';
+import { trySwitchToReal } from '../../utils/gates.js';
 
 const NAV = [
   { route: 'home', key: 'nav.home', label: 'Home', icon: 'home' },
@@ -26,7 +27,8 @@ const MOBILE_NAV = [
   { route: 'wallet', key: 'nav.wallet', label: 'Funds', icon: 'wallet' },
 ];
 
-const LICENSE_PDF_URL = 'https://mex.ae/files/pdf/regulations/SCA_LIC-0005622_Certificate.pdf';
+const LICENSE_PDF_URL = '/assets/docs/SCA_LIC-0005622_Certificate.pdf';
+const LICENSE_PREVIEW_URL = '/assets/docs/SCA_LIC-0005622_Certificate_preview.png';
 
 export function renderShell(app) {
   const brand = get('brand');
@@ -147,16 +149,19 @@ export function renderShell(app) {
           <div class="license-pdf-viewer">
             <iframe id="license-pdf-frame" title="SCA license certificate" loading="lazy"></iframe>
             <div class="license-pdf-fallback hidden" id="license-pdf-fallback">
-              <img src="/assets/docs/SCA_LIC-0005622_Certificate_preview.png"
+              <img src="${LICENSE_PREVIEW_URL}"
                    alt="SCA License Certificate preview"
                    class="license-preview-img"
                    loading="lazy" />
-              <p class="text-muted text-sm text-center mt-3">PDF preview not supported in this browser.</p>
+              <p class="text-muted text-sm text-center mt-3">${t('license.preview_fallback', 'PDF preview not supported in this browser.')}</p>
             </div>
           </div>
           <div class="license-modal-actions">
             <a href="${LICENSE_PDF_URL}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost">
-              Open certificate in new tab ↗
+              ${t('license.open_certificate', 'Open certificate')}
+            </a>
+            <a href="${LICENSE_PDF_URL}" download class="btn btn-sm btn-ghost">
+              ${t('license.download_pdf', 'Download PDF')}
             </a>
           </div>
         </div>
@@ -166,6 +171,7 @@ export function renderShell(app) {
   bindShell(app);
   syncActive();
   translateDom(app);
+  refreshNotificationBadge();
 
   // Brand logo fallback via event listener (not inline onerror)
   app.querySelectorAll('.brand-logo').forEach(img => {
@@ -324,6 +330,11 @@ function setMode(next) {
     closeModeMenus();
     return;
   }
+  if (next === 'real') {
+    trySwitchToReal('mode');
+    closeModeMenus();
+    return;
+  }
   localStorage.setItem('vp_mode', next);
   window.location.reload();
 }
@@ -340,13 +351,71 @@ async function loadNotifications() {
   const list = $('#notif-list');
   if (!list) return;
   try {
-    const data = await api('/notifications/list.php', { timeout: 6000 });
+    const data = await api('/notifications/list.php?limit=30&mark_read=1', { timeout: 6000 });
     const items = data?.items || [];
-    if (!items.length) { list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.no_notifications', 'No notifications')}</p>`; return; }
-    list.innerHTML = items.slice(0, 20).map(n => `<div class="notif-item ${n.read ? '' : 'unread'}"><p class="text-xs">${esc(n.message || n.title || '--')}</p><span class="text-[10px] text-muted">${esc(n.created_at || '')}</span></div>`).join('');
+    setNotificationBadge(0);
+    if (!items.length) {
+      list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.no_notifications', 'No notifications')}</p>`;
+      return;
+    }
+    list.innerHTML = items.slice(0, 30).map(n => {
+      const kind = String(n.kind || n.type || 'info').toLowerCase();
+      const iconMap = { success: '✓', warning: '⚠', danger: '⚡', info: 'ℹ', deposit: '↓', withdrawal: '↑', kyc: '🪪', position: '📈', trade: '📊' };
+      const colorMap = { success: 'notif-success', warning: 'notif-warning', danger: 'notif-danger', info: 'notif-info', deposit: 'notif-success', kyc: 'notif-info', position: 'notif-trade', trade: 'notif-trade' };
+      const icon = iconMap[kind] || iconMap.info;
+      const colorClass = colorMap[kind] || 'notif-info';
+      const link = n.link ? ` data-notif-link="${escAttr(n.link)}"` : '';
+      const when = n.created_at ? notifRelTime(n.created_at) : '';
+      return `<div class="notif-item ${n.read ? '' : 'unread'} ${colorClass}" ${link} role="button" tabindex="0">
+        <span class="notif-icon">${icon}</span>
+        <div class="notif-body">
+          <p class="notif-title">${esc(n.title || n.message || '--')}</p>
+          ${n.title && n.message && n.message !== n.title ? `<p class="notif-msg">${esc(n.message)}</p>` : ''}
+          ${when ? `<span class="notif-when">${esc(when)}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    // Click: navigate via link attribute
+    list.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-notif-link]');
+      if (!item) return;
+      const href = item.dataset.notifLink || '';
+      if (href.startsWith('#/')) { navigate(href.slice(1)); toggleNotifications(); }
+      else if (href) { window.location.href = href; }
+    });
     translateDom(list);
-  } catch (e) { _marketsCache = _marketsCache?.length ? _marketsCache : _fallbackDrawerMarkets;
-    renderMarketsList(_marketsCache, ''); }
+  } catch (_e) {
+    list.innerHTML = `<p class="text-muted text-xs text-center py-6">${t('common.error_loading', 'Could not load notifications')}</p>`;
+  }
+}
+
+function notifRelTime(iso) {
+  try {
+    const d = new Date(iso.replace(' ', 'T'));
+    const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (diff < 60) return t('common.just_now', 'Just now');
+    if (diff < 3600) return Math.floor(diff / 60) + ' ' + t('common.min_ago', 'min ago');
+    if (diff < 86400) return Math.floor(diff / 3600) + ' ' + t('common.hr_ago', 'hr ago');
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch (_e) { return ''; }
+}
+
+async function refreshNotificationBadge() {
+  try {
+    const data = await api('/notifications/list.php?limit=1&peek=1', { timeout: 5000 });
+    setNotificationBadge(Number(data?.unread || 0));
+  } catch (_e) {
+    setNotificationBadge(0);
+  }
+}
+
+function setNotificationBadge(count) {
+  const safe = Math.max(0, Math.min(99, Number(count || 0)));
+  $$('#notif-badge, #notif-badge-m').forEach((badge) => {
+    if (!badge) return;
+    badge.textContent = String(safe);
+    badge.classList.toggle('hidden', safe <= 0);
+  });
 }
 
 function syncActive() {
@@ -455,11 +524,30 @@ function licenseMiniCard() {
   </div>`;
 }
 
+function shouldUseLicenseImagePreview() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 function openLicenseModal() {
   const modal = $('#license-modal');
   const frame = $('#license-pdf-frame');
   const fallback = $('#license-pdf-fallback');
   if (!modal) return;
+
+  if (shouldUseLicenseImagePreview()) {
+    if (frame) {
+      frame.removeAttribute('src');
+      frame.classList.add('is-hidden');
+    }
+    if (fallback) fallback.classList.remove('hidden');
+    modal.classList.remove('hidden');
+    document.body.classList.add('license-modal-open');
+    return;
+  }
+
+  if (frame) frame.classList.remove('is-hidden');
+  if (fallback) fallback.classList.add('hidden');
 
   // Lazy-load the PDF only on first open
   if (frame && !frame.getAttribute('src')) {

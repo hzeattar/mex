@@ -2164,8 +2164,38 @@ async function closePosition(container, trigger) {
     btn.dataset.prevText = btn.textContent;
     btn.textContent = t('trade.closing', 'Closing...');
   });
+  // Attempt close — up to 2 tries (auto-retry once on price_not_executable after 1.5s)
+  const attempt = async (retry = false) => {
+    const clientPrice = Number(get('activeQuote')?.price || 0);
+    return api('/trade/close_position.php', {
+      method: 'POST',
+      body: { id, position_id: id, mode: get('mode'), client_price: clientPrice },
+      timeout: 14000,
+    }).then((res) => {
+      if (res && res.ok === false) {
+        const err = new Error(res.error || t('trade.close_failed', 'Close failed'));
+        err.code = res.code || '';
+        err.payload = res;
+        throw err;
+      }
+      return res;
+    });
+  };
   try {
-    const res = await api('/trade/close_position.php', { method: 'POST', body: { id, position_id: id, mode: get('mode') }, timeout: 14000 });
+    let res;
+    try {
+      res = await attempt();
+    } catch (e) {
+      const code = String(e?.code || e?.payload?.code || '').toLowerCase();
+      if ((code === 'price_not_executable' || code === 'price_unavailable') && !e._retried) {
+        e._retried = true;
+        // Wait 1.5s for price to refresh, then retry once
+        await new Promise((ok) => setTimeout(ok, 1500));
+        res = await attempt(true);
+      } else {
+        throw e;
+      }
+    }
     if (res && res.ok === false) throw new Error(res.error || t('trade.close_failed', 'Close failed'));
     clearCacheFor('/trade/portfolio.php', '/trade/orders.php');
     await Promise.allSettled([
@@ -2188,7 +2218,7 @@ async function closePosition(container, trigger) {
 function closePositionErrorMessage(error) {
   const code = String(error?.code || error?.payload?.code || '').toLowerCase();
   if (code === 'price_not_executable' || code === 'price_unavailable') {
-    return t('trade.close_price_refreshing', 'Live price is refreshing. Please try closing again in a moment.');
+    return t('trade.close_price_stale', 'Price is updating — retried automatically. If this persists, reload the page.');
   }
   return error?.message || t('trade.could_not_close', 'Could not close this position now.');
 }

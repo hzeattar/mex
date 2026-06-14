@@ -8,6 +8,7 @@ require_once __DIR__ . '/risk.php';
 require_once __DIR__ . '/trade_mode.php';
 require_once __DIR__ . '/affiliates.php';
 require_once __DIR__ . '/quote_snapshot.php';
+require_once __DIR__ . '/user_notifications.php';
 
 class TradeCloseException extends RuntimeException {
   public int $httpStatus;
@@ -142,6 +143,19 @@ function trade_close_resolve_price(string $symbol, string $assetType, string $ma
   if ($mode === 'real') {
     $refreshed = trade_close_try_refresh_execution_snapshot($symbol, $assetType, $quoteAssetType, $marketType, $closeSide);
     if ($refreshed) return $refreshed;
+    // Manual close fallback: use cached price (even if not execution_allowed) so user can always exit
+    $cached = trade_close_cached_price($symbol, $quoteAssetType, $marketType);
+    if ($cached && (float)$cached['price'] > 0) {
+      $cached['source'] = trim((string)($cached['source'] ?? 'cache')) . '_manual_fallback';
+      return $cached;
+    }
+    // Last resort: accept client-supplied price if it's within 3% of the snapshot (prevents manipulation)
+    if ($clientPrice > 0) {
+      $snapPx = (float)($snapshot['price'] ?? 0);
+      if ($snapPx <= 0 || abs($clientPrice - $snapPx) / max(0.0001, $snapPx) <= 0.03) {
+        return ['price' => $clientPrice, 'source' => 'client_price', 'age_sec' => 0, 'cached' => false];
+      }
+    }
     throw new TradeCloseException('Live executable price unavailable. Please wait for the quote to refresh.', 409, 'price_not_executable', [
       'symbol' => $symbol,
       'asset_type' => $assetType,
@@ -465,6 +479,11 @@ function trade_close_position(PDO $pdo, int $uid, int $positionId, array $opts =
         'reason' => $closeReason,
       ]);
     } catch (Throwable $e2) {}
+
+    // In-app notification to the trader
+    try {
+      user_notify_trade_close($uid, $symbolUi, $pnlUsd, 'USD', $closeReason, $positionId);
+    } catch (Throwable $ignored) {}
 
     return [
       'ok' => true,

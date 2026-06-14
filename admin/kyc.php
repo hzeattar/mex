@@ -27,6 +27,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $st = $pdo->prepare('UPDATE kyc_requests SET ' . implode(',', $sets) . ' WHERE id=?');
     $st->execute($params);
     admin_audit_log($action === 'save_note' ? 'save_kyc_note' : ($action . '_kyc'), 'kyc_request', $id, $summary, ['note' => $note]);
+    // Notify the user of KYC status change
+    if (in_array($action, ['approve', 'reject'], true)) {
+      try {
+        $kRow = $pdo->query("SELECT user_id FROM kyc_requests WHERE id=$id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if (!empty($kRow['user_id'])) {
+          require_once __DIR__ . '/../api/lib/user_notifications.php';
+          user_notify_kyc((int)$kRow['user_id'], $action === 'approve' ? 'approved' : 'rejected', $note);
+        }
+      } catch (Throwable $notifIgnored) {}
+    }
     $msg = $summary;
   } catch (Throwable $e) {
     $error = $e->getMessage();
@@ -44,7 +54,7 @@ if ($q !== '') {
   array_push($params, $needle, $needle, $needle, $needle, $needle, $needle, $needle, $needle);
 }
 if ($status !== '') { $where[] = 'k.status = ?'; $params[] = $status; }
-$sql = "SELECT k.id,k.user_id,k.status,k.full_name,k.country,k.doc_type,k.doc_number,k.admin_note,k.created_at,k.updated_at,u.username,u.first_name,u.last_name FROM kyc_requests k LEFT JOIN users u ON u.id=k.user_id";
+$sql = "SELECT k.id,k.user_id,k.status,k.full_name,k.country,k.phone_e164,k.birth_date,k.doc_type,k.doc_number,k.contract_path,k.extra_paths_json,k.admin_note,k.created_at,k.updated_at,u.username,u.first_name,u.last_name FROM kyc_requests k LEFT JOIN users u ON u.id=k.user_id";
 if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
 $sql .= ' ORDER BY k.id DESC LIMIT ' . (int)$limit;
 $st = $pdo->prepare($sql);
@@ -57,6 +67,17 @@ $stats = [
   'Approved' => (string)($pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status='approved'")->fetchColumn() ?: 0),
   'Rejected' => (string)($pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status='rejected'")->fetchColumn() ?: 0),
 ];
+
+function admin_extra_file_links(int $id, string $json): string {
+  $items = json_decode($json, true);
+  if (!is_array($items) || !$items) return '';
+  $html = '';
+  foreach (array_values($items) as $idx => $_path) {
+    $n = $idx + 1;
+    $html .= "<a class='btn' href='/admin/kyc_file.php?id={$id}&kind=extra&idx={$idx}' target='_blank'>Extra {$n}</a>";
+  }
+  return $html;
+}
 
 $body = "<div class='split'><div><h1 class='section-title'>KYC Review Queue</h1><div class='muted small'>Approve, reject, or annotate identity verification submissions without leaving the backoffice.</div></div><a class='btn' href='/admin/dashboard.php'>Back to dashboard</a></div>";
 if ($msg !== '') $body .= "<div class='card'><span class='pill ok'>" . admin_h($msg) . "</span></div>";
@@ -81,9 +102,9 @@ if (!$items) {
       <td>#{$id}<div class='muted small'>" . admin_format_ts($it['created_at']) . "</div></td>
       <td><strong>User #" . (int)$it['user_id'] . "</strong><div class='muted small'>" . admin_h(admin_name_for_row($it)) . "</div></td>
       <td>" . admin_status_pill((string)$it['status']) . "<div class='muted small'>Updated " . admin_format_ts($it['updated_at']) . "</div></td>
-      <td><strong>" . admin_h($it['full_name']) . "</strong><div class='muted small'>" . admin_h($it['country']) . "</div></td>
+      <td><strong>" . admin_h($it['full_name']) . "</strong><div class='muted small'>" . admin_h($it['country']) . "</div><div class='muted small'>" . admin_h((string)($it['phone_e164'] ?? '')) . "</div><div class='muted small'>" . admin_h((string)($it['birth_date'] ?? '')) . "</div></td>
       <td><div><strong>" . admin_h($it['doc_type']) . "</strong></div><div class='muted small'>" . admin_h($it['doc_number']) . "</div></td>
-      <td><div class='inline-actions'><a class='btn' href='/admin/kyc_file.php?id={$id}&kind=front' target='_blank'>Front</a><a class='btn' href='/admin/kyc_file.php?id={$id}&kind=back' target='_blank'>Back</a><a class='btn' href='/admin/kyc_file.php?id={$id}&kind=selfie' target='_blank'>Selfie</a></div></td>
+      <td><div class='inline-actions'><a class='btn' href='/admin/kyc_file.php?id={$id}&kind=front' target='_blank'>Front</a><a class='btn' href='/admin/kyc_file.php?id={$id}&kind=back' target='_blank'>Back</a><a class='btn' href='/admin/kyc_file.php?id={$id}&kind=selfie' target='_blank'>Selfie</a><a class='btn' href='/admin/kyc_file.php?id={$id}&kind=contract' target='_blank'>Contract</a>" . admin_extra_file_links($id, (string)($it['extra_paths_json'] ?? '')) . "</div></td>
       <td style='min-width:320px'><form method='post' class='stack'>" . admin_csrf_input() . "<input type='hidden' name='id' value='{$id}'><textarea name='note' rows='3' placeholder='Admin note for this KYC request'>" . admin_h($it['admin_note']) . "</textarea><div class='inline-actions'><button class='btn' type='submit' name='action' value='approve'>Approve</button><button class='btn danger' type='submit' name='action' value='reject'>Reject</button><button class='btn' type='submit' name='action' value='save_note'>Save note</button></div></form></td>
     </tr>";
   }

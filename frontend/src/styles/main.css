@@ -110,8 +110,18 @@
   .notif-panel { @apply fixed top-12 right-4 w-80 max-h-[70vh] bg-panel border border-line rounded-lg shadow-xl z-[100] overflow-hidden flex flex-col; }
   .notif-panel-header { @apply flex items-center justify-between px-4 py-3 border-b border-line; }
   .notif-panel-body { @apply flex-1 overflow-auto; }
-  .notif-item { @apply px-4 py-3 border-b border-line/50 hover:bg-surface/50; }
-  .notif-item.unread { @apply border-l-2 border-l-accent; }
+  .notif-item { @apply px-3 py-2.5 border-b border-line/40 hover:bg-surface/60 cursor-pointer flex items-start gap-3 transition-colors; }
+  .notif-item.unread { @apply border-l-2 border-l-accent bg-accent/5; }
+  .notif-icon { @apply text-base shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-[13px] mt-0.5; }
+  .notif-body { @apply flex-1 min-w-0; }
+  .notif-title { @apply text-xs font-semibold leading-snug; }
+  .notif-msg { @apply text-[11px] text-muted leading-snug mt-0.5 truncate; }
+  .notif-when { @apply text-[10px] text-muted/60 mt-0.5 block; }
+  .notif-success .notif-icon { @apply bg-green/15 text-green; }
+  .notif-warning .notif-icon { @apply bg-gold/15 text-gold; }
+  .notif-danger  .notif-icon { @apply bg-red/15 text-red; }
+  .notif-info    .notif-icon { @apply bg-accent/15 text-accent; }
+  .notif-trade   .notif-icon { @apply bg-blue-500/15 text-blue-400; }
 
   /* Markets Side Drawer */
   .markets-drawer { @apply fixed inset-0 z-[90]; }

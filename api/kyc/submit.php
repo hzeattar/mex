@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/schema.php';
 require_once __DIR__ . '/../lib/affiliates.php';
+require_once __DIR__ . '/../lib/user_notifications.php';
 
 require_method('POST');
 $uid = require_auth();
@@ -156,5 +157,7 @@ try {
     'doc' => $doc_type,
   ]);
 } catch (Throwable $e) {}
+
+try { user_notify_kyc($uid, 'pending'); } catch (Throwable $ignored) {}
 
 json_response(['ok'=>true,'id'=>$id,'status'=>'pending']);
