@@ -1096,12 +1096,7 @@ function methodBrandStrip(method) {
   } else if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) {
     logos = [];
   } else if (/crypto|wallet|usdt|tether|trc20|erc20|btc|bitcoin|eth|ethereum/.test(raw)) {
-    if (/trc20/.test(raw)) logos = [{ name: 'USDT TRC20', file: 'usdt-trc20.svg' }];
-    else if (/erc20/.test(raw)) logos = [{ name: 'USDT ERC20', file: 'usdt-erc20.svg' }];
-    else logos = [
-      { name: 'USDT TRC20', file: 'usdt-trc20.svg' },
-      { name: 'USDT ERC20', file: 'usdt-erc20.svg' },
-    ];
+    return `<span class="method-brand-strip"><img src="${paymentAsset('pm-usdt-networks.png')}" alt="USDT" class="method-brand-logo method-brand-logo-large" style="width:96px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.70);box-shadow:0 6px 14px rgba(0,0,0,.12);"></span>`;
   }
   if (!logos.length) return '';
   return `<span class="method-brand-strip">${logos.map(l => paymentImage(paymentAsset(l.file), l.name, 'method-brand-logo')).join('')}</span>`;
