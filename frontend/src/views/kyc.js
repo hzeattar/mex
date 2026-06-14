@@ -5,12 +5,88 @@ import { api, formApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 import { t } from '../utils/i18n.js';
 
+// [dialCode, countryCode, countryName]
+const DIAL_CODES = [
+  ['+1','US','United States'],['+1','CA','Canada'],['+7','RU','Russia'],['+20','EG','Egypt'],
+  ['+27','ZA','South Africa'],['+30','GR','Greece'],['+31','NL','Netherlands'],['+32','BE','Belgium'],
+  ['+33','FR','France'],['+34','ES','Spain'],['+36','HU','Hungary'],['+39','IT','Italy'],
+  ['+40','RO','Romania'],['+41','CH','Switzerland'],['+43','AT','Austria'],['+44','GB','United Kingdom'],
+  ['+45','DK','Denmark'],['+46','SE','Sweden'],['+47','NO','Norway'],['+48','PL','Poland'],
+  ['+49','DE','Germany'],['+51','PE','Peru'],['+52','MX','Mexico'],['+54','AR','Argentina'],
+  ['+55','BR','Brazil'],['+56','CL','Chile'],['+57','CO','Colombia'],['+58','VE','Venezuela'],
+  ['+60','MY','Malaysia'],['+61','AU','Australia'],['+62','ID','Indonesia'],['+63','PH','Philippines'],
+  ['+64','NZ','New Zealand'],['+65','SG','Singapore'],['+66','TH','Thailand'],['+81','JP','Japan'],
+  ['+82','KR','South Korea'],['+84','VN','Vietnam'],['+86','CN','China'],['+90','TR','Turkey'],
+  ['+91','IN','India'],['+92','PK','Pakistan'],['+94','LK','Sri Lanka'],['+98','IR','Iran'],
+  ['+212','MA','Morocco'],['+213','DZ','Algeria'],['+216','TN','Tunisia'],['+218','LY','Libya'],
+  ['+220','GM','Gambia'],['+221','SN','Senegal'],['+223','ML','Mali'],['+224','GN','Guinea'],
+  ['+225','CI','Ivory Coast'],['+233','GH','Ghana'],['+234','NG','Nigeria'],['+237','CM','Cameroon'],
+  ['+249','SD','Sudan'],['+250','RW','Rwanda'],['+251','ET','Ethiopia'],['+254','KE','Kenya'],
+  ['+255','TZ','Tanzania'],['+256','UG','Uganda'],['+260','ZM','Zambia'],['+263','ZW','Zimbabwe'],
+  ['+350','GI','Gibraltar'],['+351','PT','Portugal'],['+352','LU','Luxembourg'],['+353','IE','Ireland'],
+  ['+354','IS','Iceland'],['+355','AL','Albania'],['+356','MT','Malta'],['+357','CY','Cyprus'],
+  ['+358','FI','Finland'],['+359','BG','Bulgaria'],['+370','LT','Lithuania'],['+371','LV','Latvia'],
+  ['+372','EE','Estonia'],['+373','MD','Moldova'],['+374','AM','Armenia'],['+375','BY','Belarus'],
+  ['+380','UA','Ukraine'],['+381','RS','Serbia'],['+385','HR','Croatia'],['+386','SI','Slovenia'],
+  ['+387','BA','Bosnia and Herzegovina'],['+420','CZ','Czech Republic'],['+421','SK','Slovakia'],
+  ['+501','BZ','Belize'],['+502','GT','Guatemala'],['+503','SV','El Salvador'],['+504','HN','Honduras'],
+  ['+505','NI','Nicaragua'],['+506','CR','Costa Rica'],['+507','PA','Panama'],['+509','HT','Haiti'],
+  ['+591','BO','Bolivia'],['+592','GY','Guyana'],['+593','EC','Ecuador'],['+595','PY','Paraguay'],
+  ['+597','SR','Suriname'],['+598','UY','Uruguay'],['+60','MY','Malaysia'],['+670','TL','Timor-Leste'],
+  ['+673','BN','Brunei'],['+675','PG','Papua New Guinea'],['+676','TO','Tonga'],['+679','FJ','Fiji'],
+  ['+850','KP','North Korea'],['+852','HK','Hong Kong'],['+853','MO','Macau'],['+855','KH','Cambodia'],
+  ['+856','LA','Laos'],['+880','BD','Bangladesh'],['+886','TW','Taiwan'],['+960','MV','Maldives'],
+  ['+961','LB','Lebanon'],['+962','JO','Jordan'],['+963','SY','Syria'],['+964','IQ','Iraq'],
+  ['+965','KW','Kuwait'],['+966','SA','Saudi Arabia'],['+967','YE','Yemen'],['+968','OM','Oman'],
+  ['+970','PS','Palestine'],['+971','AE','United Arab Emirates'],['+972','IL','Israel'],
+  ['+973','BH','Bahrain'],['+974','QA','Qatar'],['+975','BT','Bhutan'],['+976','MN','Mongolia'],
+  ['+977','NP','Nepal'],['+992','TJ','Tajikistan'],['+993','TM','Turkmenistan'],
+  ['+994','AZ','Azerbaijan'],['+995','GE','Georgia'],['+996','KG','Kyrgyzstan'],['+998','UZ','Uzbekistan'],
+];
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function dialOptions(selected) {
+  return DIAL_CODES.map(([code, , name]) =>
+    `<option value="${escAttr(code)}" ${selected === code ? 'selected' : ''}>${escAttr(name)} (${escAttr(code)})</option>`
+  ).join('');
+}
+
+function dayOptions(selected) {
+  return `<option value="">${t('kyc.day','Day')}</option>` +
+    Array.from({length:31},(_,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${selected===v?'selected':''}>${i+1}</option>`;}).join('');
+}
+
+function monthOptions(selected) {
+  return `<option value="">${t('kyc.month','Month')}</option>` +
+    MONTHS.map((m,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${selected===v?'selected':''}>${m}</option>`;}).join('');
+}
+
+function yearOptions(selected) {
+  return `<option value="">${t('kyc.year','Year')}</option>` +
+    Array.from({length:106},(_,i)=>{const y=2010-i;return `<option value="${y}" ${selected===String(y)?'selected':''}>${y}</option>`;}).join('');
+}
+
 export function render() {
   const user = get('user') || {};
   const fullName = user.display_name || user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
   const country = user.country_name || user.country_code || '';
-  const phone = user.phone_e164 || [user.phone_dial_code, user.phone_number].filter(Boolean).join(' ');
+
+  // Parse phone
+  const rawPhone = user.phone_e164 || '';
+  let dialCode = user.phone_dial_code || '';
+  let phoneNum = user.phone_number || '';
+  if (!dialCode && rawPhone.startsWith('+')) {
+    // Match longest dial code first
+    const sorted = [...DIAL_CODES].sort((a,b) => b[0].length - a[0].length);
+    const match = sorted.find(([code]) => rawPhone.startsWith(code));
+    if (match) { dialCode = match[0]; phoneNum = rawPhone.slice(match[0].length); }
+    else phoneNum = rawPhone;
+  }
+
+  // Parse birth date
   const birthDate = user.birth_date || '';
+  const [birthYear='', birthMonth='', birthDay=''] = birthDate ? birthDate.split('-') : [];
 
   return `
     <div class="space-y-6 animate-fade-in kyc-page">
@@ -32,9 +108,32 @@ export function render() {
             <div class="kyc-prefill-grid">
               <label class="block"><span class="text-xs text-muted">${t('kyc.full_name', 'Full Name')}</span><input type="text" name="full_name" class="input mt-1" value="${escAttr(fullName)}" required /></label>
               <label class="block"><span class="text-xs text-muted">${t('kyc.country', 'Country')}</span><input type="text" name="country" class="input mt-1" value="${escAttr(country)}" required /></label>
-              <label class="block"><span class="text-xs text-muted">${t('kyc.phone', 'Phone')}</span><input type="text" name="phone_e164" class="input mt-1" value="${escAttr(phone)}" readonly /></label>
-              <label class="block"><span class="text-xs text-muted">${t('kyc.birth_date', 'Birth date')}</span><input type="text" name="birth_date" class="input mt-1" value="${escAttr(birthDate)}" readonly /></label>
             </div>
+
+            <!-- Phone with dial code search -->
+            <label class="block">
+              <span class="text-xs text-muted">${t('kyc.phone', 'Phone')}</span>
+              <div class="kyc-phone-row mt-1">
+                <div class="kyc-dial-wrap">
+                  <input type="text" class="input kyc-dial-search" placeholder="${escAttr(t('kyc.search_country','Search country...'))}" data-dial-search autocomplete="off" />
+                  <select name="phone_dial_code" class="input kyc-dial-select" data-dial-select>
+                    ${dialOptions(dialCode)}
+                  </select>
+                </div>
+                <input type="tel" name="phone_number" class="input kyc-phone-number" value="${escAttr(phoneNum)}" placeholder="${escAttr(t('kyc.phone_number','Phone number'))}" />
+              </div>
+            </label>
+
+            <!-- Birth date with 3 selects -->
+            <label class="block">
+              <span class="text-xs text-muted">${t('kyc.birth_date', 'Birth date')}</span>
+              <div class="kyc-birth-row mt-1">
+                <select name="birth_day" class="input">${dayOptions(birthDay)}</select>
+                <select name="birth_month" class="input">${monthOptions(birthMonth)}</select>
+                <select name="birth_year" class="input">${yearOptions(birthYear)}</select>
+              </div>
+            </label>
+
             <label class="block"><span class="text-xs text-muted">${t('kyc.document_type', 'Document Type')}</span>
               <select name="doc_type" class="input mt-1" required><option value="passport">${t('kyc.passport', 'Passport')}</option><option value="id_card">${t('kyc.id_card', 'ID Card')}</option><option value="driving_license">${t('kyc.driving_license', 'Driving License')}</option></select>
             </label>
@@ -60,6 +159,24 @@ export function render() {
 export function mount(container) {
   loadKycStatus(container);
   container.querySelector('#kyc-form')?.addEventListener('submit', (e) => submitKyc(e, container));
+
+  // Dial code search: filter <select> options as user types
+  const dialSearch = container.querySelector('[data-dial-search]');
+  const dialSelect = container.querySelector('[data-dial-select]');
+  if (dialSearch && dialSelect) {
+    dialSearch.addEventListener('input', () => {
+      const q = dialSearch.value.trim().toLowerCase();
+      let firstVisible = null;
+      Array.from(dialSelect.options).forEach(opt => {
+        const match = !q || opt.text.toLowerCase().includes(q) || opt.value.includes(q);
+        opt.hidden = !match;
+        if (match && !firstVisible) firstVisible = opt.value;
+      });
+      if (firstVisible && !dialSelect.options[dialSelect.selectedIndex]?.hidden === false) {
+        dialSelect.value = firstVisible;
+      }
+    });
+  }
 }
 
 function fileField(name, label, required, accept, multiple = false) {
@@ -89,15 +206,40 @@ async function loadKycStatus(container) {
         <div class="flex justify-between"><span class="text-muted text-xs">${t('kyc.contract', 'Contract')}</span><span class="text-sm">${kyc.contract_path ? esc(t('common.uploaded', 'Uploaded')) : '--'}</span></div>
         ${kyc.admin_note ? `<div class="pt-2 border-t border-line/50"><span class="text-muted text-xs">${t('kyc.review_note', 'Review Note')}</span><p class="text-sm mt-1">${esc(kyc.admin_note)}</p></div>` : ''}
       </div>`;
-  } catch (e) { /* silent */ }
+  } catch (e) {
+    const el = container.querySelector('#kyc-status');
+    if (el) el.innerHTML = `<p class="text-sm text-red">${t('kyc.status_error', 'Could not load KYC status.')}</p>`;
+  }
 }
 
 async function submitKyc(e, container) {
   e.preventDefault();
+  const form = e.target;
   const status = container.querySelector('#kyc-form-status');
+
+  // Combine phone parts
+  const dialCode = (form.phone_dial_code?.value || '').trim();
+  const phoneNum = (form.phone_number?.value || '').trim().replace(/^0+/, '');
+  const phone_e164 = dialCode && phoneNum ? `${dialCode}${phoneNum}` : (phoneNum || '');
+
+  // Combine birth date parts
+  const bd = form.birth_day?.value || '';
+  const bm = form.birth_month?.value || '';
+  const by = form.birth_year?.value || '';
+  const birth_date = bd && bm && by ? `${by}-${bm}-${bd}` : '';
+
   try {
     if (status) { status.textContent = t('kyc.submitting', 'Submitting...'); status.className = 'text-xs text-center text-muted'; }
-    const fd = new FormData(e.target);
+    const fd = new FormData(form);
+    // Replace individual phone/birth fields with combined values
+    fd.delete('phone_dial_code');
+    fd.delete('phone_number');
+    fd.delete('birth_day');
+    fd.delete('birth_month');
+    fd.delete('birth_year');
+    if (phone_e164) fd.set('phone_e164', phone_e164);
+    if (birth_date) fd.set('birth_date', birth_date);
+
     const res = await formApi('/kyc/submit.php', fd, { timeout: 30000 });
     if (res && res.ok !== false) {
       if (status) { status.textContent = t('kyc.submitted', 'KYC submitted!'); status.className = 'text-xs text-center text-green'; }

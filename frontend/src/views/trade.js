@@ -7,6 +7,7 @@ import { icons } from '../components/common/Icons.js';
 import { navigate } from '../router.js';
 import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
 import { t } from '../utils/i18n.js';
+import { trySwitchToReal } from '../utils/gates.js';
 
 let chart = null;
 let candleSeries = null;
@@ -35,8 +36,13 @@ let activeQuoteController = null;
 let activityRefreshTimer = null;
 let chartRefreshTimer = null;
 let resizeObserver = null;
+let binanceWs = null;
 let chartLibPromise = null;
 let lastCandle = null;
+let liveCandleFrame = 0;
+let pendingLiveCandle = null;
+let orderInfoFrame = 0;
+let lastPriceFlashAt = 0;
 let tradeRunId = 0;
 const marketListCache = new Map();
 const closingPositions = new Set();
@@ -91,15 +97,52 @@ const FALLBACK_MARKETS = {
 };
 
 const TFS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '12h', '1d', '1w'];
+const CHART_INITIAL_LIMIT = 1500;
+const CHART_PAGE_LIMIT = 1500;
+
+function defaultMarketForType(type) {
+  return normalizeType(type) === 'futures' ? 'perp' : 'spot';
+}
+
+function normalizeMarketForType(type, market) {
+  const normalizedType = normalizeType(type || 'crypto');
+  const requested = String(market || '').toLowerCase();
+  if (normalizedType === 'futures') return 'perp';
+  if (!['crypto', 'futures'].includes(normalizedType)) return 'spot';
+  return requested === 'perp' ? 'perp' : 'spot';
+}
+
+function persistTradeSelection(symbol, type, market = null) {
+  const sym = String(symbol || '').toUpperCase();
+  const normalizedType = normalizeType(type || 'crypto');
+  const normalizedMarket = normalizeMarketForType(normalizedType, market || get('market') || defaultMarketForType(normalizedType));
+  if (sym) set('symbol', sym);
+  if (normalizedType) set('type', normalizedType);
+  set('market', normalizedMarket);
+  try {
+    if (sym) localStorage.setItem('vp_symbol', sym);
+    if (normalizedType) localStorage.setItem('vp_type', normalizedType);
+    localStorage.setItem('vp_market', normalizedMarket);
+  } catch (_e) {}
+}
 
 export function render(params) {
-  if (params.symbol) set('symbol', params.symbol.toUpperCase());
-  if (params.type) set('type', params.type);
+  if (params.symbol || params.type || params.market) {
+    persistTradeSelection(
+      params.symbol || get('symbol'),
+      params.type || get('type'),
+      params.market || get('market') || defaultMarketForType(params.type || get('type')),
+    );
+  } else {
+    const normalizedMarket = normalizeMarketForType(get('type'), get('market'));
+    if (normalizedMarket !== get('market')) persistTradeSelection(get('symbol'), get('type'), normalizedMarket);
+  }
   if (params.tf) set('tf', params.tf);
 
   const symbol = get('symbol');
   const type = get('type');
   const tf = get('tf');
+  const gate = tradeGate();
 
   return `<div class="trade-terminal flex flex-col lg:flex-row h-full mobile-pad">
     <aside id="market-drawer" class="hidden lg:flex flex-col w-[250px] border-r border-line bg-surface shrink-0 overflow-hidden">
@@ -175,11 +218,26 @@ export function render(params) {
         <div class="text-[10px] text-muted" id="ticket-instrument">${esc(symbol)} - ${esc(type.toUpperCase())}</div>
       </div>
       <div class="p-3 space-y-3" id="order-body">
-        ${renderOrderPanel()}
+        ${renderOrderGate(renderOrderPanel(), gate)}
       </div>
     </aside>
 
-    ${renderMobileOrderSheet(symbol, type)}
+    ${renderMobileOrderSheet(symbol, type, gate)}
+  </div>`;
+}
+
+function renderOrderGate(content, gate = tradeGate()) {
+  if (!gate) return content;
+  return `<div class="gate-wrap trade-order-gate">
+    <div class="gate-blur">${content}</div>
+    <div class="gate-overlay">
+      <button type="button" class="gate-card trade-gate-card" data-trade-gate>
+        <span class="gate-icon">${icons.lock}</span>
+        <strong>${esc(gate.title)}</strong>
+        <p>${esc(gate.body)}</p>
+        <span class="btn-primary btn-sm">${esc(gate.action)}</span>
+      </button>
+    </div>
   </div>`;
 }
 
@@ -259,7 +317,7 @@ function renderOrderPanel() {
   </div>`;
 }
 
-function renderMobileOrderSheet(symbol, type) {
+function renderMobileOrderSheet(symbol, type, gate = tradeGate()) {
   return `<div class="fixed inset-0 z-[230] hidden lg:hidden" id="mobile-order-sheet">
     <div class="absolute inset-0 bg-black/65" data-close-order-sheet></div>
     <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-auto rounded-t-2xl border border-line bg-surface shadow-2xl">
@@ -274,13 +332,69 @@ function renderMobileOrderSheet(symbol, type) {
         <button class="icon-btn icon-btn-sm" data-close-order-sheet aria-label="Close order">${icons.close}</button>
       </div>
       <div class="p-4">
-        ${renderOrderPanel()}
+        ${renderOrderGate(renderOrderPanel(), gate)}
         <div class="order-action-sticky">
           <button class="btn-primary w-full py-3" id="mobile-submit-order" data-submit-order="BUY">${t('trade.review_place','Review & Place Order')}</button>
         </div>
       </div>
     </div>
   </div>`;
+}
+
+function tradeGate() {
+  if (get('mode') === 'real' && !kycApproved()) {
+    return {
+      kind: 'kyc',
+      title: t('earn.kyc_required', 'KYC approval required'),
+      body: t('trade.kyc_required_copy', 'Verify your account before opening or closing live trades.'),
+      action: t('earn.open_kyc', 'Open KYC'),
+    };
+  }
+  return null;
+}
+
+function kycApproved() {
+  const status = String(get('kyc')?.status || '').toLowerCase();
+  return ['approved', 'accepted', 'verified'].includes(status);
+}
+
+function showTradeGateDialog(gate = tradeGate()) {
+  if (!gate) return;
+  closeTradeGateDialog();
+  const wrap = document.createElement('div');
+  wrap.className = 'dialog-backdrop';
+  wrap.setAttribute('data-trade-gate-dialog', '1');
+  wrap.innerHTML = `<div class="dialog-card">
+    <button class="dialog-close" aria-label="${escAttr(t('common.close', 'Close'))}" data-trade-gate-close>${icons.close}</button>
+    <div class="text-center space-y-3">
+      <span class="gate-icon mx-auto">${icons.lock}</span>
+      <h2 class="text-lg font-bold">${esc(gate.title)}</h2>
+      <p class="text-sm text-muted">${esc(gate.body)}</p>
+      <button class="btn-primary btn-sm" data-trade-gate-action="${escAttr(gate.kind)}">${esc(gate.action)}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', (event) => {
+    if (event.target === wrap || event.target.closest('[data-trade-gate-close]')) closeTradeGateDialog();
+    const action = event.target.closest('[data-trade-gate-action]');
+    if (action) {
+      event.preventDefault();
+      applyTradeGateAction(action.dataset.tradeGateAction || gate.kind);
+    }
+  });
+}
+
+function closeTradeGateDialog() {
+  document.querySelector('[data-trade-gate-dialog]')?.remove();
+}
+
+function applyTradeGateAction(kind) {
+  closeTradeGateDialog();
+  if (kind === 'real') {
+    trySwitchToReal('trading');
+    return;
+  }
+  location.hash = '#/kyc';
 }
 
 export function mount(container) {
@@ -323,6 +437,9 @@ export function cleanup() {
   allCandles = [];
   chartHistory = { loading: false, done: false, nextAt: 0 };
   lastFlashPrice = 0;
+  lastPriceFlashAt = 0;
+  cancelLiveCandleFrame();
+  cancelOrderInfoFrame();
   document.body.classList.remove('chart-fullscreen-open');
   if (sseClean) {
     sseClean();
@@ -331,6 +448,8 @@ export function cleanup() {
   stopActiveQuote();
   stopActivityRefresh();
   stopChartRefresh();
+  cancelLiveCandleFrame();
+  cancelOrderInfoFrame();
   disconnect();
   eventDisposers.forEach((d) => { try { d(); } catch (_e) {} });
   eventDisposers = [];
@@ -346,7 +465,7 @@ async function setup(container) {
   set('activeQuote', null);
   const chartReady = loadChartLib();
 
-  currentSetup = { container, symbol, type, runId };
+  currentSetup = { container, symbol, type, tf, runId };
   bindEvents(container);
   bindVisibilityPause();
   updateOrderInfo(container);
@@ -386,6 +505,7 @@ function bindVisibilityPause() {
     if (document.hidden) {
       stopActiveQuote();
       stopActivityRefresh();
+      stopChartRefresh();
       if (sseClean) { sseClean(); sseClean = null; }
       return;
     }
@@ -398,6 +518,9 @@ function bindVisibilityPause() {
     }
     if (!sseClean && Array.isArray(s.container.__marketItems)) {
       startLiveQuotes(s.container, s.container.__marketItems, s.runId);
+    }
+    if (!chartRefreshTimer) {
+      startChartRefresh(s.container, s.symbol, s.type, s.tf || get('tf'), s.runId, loadChartLib());
     }
   };
   document.addEventListener('visibilitychange', onVisibility);
@@ -429,7 +552,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
   const quoteType = type === 'favorites' ? 'crypto' : type;
   const active = get('symbol');
   const isCrypto = quoteType === 'crypto';
-  const max = isCrypto ? 36 : 3;
+  const max = isCrypto ? 42 : 10;
   const symbols = [...new Set(marketItems
     .slice(0, max)
     .map(m => String(m.symbol || '').toUpperCase())
@@ -442,9 +565,9 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
     if (!isCurrentRun(runId, active, get('type'))) return;
     updateSymbolListPrices(container, items);
   }, null, {
-    interval: isCrypto ? 6000 : 5000,
-    initialDelay: 900,
-    fallbackAfter: 3000,
+    interval: isCrypto ? 4000 : 3500,
+    initialDelay: 500,
+    fallbackAfter: 2200,
     maxSymbols: max,
     timeout: isCrypto ? 9000 : 9000,
     forcePolling: !isCrypto,
@@ -454,10 +577,12 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
 function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   stopActiveQuote();
   const quoteType = normalizeType(type) === 'favorites' ? 'crypto' : normalizeType(type);
+  // Use Binance WebSocket for real-time crypto prices (instant trades, TradingView parity)
+  if (quoteType === 'crypto') startBinanceWs(container, symbol, quoteType, runId);
   // Fast path: /quote_focus.php reads only the central cache (worker-fed) and
   // sits behind a 1s nginx micro-cache shared by all users, so polling can be
   // aggressive without load concerns. No cache-buster: shared cache key.
-  const interval = quoteType === 'crypto' ? 1500 : 2500;
+  const interval = quoteType === 'crypto' ? 3000 : 1800; // slower for crypto — WS is primary
   const focusUrl = `/quote_focus.php?symbols=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}`;
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
@@ -468,7 +593,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
       if (!(Number(item?.price || 0) > 0)) {
         // Cold symbol: fall back to the legacy focus path (may warm caches).
         const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus&_=${Date.now()}`;
-        data = await api(fbUrl, { timeout: quoteType === 'crypto' ? 1800 : 2500, retry: 0, signal: activeQuoteController.signal, cacheTtl: 500, cache: 'no-store' });
+        data = await api(fbUrl, { timeout: quoteType === 'crypto' ? 1800 : 2400, retry: 0, signal: activeQuoteController.signal, cacheTtl: 200, cache: 'no-store' });
         item = data?.items?.[0];
       }
       if (!isCurrentRun(runId, symbol, type)) return;
@@ -484,6 +609,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
 }
 
 function stopActiveQuote() {
+  stopBinanceWs();
   if (activeQuoteTimer) {
     clearTimeout(activeQuoteTimer);
     activeQuoteTimer = null;
@@ -491,6 +617,41 @@ function stopActiveQuote() {
   if (activeQuoteController) {
     activeQuoteController.abort();
     activeQuoteController = null;
+  }
+}
+
+function startBinanceWs(container, symbol, quoteType, runId) {
+  stopBinanceWs();
+  const wsSymbol = symbol.toUpperCase();
+  let ws;
+  try {
+    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${wsSymbol.toLowerCase()}@miniTicker`);
+  } catch (_e) { return; }
+  binanceWs = ws;
+  ws.addEventListener('message', (evt) => {
+    if (!isCurrentRun(runId, wsSymbol, quoteType)) { try { ws.close(); } catch (_e) {} return; }
+    try {
+      const d = JSON.parse(evt.data);
+      if (!d || !d.c) return;
+      const p = parseFloat(d.c);
+      const o = parseFloat(d.o);
+      if (!(p > 0)) return;
+      const change_pct = o > 0 ? ((p - o) / o) * 100 : 0;
+      updatePrice(container, {
+        symbol: wsSymbol, type: quoteType, price: p, change_pct,
+        source: 'binance_ws',
+        provider_updated_at: d.E ? Math.floor(d.E / 1000) : Math.floor(Date.now() / 1000),
+      }, runId);
+    } catch (_e) {}
+  });
+  ws.addEventListener('error', () => { if (binanceWs === ws) binanceWs = null; });
+  ws.addEventListener('close', () => { if (binanceWs === ws) binanceWs = null; });
+}
+
+function stopBinanceWs() {
+  if (binanceWs) {
+    try { binanceWs.close(); } catch (_e) {}
+    binanceWs = null;
   }
 }
 
@@ -588,11 +749,12 @@ function updatePrice(container, q, runId = tradeRunId) {
   if (livePrice) {
     livePrice.textContent = p > 0 ? price(p, assetType) : '--';
     livePrice.className = `text-xs font-mono font-bold ${liveTrend}`;
-    if (p > 0 && lastFlashPrice > 0 && p !== lastFlashPrice) {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (p > 0 && lastFlashPrice > 0 && p !== lastFlashPrice && now - lastPriceFlashAt > 550) {
       const dir = p > lastFlashPrice ? 'price-flash-up' : 'price-flash-down';
       livePrice.classList.remove('price-flash-up', 'price-flash-down');
-      void livePrice.offsetWidth; // restart animation
-      livePrice.classList.add(dir);
+      requestAnimationFrame(() => livePrice.classList.add(dir));
+      lastPriceFlashAt = now;
     }
     if (p > 0) lastFlashPrice = p;
   }
@@ -603,9 +765,25 @@ function updatePrice(container, q, runId = tradeRunId) {
   $$('[data-sell-price]', container).forEach(el => { el.textContent = p > 0 ? price(p, assetType) : '--'; });
   $$('[data-buy-price]', container).forEach(el => { el.textContent = p > 0 ? price(p * 1.0001, assetType) : '--'; });
   $$('[data-spread-val]', container).forEach(el => { el.textContent = p > 0 ? `${t('trade.spread','Spread')}: ${price(p * 0.0001, assetType)}` : `${t('trade.spread','Spread')}: --`; });
-  updateOrderInfo(container);
+  scheduleOrderInfoUpdate(container);
   updateLiveCandle(p, runId, Number(q.provider_updated_at || q.updated_at || q.cache_updated_at || 0), normalizeType(q.type || assetType));
+  if (get('mode') !== 'real') bootstrapSyntheticChart(container, p, runId);
   updateLivePnL(container, String(q.symbol || get('symbol')).toUpperCase(), p);
+}
+
+function scheduleOrderInfoUpdate(container) {
+  if (orderInfoFrame) return;
+  orderInfoFrame = requestAnimationFrame(() => {
+    orderInfoFrame = 0;
+    if (container?.isConnected) updateOrderInfo(container);
+  });
+}
+
+function cancelOrderInfoFrame() {
+  if (orderInfoFrame) {
+    cancelAnimationFrame(orderInfoFrame);
+    orderInfoFrame = 0;
+  }
 }
 
 function updateOrderInfo(container) {
@@ -635,6 +813,16 @@ function updateOrderInfo(container) {
       marginReqEl.textContent = amt > 0 ? `${money(marginReq)} USDT` : '--';
     }
   });
+}
+
+function walletStateFromPortfolio(portfolio) {
+  const raw = portfolio?.wallet || {};
+  const real = raw.USDT || raw.usdt || {};
+  const demo = raw.USDT_DEMO || raw.usdt_demo || {};
+  return {
+    real: { ...real, currency: real.currency || 'USDT' },
+    demo: { ...demo, currency: demo.currency || 'USDT_DEMO' },
+  };
 }
 
 function renderSymbolList(container, items) {
@@ -735,12 +923,15 @@ function updateSymbolListPrices(container, items) {
     const priceCell = $('[data-price-cell]', row);
     const changeCell = $('[data-change-cell]', row);
     if (priceCell) {
-      priceCell.textContent = price(p, type);
-      priceCell.className = 'text-[11px] font-mono text-text';
+      const nextPrice = price(p, type);
+      if (priceCell.textContent !== nextPrice) priceCell.textContent = nextPrice;
+      if (priceCell.className !== 'text-[11px] font-mono text-text') priceCell.className = 'text-[11px] font-mono text-text';
     }
     if (changeCell) {
-      changeCell.textContent = pct(chg);
-      changeCell.className = `text-[9px] ${chg >= 0 ? 'text-buy' : 'text-sell'}`;
+      const nextChange = pct(chg);
+      const nextClass = `text-[9px] ${chg >= 0 ? 'text-buy' : 'text-sell'}`;
+      if (changeCell.textContent !== nextChange) changeCell.textContent = nextChange;
+      if (changeCell.className !== nextClass) changeCell.className = nextClass;
     }
   });
 }
@@ -773,6 +964,10 @@ async function loadTradeActivity(container, runId = tradeRunId, silent = false, 
     if (portfolio?.positions) {
       container.__tradePositions = portfolio.positions;
       set('portfolio', portfolio);
+      if (portfolio.wallet) {
+        set('wallet', walletStateFromPortfolio(portfolio));
+        updateOrderInfo(container);
+      }
     }
     if (orders?.items || orders?.orders) container.__tradeOrders = orders.items || orders.orders || [];
     if (!portfolio && !orders && !container.__tradeActivityLoaded) {
@@ -1191,6 +1386,77 @@ function normalizeCandleRows(candles) {
     .sort((a, b) => a.time - b.time);
 }
 
+function syntheticCandlesFromPrice(symbol, type, tf, priceValue, rows = 120) {
+  const base = Number(priceValue || 0);
+  if (!(base > 0)) return [];
+  const step = tfSeconds(tf);
+  const now = Math.floor(Date.now() / 1000 / step) * step;
+  const seed = String(symbol || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const volatility = normalizeType(type) === 'crypto' ? 0.0035 : 0.0016;
+  let prev = base * (1 - volatility * 2);
+  const candles = [];
+  for (let i = rows - 1; i >= 0; i--) {
+    const time = now - (i * step);
+    const phase = (seed + i * 7) % 31;
+    const wave = Math.sin((phase / 31) * Math.PI * 2) * volatility;
+    const drift = ((rows - i) / rows) * volatility * 1.25;
+    const close = i === 0 ? base : base * (1 - volatility + drift + wave);
+    const open = prev;
+    const spread = Math.max(base * volatility * (0.35 + ((phase % 5) / 12)), base * 0.0002);
+    const high = Math.max(open, close) + spread;
+    const low = Math.max(0.0000001, Math.min(open, close) - spread);
+    candles.push({ time, open, high, low, close, volume: 0 });
+    prev = close;
+  }
+  return candles;
+}
+
+function chartFallbackPrice(container, symbol = get('symbol')) {
+  const active = get('activeQuote') || {};
+  if (String(active.symbol || symbol || '').toUpperCase() === String(symbol || '').toUpperCase()) {
+    const p = Number(active.price || active.q_price || 0);
+    if (p > 0) return p;
+  }
+  const item = (container.__marketItems || []).find(m => String(m.symbol || '').toUpperCase() === String(symbol || '').toUpperCase());
+  const itemPrice = Number(item?.price || item?.q_price || 0);
+  if (itemPrice > 0) return itemPrice;
+  const visibleText = String($('#live-price', container)?.textContent || '').replace(/[^\d.\-]/g, '');
+  const visiblePrice = Number(visibleText || 0);
+  return visiblePrice > 0 ? visiblePrice : 0;
+}
+
+function scheduleSyntheticChartFallback(container, symbol, type, runId) {
+  if (get('mode') === 'real') return;
+  [900, 1800, 3200].forEach((delay) => {
+    setTimeout(() => {
+      if (!isCurrentRun(runId, symbol, type) || chart || candleSeries) return;
+      const fallbackPrice = chartFallbackPrice(container, symbol);
+      if (fallbackPrice > 0) bootstrapSyntheticChart(container, fallbackPrice, runId);
+    }, delay);
+  });
+}
+
+function bootstrapSyntheticChart(container, priceValue, runId = tradeRunId) {
+  if (get('mode') === 'real') return;
+  if (chart || candleSeries || container.__syntheticChartBooting || !(Number(priceValue) > 0)) return;
+  const box = $('#chart-box', container);
+  if (!box) return;
+  const text = String(box.textContent || '').toLowerCase();
+  if (!text.includes('loading') && !text.includes('chart data')) return;
+  const symbol = get('symbol');
+  const type = get('type');
+  const tf = get('tf');
+  const candles = syntheticCandlesFromPrice(symbol, type, tf, priceValue);
+  if (!candles.length) return;
+  container.__syntheticChartBooting = true;
+  loadChartLib()
+    .then(() => {
+      if (!isCurrentRun(runId, symbol, type) || chart || candleSeries) return;
+      return initChart(container, candles, runId);
+    })
+    .finally(() => { container.__syntheticChartBooting = false; });
+}
+
 function symbolListSkeleton(rows = 9) {
   let html = '';
   for (let i = 0; i < rows; i++) {
@@ -1217,10 +1483,11 @@ function mergeCandleSets(base, incoming) {
   return Array.from(by.values()).sort((a, b) => a.time - b.time);
 }
 
-function applyChartData(candles, { fit = false, key = currentChartKey() } = {}) {
+function applyChartData(candles, { fit = false, key = currentChartKey(), preserveRange = false, skipUnchanged = false } = {}) {
   if (!candleSeries || !volumeSeries) return false;
   const data = normalizeCandleRows(candles);
   if (!data.length) return false;
+  if (skipUnchanged && chartSeriesKey === key && !hasCandleDelta(data)) return true;
   if (chartSeriesKey === key && allCandles.length) {
     // Incoming is the latest window; merge it with retained older history.
     allCandles = mergeCandleSets(allCandles, data);
@@ -1229,8 +1496,41 @@ function applyChartData(candles, { fit = false, key = currentChartKey() } = {}) 
     chartHistory = { loading: false, done: false, nextAt: 0 };
   }
   chartSeriesKey = key;
-  renderChartSeries({ fit });
+  renderChartSeries({ fit, preserveRange });
   return true;
+}
+
+function hasCandleDelta(data) {
+  if (!allCandles.length) return true;
+  const sample = data.slice(-12);
+  for (const next of sample) {
+    const prev = findCandleByTime(next.time);
+    if (!prev || !sameCandle(prev, next)) return true;
+  }
+  return false;
+}
+
+function findCandleByTime(time) {
+  for (let i = allCandles.length - 1; i >= 0; i--) {
+    if (allCandles[i].time === time) return allCandles[i];
+    if (allCandles[i].time < time) break;
+  }
+  return null;
+}
+
+function sameCandle(a, b) {
+  return closeEnough(a.open, b.open)
+    && closeEnough(a.high, b.high)
+    && closeEnough(a.low, b.low)
+    && closeEnough(a.close, b.close)
+    && closeEnough(a.volume || 0, b.volume || 0);
+}
+
+function closeEnough(a, b) {
+  const left = Number(a || 0);
+  const right = Number(b || 0);
+  const scale = Math.max(1, Math.abs(left), Math.abs(right));
+  return Math.abs(left - right) <= scale * 1e-8;
 }
 
 function renderChartSeries({ fit = false, preserveRange = false } = {}) {
@@ -1261,10 +1561,12 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
 }
 
 function clearChartForSwitch(container) {
+  cancelLiveCandleFrame();
   chartSeriesKey = '';
   lastCandle = null;
   allCandles = [];
   chartHistory = { loading: false, done: false, nextAt: 0 };
+  lastPriceFlashAt = 0;
   try {
     if (candleSeries) candleSeries.setData([]);
     if (volumeSeries) volumeSeries.setData([]);
@@ -1365,7 +1667,7 @@ async function loadOlderCandles(container) {
     const tf = get('tf');
     const oldest = allCandles[0].time;
     const data = await api(
-      `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=500&end=${oldest - 1}`,
+      `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${CHART_PAGE_LIMIT}&end=${oldest - 1}`,
       { timeout: 12000, retry: 0, cacheTtl: 0 }
     );
     if (chartSeriesKey !== key || currentChartKey() !== key) return;
@@ -1373,7 +1675,7 @@ async function loadOlderCandles(container) {
     if (!older.length) { chartHistory.done = true; return; }
     allCandles = mergeCandleSets(older, allCandles);
     renderChartSeries({ preserveRange: true });
-    if (older.length < 20) chartHistory.done = true;
+    if (data?.has_more === false || older.length < 20) chartHistory.done = true;
   } catch (_e) {
     // transient failure: retry later via cooldown
   } finally {
@@ -1500,13 +1802,21 @@ async function initChart(container, candles, runId = tradeRunId) {
     chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) });
   });
   resizeObserver.observe(el);
+  // Force correct size on first paint — el.clientWidth may be 0 before layout settles
+  requestAnimationFrame(() => {
+    if (!chart || !el) return;
+    const w = Math.max(320, el.clientWidth);
+    const h = Math.max(260, el.clientHeight);
+    chart.applyOptions({ width: w, height: h });
+    chart.timeScale().fitContent();
+  });
 }
 
 
 // In-place symbol/timeframe switching (no navigate -> no full re-render, no market refetch).
 function syncTradeUrl(symbol, type, tf) {
   try {
-    const qs = new URLSearchParams({ symbol, type, tf }).toString();
+    const qs = new URLSearchParams({ symbol, type, market: get('market') || defaultMarketForType(type), tf }).toString();
     history.replaceState(null, '', `#/trade?${qs}`);
   } catch (_e) {}
 }
@@ -1554,24 +1864,23 @@ function switchSymbol(container, symbol, type) {
   stopChartRefresh();
   clearChartForSwitch(container);
   lastFlashPrice = 0;
-  set('symbol', sym);
-  set('type', nextTypeRaw);
+  persistTradeSelection(sym, nextType, get('market'));
   set('activeQuote', null);
   const runId = tradeRunId;
-  currentSetup = { container, symbol: sym, type: nextTypeRaw, runId };
-  syncTradeUrl(sym, nextTypeRaw, tf);
-  updateInstrumentHeader(container, sym, nextTypeRaw);
+  currentSetup = { container, symbol: sym, type: nextType, tf, runId };
+  syncTradeUrl(sym, nextType, tf);
+  updateInstrumentHeader(container, sym, nextType);
   markActiveSymbolRow(container, sym);
   updateOrderInfo(container);
   hydrateActiveFromMarketList(container, container.__marketItems || [], runId);
   const chartReady = loadChartLib();
-  startActiveQuote(container, sym, nextTypeRaw, runId);
-  loadChartData(container, sym, nextTypeRaw, tf, runId, chartReady);
-  startChartRefresh(container, sym, nextTypeRaw, tf, runId, chartReady);
+  startActiveQuote(container, sym, nextType, runId);
+  loadChartData(container, sym, nextType, tf, runId, chartReady);
+  startChartRefresh(container, sym, nextType, tf, runId, chartReady);
   if (typeChanged) {
     loadMarketItems(nextType, runId, true)
       .then(mkts => {
-        if (!isCurrentRun(runId, sym, nextTypeRaw)) return;
+        if (!isCurrentRun(runId, sym, nextType)) return;
         if (mkts && mkts.items) {
           container.__marketItems = mkts.items;
           renderSymbolList(container, mkts.items);
@@ -1593,6 +1902,7 @@ function switchTimeframe(container, tf) {
   const runId = tradeRunId;
   const symbol = get('symbol');
   const type = get('type');
+  if (currentSetup && currentSetup.runId === runId) currentSetup = { ...currentSetup, symbol, type, tf };
   syncTradeUrl(symbol, type, tf);
   stopChartRefresh();
   clearChartForSwitch(container);
@@ -1607,8 +1917,6 @@ function bindEvents(container) {
 
   bindDelegate(container,'[data-sym]', 'click', (e, el) => {
     closeMarketDrawer(container);
-    localStorage.setItem('vp_symbol', el.dataset.sym);
-    localStorage.setItem('vp_type', el.dataset.stype || get('type'));
     switchSymbol(container, el.dataset.sym, el.dataset.stype || get('type'));
   });
 
@@ -1635,6 +1943,10 @@ function bindEvents(container) {
     });
   });
 
+  bindDelegate(container,'[data-trade-gate]', 'click', (e) => {
+    e.preventDefault();
+    showTradeGateDialog();
+  });
   bindDelegate(container,'[data-open-order]', 'click', (e, el) => openOrderSheet(container, el.dataset.openOrder));
   bindDelegate(container,'[data-close-order-sheet]', 'click', () => closeOrderSheet(container));
   bindDelegate(container,'[data-submit-order]', 'click', (e, el) => placeOrder(el.dataset.submitOrder, container, $('#mobile-order-sheet [data-order-form]', container)));
@@ -1650,13 +1962,15 @@ function bindEvents(container) {
 
   bindDelegate(container,'[data-order-type]', 'change', (e, el) => set('orderType', el.value));
   bindDelegate(container,'[data-market-type]', 'change', (e, el) => {
-    set('market', el.value);
-    localStorage.setItem('vp_market', el.value);
+    const nextMarket = normalizeMarketForType(get('type'), el.value);
+    set('market', nextMarket);
+    localStorage.setItem('vp_market', nextMarket);
+    $$('[data-market-type]', container).forEach(select => { select.value = nextMarket; });
     // Re-render leverage row based on market type (spot = hidden, perp = visible)
     $$('[data-order-form]', container).forEach(form => {
       const levRow = $('#leverage-row', form);
       if (!levRow) return;
-      const isPerp = el.value === 'perp';
+      const isPerp = nextMarket === 'perp';
       const lev = Number(get('leverage') || 10);
       if (isPerp) {
         levRow.outerHTML = `<label class="block order-leverage-row" id="leverage-row">
@@ -1734,7 +2048,7 @@ function stopChartRefresh() {
 function startChartRefresh(container, symbol, type, tf, runId = tradeRunId, chartReady = loadChartLib()) {
   stopChartRefresh();
   const quoteType = normalizeType(type || 'crypto');
-  const interval = quoteType === 'crypto' ? 12000 : 18000;
+  const interval = quoteType === 'crypto' ? 120000 : 240000;
   chartRefreshTimer = setInterval(() => {
     if (!isCurrentRun(runId, symbol, type)) return;
     loadChartData(container, symbol, type, tf, runId, chartReady, { silent: true, refresh: true }).catch(() => null);
@@ -1750,26 +2064,51 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
   } else if (hasChart && !options.silent) {
     showChartOverlay(container);
   }
+  if (!hasChart && !options.silent) {
+    scheduleSyntheticChartFallback(container, symbol, type, runId);
+  }
   try {
     const refreshParam = options.refresh ? '&refresh=1' : '';
     // No cache-buster param: lets the nginx micro-cache share identical candle
     // responses across users (the request itself is already no-store client-side).
-    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=500&fast=1${refreshParam}`;
+    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${CHART_INITIAL_LIMIT}&fast=1${refreshParam}`;
     const candles = await api(url, { timeout: options.silent ? 10000 : 14000, retry: 1, cacheTtl: 0, cache: 'no-store' });
     await chartReady;
     if (!isCurrentRun(runId, symbol, type)) return;
     if (reqKey !== currentChartKey()) return; // stale response for a previous symbol/timeframe
-    if (candles?.items?.length) {
+    let chartItems = candles?.items || [];
+    if (options.refresh && chartItems.length) {
+      const activeBucket = currentBucketTime(0, type);
+      chartItems = normalizeCandleRows(chartItems).filter(c => c.time < activeBucket);
+    }
+    if (chartItems.length) {
       if (chart && candleSeries) {
-        applyChartData(candles.items, { fit: !options.silent && !options.refresh, key: reqKey });
+        applyChartData(chartItems, {
+          fit: !options.silent && !options.refresh,
+          key: reqKey,
+          preserveRange: !!(options.silent || options.refresh),
+          skipUnchanged: !!(options.silent || options.refresh),
+        });
         hideChartOverlay(container);
       } else {
-        await initChart(container, candles.items, runId);
+        await initChart(container, chartItems, runId);
       }
-    } else if (!hasChart && !options.silent) {
-      renderChartFallback(container, 'Chart data is still loading from the market provider.');
-    } else if (hasChart && !options.silent) {
-      hideChartOverlay(container);
+    } else {
+      if (options.silent || options.refresh) return;
+      const fallbackPrice = chartFallbackPrice(container, symbol);
+      const fallbackCandles = get('mode') === 'real' ? [] : syntheticCandlesFromPrice(symbol, type, tf, fallbackPrice);
+      if (fallbackCandles.length) {
+        if (chart && candleSeries) {
+          applyChartData(fallbackCandles, { fit: !options.silent && !options.refresh, key: reqKey, preserveRange: !!options.silent });
+          hideChartOverlay(container);
+        } else {
+          await initChart(container, fallbackCandles, runId);
+        }
+      } else if (!hasChart && !options.silent) {
+        renderChartFallback(container, 'Chart data is still loading from the market provider.');
+      } else if (hasChart && !options.silent) {
+        hideChartOverlay(container);
+      }
     }
   } catch (e) {
     if (!isCurrentRun(runId, symbol, type)) return;
@@ -1807,6 +2146,11 @@ function toggleActivityExpand(container) {
 }
 
 async function closePosition(container, trigger) {
+  const gate = tradeGate();
+  if (gate) {
+    showTradeGateDialog(gate);
+    return;
+  }
   const id = String(trigger?.dataset?.close || '');
   if (!id || closingPositions.has(id)) return;
   const confirmed = await showCloseConfirmation(id);
@@ -1830,7 +2174,7 @@ async function closePosition(container, trigger) {
     ]);
     showTradeToast(t('trade.position_closed_success', 'Position closed successfully'), 'success');
   } catch (e) {
-    showTradeToast(e.message || t('trade.could_not_close', 'Could not close this position now.'), 'error');
+    showTradeToast(closePositionErrorMessage(e), 'error');
     related.forEach((btn) => {
       btn.disabled = false;
       btn.classList.remove('opacity-60');
@@ -1841,12 +2185,25 @@ async function closePosition(container, trigger) {
   }
 }
 
+function closePositionErrorMessage(error) {
+  const code = String(error?.code || error?.payload?.code || '').toLowerCase();
+  if (code === 'price_not_executable' || code === 'price_unavailable') {
+    return t('trade.close_price_refreshing', 'Live price is refreshing. Please try closing again in a moment.');
+  }
+  return error?.message || t('trade.could_not_close', 'Could not close this position now.');
+}
+
 function findTradeOrder(container, id) {
   const target = String(id || '');
   return (container.__tradeOrders || []).find((order) => orderId(order) === target) || null;
 }
 
 async function cancelPendingOrder(container, trigger) {
+  const gate = tradeGate();
+  if (gate) {
+    showTradeGateDialog(gate);
+    return;
+  }
   const id = String(trigger?.dataset?.cancelOrder || '');
   if (!id) return;
   const confirmed = await showCancelOrderConfirmation(id);
@@ -1907,6 +2264,11 @@ function showCancelOrderConfirmation(id) {
 }
 
 function openEditOrderModal(container, id) {
+  const gate = tradeGate();
+  if (gate) {
+    showTradeGateDialog(gate);
+    return;
+  }
   const order = findTradeOrder(container, id);
   if (!order || !isPendingOrder(order)) {
     showTradeToast(t('trade.order_no_longer_pending', 'This order is no longer pending.'), 'error');
@@ -2049,6 +2411,12 @@ function showTradeToast(message, type = 'success') {
 async function placeOrder(side, container, formRoot) {
   const root = formRoot || $('[data-order-form]', container) || container;
   showOrderStatus(root, '', 'info');
+
+  const gate = tradeGate();
+  if (gate) {
+    showTradeGateDialog(gate);
+    return;
+  }
 
   const q = get('activeQuote') || {};
   const currentPrice = Number(q.price || 0);
@@ -2262,6 +2630,11 @@ function closeMarketDrawer(container) {
 }
 
 function openOrderSheet(container, side) {
+  const gate = tradeGate();
+  if (gate) {
+    showTradeGateDialog(gate);
+    return;
+  }
   const sheet = $('#mobile-order-sheet', container);
   if (!sheet) return;
   setMobileSubmitSide(container, side);
@@ -2299,22 +2672,49 @@ function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetT
   // spike/distortion seen for a few seconds while switching assets).
   if (!chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
   const bucket = currentBucketTime(sourceTime, assetType);
-  if (bucket <= lastCandle.time) {
-    lastCandle.close = priceValue;
-    lastCandle.high = Math.max(lastCandle.high, priceValue);
-    lastCandle.low = Math.min(lastCandle.low, priceValue);
+  const base = pendingLiveCandle?.candle || lastCandle;
+  let next;
+  if (bucket <= base.time) {
+    next = {
+      ...base,
+      close: priceValue,
+      high: Math.max(base.high, priceValue),
+      low: Math.min(base.low, priceValue),
+    };
   } else {
-    lastCandle = { time: bucket, open: lastCandle.close, high: Math.max(lastCandle.close, priceValue), low: Math.min(lastCandle.close, priceValue), close: priceValue, volume: 0 };
+    next = { time: bucket, open: base.close, high: Math.max(base.close, priceValue), low: Math.min(base.close, priceValue), close: priceValue, volume: 0 };
   }
+  if (lastCandle.time === next.time && sameCandle(lastCandle, next)) return;
+  pendingLiveCandle = { key: currentChartKey(), runId, candle: next };
+  if (!liveCandleFrame) {
+    liveCandleFrame = requestAnimationFrame(flushLiveCandleFrame);
+  }
+}
+
+function flushLiveCandleFrame() {
+  liveCandleFrame = 0;
+  const pending = pendingLiveCandle;
+  pendingLiveCandle = null;
+  if (!pending || pending.runId !== tradeRunId || pending.key !== currentChartKey() || !candleSeries) return;
+  lastCandle = { ...pending.candle };
   candleSeries.update({ time: lastCandle.time, open: lastCandle.open, high: lastCandle.high, low: lastCandle.low, close: lastCandle.close });
+  if (volumeSeries) volumeSeries.update({ time: lastCandle.time, value: lastCandle.volume || 0, color: lastCandle.close >= lastCandle.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' });
   if (lineSeries) lineSeries.update({ time: lastCandle.time, value: lastCandle.close });
   if (areaSeries) areaSeries.update({ time: lastCandle.time, value: lastCandle.close });
-  // Keep the merged dataset tail in sync so legend/pagination stay accurate.
   if (allCandles.length) {
     const tail = allCandles[allCandles.length - 1];
     if (tail.time === lastCandle.time) allCandles[allCandles.length - 1] = { ...lastCandle };
     else if (lastCandle.time > tail.time) allCandles.push({ ...lastCandle });
   }
+  updateChartLegend(null);
+}
+
+function cancelLiveCandleFrame() {
+  if (liveCandleFrame) {
+    cancelAnimationFrame(liveCandleFrame);
+    liveCandleFrame = 0;
+  }
+  pendingLiveCandle = null;
 }
 
 function currentBucketTime(sourceTime = 0, assetType = get('type')) {
@@ -2432,14 +2832,14 @@ async function loadMarketItems(type, runId = tradeRunId, force = false) {
 
   let data = null;
   try {
-    data = await api(marketListUrl(resolved), { timeout: 8000, retry: 1, cacheTtl: 12000, cache: 'no-store' });
+    data = await api(marketListUrl(resolved), { timeout: 8000, retry: 1, cacheTtl: 6000, cache: 'no-store' });
   } catch (_e) {
     if (cached?.data?.items?.length) return cached.data;
     data = null;
   }
   const normalized = normalizeMarketListPayload(data, resolved);
   if (!isCurrentRun(runId)) return normalized;
-  marketListCache.set(key, { data: normalized, expires: Date.now() + 8000 });
+  marketListCache.set(key, { data: normalized, expires: Date.now() + 6000 });
   return normalized;
 }
 
@@ -2461,13 +2861,39 @@ function quoteClass(market) {
 function quoteStateKey(q) {
   const timing = String(q?.timing_class || '').toLowerCase();
   const source = String(q?.source || '').toLowerCase();
+  const type = normalizeType(q?.type || get('type'));
+  const age = quoteAgeSeconds(q);
+  const freshWindow = quoteFreshWindow(type);
+  const staleWindow = freshWindow * 3;
   if (Number(q?.price || 0) <= 0) return 'unavailable';
   if (timing === 'seed' || source.includes('seed')) return 'reference';
-  if (timing === 'stale' || q?.is_stale) return 'stale';
   if (timing === 'market_closed') return 'closed';
-  if (timing === 'delayed' || source.includes('yahoo') || ['stocks', 'arab'].includes(normalizeType(q?.type || get('type')))) return 'delayed';
-  if (timing === 'candle_fallback') return 'chart_quote';
-  return 'live';
+  if (age === null || age <= freshWindow) return 'live';
+  if (timing === 'stale' || q?.is_stale) return age <= staleWindow ? 'cached' : 'stale';
+  if (timing === 'delayed' || source.includes('yahoo') || ['stocks', 'arab'].includes(type)) return 'cached';
+  if (timing === 'candle_fallback') return age <= staleWindow ? 'cached' : 'chart_quote';
+  return age <= staleWindow ? 'cached' : 'stale';
+}
+
+function quoteAgeSeconds(q) {
+  const ts = Math.max(
+    normalizedQuoteTs(q?.provider_updated_at),
+    normalizedQuoteTs(q?.provider_ts),
+    normalizedQuoteTs(q?.as_of),
+    normalizedQuoteTs(q?.updated_at),
+    normalizedQuoteTs(q?.cache_updated_at),
+    normalizedQuoteTs(q?.received_at),
+    normalizedQuoteTs(q?.ingested_at),
+  );
+  return ts > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - ts) : null;
+}
+
+function quoteFreshWindow(type) {
+  const value = normalizeType(type || 'crypto');
+  if (value === 'crypto') return 90;
+  if (['forex', 'commodities', 'futures'].includes(value)) return 180;
+  if (['stocks', 'arab'].includes(value)) return 15 * 60;
+  return 300;
 }
 
 function quoteStateLabel(q) {
@@ -2494,6 +2920,7 @@ function quoteStateClass(label) {
   const value = String(label || '').toLowerCase();
   if (value === t('quote.live', 'Live').toLowerCase() || value === 'live') return 'status-chip-live';
   if (value === t('quote.unavailable', 'Unavailable').toLowerCase() || value === 'unavailable') return 'status-chip-locked';
+  if (['cached', 'closed', t('quote.cached', 'Cached').toLowerCase(), t('quote.closed', 'Closed').toLowerCase()].includes(value)) return 'status-chip-derived';
   return 'status-chip-delayed';
 }
 
