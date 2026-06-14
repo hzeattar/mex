@@ -5,9 +5,22 @@ import { navigate } from '../router.js';
 import { api, formApi, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 import { t } from '../utils/i18n.js';
+import { isKycApproved, showKycGateDialog, trySwitchToReal } from '../utils/gates.js';
 
 const fundingCache = globalThis.__MEX_FUNDING_CACHE__ || (globalThis.__MEX_FUNDING_CACHE__ = new Map());
 const CACHE_TTL = 45_000;
+const PAYMENT_ASSET_BASE = '/assets/img/payment_methods/';
+
+const PAYMENT_LOGO_STRIP = [
+  { name: 'Google Pay', file: 'pm-google-pay.png' },
+  { name: 'Apple Pay', file: 'pm-apple-pay.png' },
+  { name: 'SII', file: 'pm-sii.png' },
+  { name: 'American Express', file: 'pm-amex.png' },
+  { name: 'Mastercard', file: 'pm-mastercard.png' },
+  { name: 'Visa', file: 'pm-visa.png' },
+  { name: 'USDT', file: 'pm-usdt-networks.svg' },
+  { name: 'Bank transfer', file: 'pm-bank-transfer.svg' },
+];
 
 // Listeners bound to the persistent #view container; disposed on cleanup to avoid accumulation.
 let fundingDisposers = [];
@@ -21,11 +34,10 @@ const TABS = [
 export function render(params = {}) {
   const activeTab = resolveTab(params);
   const wallet = get('wallet') || {};
-  const kyc = get('kyc') || {};
-  const level = get('level') || {};
   const mode = get('mode') === 'real' ? 'real' : 'demo';
+  const needsKyc = !isKycApproved();
+  const locked = activeTab !== 'history' && (mode !== 'real' || needsKyc);
   const activeBalance = mode === 'real' ? (wallet.real || {}) : (wallet.demo || {});
-  const currentLevel = level.current || {};
 
   return `
     <div class="funds-workspace animate-fade-in" data-active-funding-tab="${escAttr(activeTab)}">
@@ -42,15 +54,14 @@ export function render(params = {}) {
         </div>
       </section>
 
-      <section class="funding-promo-banner" data-promo-banner>
-        <div class="promo-coin-float">${icons.coin}</div>
-        <div class="promo-coin-float promo-coin-float--alt">${icons.coin}</div>
+      ${activeTab === 'deposit' ? `<section class="funding-promo-banner" data-promo-banner>
+        <span class="promo-coin-float">${icons.coin}</span>
         <div class="promo-banner-content">
-          <span class="promo-badge">+10%</span>
+          <span class="promo-badge"><b>+10%</b> ${t('funding.bonus', 'Bonus')}</span>
           <span class="promo-text">${t('funding.bonus_crypto', 'Get 10% bonus on every crypto deposit')}</span>
-          <button type="button" data-dismiss-promo aria-label="Dismiss">${icons.close}</button>
         </div>
-      </section>
+        <button type="button" data-dismiss-promo aria-label="Dismiss">${icons.close}</button>
+      </section>` : ''}
 
       <section class="funds-tabs-pro" role="tablist" aria-label="Funding workspace tabs">
         ${TABS.map(tab => `
@@ -60,16 +71,16 @@ export function render(params = {}) {
         `).join('')}
       </section>
 
-      ${mode !== 'real' && activeTab !== 'history' ? `<section class="funding-mode-warning">
+      ${locked ? `<section class="funding-mode-warning">
         <span class="gate-icon">${icons.lock}</span>
         <div>
-          <strong>${t('funding.real_required', 'Real account required')}</strong>
-          <small>${t('funding.real_required_copy', 'Methods are visible for preview. Switch to Real before submitting a live funding request.')}</small>
+          <strong>${mode !== 'real' ? t('funding.real_required', 'Real account required') : t('earn.kyc_required', 'KYC approval required')}</strong>
+          <small>${t('funding.real_only_copy', 'Deposits and withdrawals are available for verified real accounts only.')}</small>
         </div>
         <button type="button" class="btn-primary btn-sm" data-switch-real>${t('earn.switch_real', 'Switch to Real')}</button>
       </section>` : ''}
 
-      ${activeTab === 'history' ? renderHistoryWorkspace() : renderFundingWorkspace(activeTab)}
+      ${activeTab === 'history' ? renderHistoryWorkspace() : (locked ? fundingLockedWorkspace(renderFundingWorkspace(activeTab)) : renderFundingWorkspace(activeTab))}
     </div>`;
 }
 
@@ -83,6 +94,18 @@ export function mount(container, params = {}) {
     if (tab) {
       e.preventDefault();
       navigate('wallet', { action: tab.dataset.fundingTab || 'deposit' });
+      return;
+    }
+
+    if (e.target.closest('[data-switch-real]')) {
+      e.preventDefault();
+      trySwitchToReal('funding');
+      return;
+    }
+
+    if ((get('mode') !== 'real' || !isKycApproved()) && activeTab !== 'history' && e.target.closest('[data-funding-category], [data-method], [data-quick-amount], [data-copy-address], #funding-form, .funding-locked-shell')) {
+      e.preventDefault();
+      showKycGateDialog({ body: t('gate.funding_body', 'Deposits and withdrawals are available for verified real accounts only.') });
       return;
     }
 
@@ -135,11 +158,6 @@ export function mount(container, params = {}) {
       return;
     }
 
-    if (e.target.closest('[data-switch-real]')) {
-      localStorage.setItem('vp_mode', 'real');
-      set('mode', 'real');
-      location.reload();
-    }
   };
   container.addEventListener('click', onFundingClick);
   fundingDisposers.push(() => container.removeEventListener('click', onFundingClick));
@@ -174,7 +192,28 @@ export function mount(container, params = {}) {
   }
 
   loadMethods(container, activeTab);
-  container.querySelector('#funding-form')?.addEventListener('submit', (e) => handleSubmit(e, container, activeTab));
+  container.querySelector('#funding-form')?.addEventListener('submit', (e) => {
+    if (get('mode') !== 'real' || !isKycApproved()) {
+      e.preventDefault();
+      showKycGateDialog({ body: t('gate.funding_body', 'Deposits and withdrawals are available for verified real accounts only.') });
+      return;
+    }
+    handleSubmit(e, container, activeTab);
+  });
+}
+
+function fundingLockedWorkspace(content) {
+  return `<section class="funding-locked-shell blur-gate blur-active">
+    <div class="blur-gate-content">${content}</div>
+    <div class="blur-gate-overlay">
+      <button type="button" class="gate-card funding-lock-card" data-switch-real>
+        <span class="gate-icon">${icons.lock}</span>
+        <strong>${t('funding.real_only', 'Real account only')}</strong>
+        <p>${t('funding.real_only_copy', 'Deposits and withdrawals are available for verified real accounts only.')}</p>
+        <span class="btn-primary btn-sm">${t('earn.switch_real', 'Switch to Real')}</span>
+      </button>
+    </div>
+  </section>`;
 }
 
 function reconcileStripeReturn(container, params) {
@@ -234,17 +273,10 @@ export function cleanup() {
 }
 
 function renderPaymentLogosStrip() {
-  const logos = [
-    { name: 'Visa',      icon: icons.visa || '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#1A1F71"/\u003e\u003cpath d="M19.6 21.4L21.4 10.6H24.2L22.4 21.4H19.6ZM32.8 10.8C32.2 10.6 31.4 10.4 30.4 10.4C28 10.4 26.2 11.6 26.2 13.4C26.2 14.8 27.4 15.6 28.4 16.2C29.4 16.8 29.8 17.2 29.8 17.6C29.8 18.2 29 18.6 28.2 18.6C27.2 18.6 26.6 18.4 25.8 18L25.4 17.8L25 20.6C25.8 21 27 21.2 28.2 21.2C30.8 21.2 32.6 20 32.6 18C32.6 16.8 31.8 16 30.6 15.4C29.6 14.8 29 14.4 29 14C29 13.6 29.4 13.2 30.2 13.2C31 13.2 31.6 13.4 32.2 13.6L32.6 13.8L32.8 10.8ZM38.4 10.6H36.4C35.8 10.6 35.4 10.8 35.2 11.4L31.4 21.4H34.2L34.6 20.2H37.8L38.2 21.4H40.6L38.4 10.6ZM35.4 18.2L36.6 14.6L37.4 18.2H35.4ZM23.4 10.6L20.8 18.2L20.4 16.4C19.8 14.4 18.2 12.4 16.4 11.4L18.8 21.4H21.6L25.6 10.6H23.4ZM14.4 10.6H10.6L10.6 10.8C13.8 11.6 16 13.8 16.8 16.4L16 11.4C15.8 10.8 15.4 10.6 14.4 10.6Z" fill="white"/\u003e\u003c/svg\u003e' },
-    { name: 'Mastercard',icon: icons.mastercard || '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#F5F5F5"/\u003e\u003ccircle cx="18" cy="16" r="8" fill="#EB001B"/\u003e\u003ccircle cx="30" cy="16" r="8" fill="#F79E1B"/\u003e\u003cpath d="M24 10.4C25.8 11.8 27 13.8 27 16C27 18.2 25.8 20.2 24 21.6C22.2 20.2 21 18.2 21 16C21 13.8 22.2 11.8 24 10.4Z" fill="#FF5F00"/\u003e\u003c/svg\u003e' },
-    { name: 'Crypto',    icon: icons.crypto || '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#0B0E11"/\u003e\u003ccircle cx="24" cy="16" r="8" stroke="#F0B90B" stroke-width="2"/\u003e\u003cpath d="M24 10V22M18 16H30" stroke="#F0B90B" stroke-width="2" stroke-linecap="round"/\u003e\u003c/svg\u003e' },
-    { name: 'Amex',      icon: icons.amex || '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#016FD0"/\u003e\u003cpath d="M8 10H16L20 16L16 22H8L12 16L8 10ZM28 10H40V13H32V14.5H38V17.5H32V19H40V22H28V10ZM20 10H28L24 16L28 22H20L24 16L20 10Z" fill="white"/\u003e\u003c/svg\u003e' },
-    { name: 'Bank',      icon: icons.bank || '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#1A2332"/\u003e\u003cpath d="M24 6L8 14H40L24 6ZM12 16V24H16V16H12ZM20 16V24H24V16H20ZM28 16V24H32V16H28ZM36 16V24H40V16H36ZM8 26H40V28H8V26Z" fill="#8FA0D2"/\u003e\u003c/svg\u003e' },
-  ];
   return `
     <div class="payment-logos-strip">
       <div class="payment-logos-row">
-        ${logos.map(l => `<span class="payment-logo" title="${escAttr(l.name)}">${l.icon}</span>`).join('')}
+        ${PAYMENT_LOGO_STRIP.map(l => `<span class="payment-logo" title="${escAttr(l.name)}">${paymentImage(paymentAsset(l.file), l.name, 'payment-logo-img')}</span>`).join('')}
       </div>
       <p class="payment-logos-caption">${t('funding.payment_methods_secure', 'We support all payment methods securely and quickly')}</p>
     </div>`;
@@ -353,14 +385,15 @@ async function loadMethods(container, kind) {
     container.__fundingCategories = categories;
     container.__fundingCategory = categories[0]?.key || '';
     container.__fundingSelectedMethodId = '';
-    // Pre-load bonuses per category
     container.__fundingBonuses = {};
-    await Promise.all(categories.map(async (cat) => {
-      try {
-        const b = await api(`/wallet/bonuses.php?method_key=${encodeURIComponent(cat.key)}`, { timeout: 4000 });
-        if (b?.ok && b.bonus) container.__fundingBonuses[cat.key] = b.bonus;
-      } catch (_e) {}
-    }));
+    if (kind === 'deposit') {
+      await Promise.all(categories.map(async (cat) => {
+        try {
+          const b = await api(`/wallet/bonuses.php?method_key=${encodeURIComponent(cat.key)}`, { timeout: 4000 });
+          if (b?.ok && b.bonus) container.__fundingBonuses[cat.key] = b.bonus;
+        } catch (_e) {}
+      }));
+    }
     renderCategoryTabs(container);
     renderMethodCards(container);
     updateSelectedMethod(container);
@@ -382,7 +415,7 @@ function buildCategories(adminCategories, methods) {
       key,
       label: cat.label || fallbackCategoryLabel(key),
       hint: cat.hint || fallbackCategoryHint(key),
-      icon: cat.image_url ? `<img src="${escAttr(cat.image_url)}" alt="">` : categoryIcon(key, cat.icon),
+      icon: cat.image_url ? paymentImage(cat.image_url, cat.label || fallbackCategoryLabel(key), 'funding-category-logo') : categoryIcon(key, cat.icon),
     });
   });
   methodKeys.forEach((key) => {
@@ -405,18 +438,18 @@ function renderCategoryTabs(container) {
     return;
   }
   el.innerHTML = categories.map(cat => {
-    const bonus = container.__fundingBonuses?.[cat.key];
+    const isDeposit = (container.__fundingKind || '') === 'deposit';
+    const bonus = isDeposit ? container.__fundingBonuses?.[cat.key] : null;
     // Default crypto bonus if API not ready
-    const showBonus = bonus || (cat.key === 'crypto' ? { amount: 10 } : null);
+    const showBonus = isDeposit ? (bonus || (cat.key === 'crypto' ? { amount: 10 } : null)) : null;
     const bonusCard = showBonus ? `
-      <span class="bonus-card">+${parseFloat(showBonus.amount || 0)}% ${t('funding.bonus', 'Bonus')}</span>
+      <span class="bonus-card"><span>${t('funding.bonus', 'Bonus')}</span><b>+${formatBonusPercent(showBonus.amount || 0)}%</b></span>
     ` : '';
     return `
     <button type="button" class="${cat.key === selected ? 'active' : ''}" data-funding-category="${escAttr(cat.key)}">
       <i>${cat.icon || icons.wallet}</i>
       <strong>${esc(cat.label)}</strong>
       ${bonusCard}
-      <small>${esc(cat.hint || '')}</small>
     </button>`;
   }).join('');
 }
@@ -424,6 +457,7 @@ function renderCategoryTabs(container) {
 function renderMethodCards(container) {
   const el = container.querySelector('#method-cards');
   const methods = filteredMethods(container);
+  const isDeposit = (container.__fundingKind || container.querySelector('#funding-form')?.dataset.kind || 'deposit') === 'deposit';
   if (!el) return;
   clearCountdown(container);
   if (!methods.length) {
@@ -438,9 +472,12 @@ function renderMethodCards(container) {
   el.innerHTML = methods.map((m) => {
     const id = methodId(m);
     return `<button type="button" class="method-card ${id === container.__fundingSelectedMethodId ? 'active' : ''}" data-method="${escAttr(id)}">
-      <span class="method-icon">${methodIcon(m)}</span>
+      <span class="method-card-top">
+        <span class="method-icon">${methodIcon(m)}</span>
+        ${methodBrandStrip(m)}
+      </span>
       <strong>${esc(m.title || m.name || m.code || t('funding.method', 'Method'))}</strong>
-      <span class="method-card-badges">${methodBadges(m)}</span>
+      <span class="method-card-badges">${methodBadges(m, isDeposit)}</span>
       <em>${money(m.min_amount || 0)}${m.max_amount ? ` - ${money(m.max_amount)}` : '+'}</em>
     </button>`;
   }).join('');
@@ -645,12 +682,18 @@ function emptyTransferPanel(title, text) {
   return `<div class="deposit-transfer-empty"><span>${icons.deposit}</span><strong>${esc(title)}</strong><small>${esc(text)}</small></div>`;
 }
 
-function methodBadges(method) {
+function methodBadges(method, isDeposit = true) {
   const badges = [];
-  if (method?.bonus_amount || method?.bonus_type) badges.push(t('funding.badge_bonus', 'Bonus'));
-  if (methodQrUrl(method)) badges.push(t('funding.badge_qr', 'QR'));
-  if (method?.proof_required) badges.push(t('funding.badge_receipt', 'Receipt'));
-  return badges.slice(0, 3).map(label => `<b>${esc(label)}</b>`).join('');
+  if (isDeposit && (method?.bonus_amount || method?.bonus_type)) badges.push({ label: t('funding.badge_bonus', 'Bonus'), type: 'bonus' });
+  if (methodQrUrl(method)) badges.push({ label: t('funding.badge_qr', 'QR'), type: 'qr' });
+  if (method?.proof_required) badges.push({ label: t('funding.badge_receipt', 'Receipt'), type: 'receipt' });
+  return badges.slice(0, 3).map(item => `<b class="${item.type === 'bonus' ? 'is-bonus' : ''}">${esc(item.label)}</b>`).join('');
+}
+
+function formatBonusPercent(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return '0';
+  return amount.toFixed(amount % 1 === 0 ? 0 : 1).replace(/\.0$/, '');
 }
 
 function renderMethodPaymentPreview(method, isDeposit) {
@@ -660,7 +703,7 @@ function renderMethodPaymentPreview(method, isDeposit) {
   const needsSetup = isDeposit && !address && !fields.length;
   return `<div class="method-payment-preview ${needsSetup ? 'needs-setup' : ''}">
     <div class="method-payment-preview-main">
-      ${qr ? `<img src="${escAttr(qr)}" alt="Payment QR">` : `<span>${icons.deposit}</span>`}
+      ${qr ? `<img class="method-preview-qr" src="${escAttr(qr)}" alt="Payment QR">` : `<span class="method-preview-logo">${methodIcon(method)}</span>`}
       <div>
         <strong>${needsSetup ? t('funding.details_unavailable', 'Funding details unavailable') : (isDeposit ? t('funding.transfer_details_configured', 'Transfer details configured') : t('funding.payout_fields_configured', 'Payout fields configured'))}</strong>
         <small>${needsSetup ? t('funding.choose_another_method', 'Choose another method or try again shortly.') : t('funding.route_details_copy', 'These details are provided by the selected funding route.')}</small>
@@ -967,27 +1010,120 @@ function methodCategory(method) {
   return 'manual';
 }
 
+function paymentAsset(file) {
+  return `${PAYMENT_ASSET_BASE}${file}`;
+}
+
+function normalizePaymentImageUrl(value) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  const cleanPath = url.split(/[?#]/)[0].replace(/\\/g, '/').toLowerCase();
+  if (cleanPath.endsWith('/cat-card.svg')) return paymentAsset('pm-card-logos.svg');
+  if (cleanPath.endsWith('/cat-bank.svg')) return paymentAsset('pm-bank-transfer.svg');
+  if (cleanPath.endsWith('/cat-crypto.svg')) return paymentAsset('pm-usdt-networks.svg');
+  if (cleanPath.endsWith('/card-visa.svg')) return paymentAsset('pm-visa.svg');
+  if (cleanPath.endsWith('/card-mastercard.svg')) return paymentAsset('pm-mastercard.svg');
+  if (cleanPath.endsWith('/card-stripe.svg')) return paymentAsset('pm-card-logos.svg');
+  if (cleanPath.endsWith('/stripe-card.svg')) return paymentAsset('pm-card-logos.svg');
+  if (cleanPath.endsWith('/bank-transfer.svg')) return paymentAsset('pm-bank-transfer.svg');
+  if (cleanPath.endsWith('/bank-withdraw.svg')) return paymentAsset('pm-bank-transfer.svg');
+  if (cleanPath.endsWith('/crypto-withdraw.svg')) return paymentAsset('pm-usdt-networks.svg');
+  return url;
+}
+
+function paymentImage(value, label = '', className = 'payment-asset-img') {
+  const src = normalizePaymentImageUrl(value);
+  if (!src) return '';
+  return `<img class="${escAttr(className)}" src="${escAttr(src)}" alt="${escAttr(label)}" loading="lazy">`;
+}
+
+function isPaymentImageRef(value) {
+  const ref = String(value || '').trim();
+  if (!ref) return false;
+  return /^data:image\//i.test(ref) || /^https?:\/\//i.test(ref) || /^\/.+\.(svg|png|jpe?g|webp|gif)([?#].*)?$/i.test(ref) || /\.(svg|png|jpe?g|webp|gif)([?#].*)?$/i.test(ref);
+}
+
+function methodSearchText(method) {
+  return [
+    method?.provider,
+    method?.code,
+    method?.title,
+    method?.name,
+    method?.method_group,
+    method?.category_key,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function methodLogoFile(method) {
+  const raw = methodSearchText(method);
+  if (/visa/.test(raw)) return 'pm-visa.svg';
+  if (/mastercard|master/.test(raw)) return 'pm-mastercard.svg';
+  if (/amex|american express/.test(raw)) return 'pm-amex.svg';
+  if (/apple\s*pay/.test(raw)) return 'pm-apple-pay.svg';
+  if (/google\s*pay/.test(raw)) return 'pm-google-pay.svg';
+  if (/withdraw/.test(raw) && /bank|wire|iban|swift/.test(raw)) return 'pm-bank-transfer.svg';
+  if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) return 'pm-bank-transfer.svg';
+  if (/stripe/.test(raw)) return 'pm-stripe.svg';
+  if (/card|credit|debit/.test(raw)) return 'pm-card-logos.svg';
+  if (/trc20/.test(raw)) return 'pm-usdt-networks.svg';
+  if (/erc20/.test(raw)) return 'pm-usdt-networks.svg';
+  if (/btc|bitcoin/.test(raw)) return 'btc.svg';
+  if (/eth|ethereum/.test(raw)) return 'eth.svg';
+  if (/usdt|tether/.test(raw)) return 'pm-usdt-networks.svg';
+  if (/crypto_bot|bot|telegram/.test(raw)) return 'cat-crypto.svg';
+  if (/crypto|wallet|blockchain/.test(raw)) return 'pm-usdt-networks.svg';
+  const category = methodCategory(method);
+  if (category === 'card') return 'pm-card-logos.svg';
+  if (category === 'bank') return 'pm-bank-transfer.svg';
+  if (category === 'crypto') return 'pm-usdt-networks.svg';
+  return '';
+}
+
 function methodIcon(m) {
-  if (String(m?.image_url || '').trim()) return `<img src="${escAttr(m.image_url)}" alt="" style="width:32px;height:32px;object-fit:contain;border-radius:6px;">`;
-  // Provider-specific logo from well-known CDN
-  const raw = [m?.provider, m?.code, m?.title, m?.name].filter(Boolean).join(' ').toLowerCase();
-  if (/visa/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24" fill="none"><rect width="38" height="24" rx="4" fill="#1A1F71"/><path d="M15.5 16.5h-2.3l1.43-8.9h2.3L15.5 16.5zm-4.85-8.9L8.6 13.3l-.28-1.4-.82-4.14s-.1-.66-.95-.66H3.08l-.04.16s1.45.3 2.13.94c.6.56.81 1.43.81 1.43l1.45 7.07h2.42l3.7-8.9H10.65zM33.8 16.5h2.14L34.07 7.6H32.2c-.72 0-.9.56-.9.56L27.8 16.5h2.43l.48-1.33h2.97l.12 1.33zm-2.59-3.2l1.23-3.37.69 3.37h-1.92zm-3.34-3.86l.33-1.93S27.3 7 26.1 7c-1.3 0-4.5.58-4.5 3.4 0 2.65 3.7 2.68 3.7 4.07 0 1.4-3.33 1.15-4.42.27l-.35 2.04s.96.47 2.44.47c1.48 0 4.76-.77 4.76-3.52 0-2.68-3.73-2.93-3.73-4.07 0-1.13 2.61-1 3.87-.42z" fill="white"/></svg>`;
-  if (/mastercard|master/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#252525"/><circle cx="15" cy="12" r="7" fill="#EB001B"/><circle cx="23" cy="12" r="7" fill="#F79E1B"/><path d="M19 6.8a7 7 0 0 1 0 10.4A7 7 0 0 1 19 6.8z" fill="#FF5F00"/></svg>`;
-  if (/stripe|card/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#635bff"/><path d="M17.6 10.3c0-.7.6-1 1.5-1 1.3 0 3 .4 4.2 1.1V7.1A11.2 11.2 0 0 0 19 6.5c-3.4 0-5.6 1.8-5.6 4.7 0 4.6 6.3 3.8 6.3 5.8 0 .8-.7 1.1-1.7 1.1-1.4 0-3.3-.6-4.7-1.4v3.3c1.6.7 3.2 1 4.7 1 3.5 0 5.9-1.7 5.9-4.8-.1-4.9-6.3-4-6.3-5.9z" fill="white"/></svg>`;
-  if (/btc|bitcoin/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#F7931A"/><path d="M21.8 11.9c.4-.3.7-.8.6-1.5-.2-1.6-1.8-2-3.2-2h-3.5l-.9 6h3.7c1.5 0 3-.7 3.3-2.5.1-.8-.1-1.5-.5-1.9l.5-.1zm-4.6-1.8h1.6c.5 0 1 .1 1.1.6.1.5-.4.8-.9.8h-1.5l.3-1.4zm1.9 3.8h-1.7l.3-1.6h1.6c.5 0 1.1.1 1.1.7.1.6-.5.9-1.3.9z" fill="white"/></svg>`;
-  if (/eth|ethereum/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#627EEA"/><path d="M19 7.5V13l4 1.8L19 7.5z" fill="white" opacity="0.6"/><path d="M19 7.5l-4 6.3 4-1.8V7.5z" fill="white"/><path d="M19 16.5v-1.9l4-2.3-4 4.2z" fill="white" opacity="0.6"/><path d="M19 16.5l-4-4.2 4 2.3v1.9z" fill="white"/></svg>`;
-  if (/usdt|tether/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#26A17B"/><path d="M20.5 12.1c-.1 0-.6.1-1.5.1s-1.4 0-1.5-.1v-.8h3v.8zm0-2.1h-3V9h-2v1H13v1.2h1.5c.1.4.1.8 0 1.2v.2c-.1.6-.1 1.3.1 1.9.3.7 1 1 2.4 1s2-.3 2.4-1c.2-.6.2-1.3.1-1.9v-.2c0-.4 0-.8-.1-1.2H22V9h-1.5z" fill="white"/></svg>`;
-  if (/bank|wire|iban|swift/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#1e3a5f"/><path d="M9 17h20v1.5H9zm2-6.5h2.5v6H11zm4 0H17v6h-2zm4 0h2.5v6H19zm4 0h2.5v6H23zM19 6l10 3.5H9L19 6z" fill="white" opacity="0.9"/></svg>`;
-  if (/crypto_bot|bot|telegram/.test(raw)) return `<svg viewBox="0 0 38 24" width="36" height="24"><rect width="38" height="24" rx="4" fill="#229ED9"/><path d="M8 12.5l2.5 1.5L16 9l-8 3.5zm3.5 2.5l.5 3.5 2.5-2.5-3-1zm4.5-2l4.5-7-9.5 5.5 5 1.5z" fill="white"/></svg>`;
+  const label = m?.title || m?.name || m?.code || t('funding.payment_method', 'Payment method');
+  const uploaded = normalizePaymentImageUrl(m?.image_url);
+  if (uploaded) return paymentImage(uploaded, label, 'payment-method-logo');
+  const file = methodLogoFile(m);
+  if (file) return paymentImage(paymentAsset(file), label, 'payment-method-logo');
   return categoryIcon(methodCategory(m));
 }
 
+function methodBrandStrip(method) {
+  const raw = methodSearchText(method);
+  let logos = [];
+  if (/stripe|card|visa|mastercard|master|amex|credit|debit/.test(raw)) {
+    logos = [
+      { name: 'Visa', file: 'pm-visa.svg' },
+      { name: 'Mastercard', file: 'pm-mastercard.svg' },
+      { name: 'Stripe', file: 'pm-stripe.svg' },
+    ];
+  } else if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) {
+    logos = [];
+  } else if (/crypto|wallet|usdt|tether|trc20|erc20|btc|bitcoin|eth|ethereum/.test(raw)) {
+    if (/trc20/.test(raw)) logos = [{ name: 'USDT TRC20', file: 'usdt-trc20.svg' }];
+    else if (/erc20/.test(raw)) logos = [{ name: 'USDT ERC20', file: 'usdt-erc20.svg' }];
+    else logos = [
+      { name: 'USDT TRC20', file: 'usdt-trc20.svg' },
+      { name: 'USDT ERC20', file: 'usdt-erc20.svg' },
+    ];
+  }
+  if (!logos.length) return '';
+  return `<span class="method-brand-strip">${logos.map(l => paymentImage(paymentAsset(l.file), l.name, 'method-brand-logo')).join('')}</span>`;
+}
+
 function categoryIcon(key, configured = '') {
-  if (configured) return `<b>${esc(configured)}</b>`;
-  if (key === 'card') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h2M15 15h2"/></svg>`;
-  if (key === 'bank') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 10h18M5 10V6M8 10V6M11 10V6M14 10V6M17 10V6M19 10V6M12 3 3 6h18L12 3z"/></svg>`;
-  if (key === 'crypto') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 8h4a2 2 0 1 1 0 4H9V8zm0 4h5a2 2 0 1 1 0 4H9v-4z"/><path d="M12 6v2M12 16v2"/></svg>`;
-  if (key === 'crypto_bot') return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M8 9V6a4 4 0 0 1 8 0v3"/><circle cx="9" cy="14" r="1.5" fill="currentColor"/><circle cx="15" cy="14" r="1.5" fill="currentColor"/></svg>`;
+  const configuredRef = String(configured || '').trim();
+  if (isPaymentImageRef(configuredRef)) return paymentImage(configuredRef, fallbackCategoryLabel(key), 'funding-category-logo');
+  const files = {
+    card: 'pm-card-logos.svg',
+    bank: 'pm-bank-transfer.svg',
+    crypto: 'pm-usdt-networks.svg',
+    crypto_bot: 'pm-usdt-networks.svg',
+    cash: 'pm-bank-transfer.svg',
+    manual: 'pm-bank-transfer.svg',
+  };
+  if (files[key]) return paymentImage(paymentAsset(files[key]), fallbackCategoryLabel(key), 'funding-category-logo');
+  if (configuredRef) return `<b>${esc(configuredRef)}</b>`;
   return icons.wallet;
 }
 
