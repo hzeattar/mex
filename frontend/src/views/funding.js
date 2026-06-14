@@ -1092,11 +1092,7 @@ function methodBrandStrip(method) {
   const raw = methodSearchText(method);
   let logos = [];
   if (/stripe|card|visa|mastercard|master|amex|credit|debit/.test(raw)) {
-    logos = [
-      { name: 'Visa', file: 'pm-visa.svg' },
-      { name: 'Mastercard', file: 'pm-mastercard.svg' },
-      { name: 'Stripe', file: 'pm-stripe.svg' },
-    ];
+    return `<span class="method-brand-strip"><img src="${paymentAsset('pm-card-logos.png')}" alt="Card" class="method-brand-logo method-brand-logo-large" style="width:96px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.70);box-shadow:0 6px 14px rgba(0,0,0,.12);"></span>`;
   } else if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) {
     logos = [];
   } else if (/crypto|wallet|usdt|tether|trc20|erc20|btc|bitcoin|eth|ethereum/.test(raw)) {
