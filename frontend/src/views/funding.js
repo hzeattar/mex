@@ -19,7 +19,7 @@ const PAYMENT_LOGO_STRIP = [
   { name: 'Mastercard', file: 'pm-mastercard.png' },
   { name: 'Visa', file: 'pm-visa.png' },
   { name: 'USDT', file: 'pm-usdt-networks.svg' },
-  { name: 'Bank transfer', file: 'pm-bank-transfer.svg' },
+  { name: 'Bank transfer', file: 'pm-bank-transfer.png' },
 ];
 
 // Listeners bound to the persistent #view container; disposed on cleanup to avoid accumulation.
@@ -1018,15 +1018,15 @@ function normalizePaymentImageUrl(value) {
   const url = String(value || '').trim();
   if (!url) return '';
   const cleanPath = url.split(/[?#]/)[0].replace(/\\/g, '/').toLowerCase();
-  if (cleanPath.endsWith('/cat-card.svg')) return paymentAsset('pm-card-logos.svg');
-  if (cleanPath.endsWith('/cat-bank.svg')) return paymentAsset('pm-bank-transfer.svg');
+  if (cleanPath.endsWith('/cat-card.svg')) return paymentAsset('pm-card-logos.png');
+  if (cleanPath.endsWith('/cat-bank.svg')) return paymentAsset('pm-bank-transfer.png');
   if (cleanPath.endsWith('/cat-crypto.svg')) return paymentAsset('pm-usdt-networks.svg');
   if (cleanPath.endsWith('/card-visa.svg')) return paymentAsset('pm-visa.svg');
   if (cleanPath.endsWith('/card-mastercard.svg')) return paymentAsset('pm-mastercard.svg');
-  if (cleanPath.endsWith('/card-stripe.svg')) return paymentAsset('pm-card-logos.svg');
-  if (cleanPath.endsWith('/stripe-card.svg')) return paymentAsset('pm-card-logos.svg');
-  if (cleanPath.endsWith('/bank-transfer.svg')) return paymentAsset('pm-bank-transfer.svg');
-  if (cleanPath.endsWith('/bank-withdraw.svg')) return paymentAsset('pm-bank-transfer.svg');
+  if (cleanPath.endsWith('/card-stripe.svg')) return paymentAsset('pm-card-logos.png');
+  if (cleanPath.endsWith('/stripe-card.svg')) return paymentAsset('pm-card-logos.png');
+  if (cleanPath.endsWith('/bank-transfer.svg')) return paymentAsset('pm-bank-transfer.png');
+  if (cleanPath.endsWith('/bank-withdraw.svg')) return paymentAsset('pm-bank-transfer.png');
   if (cleanPath.endsWith('/crypto-withdraw.svg')) return paymentAsset('pm-usdt-networks.svg');
   return url;
 }
@@ -1061,10 +1061,10 @@ function methodLogoFile(method) {
   if (/amex|american express/.test(raw)) return 'pm-amex.svg';
   if (/apple\s*pay/.test(raw)) return 'pm-apple-pay.svg';
   if (/google\s*pay/.test(raw)) return 'pm-google-pay.svg';
-  if (/withdraw/.test(raw) && /bank|wire|iban|swift/.test(raw)) return 'pm-bank-transfer.svg';
-  if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) return 'pm-bank-transfer.svg';
+  if (/withdraw/.test(raw) && /bank|wire|iban|swift/.test(raw)) return 'pm-bank-transfer.png';
+  if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) return 'pm-bank-transfer.png';
   if (/stripe/.test(raw)) return 'pm-stripe.svg';
-  if (/card|credit|debit/.test(raw)) return 'pm-card-logos.svg';
+  if (/card|credit|debit/.test(raw)) return 'pm-card-logos.png';
   if (/trc20/.test(raw)) return 'pm-usdt-networks.svg';
   if (/erc20/.test(raw)) return 'pm-usdt-networks.svg';
   if (/btc|bitcoin/.test(raw)) return 'btc.svg';
@@ -1073,8 +1073,8 @@ function methodLogoFile(method) {
   if (/crypto_bot|bot|telegram/.test(raw)) return 'cat-crypto.svg';
   if (/crypto|wallet|blockchain/.test(raw)) return 'pm-usdt-networks.svg';
   const category = methodCategory(method);
-  if (category === 'card') return 'pm-card-logos.svg';
-  if (category === 'bank') return 'pm-bank-transfer.svg';
+  if (category === 'card') return 'pm-card-logos.png';
+  if (category === 'bank') return 'pm-bank-transfer.png';
   if (category === 'crypto') return 'pm-usdt-networks.svg';
   return '';
 }
@@ -1111,12 +1111,12 @@ function categoryIcon(key, configured = '') {
   const configuredRef = String(configured || '').trim();
   if (isPaymentImageRef(configuredRef)) return paymentImage(configuredRef, fallbackCategoryLabel(key), 'funding-category-logo');
   const files = {
-    card: 'pm-card-logos.svg',
-    bank: 'pm-bank-transfer.svg',
+    card: 'pm-card-logos.png',
+    bank: 'pm-bank-transfer.png',
     crypto: 'pm-usdt-networks.svg',
     crypto_bot: 'pm-usdt-networks.svg',
-    cash: 'pm-bank-transfer.svg',
-    manual: 'pm-bank-transfer.svg',
+    cash: 'pm-bank-transfer.png',
+    manual: 'pm-bank-transfer.png',
   };
   if (files[key]) return paymentImage(paymentAsset(files[key]), fallbackCategoryLabel(key), 'funding-category-logo');
   if (configuredRef) return `<b>${esc(configuredRef)}</b>`;
