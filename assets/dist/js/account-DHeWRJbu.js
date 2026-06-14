@@ -1,4 +1,4 @@
-import{j as l,k as r,t as a,g as t,m as o,h as y}from"./main-jB8bpRHy.js";function D(){const e=l("user")||{},c=l("kyc")||{},s=l("level")||{},$=l("wallet")||{},f=l("brand")||{},k=l("support")||{},i=l("mode")==="real"?"real":"demo",n=i==="real"?$.real||{}:$.demo||{},p=s.current||e.user_level||{},u=s.next||e.next_level||null,v=Number(s.confirmed_deposit_total??e.confirmed_deposit_total??0),d=Number(u?.min_deposit_total||0),S=d>0?Math.min(100,Math.round(v/d*100)):100,x=d>0?Math.max(0,d-v):0,h=e.display_name||e.name||e.username||e.email||"Client",A=String(h).trim().charAt(0).toUpperCase()||"U",b=String(c.status||"not submitted").replace(/_/g," "),g=f.whatsapp_support_url||k.whatsapp_url||"",_=/^https?:\/\//i.test(String(g));return`
+import{j as l,k as r,v as a,g as t,m as o,h as y}from"./main-DzxtJ6CI.js";function D(){const e=l("user")||{},c=l("kyc")||{},n=l("level")||{},v=l("wallet")||{},f=l("brand")||{},k=l("support")||{},i=l("mode")==="real"?"real":"demo",s=i==="real"?v.real||{}:v.demo||{},p=n.current||e.user_level||{},u=n.next||e.next_level||null,$=Number(n.confirmed_deposit_total??e.confirmed_deposit_total??0),d=Number(u?.min_deposit_total||0),S=d>0?Math.min(100,Math.round($/d*100)):100,x=d>0?Math.max(0,d-$):0,h=e.display_name||e.name||e.username||e.email||"Client",A=String(h).trim().charAt(0).toUpperCase()||"U",b=String(c.status||"not submitted").replace(/_/g," "),g=f.whatsapp_support_url||k.whatsapp_url||"",_=/^https?:\/\//i.test(String(g));return`
     <div class="account-page account-page-pro account-page-lean animate-fade-in">
       <a href="#/home" class="account-mobile-back">${r.back}<span>${a("nav.home","Dashboard")}</span></a>
 
@@ -14,8 +14,8 @@ import{j as l,k as r,t as a,g as t,m as o,h as y}from"./main-jB8bpRHy.js";functi
             <p class="text-muted text-sm truncate">${t(e.email||a("account.no_email","No email attached"))}</p>
             <div class="account-lean-metrics">
               ${m(a("account.kyc","KYC"),w(b),c.status==="approved"?"text-buy":"")}
-              ${m(a("trade.available","Available"),`${o(n.available||0)} ${n.currency||"USDT"}`)}
-              ${m(a("account.in_use","In use"),`${o(n.holds||0)} ${n.currency||"USDT"}`)}
+              ${m(a("trade.available","Available"),`${o(s.available||0)} ${s.currency||"USDT"}`)}
+              ${m(a("account.in_use","In use"),`${o(s.holds||0)} ${s.currency||"USDT"}`)}
             </div>
           </div>
         </div>
@@ -42,13 +42,13 @@ import{j as l,k as r,t as a,g as t,m as o,h as y}from"./main-jB8bpRHy.js";functi
           <span class="account-lean-icon">${r.wallet}</span>
           <div>
             <span class="badge-green">${a("account.wallet","Wallet")}</span>
-            <h2>${t(n.currency||"USDT")}</h2>
+            <h2>${t(s.currency||"USDT")}</h2>
             <p>${i==="real"?a("account.real_wallet","Real wallet selected"):a("account.demo_wallet","Demo wallet selected")}</p>
           </div>
           <div class="account-wallet-lines">
-            <span><small>${a("account.total","Total")}</small><b>${o(n.balance||0)}</b></span>
-            <span><small>${a("trade.available","Available")}</small><b>${o(n.available||0)}</b></span>
-            <span><small>${a("account.in_use","In use")}</small><b>${o(n.holds||0)}</b></span>
+            <span><small>${a("account.total","Total")}</small><b>${o(s.balance||0)}</b></span>
+            <span><small>${a("trade.available","Available")}</small><b>${o(s.available||0)}</b></span>
+            <span><small>${a("account.in_use","In use")}</small><b>${o(s.holds||0)}</b></span>
           </div>
         </article>
 
@@ -72,4 +72,4 @@ import{j as l,k as r,t as a,g as t,m as o,h as y}from"./main-jB8bpRHy.js";functi
           <a href="/logout.php" class="btn-danger btn-sm">${a("account.logout","Logout")}</a>
         </article>
       </section>
-    </div>`}function T(){}function w(e){return String(e||"").replace(/\b\w/g,c=>c.toUpperCase())}function m(e,c,s=""){return`<span><small>${t(e)}</small><b class="${s}">${t(c)}</b></span>`}function C(e){const c=String(e?.level_code||e?.name_en||"starter").toLowerCase().replace(/[^a-z0-9]+/g,"-"),s=e?.name||e?.name_en||e?.level_code||a("level.starter","Starter");return`<span class="level-badge level-badge--${y(c)}">${t(s)}</span>`}export{T as mount,D as render};
+    </div>`}function T(){}function w(e){return String(e||"").replace(/\b\w/g,c=>c.toUpperCase())}function m(e,c,n=""){return`<span><small>${t(e)}</small><b class="${n}">${t(c)}</b></span>`}function C(e){const c=String(e?.level_code||e?.name_en||"starter").toLowerCase().replace(/[^a-z0-9]+/g,"-"),n=e?.name||e?.name_en||e?.level_code||a("level.starter","Starter");return`<span class="level-badge level-badge--${y(c)}">${t(n)}</span>`}export{T as mount,D as render};

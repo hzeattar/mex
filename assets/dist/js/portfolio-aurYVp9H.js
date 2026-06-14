@@ -1,4 +1,4 @@
-import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l as z}from"./main-jB8bpRHy.js";function I(){const e=T("mode");return`
+import{j as T,k as b,v as s,c as k,g as a,m as d,f as M,q as p,r as v,h as N,o as z}from"./main-DzxtJ6CI.js";function I(){const e=T("mode");return`
     <div class="portfolio-page-pro animate-fade-in">
       <section class="portfolio-hero portfolio-pro-hero">
         <div class="portfolio-hero-content">
@@ -65,13 +65,13 @@ import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l a
         </tr></thead>
         <tbody>${t.map(B).join("")}</tbody>
       </table>
-    </div>`,M(y,"[data-close-pos]","click",(h,$)=>j($.dataset.closePos,e,$)),q(y)}}function P(e){const o=Number(e.pnl||e.unrealized_pnl||0),t=e.asset_type||e.type||"crypto",n=Number(e.mark_price||e.current_price||e.price||0),l=e.position_id||e.id||"",r=String(e.symbol||"").replace("@R@",""),m=String(e.side||"buy").toUpperCase()==="SELL"?"SELL":"BUY",c=Number(e.entry_price||e.open_price||0),x=Number(e.qty||e.amount||e.size||e.units||0),u=Number(e.margin_initial||e.margin||e.initial_margin||e.used_margin||0),y=Number(e.leverage||1),h=e.opened_at_label||e.created_at||e.opened_at||e.updated_at||"",$=e.tp_price!=null?Number(e.tp_price):null,v=e.sl_price!=null?Number(e.sl_price):null,g=e.liquidation_price!=null?Number(e.liquidation_price):null,S=Number(e.roe_pct||(u>0?o/u*100:0)),C=e.source||"";return{pnl:o,type:t,mark:n,id:l,symbol:r,side:m,entry:c,size:x,margin:u,leverage:y,opened:h,tp:$,sl:v,liq:g,roe:S,source:C}}function B(e){const o=P(e);return`<tr class="border-b border-line/50 hover:bg-panel-2/30">
+    </div>`,M(y,"[data-close-pos]","click",(h,$)=>j($.dataset.closePos,e,$)),q(y)}}function P(e){const o=Number(e.pnl||e.unrealized_pnl||0),t=e.asset_type||e.type||"crypto",n=Number(e.mark_price||e.current_price||e.price||0),l=e.position_id||e.id||"",r=String(e.symbol||"").replace("@R@",""),m=String(e.side||"buy").toUpperCase()==="SELL"?"SELL":"BUY",c=Number(e.entry_price||e.open_price||0),x=Number(e.qty||e.amount||e.size||e.units||0),u=Number(e.margin_initial||e.margin||e.initial_margin||e.used_margin||0),y=Number(e.leverage||1),h=e.opened_at_label||e.created_at||e.opened_at||e.updated_at||"",$=e.tp_price!=null?Number(e.tp_price):null,f=e.sl_price!=null?Number(e.sl_price):null,g=e.liquidation_price!=null?Number(e.liquidation_price):null,S=Number(e.roe_pct||(u>0?o/u*100:0)),C=e.source||"";return{pnl:o,type:t,mark:n,id:l,symbol:r,side:m,entry:c,size:x,margin:u,leverage:y,opened:h,tp:$,sl:f,liq:g,roe:S,source:C}}function B(e){const o=P(e);return`<tr class="border-b border-line/50 hover:bg-panel-2/30">
     <td class="py-2.5 px-2 font-semibold">${a(o.symbol)}</td>
     <td class="py-2.5"><span class="badge ${o.side==="BUY"?"badge-green":"badge-red"}">${a(o.side)}</span></td>
     <td class="py-2.5 text-xs text-muted">${a(e.market_type||e.order_type||"spot")}</td>
     <td class="py-2.5 text-right font-mono text-xs">${o.entry>0?p(o.entry,o.type):"--"}</td>
     <td class="py-2.5 text-right font-mono text-xs">${o.mark>0?p(o.mark,o.type):"--"}</td>
-    <td class="py-2.5 text-right text-xs">${f(o.size)}</td>
+    <td class="py-2.5 text-right text-xs">${v(o.size)}</td>
     <td class="py-2.5 text-right font-mono text-xs">${a(String(o.leverage||1))}x</td>
     <td class="py-2.5 text-right text-xs">${d(o.margin)}</td>
     <td class="py-2.5 text-right font-mono ${o.pnl>=0?"text-buy":"text-sell"}">${d(o.pnl)}</td>
@@ -91,7 +91,7 @@ import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l a
           <span class="pos-exp-dot">&#183;</span>
           <span>${n("common.mark","Mark")} ${t.mark>0?p(t.mark,t.type):"--"}</span>
           <span class="pos-exp-dot">&#183;</span>
-          <span>${f(t.size)}</span>
+          <span>${v(t.size)}</span>
           ${c?`<span class="pos-exp-dot">&#183;</span><span class="pos-exp-safety" title="TP: ${p(t.tp,t.type)}">TP</span>`:""}
           ${x?`<span class="pos-exp-dot">&#183;</span><span class="pos-exp-safety" title="SL: ${p(t.sl,t.type)}">SL</span>`:""}
         </div>
@@ -106,7 +106,7 @@ import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l a
       <div class="pos-exp-detail-grid">
         ${i(n("common.entry","Entry Price"),t.entry>0?p(t.entry,t.type):"--")}
         ${i(n("common.mark","Mark Price"),t.mark>0?p(t.mark,t.type):"--")}
-        ${i(n("common.size","Size / Qty"),f(t.size))}
+        ${i(n("common.size","Size / Qty"),v(t.size))}
         ${i(n("common.lev","Leverage"),t.leverage+"x")}
         ${i(n("common.margin","Margin"),d(t.margin))}
         ${i(n("common.roe","ROE"),(t.roe>=0?"+":"")+t.roe.toFixed(2)+"%")}
@@ -154,12 +154,12 @@ import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l a
     <td class="py-2 font-semibold">${a(o)}</td>
     <td class="py-2"><span class="badge ${t==="BUY"?"badge-green":"badge-red"}">${a(t)}</span></td>
     <td class="py-2 text-right font-mono text-xs">${l>0?p(l,c):"--"}</td>
-    <td class="py-2 text-right text-xs">${f(r)}</td>
+    <td class="py-2 text-right text-xs">${v(r)}</td>
     <td class="py-2 text-right font-mono ${n>=0?"text-buy":"text-sell"}">${d(n)}</td>
     <td class="py-2 text-right text-xs">${d(m)}</td>
     <td class="py-2 text-xs text-muted">${a(e.close_reason||e.status||"--")}</td>
     <td class="py-2 text-xs text-muted">${a(e.closed_at||"--")}</td>
-  </tr>`}function F(e,o){const t=String(e.symbol||"").replace("@R@",""),n=String(e.side||"buy").toUpperCase()==="SELL"?"SELL":"BUY",l=Number(e.pnl_usd||0),r=Number(e.fill_price||e.limit_price||e.price||0),m=Number(e.qty||e.amount||0),c=Number(e.leverage||1),x=String(e.status||"closed"),u=String(e.close_reason||""),y=String(e.created_at||"--"),h=String(e.closed_at||"--"),$=Number(e.fee_paid||0),v=e.asset_type||e.type||"crypto",g=l>=0?"+":"",S=l>=0?"pos-exp-pnl-up":"pos-exp-pnl-down",C=n==="BUY"?"pos-exp-side-buy":"pos-exp-side-sell";return`
+  </tr>`}function F(e,o){const t=String(e.symbol||"").replace("@R@",""),n=String(e.side||"buy").toUpperCase()==="SELL"?"SELL":"BUY",l=Number(e.pnl_usd||0),r=Number(e.fill_price||e.limit_price||e.price||0),m=Number(e.qty||e.amount||0),c=Number(e.leverage||1),x=String(e.status||"closed"),u=String(e.close_reason||""),y=String(e.created_at||"--"),h=String(e.closed_at||"--"),$=Number(e.fee_paid||0),f=e.asset_type||e.type||"crypto",g=l>=0?"+":"",S=l>=0?"pos-exp-pnl-up":"pos-exp-pnl-down",C=n==="BUY"?"pos-exp-side-buy":"pos-exp-side-sell";return`
   <article class="pos-exp-card pos-exp-card-closed" data-card-idx="${o}">
     <div class="pos-exp-summary" data-toggle-expand>
       <div class="pos-exp-info">
@@ -170,9 +170,9 @@ import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l a
           <span class="pos-exp-lev">${c}x</span>
         </div>
         <div class="pos-exp-row2">
-          <span>${s("common.fill","Fill")} ${r>0?p(r,v):"--"}</span>
+          <span>${s("common.fill","Fill")} ${r>0?p(r,f):"--"}</span>
           <span class="pos-exp-dot">&#183;</span>
-          <span>${f(m)}</span>
+          <span>${v(m)}</span>
           <span class="pos-exp-dot">&#183;</span>
           <span>${a(u||x)}</span>
         </div>
@@ -184,8 +184,8 @@ import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l a
     </div>
     <div class="pos-exp-detail">
       <div class="pos-exp-detail-grid">
-        ${i(s("common.fill","Fill Price"),r>0?p(r,v):"--")}
-        ${i(s("common.qty","Size / Qty"),f(m))}
+        ${i(s("common.fill","Fill Price"),r>0?p(r,f):"--")}
+        ${i(s("common.qty","Size / Qty"),v(m))}
         ${i(s("common.lev","Leverage"),c+"x")}
         ${i(s("common.pnl","Realized PnL"),g+d(l))}
         ${i(s("common.fee","Fee"),d($))}
@@ -193,7 +193,7 @@ import{j as T,k as b,t as s,c as k,g as a,m as d,f as M,o as p,q as f,h as N,l a
         ${i(s("common.reason","Close Reason"),a(u||"--"))}
         ${i(s("common.opened","Opened"),a(y))}
         ${i(s("common.closed","Closed"),a(h))}
-        ${i(s("common.type","Type"),a(v))}
+        ${i(s("common.type","Type"),a(f))}
         ${i(s("common.order_type","Order Type"),a(e.order_type||"--"))}
         ${i(s("common.side","Side"),a(n))}
       </div>
