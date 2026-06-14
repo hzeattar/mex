@@ -1096,6 +1096,9 @@ function methodBrandStrip(method) {
   } else if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) {
     logos = [];
   } else if (/crypto|wallet|usdt|tether|trc20|erc20|btc|bitcoin|eth|ethereum/.test(raw)) {
+    if (/erc20/.test(raw)) {
+      return `<span class="method-brand-strip"><img src="${paymentAsset('pm-usdt-erc20.png')}" alt="USDT ERC20" class="method-brand-logo method-brand-logo-large" style="width:96px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.70);box-shadow:0 6px 14px rgba(0,0,0,.12);"></span>`;
+    }
     return `<span class="method-brand-strip"><img src="${paymentAsset('pm-usdt-networks.png')}" alt="USDT" class="method-brand-logo method-brand-logo-large" style="width:96px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.70);box-shadow:0 6px 14px rgba(0,0,0,.12);"></span>`;
   }
   if (!logos.length) return '';
