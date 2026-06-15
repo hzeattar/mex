@@ -3117,20 +3117,41 @@
 .pro-actions-panel-horizontal { padding: 16px; }
 .pro-level-percent { color: var(--buy); font-size: 26px; font-weight: 950; letter-spacing: -.04em; }
 .pro-progress {
-  height: 10px;
-  margin-top: 16px;
+  height: 8px;
+  margin-top: 18px;
   overflow: hidden;
   border-radius: 99px;
-  background: rgba(132,164,225,.12);
+  background: rgba(132,164,225,.08);
   box-shadow: inset 0 0 0 1px rgba(132,164,225,.06);
+  position: relative;
+}
+.pro-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.1) 50%, transparent 100%);
+  animation: shimmer 2s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 .pro-progress i,
 .pro-mini-progress i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #7f96c8, #18c98f);
-  box-shadow: 0 0 20px rgba(24,201,143,.22);
+  background: linear-gradient(90deg, #5d7cff, #18c98f, #5d7cff);
+  background-size: 200% 100%;
+  box-shadow: 0 0 16px rgba(24,201,143,.25);
+  animation: gradient-shift 3s ease infinite;
+  position: relative;
+  z-index: 1;
+}
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 .pro-level-rail {
   --level-rail-side-pad: 2px;
@@ -3181,18 +3202,20 @@
 .pro-earn-rail .copy-card,
 .pro-earn-rail .pro-contract-card,
 .pro-earn-rail .pro-earn-empty-card {
-  flex: 0 0 260px;
-  width: 260px;
-  border: 1px solid rgba(132,164,225,.15);
-  border-radius: 20px;
+  flex: 0 0 280px;
+  width: 280px;
+  border: 1px solid rgba(132,164,225,.12);
+  border-radius: 24px;
 }
 .pro-level-rail-card {
-  background: rgba(5,12,26,.52);
-  padding: 18px;
-  min-height: 180px;
+  background: 
+    linear-gradient(145deg, rgba(15,25,45,.75), rgba(5,12,26,.85)),
+    radial-gradient(ellipse at 50% 0%, rgba(93,124,255,.08), transparent 70%);
+  padding: 22px;
+  min-height: 200px;
   position: relative;
   overflow: hidden;
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  transition: all .35s cubic-bezier(.4,0,.2,1);
 }
 .pro-level-rail-card::before {
   content: '';
@@ -3200,47 +3223,80 @@
   inset: 0;
   border-radius: inherit;
   padding: 1.5px;
-  background: linear-gradient(180deg, rgba(132,164,225,.25), transparent 60%);
+  background: linear-gradient(180deg, rgba(132,164,225,.20), transparent 55%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
   opacity: 0;
-  transition: opacity .3s ease;
+  transition: opacity .4s ease;
 }
 .pro-level-rail-card:hover::before {
   opacity: 1;
 }
 .pro-level-rail-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0,0,0,.28);
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 
+    0 20px 40px rgba(0,0,0,.35),
+    0 0 0 1px rgba(93,124,255,.15);
 }
 .pro-level-rail-card.is-current {
-  border-color: rgba(93,124,255,.45);
-  background: linear-gradient(180deg, rgba(93,124,255,.10), rgba(5,12,26,.58));
-  box-shadow: 0 8px 28px rgba(93,124,255,.15);
+  border-color: rgba(93,124,255,.40);
+  background: 
+    linear-gradient(145deg, rgba(20,30,60,.80), rgba(8,15,35,.90)),
+    radial-gradient(ellipse at 50% 0%, rgba(93,124,255,.15), transparent 60%);
+  box-shadow: 
+    0 12px 32px rgba(93,124,255,.12),
+    0 0 0 1px rgba(93,124,255,.20),
+    inset 0 1px 0 rgba(255,255,255,.05);
 }
 .pro-level-rail-card.is-current::before {
   opacity: 1;
-  background: linear-gradient(180deg, rgba(93,124,255,.35), transparent 50%);
+  background: linear-gradient(180deg, rgba(93,124,255,.40), transparent 45%);
+}
+.pro-level-rail-card.is-current::after {
+  content: '●';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: var(--accent);
+  font-size: 10px;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(1.3); }
 }
 .pro-level-rail-card.is-completed,
 .pro-level-rail-card.is-available {
-  border-color: rgba(24,201,143,.35);
-  background: linear-gradient(180deg, rgba(24,201,143,.08), rgba(5,12,26,.58));
+  border-color: rgba(24,201,143,.30);
+  background: 
+    linear-gradient(145deg, rgba(15,40,30,.75), rgba(5,20,15,.85)),
+    radial-gradient(ellipse at 50% 0%, rgba(24,201,143,.12), transparent 60%);
+  box-shadow: 0 8px 24px rgba(24,201,143,.10);
 }
 .pro-level-rail-card.is-completed::before,
 .pro-level-rail-card.is-available::before {
-  background: linear-gradient(180deg, rgba(24,201,143,.30), transparent 50%);
+  background: linear-gradient(180deg, rgba(24,201,143,.35), transparent 45%);
+}
+.pro-level-rail-card.is-completed::after {
+  content: '✓';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: var(--buy);
+  font-size: 14px;
+  font-weight: 900;
 }
 .pro-level-rail-card.is-locked {
-  border-color: rgba(132,164,225,.10);
-  opacity: .75;
-  filter: grayscale(.25);
+  border-color: rgba(132,164,225,.08);
+  opacity: .70;
+  filter: grayscale(.30);
+  background: linear-gradient(145deg, rgba(10,15,25,.60), rgba(5,8,15,.70));
 }
 .pro-level-rail-card.is-locked:hover {
-  opacity: .9;
-  filter: grayscale(0);
+  opacity: .85;
+  filter: grayscale(.10);
 }
 .pro-level-card-row {
   display: flex;
@@ -3249,52 +3305,59 @@
   gap: 8px;
 }
 .pro-level-card-row span {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .12em;
   text-transform: uppercase;
-  color: rgba(207,225,255,.55);
+  color: rgba(207,225,255,.45);
 }
 .pro-level-card-row b { 
   color: var(--buy); 
-  font-size: 13px; 
+  font-size: 12px; 
   font-weight: 950; 
-  background: rgba(24,201,143,.12);
-  padding: 3px 8px;
-  border-radius: 8px;
+  background: rgba(24,201,143,.10);
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(24,201,143,.20);
 }
 .pro-level-rail-card.is-current .pro-level-card-row span {
-  color: var(--accent);
+  color: rgba(138,171,255,.80);
 }
 .pro-level-rail-card.is-current .pro-level-card-row b {
-  background: rgba(93,124,255,.18);
-  color: #8aabff;
+  background: rgba(93,124,255,.15);
+  color: #a8c4ff;
+  border-color: rgba(93,124,255,.25);
 }
 .pro-level-rail-card strong,
 .pro-contract-card strong,
 .pro-earn-empty-card strong {
   display: block;
-  margin-top: 12px;
-  font-size: 20px;
-  line-height: 1.1;
+  margin-top: 16px;
+  font-size: 24px;
+  line-height: 1.15;
   font-weight: 950;
-  letter-spacing: -.02em;
+  letter-spacing: -.03em;
+  background: linear-gradient(135deg, #fff 0%, rgba(207,225,255,.85) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 .pro-level-rail-card small,
 .pro-contract-card small,
 .pro-earn-empty-card small {
   display: block;
-  min-height: 28px;
-  margin-top: 8px;
-  color: var(--muted);
+  min-height: 24px;
+  margin-top: 10px;
+  color: rgba(207,225,255,.55);
   font-size: 12px;
   line-height: 1.5;
+  font-weight: 500;
 }
 .pro-level-rail-card p {
-  margin: 12px 0 0;
-  color: rgba(207,225,255,.68);
+  margin: 14px 0 0;
+  color: rgba(207,225,255,.60);
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 .pro-level-benefits {
   display: grid;
@@ -3306,47 +3369,51 @@
 .pro-level-features {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 16px;
 }
 .pro-level-feat {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 10px;
-  background: rgba(93,124,255,.10);
-  color: rgba(170,200,255,.95);
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(93,124,255,.08);
+  color: rgba(170,200,255,.90);
   font-size: 11px;
-  border: 1px solid rgba(93,124,255,.22);
-  transition: transform .15s ease, background .15s ease;
+  font-weight: 600;
+  border: 1px solid rgba(93,124,255,.18);
+  transition: all .2s cubic-bezier(.4,0,.2,1);
+  cursor: default;
 }
 .pro-level-feat:hover {
-  transform: scale(1.05);
-  background: rgba(93,124,255,.18);
+  transform: translateY(-2px);
+  background: rgba(93,124,255,.15);
+  border-color: rgba(93,124,255,.30);
+  box-shadow: 0 4px 12px rgba(93,124,255,.15);
 }
 .pro-level-feat small {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
 }
 .pro-level-rail-card.is-current .pro-level-feat {
-  background: rgba(93,124,255,.15);
-  border-color: rgba(93,124,255,.35);
-  color: #a8c4ff;
+  background: rgba(93,124,255,.12);
+  border-color: rgba(93,124,255,.28);
+  color: #b8d4ff;
 }
 .pro-level-rail-card.is-completed .pro-level-feat {
   background: rgba(24,201,143,.10);
-  border-color: rgba(24,201,143,.25);
-  color: rgba(120,240,200,.95);
+  border-color: rgba(24,201,143,.22);
+  color: rgba(130,245,205,.95);
 }
 .pro-level-rail-card.is-locked .pro-level-feat {
-  background: rgba(132,164,225,.08);
-  border-color: rgba(132,164,225,.15);
-  color: rgba(132,164,225,.55);
+  background: rgba(132,164,225,.06);
+  border-color: rgba(132,164,225,.12);
+  color: rgba(132,164,225,.45);
 }
 .pro-level-rail-card.is-locked .pro-level-feat:hover {
-  background: rgba(132,164,225,.12);
-  border-color: rgba(132,164,225,.20);
+  background: rgba(132,164,225,.10);
+  border-color: rgba(132,164,225,.18);
 }
 .pro-level-benefits li {
   position: relative;
