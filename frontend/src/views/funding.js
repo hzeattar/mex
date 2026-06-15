@@ -1021,13 +1021,17 @@ function normalizePaymentImageUrl(value) {
   if (cleanPath.endsWith('/cat-card.svg')) return paymentAsset('pm-card-logos.png');
   if (cleanPath.endsWith('/cat-bank.svg')) return paymentAsset('pm-bank-transfer.png');
   if (cleanPath.endsWith('/cat-crypto.svg')) return paymentAsset('pm-usdt-networks.png');
-  if (cleanPath.endsWith('/card-visa.svg')) return paymentAsset('pm-visa.svg');
-  if (cleanPath.endsWith('/card-mastercard.svg')) return paymentAsset('pm-mastercard.svg');
+  if (cleanPath.endsWith('/card-visa.svg')) return paymentAsset('pm-visa.png');
+  if (cleanPath.endsWith('/card-mastercard.svg')) return paymentAsset('pm-mastercard.png');
   if (cleanPath.endsWith('/card-stripe.svg')) return paymentAsset('pm-card-logos.png');
   if (cleanPath.endsWith('/stripe-card.svg')) return paymentAsset('pm-card-logos.png');
   if (cleanPath.endsWith('/bank-transfer.svg')) return paymentAsset('pm-bank-transfer.png');
   if (cleanPath.endsWith('/bank-withdraw.svg')) return paymentAsset('pm-bank-transfer.png');
   if (cleanPath.endsWith('/crypto-withdraw.svg')) return paymentAsset('pm-usdt-networks.png');
+  if (cleanPath.endsWith('/btc.svg')) return paymentAsset('pm-usdt.png');
+  if (cleanPath.endsWith('/eth.svg')) return paymentAsset('pm-usdt.png');
+  if (cleanPath.endsWith('/usdt-erc20.svg')) return paymentAsset('pm-usdt-erc20.png');
+  if (cleanPath.endsWith('/usdt-trc20.svg')) return paymentAsset('pm-usdt-networks.png');
   return url;
 }
 
@@ -1056,21 +1060,21 @@ function methodSearchText(method) {
 
 function methodLogoFile(method) {
   const raw = methodSearchText(method);
-  if (/visa/.test(raw)) return 'pm-visa.svg';
-  if (/mastercard|master/.test(raw)) return 'pm-mastercard.svg';
-  if (/amex|american express/.test(raw)) return 'pm-amex.svg';
-  if (/apple\s*pay/.test(raw)) return 'pm-apple-pay.svg';
-  if (/google\s*pay/.test(raw)) return 'pm-google-pay.svg';
+  if (/visa/.test(raw)) return 'pm-visa.png';
+  if (/mastercard|master/.test(raw)) return 'pm-mastercard.png';
+  if (/amex|american express/.test(raw)) return 'pm-amex.png';
+  if (/apple\s*pay/.test(raw)) return 'pm-apple-pay.png';
+  if (/google\s*pay/.test(raw)) return 'pm-google-pay.png';
   if (/withdraw/.test(raw) && /bank|wire|iban|swift/.test(raw)) return 'pm-bank-transfer.png';
   if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) return 'pm-bank-transfer.png';
-  if (/stripe/.test(raw)) return 'pm-stripe.svg';
+  if (/stripe/.test(raw)) return 'pm-card-logos.png';
   if (/card|credit|debit/.test(raw)) return 'pm-card-logos.png';
   if (/trc20/.test(raw)) return 'pm-usdt-networks.png';
-  if (/erc20/.test(raw)) return 'pm-usdt-networks.png';
-  if (/btc|bitcoin/.test(raw)) return 'btc.svg';
-  if (/eth|ethereum/.test(raw)) return 'eth.svg';
+  if (/erc20/.test(raw)) return 'pm-usdt-erc20.png';
+  if (/btc|bitcoin/.test(raw)) return 'pm-usdt.png';
+  if (/eth|ethereum/.test(raw)) return 'pm-usdt.png';
   if (/usdt|tether/.test(raw)) return 'pm-usdt-networks.png';
-  if (/crypto_bot|bot|telegram/.test(raw)) return 'cat-crypto.svg';
+  if (/crypto_bot|bot|telegram/.test(raw)) return 'pm-usdt-networks.png';
   if (/crypto|wallet|blockchain/.test(raw)) return 'pm-usdt-networks.png';
   const category = methodCategory(method);
   if (category === 'card') return 'pm-card-logos.png';

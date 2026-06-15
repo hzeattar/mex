@@ -4,79 +4,108 @@ import { money, esc, escAttr } from '../utils/format.js';
 import { navigate } from '../router.js';
 import { api, formApi, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
+import { t } from '../utils/i18n.js';
+import { isKycApproved, showKycGateDialog, trySwitchToReal } from '../utils/gates.js';
 
 const fundingCache = globalThis.__MEX_FUNDING_CACHE__ || (globalThis.__MEX_FUNDING_CACHE__ = new Map());
 const CACHE_TTL = 45_000;
+const PAYMENT_ASSET_BASE = '/assets/img/payment_methods/';
+
+const PAYMENT_LOGO_STRIP = [
+  { name: 'Google Pay', file: 'pm-google-pay.png' },
+  { name: 'Apple Pay', file: 'pm-apple-pay.png' },
+  { name: 'SII', file: 'pm-sii.png' },
+  { name: 'American Express', file: 'pm-amex.png' },
+  { name: 'Mastercard', file: 'pm-mastercard.png' },
+  { name: 'Visa', file: 'pm-visa.png' },
+  { name: 'USDT', file: 'pm-usdt-networks.png' },
+  { name: 'Bank transfer', file: 'pm-bank-transfer.png' },
+];
 
 // Listeners bound to the persistent #view container; disposed on cleanup to avoid accumulation.
 let fundingDisposers = [];
 
 const TABS = [
-  { key: 'deposit', label: 'Deposit', icon: icons.deposit },
-  { key: 'withdraw', label: 'Withdraw', icon: icons.withdraw },
-  { key: 'history', label: 'History', icon: icons.wallet },
+  { key: 'deposit', label: 'funding.deposit', fallback: 'Deposit', icon: icons.deposit },
+  { key: 'withdraw', label: 'funding.withdraw', fallback: 'Withdraw', icon: icons.withdraw },
+  { key: 'history', label: 'funding.history', fallback: 'History', icon: icons.wallet },
 ];
 
 export function render(params = {}) {
   const activeTab = resolveTab(params);
   const wallet = get('wallet') || {};
-  const kyc = get('kyc') || {};
-  const level = get('level') || {};
   const mode = get('mode') === 'real' ? 'real' : 'demo';
+  const needsKyc = !isKycApproved();
+  const locked = activeTab !== 'history' && (mode !== 'real' || needsKyc);
   const activeBalance = mode === 'real' ? (wallet.real || {}) : (wallet.demo || {});
-  const currentLevel = level.current || {};
 
   return `
     <div class="funds-workspace animate-fade-in" data-active-funding-tab="${escAttr(activeTab)}">
       <section class="funds-hero-pro">
         <div>
-          <span class="badge-accent">Assets desk</span>
-          <h1>Funds</h1>
-          <p>Deposit, withdraw and audit wallet movements from one fast workspace powered by admin payment categories.</p>
+          <span class="badge-accent">${t('funding.assets_desk', 'Assets desk')}</span>
+          <h1>${t('nav.wallet', 'Funds')}</h1>
+          <p>${t('funding.hero_copy', 'Deposit, withdraw and audit wallet movements from one fast workspace powered by admin payment categories.')}</p>
         </div>
         <div class="funds-balance-pro">
-          <span>${mode === 'real' ? 'Available balance' : 'Demo balance'}</span>
+          <span>${mode === 'real' ? t('balance.available', 'Available balance') : t('funding.demo_balance', 'Demo balance')}</span>
           <strong>${money(activeBalance.available || activeBalance.balance || 0)}</strong>
           <small>${esc(activeBalance.currency || (mode === 'real' ? 'USDT' : 'USDT_DEMO'))}</small>
         </div>
       </section>
 
+      ${activeTab === 'deposit' ? `<section class="funding-promo-banner" data-promo-banner>
+        <span class="promo-coin-float">${icons.coin}</span>
+        <div class="promo-banner-content">
+          <span class="promo-badge"><b>+10%</b> ${t('funding.bonus', 'Bonus')}</span>
+          <span class="promo-text">${t('funding.bonus_crypto', 'Get 10% bonus on every crypto deposit')}</span>
+        </div>
+        <button type="button" data-dismiss-promo aria-label="Dismiss">${icons.close}</button>
+      </section>` : ''}
+
       <section class="funds-tabs-pro" role="tablist" aria-label="Funding workspace tabs">
         ${TABS.map(tab => `
           <button type="button" class="${tab.key === activeTab ? 'active' : ''}" data-funding-tab="${tab.key}" role="tab" aria-selected="${tab.key === activeTab ? 'true' : 'false'}">
-            <span>${tab.icon || ''}</span>${esc(tab.label)}
+            <span>${tab.icon || ''}</span>${esc(t(tab.label, tab.fallback))}
           </button>
         `).join('')}
       </section>
 
-      ${mode !== 'real' && activeTab !== 'history' ? `<section class="funding-mode-warning">
+      ${locked ? `<section class="funding-mode-warning">
         <span class="gate-icon">${icons.lock}</span>
         <div>
-          <strong>Real account required</strong>
-          <small>Methods are visible for preview. Switch to Real before submitting a live funding request.</small>
+          <strong>${mode !== 'real' ? t('funding.real_required', 'Real account required') : t('earn.kyc_required', 'KYC approval required')}</strong>
+          <small>${t('funding.real_only_copy', 'Deposits and withdrawals are available for verified real accounts only.')}</small>
         </div>
-        <button type="button" class="btn-primary btn-sm" data-switch-real>Switch to Real</button>
+        <button type="button" class="btn-primary btn-sm" data-switch-real>${t('earn.switch_real', 'Switch to Real')}</button>
       </section>` : ''}
 
-      <section class="funding-summary-grid funding-summary-slim">
-        ${summaryTile('Mode', mode === 'real' ? 'Real' : 'Demo', mode === 'real' ? 'Funding enabled' : 'Preview only')}
-        ${summaryTile('Verification', titleCase(kyc.status || 'not submitted'), kyc.status === 'approved' ? 'Ready' : 'KYC may be required')}
-        ${summaryTile('Level', currentLevel.name || currentLevel.name_en || 'Starter', 'Limits and products')}
-        ${summaryTile('Workspace', activeTabLabel(activeTab), 'Deposit, payout and ledger trail')}
-      </section>
-
-      ${activeTab === 'history' ? renderHistoryWorkspace() : renderFundingWorkspace(activeTab)}
+      ${activeTab === 'history' ? renderHistoryWorkspace() : (locked ? fundingLockedWorkspace(renderFundingWorkspace(activeTab)) : renderFundingWorkspace(activeTab))}
     </div>`;
 }
 
 export function mount(container, params = {}) {
   const activeTab = resolveTab(params);
 
+  reconcileStripeReturn(container, params);
+
   const onFundingClick = (e) => {
     const tab = e.target.closest('[data-funding-tab]');
     if (tab) {
       e.preventDefault();
       navigate('wallet', { action: tab.dataset.fundingTab || 'deposit' });
+      return;
+    }
+
+    if (e.target.closest('[data-switch-real]')) {
+      e.preventDefault();
+      trySwitchToReal('funding');
+      return;
+    }
+
+    if ((get('mode') !== 'real' || !isKycApproved()) && activeTab !== 'history' && e.target.closest('[data-funding-category], [data-method], [data-quick-amount], [data-copy-address], #funding-form, .funding-locked-shell')) {
+      e.preventDefault();
+      showKycGateDialog({ body: t('gate.funding_body', 'Deposits and withdrawals are available for verified real accounts only.') });
       return;
     }
 
@@ -97,10 +126,29 @@ export function mount(container, params = {}) {
       return;
     }
 
+    const dismissPromo = e.target.closest('[data-dismiss-promo]');
+    if (dismissPromo) {
+      e.preventDefault();
+      const banner = container.querySelector('[data-promo-banner]');
+      if (banner) banner.style.display = 'none';
+      return;
+    }
+
     const filter = e.target.closest('[data-history-filter]');
     if (filter) {
       container.__fundingHistoryFilter = filter.dataset.historyFilter || 'all';
       renderCombinedHistory(container);
+      return;
+    }
+
+    const historyToggle = e.target.closest('[data-funding-history-toggle]');
+    if (historyToggle) {
+      const card = historyToggle.closest('[data-funding-history-card]');
+      if (card) {
+        const expanded = !card.classList.contains('is-expanded');
+        card.classList.toggle('is-expanded', expanded);
+        historyToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      }
       return;
     }
 
@@ -110,11 +158,6 @@ export function mount(container, params = {}) {
       return;
     }
 
-    if (e.target.closest('[data-switch-real]')) {
-      localStorage.setItem('vp_mode', 'real');
-      set('mode', 'real');
-      location.reload();
-    }
   };
   container.addEventListener('click', onFundingClick);
   fundingDisposers.push(() => container.removeEventListener('click', onFundingClick));
@@ -130,7 +173,7 @@ export function mount(container, params = {}) {
     if (!proof) return;
     const badge = container.querySelector('#proof-file-name');
     const file = proof.files?.[0];
-    if (badge) badge.textContent = file ? `${file.name} - ${formatFileSize(file.size || 0)}` : 'Image or PDF up to 8MB';
+    if (badge) badge.textContent = file ? `${file.name} - ${formatFileSize(file.size || 0)}` : t('funding.upload_file_hint', 'Image or PDF up to 8MB');
   };
   container.addEventListener('change', onFundingChange);
   fundingDisposers.push(() => container.removeEventListener('change', onFundingChange));
@@ -149,7 +192,78 @@ export function mount(container, params = {}) {
   }
 
   loadMethods(container, activeTab);
-  container.querySelector('#funding-form')?.addEventListener('submit', (e) => handleSubmit(e, container, activeTab));
+  container.querySelector('#funding-form')?.addEventListener('submit', (e) => {
+    if (get('mode') !== 'real' || !isKycApproved()) {
+      e.preventDefault();
+      showKycGateDialog({ body: t('gate.funding_body', 'Deposits and withdrawals are available for verified real accounts only.') });
+      return;
+    }
+    handleSubmit(e, container, activeTab);
+  });
+}
+
+function fundingLockedWorkspace(content) {
+  return `<section class="funding-locked-shell blur-gate blur-active">
+    <div class="blur-gate-content">${content}</div>
+    <div class="blur-gate-overlay">
+      <button type="button" class="gate-card funding-lock-card" data-switch-real>
+        <span class="gate-icon">${icons.lock}</span>
+        <strong>${t('funding.real_only', 'Real account only')}</strong>
+        <p>${t('funding.real_only_copy', 'Deposits and withdrawals are available for verified real accounts only.')}</p>
+        <span class="btn-primary btn-sm">${t('earn.switch_real', 'Switch to Real')}</span>
+      </button>
+    </div>
+  </section>`;
+}
+
+function reconcileStripeReturn(container, params) {
+  const ret = params && params.stripe;
+  if (!ret) return;
+  // Clear the one-shot stripe params so reload / re-navigation does not re-trigger.
+  try { window.history.replaceState(null, '', window.location.pathname + '#/wallet'); } catch (_e) {}
+
+  const banner = document.createElement('div');
+  banner.className = 'stripe-return-banner';
+  container.prepend(banner);
+
+  if (ret !== 'success') {
+    banner.classList.add('is-cancel');
+    banner.innerHTML = `<div><strong>${t('funding.payment_canceled', 'Card payment was canceled.')}</strong><small>${t('funding.payment_canceled_copy', 'You can start a new deposit whenever you are ready.')}</small></div>`;
+    return;
+  }
+
+  const depositId = Number(params.deposit || 0);
+  banner.classList.add('is-pending');
+  banner.innerHTML = `<span class="stripe-return-spin"></span><div><strong>${t('funding.verifying_payment', 'Verifying card payment...')}</strong></div>`;
+
+  (async () => {
+    let status = '';
+    if (depositId > 0) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const res = await postApi('/deposits/stripe_sync.php', { deposit_id: depositId }, { timeout: 15000 });
+          status = String(res?.status || '');
+          if (status === 'confirmed' || status === 'failed') break;
+        } catch (_e) { /* retry */ }
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    }
+    if (status === 'confirmed') {
+      banner.className = 'stripe-return-banner is-success';
+      banner.innerHTML = `<div><strong>${t('funding.deposit_confirmed', 'Payment confirmed. Funds credited to your wallet.')}</strong></div>`;
+      try {
+        const data = await api('/bootstrap.php');
+        if (data && data.wallet) set('wallet', data.wallet);
+      } catch (_e) { /* ignore */ }
+      navigate('wallet', { action: 'history' });
+    } else if (status === 'failed') {
+      banner.className = 'stripe-return-banner is-cancel';
+      banner.innerHTML = `<div><strong>${t('funding.deposit_failed', 'Payment was not completed.')}</strong></div>`;
+    } else {
+      banner.className = 'stripe-return-banner';
+      banner.innerHTML = `<div><strong>${t('funding.payment_processing', 'Payment is processing. Your balance will update shortly.')}</strong></div>`;
+    }
+  })();
 }
 
 export function cleanup() {
@@ -159,17 +273,10 @@ export function cleanup() {
 }
 
 function renderPaymentLogosStrip() {
-  const logos = [
-    { name: 'Visa',      icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#1A1F71"/\u003e\u003cpath d="M19.6 21.4L21.4 10.6H24.2L22.4 21.4H19.6ZM32.8 10.8C32.2 10.6 31.4 10.4 30.4 10.4C28 10.4 26.2 11.6 26.2 13.4C26.2 14.8 27.4 15.6 28.4 16.2C29.4 16.8 29.8 17.2 29.8 17.6C29.8 18.2 29 18.6 28.2 18.6C27.2 18.6 26.6 18.4 25.8 18L25.4 17.8L25 20.6C25.8 21 27 21.2 28.2 21.2C30.8 21.2 32.6 20 32.6 18C32.6 16.8 31.8 16 30.6 15.4C29.6 14.8 29 14.4 29 14C29 13.6 29.4 13.2 30.2 13.2C31 13.2 31.6 13.4 32.2 13.6L32.6 13.8L32.8 10.8ZM38.4 10.6H36.4C35.8 10.6 35.4 10.8 35.2 11.4L31.4 21.4H34.2L34.6 20.2H37.8L38.2 21.4H40.6L38.4 10.6ZM35.4 18.2L36.6 14.6L37.4 18.2H35.4ZM23.4 10.6L20.8 18.2L20.4 16.4C19.8 14.4 18.2 12.4 16.4 11.4L18.8 21.4H21.6L25.6 10.6H23.4ZM14.4 10.6H10.6L10.6 10.8C13.8 11.6 16 13.8 16.8 16.4L16 11.4C15.8 10.8 15.4 10.6 14.4 10.6Z" fill="white"/\u003e\u003c/svg\u003e' },
-    { name: 'Mastercard',icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#F5F5F5"/\u003e\u003ccircle cx="18" cy="16" r="8" fill="#EB001B"/\u003e\u003ccircle cx="30" cy="16" r="8" fill="#F79E1B"/\u003e\u003cpath d="M24 10.4C25.8 11.8 27 13.8 27 16C27 18.2 25.8 20.2 24 21.6C22.2 20.2 21 18.2 21 16C21 13.8 22.2 11.8 24 10.4Z" fill="#FF5F00"/\u003e\u003c/svg\u003e' },
-    { name: 'Crypto',    icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#0B0E11"/\u003e\u003ccircle cx="24" cy="16" r="8" stroke="#F0B90B" stroke-width="2"/\u003e\u003cpath d="M24 10V22M18 16H30" stroke="#F0B90B" stroke-width="2" stroke-linecap="round"/\u003e\u003c/svg\u003e' },
-    { name: 'Amex',      icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#016FD0"/\u003e\u003cpath d="M8 10H16L20 16L16 22H8L12 16L8 10ZM28 10H40V13H32V14.5H38V17.5H32V19H40V22H28V10ZM20 10H28L24 16L28 22H20L24 16L20 10Z" fill="white"/\u003e\u003c/svg\u003e' },
-    { name: 'Bank',      icon: '\u003csvg viewBox="0 0 48 32" fill="none"\u003e\u003crect width="48" height="32" rx="4" fill="#1A2332"/\u003e\u003cpath d="M24 6L8 14H40L24 6ZM12 16V24H16V16H12ZM20 16V24H24V16H20ZM28 16V24H32V16H28ZM36 16V24H40V16H36ZM8 26H40V28H8V26Z" fill="#8FA0D2"/\u003e\u003c/svg\u003e' },
-  ];
   return `
     <div class="payment-logos-strip">
       <div class="payment-logos-row">
-        ${logos.map(l => `<span class="payment-logo" title="${escAttr(l.name)}">${l.icon}</span>`).join('')}
+        ${PAYMENT_LOGO_STRIP.map(l => `<span class="payment-logo" title="${escAttr(l.name)}">${paymentImage(paymentAsset(l.file), l.name, 'payment-logo-img')}</span>`).join('')}
       </div>
       <p class="payment-logos-caption">${t('funding.payment_methods_secure', 'We support all payment methods securely and quickly')}</p>
     </div>`;
@@ -182,36 +289,36 @@ function renderFundingWorkspace(kind) {
       ${renderPaymentLogosStrip()}
       <div class="funding-flow-main card ${isDeposit ? 'deposit-console-card' : ''}">
         <div class="panel-headline funding-panel-title">
-          <span class="${isDeposit ? 'badge-green' : 'badge-accent'}">${isDeposit ? 'Deposit ticket' : 'Withdrawal ticket'}</span>
-          <h2>${isDeposit ? 'Create deposit transfer' : 'Create withdrawal request'}</h2>
+          <span class="${isDeposit ? 'badge-green' : 'badge-accent'}">${isDeposit ? t('funding.deposit_ticket', 'Deposit ticket') : t('funding.withdraw_ticket', 'Withdrawal ticket')}</span>
+          <h2>${isDeposit ? t('funding.create_deposit', 'Create deposit transfer') : t('funding.create_withdraw', 'Create withdrawal request')}</h2>
         </div>
 
         <form id="funding-form" data-kind="${kind}" class="funding-form-pro" novalidate>
           <div class="funding-step-block">
-            <span class="field-label">1. Select section</span>
+            <span class="field-label">${t('funding.select_section', '1. Select section')}</span>
             <div class="funding-category-rail" id="funding-categories">
               ${Array.from({ length: 3 }).map(() => '<div class="skeleton h-16 rounded-lg"></div>').join('')}
             </div>
           </div>
 
           <div class="funding-step-block">
-            <span class="field-label">2. Select method</span>
+            <span class="field-label">${t('funding.select_method_step', '2. Select method')}</span>
             <div id="method-cards" class="method-grid method-grid-rail">
               ${Array.from({ length: 4 }).map(() => '<div class="skeleton h-20 rounded-lg"></div>').join('')}
             </div>
           </div>
 
           ${isDeposit ? `<div id="deposit-transfer-panel" class="deposit-transfer-panel is-muted">
-            ${emptyTransferPanel('Transfer details will appear here', 'Choose a method to unlock account details, QR code, wallet address and bank fields.')}
+            ${emptyTransferPanel(t('funding.transfer_details_waiting', 'Transfer details will appear here'), t('funding.transfer_details_waiting_copy', 'Choose a method to unlock account details, QR code, wallet address and bank fields.'))}
           </div>` : `<div id="withdraw-fields-panel" class="withdraw-fields-panel"></div>`}
 
           <div class="deposit-ticket-grid">
             <label class="block">
-              <span class="field-label">${isDeposit ? '3. Amount' : 'Amount'}</span>
-              <input type="number" name="amount" class="input mt-1" value="${isDeposit ? '' : '50'}" min="1" step="any" placeholder="${isDeposit ? 'Enter exact amount after copying the transfer details' : '50'}" required>
+              <span class="field-label">${isDeposit ? t('funding.amount_step', '3. Amount') : t('deposit.amount', 'Amount')}</span>
+              <input type="number" name="amount" class="input mt-1" value="${isDeposit ? '' : '50'}" min="1" step="any" placeholder="${isDeposit ? escAttr(t('funding.amount_placeholder', 'Enter exact amount after copying the transfer details')) : '50'}" required>
             </label>
             <label class="block">
-              <span class="field-label">Currency</span>
+              <span class="field-label">${t('funding.currency', 'Currency')}</span>
               <input type="text" name="currency" class="input mt-1" value="USDT" readonly>
             </label>
           </div>
@@ -222,33 +329,18 @@ function renderFundingWorkspace(kind) {
           <div id="deposit-proof-slot" class="deposit-proof-slot"></div>` : ''}
 
           <label class="block deposit-note-field">
-            <span class="field-label">${isDeposit ? 'Reference / notes' : 'Additional notes'}</span>
-            <textarea name="notes" class="input mt-1" rows="2" placeholder="${isDeposit ? 'Sender name, transaction hash, or bank reference...' : 'Optional note for the operations desk...'}"></textarea>
+            <span class="field-label">${isDeposit ? t('funding.reference_notes', 'Reference / notes') : t('funding.additional_notes', 'Additional notes')}</span>
+            <textarea name="notes" class="input mt-1" rows="2" placeholder="${isDeposit ? escAttr(t('funding.reference_placeholder', 'Sender name, transaction hash, or bank reference...')) : escAttr(t('funding.notes_placeholder', 'Optional note for the operations desk...'))}"></textarea>
           </label>
 
           <div class="funding-submit-zone">
             <button type="submit" class="${isDeposit ? 'btn-primary' : 'btn-sell'} w-full py-3" id="funding-submit">
-              ${isDeposit ? 'Confirm transfer' : 'Submit withdrawal request'}
+              ${isDeposit ? t('funding.confirm_transfer', 'Confirm transfer') : t('funding.submit_withdraw', 'Submit withdrawal request')}
             </button>
             <p class="text-xs text-center funding-form-status" id="form-status"></p>
           </div>
         </form>
       </div>
-
-      <aside class="funding-side-stack">
-        <section class="card funding-sidebar-card funding-guide-card">
-          <div class="panel-headline">
-            <span class="badge-green">${isDeposit ? 'Secure checklist' : 'Payout checklist'}</span>
-            <h2>${isDeposit ? 'Before you confirm' : 'Before you request'}</h2>
-          </div>
-          <div class="funding-checklist">
-            ${checkItem('Use the selected category and method only', true)}
-            ${checkItem(isDeposit ? 'Send the exact amount shown' : 'Balance must cover payout amount', true)}
-            ${checkItem(isDeposit ? 'Upload a clear receipt when required' : 'Provide payout destination', true)}
-            ${checkItem('Real mode required', get('mode') === 'real')}
-          </div>
-        </section>
-      </aside>
     </section>`;
 }
 
@@ -257,17 +349,17 @@ function renderHistoryWorkspace() {
     <section class="card funding-history-workspace">
       <div class="panel-headline-row">
         <div>
-          <span class="badge-accent">Ledger</span>
-          <h2>Funding history</h2>
+          <span class="badge-accent">${t('funding.history', 'History')}</span>
+          <h2>${t('funding.history_title', 'Funding history')}</h2>
         </div>
         <div class="history-filter-rail">
-          ${['all', 'deposit', 'withdraw', 'ledger', 'pending', 'completed', 'failed'].map((key, index) => `
-            <button type="button" class="${index === 0 ? 'active' : ''}" data-history-filter="${key}">${titleCase(key)}</button>
+          ${['all', 'deposit', 'withdraw', 'pending', 'completed', 'failed'].map((key, index) => `
+            <button type="button" class="${index === 0 ? 'active' : ''}" data-history-filter="${key}">${esc(historyFilterLabel(key))}</button>
           `).join('')}
         </div>
       </div>
       <div id="funding-history-all" class="funding-history-stack">
-        <p class="text-muted text-sm text-center py-10">Loading funding history...</p>
+        <p class="text-muted text-sm text-center py-10">${t('funding.loading_history', 'Loading funding history...')}</p>
       </div>
     </section>`;
 }
@@ -293,13 +385,22 @@ async function loadMethods(container, kind) {
     container.__fundingCategories = categories;
     container.__fundingCategory = categories[0]?.key || '';
     container.__fundingSelectedMethodId = '';
+    container.__fundingBonuses = {};
+    if (kind === 'deposit') {
+      await Promise.all(categories.map(async (cat) => {
+        try {
+          const b = await api(`/wallet/bonuses.php?method_key=${encodeURIComponent(cat.key)}`, { timeout: 4000 });
+          if (b?.ok && b.bonus) container.__fundingBonuses[cat.key] = b.bonus;
+        } catch (_e) {}
+      }));
+    }
     renderCategoryTabs(container);
     renderMethodCards(container);
     updateSelectedMethod(container);
   } catch (_e) {
     const cats = container.querySelector('#funding-categories');
     const cards = container.querySelector('#method-cards');
-    if (cats) cats.innerHTML = '<div class="empty-state empty-state--compact">Payment sections are temporarily unavailable.</div>';
+    if (cats) cats.innerHTML = `<div class="empty-state empty-state--compact">${t('funding.sections_unavailable', 'Payment sections are temporarily unavailable.')}</div>`;
     if (cards) cards.innerHTML = '';
   }
 }
@@ -314,13 +415,16 @@ function buildCategories(adminCategories, methods) {
       key,
       label: cat.label || fallbackCategoryLabel(key),
       hint: cat.hint || fallbackCategoryHint(key),
-      icon: cat.image_url ? `<img src="${escAttr(cat.image_url)}" alt="">` : categoryIcon(key, cat.icon),
+      icon: cat.image_url ? paymentImage(cat.image_url, cat.label || fallbackCategoryLabel(key), 'funding-category-logo') : categoryIcon(key, cat.icon),
     });
   });
   methodKeys.forEach((key) => {
     if (categories.some(cat => cat.key === key)) return;
     categories.push({ key, label: fallbackCategoryLabel(key), hint: fallbackCategoryHint(key), icon: categoryIcon(key) });
   });
+  // Enforce user-priority: card → bank → crypto → crypto_bot → everything else
+  const priority = { card: 1, bank: 2, crypto: 3, crypto_bot: 4, manual: 99 };
+  categories.sort((a, b) => (priority[a.key] || 99) - (priority[b.key] || 99));
   return categories;
 }
 
@@ -330,25 +434,34 @@ function renderCategoryTabs(container) {
   const selected = container.__fundingCategory || categories[0]?.key || '';
   if (!el) return;
   if (!categories.length) {
-    el.innerHTML = '<div class="empty-state empty-state--compact">No active funding sections are configured by admin.</div>';
+    el.innerHTML = `<div class="empty-state empty-state--compact">${t('funding.no_sections', 'No active funding sections are configured by admin.')}</div>`;
     return;
   }
-  el.innerHTML = categories.map(cat => `
+  el.innerHTML = categories.map(cat => {
+    const isDeposit = (container.__fundingKind || '') === 'deposit';
+    const bonus = isDeposit ? container.__fundingBonuses?.[cat.key] : null;
+    // Default crypto bonus if API not ready
+    const showBonus = isDeposit ? (bonus || (cat.key === 'crypto' ? { amount: 10 } : null)) : null;
+    const bonusCard = showBonus ? `
+      <span class="bonus-card"><span>${t('funding.bonus', 'Bonus')}</span><b>+${formatBonusPercent(showBonus.amount || 0)}%</b></span>
+    ` : '';
+    return `
     <button type="button" class="${cat.key === selected ? 'active' : ''}" data-funding-category="${escAttr(cat.key)}">
       <i>${cat.icon || icons.wallet}</i>
       <strong>${esc(cat.label)}</strong>
-      <small>${esc(cat.hint || '')}</small>
-    </button>
-  `).join('');
+      ${bonusCard}
+    </button>`;
+  }).join('');
 }
 
 function renderMethodCards(container) {
   const el = container.querySelector('#method-cards');
   const methods = filteredMethods(container);
+  const isDeposit = (container.__fundingKind || container.querySelector('#funding-form')?.dataset.kind || 'deposit') === 'deposit';
   if (!el) return;
   clearCountdown(container);
   if (!methods.length) {
-    el.innerHTML = '<div class="empty-state empty-state--compact">No active methods under this section.</div>';
+    el.innerHTML = `<div class="empty-state empty-state--compact">${t('funding.no_methods_section', 'No active methods under this section.')}</div>`;
     container.__fundingSelectedMethodId = '';
     updateSelectedMethod(container);
     return;
@@ -359,9 +472,12 @@ function renderMethodCards(container) {
   el.innerHTML = methods.map((m) => {
     const id = methodId(m);
     return `<button type="button" class="method-card ${id === container.__fundingSelectedMethodId ? 'active' : ''}" data-method="${escAttr(id)}">
-      <span class="method-icon">${methodIcon(m)}</span>
-      <strong>${esc(m.title || m.name || m.code || 'Method')}</strong>
-      <span class="method-card-badges">${methodBadges(m)}</span>
+      <span class="method-card-top">
+        <span class="method-icon">${methodIcon(m)}</span>
+        ${methodBrandStrip(m)}
+      </span>
+      <strong>${esc(m.title || m.name || m.code || t('funding.method', 'Method'))}</strong>
+      <span class="method-card-badges">${methodBadges(m, isDeposit)}</span>
       <em>${money(m.min_amount || 0)}${m.max_amount ? ` - ${money(m.max_amount)}` : '+'}</em>
     </button>`;
   }).join('');
@@ -380,10 +496,10 @@ function updateSelectedMethod(container) {
   container.querySelectorAll('.method-card').forEach(card => card.classList.toggle('active', card.dataset.method === methodId(selected || {})));
   if (submit && selected) {
     submit.disabled = false;
-    submit.textContent = isStripe ? (selected.checkout_label || 'Continue to secure card checkout') : (isDeposit ? 'Confirm transfer' : 'Submit withdrawal request');
+    submit.textContent = isStripe ? (selected.checkout_label || t('funding.continue_card_checkout', 'Continue to secure card checkout')) : (isDeposit ? t('funding.confirm_transfer', 'Confirm transfer') : t('funding.submit_withdraw', 'Submit withdrawal request'));
   }
   if (!selected) {
-    renderDepositTransferPanel(container, null, amount, false, 'Choose an active method first.');
+    renderDepositTransferPanel(container, null, amount, false, t('funding.choose_method_first', 'Choose an active method first.'));
     renderDepositProofSlot(container, null, false);
     renderWithdrawFields(container, null);
     return;
@@ -402,23 +518,23 @@ function renderMethodDetails(selected, isStripe, isDeposit) {
     <div class="method-details-head">
       <span>${methodIcon(selected)}</span>
       <div>
-        <strong>${esc(selected.title || selected.name || selected.code || 'Payment method')}</strong>
-        <small>${esc(selected.description || 'Configured funding route')}</small>
+        <strong>${esc(selected.title || selected.name || selected.code || t('funding.payment_method', 'Payment method'))}</strong>
+        <small>${esc(selected.description || t('funding.configured_route', 'Configured funding route'))}</small>
       </div>
     </div>
     <div class="method-detail-grid">
-      ${detailPill('Section', fallbackCategoryLabel(methodCategory(selected)))}
-      ${detailPill('Currency', selected.currency || 'USDT')}
-      ${detailPill('Minimum', money(selected.min_amount || 0))}
-      ${detailPill('Maximum', selected.max_amount ? money(selected.max_amount) : 'Flexible')}
-      ${detailPill('Proof', isStripe ? 'Not needed' : (selected.proof_required || isDeposit ? 'Receipt' : 'Optional'))}
-      ${detailPill('Window', isStripe ? 'Checkout' : `${Math.max(1, Number(selected.expires_hours || 24))}h`)}
+      ${detailPill(t('funding.section', 'Section'), fallbackCategoryLabel(methodCategory(selected)))}
+      ${detailPill(t('funding.currency', 'Currency'), selected.currency || 'USDT')}
+      ${detailPill(t('funding.minimum', 'Minimum'), money(selected.min_amount || 0))}
+      ${detailPill(t('funding.maximum', 'Maximum'), selected.max_amount ? money(selected.max_amount) : t('funding.flexible', 'Flexible'))}
+      ${detailPill(t('funding.proof', 'Proof'), isStripe ? t('funding.not_needed', 'Not needed') : (selected.proof_required || isDeposit ? t('funding.receipt', 'Receipt') : t('funding.optional', 'Optional')))}
+      ${detailPill(t('funding.window', 'Window'), isStripe ? t('funding.checkout', 'Checkout') : `${Math.max(1, Number(selected.expires_hours || 24))}h`)}
     </div>
     ${isStripe ? `<div class="secure-checkout-strip">
       <i>${icons.wallet}</i>
       <div>
-        <strong>Secure Stripe Checkout</strong>
-        <small>Card details are collected by Stripe. You return to MEX after payment confirmation.</small>
+        <strong>${t('funding.secure_stripe', 'Secure Stripe Checkout')}</strong>
+        <small>${t('funding.secure_stripe_copy', 'Card details are collected by Stripe. You return to MEX after payment confirmation.')}</small>
       </div>
     </div>` : ''}
     ${selected.instructions ? `<p class="method-instructions">${esc(selected.instructions)}</p>` : ''}
@@ -432,7 +548,7 @@ function renderDepositTransferPanel(container, selected, amount, isStripe, valid
 
   if (!selected) {
     panel.className = 'deposit-transfer-panel is-muted';
-    panel.innerHTML = emptyTransferPanel('Choose a method', 'Select a funding method to display transfer instructions, QR code and destination details.');
+    panel.innerHTML = emptyTransferPanel(t('funding.choose_method', 'Choose a method'), t('funding.choose_method_copy', 'Select a funding method to display transfer instructions, QR code and destination details.'));
     return;
   }
   if (isStripe) {
@@ -441,14 +557,14 @@ function renderDepositTransferPanel(container, selected, amount, isStripe, valid
       <div class="deposit-transfer-ready">
         <div class="deposit-transfer-title">
           <span>${icons.wallet}</span>
-          <div><strong>Ready for card checkout</strong><small>Enter the amount and continue to Stripe Checkout. No receipt upload is required.</small></div>
+          <div><strong>${t('funding.ready_card_checkout', 'Ready for card checkout')}</strong><small>${t('funding.ready_card_checkout_copy', 'Enter the amount and continue to Stripe Checkout. No receipt upload is required.')}</small></div>
         </div>
         ${renderFundingRouteSummary(selected, true)}
         <div class="secure-checkout-strip">
           <i>${icons.wallet}</i>
           <div>
-            <strong>Secure Stripe Checkout</strong>
-            <small>Card details are collected by Stripe. You return to MEX after payment confirmation.</small>
+            <strong>${t('funding.secure_stripe', 'Secure Stripe Checkout')}</strong>
+            <small>${t('funding.secure_stripe_copy', 'Card details are collected by Stripe. You return to MEX after payment confirmation.')}</small>
           </div>
         </div>
       </div>`;
@@ -463,38 +579,31 @@ function renderDepositTransferPanel(container, selected, amount, isStripe, valid
       <div class="deposit-transfer-title">
         <span>${icons.deposit}</span>
         <div>
-          <strong>${hasValidAmount ? `Transfer ${money(amount)} ${esc(selected.currency || 'USDT')}` : esc(selected.title || selected.name || selected.code || 'Payment method')}</strong>
-          <small>${hasValidAmount ? 'Use only the details shown here before the timer ends.' : 'Scan the QR or copy the destination first, then enter the exact amount below.'}</small>
+          <strong>${hasValidAmount ? `${t('funding.transfer', 'Transfer')} ${money(amount)} ${esc(selected.currency || 'USDT')}` : esc(selected.title || selected.name || selected.code || t('funding.payment_method', 'Payment method'))}</strong>
+          <small>${hasValidAmount ? t('funding.use_exact_details', 'Use only the details shown here before the timer ends.') : t('funding.scan_then_amount', 'Scan the QR or copy the destination first, then enter the exact amount below.')}</small>
         </div>
       </div>
       ${renderFundingRouteSummary(selected, false)}
       ${hasValidAmount ? `<div class="deposit-timer" data-deposit-deadline="${deadline}">
-        <div><span>Payment window</span><strong id="deposit-countdown">--:--:--</strong></div>
-        <small>Expires ${formatDeadline(deadline)}</small>
+        <div><span>${t('funding.payment_window', 'Payment window')}</span><strong id="deposit-countdown">--:--:--</strong></div>
+        <small>${t('funding.expires', 'Expires')} ${formatDeadline(deadline)}</small>
       </div>` : ''}
       ${renderQrBlock(selected)}
       ${selected.instructions ? `<div class="transfer-instruction-card">
-        <strong>Transfer instructions</strong>
+        <strong>${t('funding.transfer_instructions', 'Transfer instructions')}</strong>
         <p>${esc(selected.instructions)}</p>
       </div>` : ''}
-      <div class="transfer-target-grid">
-        ${renderTransferTargetGrid(selected)}
-      </div>
       ${renderMissingFundingDetails(selected)}
     </div>`;
   if (hasValidAmount) startCountdown(container, deadline);
 }
 
 function renderFundingRouteSummary(method, isStripe = false) {
-  const max = method.max_amount ? money(method.max_amount) : 'Flexible';
-  const proof = isStripe ? 'Not needed' : (method.proof_required ? 'Receipt required' : 'Optional');
-  const windowLabel = isStripe ? 'Checkout' : `${Math.max(1, Number(method.expires_hours || 24))}h`;
+  const max = method.max_amount ? money(method.max_amount) : t('funding.flexible', 'Flexible');
   return `<div class="funding-route-summary" aria-label="Selected funding route summary">
-    ${routeSummaryPill('Section', fallbackCategoryLabel(methodCategory(method)))}
-    ${routeSummaryPill('Currency', method.currency || 'USDT')}
-    ${routeSummaryPill('Limits', `${money(method.min_amount || 0)} - ${max}`)}
-    ${routeSummaryPill('Proof', proof)}
-    ${routeSummaryPill('Window', windowLabel)}
+    ${routeSummaryPill(t('funding.section', 'Section'), fallbackCategoryLabel(methodCategory(method)))}
+    ${routeSummaryPill(t('funding.currency', 'Currency'), method.currency || 'USDT')}
+    ${routeSummaryPill(t('funding.limits', 'Limits'), `${money(method.min_amount || 0)} - ${max}`)}
   </div>`;
 }
 
@@ -519,14 +628,14 @@ function renderDepositProofSlot(container, selected, isStripe) {
   if (isStripe) {
     slot.innerHTML = `<div class="deposit-proof-note">
       <span>${icons.wallet}</span>
-      <div><strong>No receipt upload needed</strong><small>Card payments continue through Stripe Checkout.</small></div>
+      <div><strong>${t('funding.no_receipt_needed', 'No receipt upload needed')}</strong><small>${t('funding.card_checkout_copy', 'Card payments continue through Stripe Checkout.')}</small></div>
     </div>`;
     return;
   }
   slot.innerHTML = `<label class="deposit-file-drop">
     <input type="file" name="proof" accept="image/*,.pdf">
     <span>${icons.deposit}</span>
-    <div><strong>${selected.proof_required ? 'Upload transfer proof' : 'Upload receipt if available'}</strong><small id="proof-file-name">Image or PDF up to 8MB</small></div>
+    <div><strong>${selected.proof_required ? t('funding.upload_transfer_proof', 'Upload transfer proof') : t('funding.upload_receipt_optional', 'Upload receipt if available')}</strong><small id="proof-file-name">${t('funding.upload_file_hint', 'Image or PDF up to 8MB')}</small></div>
   </label>`;
 }
 
@@ -534,14 +643,18 @@ function renderWithdrawFields(container, selected) {
   const panel = container.querySelector('#withdraw-fields-panel');
   if (!panel) return;
   if (!selected) {
-    panel.innerHTML = '<p class="text-muted text-sm">Select a withdrawal method first.</p>';
+    panel.dataset.methodId = '';
+    panel.innerHTML = `<p class="text-muted text-sm">${t('funding.select_withdraw_method_first', 'Select a withdrawal method first.')}</p>`;
     return;
   }
+  const selectedId = methodId(selected);
+  if (panel.dataset.methodId === selectedId && panel.querySelector('[data-withdraw-field]')) return;
+  panel.dataset.methodId = selectedId;
   const fields = normalizeInputFields(selected.fields || []);
   if (!fields.length) {
     panel.innerHTML = `<label class="block">
-      <span class="field-label">Payout destination</span>
-      <textarea name="destination" data-withdraw-field class="input mt-1" rows="3" placeholder="Wallet address, bank reference, IBAN, or payout details..." required></textarea>
+      <span class="field-label">${t('funding.payout_destination', 'Payout destination')}</span>
+      <textarea name="destination" data-withdraw-field class="input mt-1" rows="3" placeholder="${escAttr(t('funding.payout_destination_placeholder', 'Wallet address, bank reference, IBAN, or payout details...'))}" required></textarea>
     </label>`;
     return;
   }
@@ -569,12 +682,18 @@ function emptyTransferPanel(title, text) {
   return `<div class="deposit-transfer-empty"><span>${icons.deposit}</span><strong>${esc(title)}</strong><small>${esc(text)}</small></div>`;
 }
 
-function methodBadges(method) {
+function methodBadges(method, isDeposit = true) {
   const badges = [];
-  if (method?.bonus_amount || method?.bonus_type) badges.push('Bonus');
-  if (methodQrUrl(method)) badges.push('QR');
-  if (method?.proof_required) badges.push('Receipt');
-  return badges.slice(0, 3).map(label => `<b>${esc(label)}</b>`).join('');
+  if (isDeposit && (method?.bonus_amount || method?.bonus_type)) badges.push({ label: t('funding.badge_bonus', 'Bonus'), type: 'bonus' });
+  if (methodQrUrl(method)) badges.push({ label: t('funding.badge_qr', 'QR'), type: 'qr' });
+  if (method?.proof_required) badges.push({ label: t('funding.badge_receipt', 'Receipt'), type: 'receipt' });
+  return badges.slice(0, 3).map(item => `<b class="${item.type === 'bonus' ? 'is-bonus' : ''}">${esc(item.label)}</b>`).join('');
+}
+
+function formatBonusPercent(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return '0';
+  return amount.toFixed(amount % 1 === 0 ? 0 : 1).replace(/\.0$/, '');
 }
 
 function renderMethodPaymentPreview(method, isDeposit) {
@@ -584,13 +703,13 @@ function renderMethodPaymentPreview(method, isDeposit) {
   const needsSetup = isDeposit && !address && !fields.length;
   return `<div class="method-payment-preview ${needsSetup ? 'needs-setup' : ''}">
     <div class="method-payment-preview-main">
-      ${qr ? `<img src="${escAttr(qr)}" alt="Payment QR">` : `<span>${icons.deposit}</span>`}
+      ${qr ? `<img class="method-preview-qr" src="${escAttr(qr)}" alt="Payment QR">` : `<span class="method-preview-logo">${methodIcon(method)}</span>`}
       <div>
-        <strong>${needsSetup ? 'Funding details unavailable' : (isDeposit ? 'Transfer details configured' : 'Payout fields configured')}</strong>
-        <small>${needsSetup ? 'Choose another method or try again shortly.' : 'These details are provided by the selected funding route.'}</small>
+        <strong>${needsSetup ? t('funding.details_unavailable', 'Funding details unavailable') : (isDeposit ? t('funding.transfer_details_configured', 'Transfer details configured') : t('funding.payout_fields_configured', 'Payout fields configured'))}</strong>
+        <small>${needsSetup ? t('funding.choose_another_method', 'Choose another method or try again shortly.') : t('funding.route_details_copy', 'These details are provided by the selected funding route.')}</small>
       </div>
     </div>
-    ${address ? `<div class="method-payment-address"><span>Address / destination</span><code>${esc(address)}</code><button type="button" data-copy-address="${escAttr(address)}">Copy</button></div>` : ''}
+    ${address ? `<div class="method-payment-address"><span>${t('funding.address_destination', 'Address / destination')}</span><code>${esc(address)}</code><button type="button" data-copy-address="${escAttr(address)}">${t('common.copy', 'Copy')}</button></div>` : ''}
     ${fields.length ? `<div class="method-payment-fields">${fields.slice(0, 4).map(row => `<span><small>${esc(row.label)}</small><b>${esc(String(row.value))}</b></span>`).join('')}</div>` : ''}
   </div>`;
 }
@@ -598,7 +717,7 @@ function renderMethodPaymentPreview(method, isDeposit) {
 function renderTransferTargetGrid(method) {
   const address = String(method?.payment_address || '').trim();
   return `
-    <div class="transfer-target-card"><span>Method</span><strong>${esc(method?.title || method?.name || method?.code || 'Payment method')}</strong></div>
+    <div class="transfer-target-card"><span>${t('funding.method', 'Method')}</span><strong>${esc(method?.title || method?.name || method?.code || t('funding.payment_method', 'Payment method'))}</strong></div>
     ${renderTransferFields(method, address ? [address] : [])}
   `;
 }
@@ -608,13 +727,13 @@ function renderQrBlock(method) {
   const address = String(method?.payment_address || '').trim();
   if (!qr && !address) return '';
   return `<div class="transfer-qr-card transfer-qr-card--centered">
-    <strong>Scan QR code</strong>
-    <small>Scan with your wallet or banking app, then use the wallet address below if you prefer to copy it manually.</small>
+    <strong>${t('funding.scan_qr', 'Scan QR code')}</strong>
+    <small>${t('funding.scan_qr_copy', 'Scan with your wallet or banking app, then use the wallet address below if you prefer to copy it manually.')}</small>
     ${qr ? `<img src="${escAttr(qr)}" alt="Payment QR">` : ''}
     ${address ? `<div class="transfer-qr-address">
-      <span>Wallet address</span>
+      <span>${t('funding.wallet_address', 'Wallet address')}</span>
       <code>${esc(address)}</code>
-      <button type="button" data-copy-address="${escAttr(address)}">Copy address</button>
+      <button type="button" data-copy-address="${escAttr(address)}">${t('funding.copy_address', 'Copy address')}</button>
     </div>` : ''}
   </div>`;
 }
@@ -632,7 +751,7 @@ function renderMissingFundingDetails(method) {
   const address = String(method?.payment_address || '').trim();
   const fields = displayFields(method?.fields || {});
   if (address || fields.length) return '';
-  return `<div class="funding-method-warning">${icons.lock}<div><strong>Funding route unavailable</strong><small>Choose another method or try again shortly.</small></div></div>`;
+  return `<div class="funding-method-warning">${icons.lock}<div><strong>${t('funding.route_unavailable', 'Funding route unavailable')}</strong><small>${t('funding.choose_another_method', 'Choose another method or try again shortly.')}</small></div></div>`;
 }
 
 function renderTransferFields(method, excludeValues = []) {
@@ -640,7 +759,7 @@ function renderTransferFields(method, excludeValues = []) {
   const exclude = new Set(excludeValues.map(v => String(v || '').trim()).filter(Boolean));
   return rows.filter(r => !exclude.has(String(r.value || '').trim())).slice(0, 8).map((r) => {
     const value = String(r.value);
-    return `<div class="transfer-target-card ${value.length > 26 ? 'transfer-target-wide' : ''}"><span>${esc(r.label)}</span><strong>${esc(value)}</strong><button type="button" data-copy-address="${escAttr(value)}">Copy</button></div>`;
+    return `<div class="transfer-target-card ${value.length > 26 ? 'transfer-target-wide' : ''}"><span>${esc(r.label)}</span><strong>${esc(value)}</strong><button type="button" data-copy-address="${escAttr(value)}">${t('common.copy', 'Copy')}</button></div>`;
   }).join('');
 }
 
@@ -699,25 +818,25 @@ async function handleSubmit(e, container, kind) {
   const isStripe = selected ? isStripeMethod(selected) : false;
 
   try {
-    if (get('mode') !== 'real') return setStatus(status, 'Switch to Real before submitting live funding requests.', 'error');
-    if (!selected) return setStatus(status, 'Select an active payment method first.', 'error');
+    if (get('mode') !== 'real') return setStatus(status, t('funding.switch_real_before_submit', 'Switch to Real before submitting live funding requests.'), 'error');
+    if (!selected) return setStatus(status, t('funding.select_active_method_first', 'Select an active payment method first.'), 'error');
     const validation = validateAmount(selected, amount);
     if (validation) return setStatus(status, validation, 'error');
 
     const proof = form.querySelector('input[name="proof"]')?.files?.[0] || null;
-    if (isDeposit && !isStripe && selected.proof_required && !proof) return setStatus(status, 'Upload transfer proof before confirming.', 'error');
+    if (isDeposit && !isStripe && selected.proof_required && !proof) return setStatus(status, t('funding.upload_proof_before_confirm', 'Upload transfer proof before confirming.'), 'error');
 
     const withdrawFields = collectWithdrawFields(container);
     const destination = withdrawFields.destination || withdrawFields.wallet_address || withdrawFields.bank_account || withdrawFields.iban || withdrawFields.address || notes;
-    if (!isDeposit && !String(destination || '').trim()) return setStatus(status, 'Enter payout destination details.', 'error');
+    if (!isDeposit && !String(destination || '').trim()) return setStatus(status, t('funding.enter_payout_destination', 'Enter payout destination details.'), 'error');
 
     container.__fundingSubmitting = true;
     if (submit) {
       submit.disabled = true;
       submit.dataset.originalText = submit.dataset.originalText || submit.textContent || '';
-      submit.textContent = isDeposit ? (isStripe ? 'Opening checkout...' : 'Confirming...') : 'Submitting...';
+      submit.textContent = isDeposit ? (isStripe ? t('funding.opening_checkout', 'Opening checkout...') : t('funding.confirming', 'Confirming...')) : t('funding.submitting', 'Submitting...');
     }
-    setStatus(status, isStripe ? 'Opening secure checkout...' : (isDeposit ? 'Sending transfer confirmation...' : 'Sending payout request...'), 'info');
+    setStatus(status, isStripe ? t('funding.opening_secure_checkout', 'Opening secure checkout...') : (isDeposit ? t('funding.sending_transfer_confirmation', 'Sending transfer confirmation...') : t('funding.sending_payout_request', 'Sending payout request...')), 'info');
 
     const method = selected.code || selected.method || selected.id || '';
     const currency = selected.currency || 'USDT';
@@ -737,9 +856,9 @@ async function handleSubmit(e, container, kind) {
       : { method, currency, amount, destination, details: { ...details, destination } };
     const res = await postApi(endpoint, body, { timeout: isStripe ? 18000 : 14000, headers: { 'Idempotency-Key': idempotencyKey(isDeposit ? 'dep' : 'wd') } });
 
-    if (!res || res.ok === false) return setStatus(status, res?.error || 'Request failed', 'error');
+    if (!res || res.ok === false) return setStatus(status, res?.error || t('common.request_failed', 'Request failed'), 'error');
     if (isStripe && res.checkout_url) {
-      setStatus(status, 'Redirecting to checkout...', 'success');
+      setStatus(status, t('funding.redirecting_checkout', 'Redirecting to checkout...'), 'success');
       window.location.assign(res.checkout_url);
       return;
     }
@@ -754,16 +873,16 @@ async function handleSubmit(e, container, kind) {
       }
     }
 
-    setStatus(status, isDeposit ? 'Transfer confirmation received. Your deposit is now being processed.' : 'Withdrawal request received. You can track it from history.', 'success');
+    setStatus(status, isDeposit ? t('funding.transfer_confirmation_received', 'Transfer confirmation received. Your deposit is now being processed.') : t('funding.withdrawal_request_received', 'Withdrawal request received. You can track it from history.'), 'success');
     showSuccessPanel(container, isDeposit, amount, selected);
     fundingCache.delete(isDeposit ? '/deposits/list.php' : '/withdrawals/list.php');
   } catch (err) {
-    setStatus(status, err.message || 'Request failed', 'error');
+    setStatus(status, err.message || t('common.request_failed', 'Request failed'), 'error');
   } finally {
     container.__fundingSubmitting = false;
     if (submit) {
       submit.disabled = false;
-      submit.textContent = submit.dataset.originalText || (isDeposit ? 'Confirm transfer' : 'Submit withdrawal request');
+      submit.textContent = submit.dataset.originalText || (isDeposit ? t('funding.confirm_transfer', 'Confirm transfer') : t('funding.submit_withdraw', 'Submit withdrawal request'));
     }
   }
 }
@@ -774,12 +893,10 @@ async function loadCombinedHistory(container) {
   const results = await Promise.allSettled([
     cachedApi('/deposits/list.php', { timeout: 8000, retry: 1 }, 20_000),
     cachedApi('/withdrawals/list.php', { timeout: 8000, retry: 1 }, 20_000),
-    cachedApi('/wallet/ledger.php?per=50', { timeout: 8000, retry: 1 }, 20_000),
   ]);
   container.__fundingHistoryItems = [
     ...(results[0].status === 'fulfilled' ? (results[0].value?.items || []).map(item => normalizeHistoryItem(item, 'deposit')) : []),
     ...(results[1].status === 'fulfilled' ? (results[1].value?.items || []).map(item => normalizeHistoryItem(item, 'withdraw')) : []),
-    ...(results[2].status === 'fulfilled' ? (results[2].value?.items || []).map(item => normalizeHistoryItem(item, 'ledger')) : []),
   ].sort((a, b) => b.sortTime - a.sortTime).slice(0, 80);
   renderCombinedHistory(container);
 }
@@ -791,14 +908,14 @@ function renderCombinedHistory(container) {
   container.querySelectorAll('[data-history-filter]').forEach(btn => btn.classList.toggle('active', btn.dataset.historyFilter === filter));
   const items = (container.__fundingHistoryItems || []).filter(item => historyMatchesFilter(item, filter));
   if (!items.length) {
-    el.innerHTML = '<div class="empty-state empty-state--compact">No matching funding history yet.</div>';
+    el.innerHTML = `<div class="empty-state empty-state--compact">${t('funding.no_matching_history', 'No matching funding history yet.')}</div>`;
     return;
   }
   el.innerHTML = `
     <div class="ledger-mobile-list md:hidden">${items.map(historyCard).join('')}</div>
     <div class="hidden md:block overflow-x-auto">
       <table class="funding-history-table">
-        <thead><tr><th>Type</th><th>Method</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+        <thead><tr><th>${t('funding.type', 'Type')}</th><th>${t('funding.method', 'Method')}</th><th>${t('deposit.amount', 'Amount')}</th><th>${t('kyc.status', 'Status')}</th><th>${t('funding.date', 'Date')}</th></tr></thead>
         <tbody>${items.map(historyRow).join('')}</tbody>
       </table>
     </div>`;
@@ -808,25 +925,40 @@ function normalizeHistoryItem(item, kind) {
   const amount = Number(item.amount || 0);
   const created = item.created_at || item.updated_at || '';
   const status = kind === 'ledger' ? 'posted' : String(item.status || 'pending').toLowerCase();
+  const reference = item.reference || item.ref || item.ref_id || item.txid || item.tx_hash || item.transaction_id || item.id || '';
+  const note = item.note || item.notes || item.memo || item.description || '';
   return {
     kind,
     amount,
     currency: item.currency || 'USDT',
     status,
-    method: kind === 'ledger' ? (item.type || item.ref_type || 'ledger') : (item.method_label || item.provider || item.method_code || item.method || 'manual'),
+    method: historyMethodLabel(kind === 'ledger' ? (item.type || item.ref_type || 'ledger') : (item.method_label || item.provider || item.method_code || item.method || 'manual')),
     created,
+    reference: String(reference || ''),
+    note: String(note || ''),
     sortTime: timeValue(created),
   };
 }
 
 function historyCard(item) {
   const positive = item.kind === 'deposit' || (item.kind === 'ledger' && item.amount >= 0);
-  return `<article class="funding-history-card funds-history-card ${positive ? 'is-positive' : 'is-negative'}">
+  const details = [
+    [t('funding.method', 'Method'), item.method],
+    [t('funding.date', 'Date'), formatHistoryTime(item.created)],
+    [t('kyc.status', 'Status'), statusLabel(item.status)],
+    item.reference ? [t('funding.reference', 'Reference'), item.reference] : null,
+    item.note ? [t('funding.notes', 'Notes'), item.note] : null,
+  ].filter(Boolean);
+  return `<article class="funding-history-card funds-history-card ${positive ? 'is-positive' : 'is-negative'}" data-funding-history-card>
     <div class="funding-history-main">
       <span class="history-kind ${positive ? 'is-deposit' : 'is-withdraw'}">${item.kind === 'withdraw' ? icons.withdraw : icons.deposit}</span>
       <div><strong>${historyTitle(item.kind)}</strong><small>${esc(item.method)} - ${esc(formatHistoryTime(item.created))}</small></div>
+      <button type="button" class="funding-history-toggle" data-funding-history-toggle aria-expanded="false" aria-label="${escAttr(t('common.details', 'Details'))}">${icons.chevronDown || '⌄'}</button>
     </div>
-    <div class="funds-history-amount"><strong>${positive ? '+' : ''}${money(item.amount)} ${esc(item.currency)}</strong><span class="${statusBadge(item.status)}">${esc(item.status)}</span></div>
+    <div class="funds-history-amount"><strong>${positive ? '+' : ''}${money(item.amount)} ${esc(item.currency)}</strong><span class="${statusBadge(item.status)}">${esc(statusLabel(item.status))}</span></div>
+    <div class="funding-history-details">
+      ${details.map(([label, value]) => `<span><small>${esc(label)}</small><b>${esc(value)}</b></span>`).join('')}
+    </div>
   </article>`;
 }
 
@@ -836,14 +968,14 @@ function historyRow(item) {
     <td>${esc(historyTitle(item.kind))}</td>
     <td>${esc(item.method)}</td>
     <td class="${positive ? 'text-buy' : 'text-sell'}">${positive ? '+' : ''}${money(item.amount)} ${esc(item.currency)}</td>
-    <td><span class="${statusBadge(item.status)}">${esc(item.status)}</span></td>
+    <td><span class="${statusBadge(item.status)}">${esc(statusLabel(item.status))}</span></td>
     <td>${esc(formatHistoryTime(item.created))}</td>
   </tr>`;
 }
 
 function historyMatchesFilter(item, filter) {
   if (filter === 'all') return true;
-  if (['deposit', 'withdraw', 'ledger'].includes(filter)) return item.kind === filter;
+  if (['deposit', 'withdraw'].includes(filter)) return item.kind === filter;
   if (filter === 'pending') return ['pending', 'requested', 'processing', 'review'].includes(item.status);
   if (filter === 'completed') return ['approved', 'confirmed', 'completed', 'paid', 'posted'].includes(item.status);
   if (filter === 'failed') return ['rejected', 'failed', 'cancelled', 'canceled'].includes(item.status);
@@ -878,27 +1010,143 @@ function methodCategory(method) {
   return 'manual';
 }
 
+function paymentAsset(file) {
+  return `${PAYMENT_ASSET_BASE}${file}`;
+}
+
+function normalizePaymentImageUrl(value) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  const cleanPath = url.split(/[?#]/)[0].replace(/\\/g, '/').toLowerCase();
+  if (cleanPath.endsWith('/cat-card.svg')) return paymentAsset('pm-card-logos.png');
+  if (cleanPath.endsWith('/cat-bank.svg')) return paymentAsset('pm-bank-transfer.png');
+  if (cleanPath.endsWith('/cat-crypto.svg')) return paymentAsset('pm-usdt-networks.png');
+  if (cleanPath.endsWith('/card-visa.svg')) return paymentAsset('pm-visa.png');
+  if (cleanPath.endsWith('/card-mastercard.svg')) return paymentAsset('pm-mastercard.png');
+  if (cleanPath.endsWith('/card-stripe.svg')) return paymentAsset('pm-card-logos.png');
+  if (cleanPath.endsWith('/stripe-card.svg')) return paymentAsset('pm-card-logos.png');
+  if (cleanPath.endsWith('/bank-transfer.svg')) return paymentAsset('pm-bank-transfer.png');
+  if (cleanPath.endsWith('/bank-withdraw.svg')) return paymentAsset('pm-bank-transfer.png');
+  if (cleanPath.endsWith('/crypto-withdraw.svg')) return paymentAsset('pm-usdt-networks.png');
+  if (cleanPath.endsWith('/btc.svg')) return paymentAsset('pm-usdt.png');
+  if (cleanPath.endsWith('/eth.svg')) return paymentAsset('pm-usdt.png');
+  if (cleanPath.endsWith('/usdt-erc20.svg')) return paymentAsset('pm-usdt-erc20.png');
+  if (cleanPath.endsWith('/usdt-trc20.svg')) return paymentAsset('pm-usdt-networks.png');
+  return url;
+}
+
+function paymentImage(value, label = '', className = 'payment-asset-img') {
+  const src = normalizePaymentImageUrl(value);
+  if (!src) return '';
+  return `<img class="${escAttr(className)}" src="${escAttr(src)}" alt="${escAttr(label)}" loading="lazy">`;
+}
+
+function isPaymentImageRef(value) {
+  const ref = String(value || '').trim();
+  if (!ref) return false;
+  return /^data:image\//i.test(ref) || /^https?:\/\//i.test(ref) || /^\/.+\.(svg|png|jpe?g|webp|gif)([?#].*)?$/i.test(ref) || /\.(svg|png|jpe?g|webp|gif)([?#].*)?$/i.test(ref);
+}
+
+function methodSearchText(method) {
+  return [
+    method?.provider,
+    method?.code,
+    method?.title,
+    method?.name,
+    method?.method_group,
+    method?.category_key,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function methodLogoFile(method) {
+  const raw = methodSearchText(method);
+  if (/visa/.test(raw)) return 'pm-visa.png';
+  if (/mastercard|master/.test(raw)) return 'pm-mastercard.png';
+  if (/amex|american express/.test(raw)) return 'pm-amex.png';
+  if (/apple\s*pay/.test(raw)) return 'pm-apple-pay.png';
+  if (/google\s*pay/.test(raw)) return 'pm-google-pay.png';
+  if (/withdraw/.test(raw) && /bank|wire|iban|swift/.test(raw)) return 'pm-bank-transfer.png';
+  if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) return 'pm-bank-transfer.png';
+  if (/stripe/.test(raw)) return 'pm-card-logos.png';
+  if (/card|credit|debit/.test(raw)) return 'pm-card-logos.png';
+  if (/trc20/.test(raw)) return 'pm-usdt-networks.png';
+  if (/erc20/.test(raw)) return 'pm-usdt-erc20.png';
+  if (/btc|bitcoin/.test(raw)) return 'pm-usdt.png';
+  if (/eth|ethereum/.test(raw)) return 'pm-usdt.png';
+  if (/usdt|tether/.test(raw)) return 'pm-usdt-networks.png';
+  if (/crypto_bot|bot|telegram/.test(raw)) return 'pm-usdt-networks.png';
+  if (/crypto|wallet|blockchain/.test(raw)) return 'pm-usdt-networks.png';
+  const category = methodCategory(method);
+  if (category === 'card') return 'pm-card-logos.png';
+  if (category === 'bank') return 'pm-bank-transfer.png';
+  if (category === 'crypto') return 'pm-usdt-networks.png';
+  return '';
+}
+
 function methodIcon(m) {
-  if (String(m?.image_url || '').trim()) return `<img src="${escAttr(m.image_url)}" alt="">`;
+  const label = m?.title || m?.name || m?.code || t('funding.payment_method', 'Payment method');
+  const uploaded = normalizePaymentImageUrl(m?.image_url);
+  if (uploaded) return paymentImage(uploaded, label, 'payment-method-logo');
+  const file = methodLogoFile(m);
+  if (file) return paymentImage(paymentAsset(file), label, 'payment-method-logo');
   return categoryIcon(methodCategory(m));
 }
 
+function methodBrandStrip(method) {
+  const raw = methodSearchText(method);
+  let logos = [];
+  if (/stripe|card|visa|mastercard|master|amex|credit|debit/.test(raw)) {
+    return `<span class="method-brand-strip"><img src="${paymentAsset('pm-card-logos.png')}" alt="Card" class="method-brand-logo method-brand-logo-large" style="width:96px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.70);box-shadow:0 6px 14px rgba(0,0,0,.12);"></span>`;
+  } else if (/bank|wire|iban|swift|ach|fedwire/.test(raw)) {
+    logos = [];
+  } else if (/crypto|wallet|usdt|tether|trc20|erc20|btc|bitcoin|eth|ethereum/.test(raw)) {
+    if (/erc20/.test(raw)) {
+      return `<span class="method-brand-strip"><img src="${paymentAsset('pm-usdt-erc20.png')}" alt="USDT ERC20" class="method-brand-logo method-brand-logo-large" style="width:96px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.70);box-shadow:0 6px 14px rgba(0,0,0,.12);"></span>`;
+    }
+    return `<span class="method-brand-strip"><img src="${paymentAsset('pm-usdt-networks.png')}" alt="USDT" class="method-brand-logo method-brand-logo-large" style="width:96px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.70);box-shadow:0 6px 14px rgba(0,0,0,.12);"></span>`;
+  }
+  if (!logos.length) return '';
+  return `<span class="method-brand-strip">${logos.map(l => paymentImage(paymentAsset(l.file), l.name, 'method-brand-logo')).join('')}</span>`;
+}
+
 function categoryIcon(key, configured = '') {
-  if (configured) return `<b>${esc(configured)}</b>`;
-  if (key === 'card') return icons.wallet;
-  if (key === 'bank') return icons.wallet;
-  if (key === 'crypto' || key === 'crypto_bot') return icons.deposit;
+  const configuredRef = String(configured || '').trim();
+  if (isPaymentImageRef(configuredRef)) return paymentImage(configuredRef, fallbackCategoryLabel(key), 'funding-category-logo');
+  const files = {
+    card: 'pm-card-logos.png',
+    bank: 'pm-bank-transfer.png',
+    crypto: 'pm-usdt-networks.png',
+    crypto_bot: 'pm-usdt-networks.png',
+    cash: 'pm-bank-transfer.png',
+    manual: 'pm-bank-transfer.png',
+  };
+  if (files[key]) return paymentImage(paymentAsset(files[key]), fallbackCategoryLabel(key), 'funding-category-logo');
+  if (configuredRef) return `<b>${esc(configuredRef)}</b>`;
   return icons.wallet;
 }
 
 function fallbackCategoryLabel(key) {
-  const labels = { bank: 'Bank transfer', crypto: 'Crypto', card: 'Card / Visa', cash: 'Cash desk', crypto_bot: 'Crypto bot', manual: 'Manual' };
+  const labels = {
+    bank: t('funding.bank_transfer', 'Bank transfer'),
+    crypto: t('funding.crypto', 'Crypto'),
+    card: t('funding.card_visa', 'Card / Visa'),
+    cash: t('funding.cash_desk', 'Cash desk'),
+    crypto_bot: t('funding.crypto_bot', 'Crypto bot'),
+    manual: t('funding.manual', 'Manual'),
+  };
   return labels[key] || titleCase(key || 'Manual');
 }
 
 function fallbackCategoryHint(key) {
-  const hints = { bank: 'Wire and bank details', crypto: 'Wallet networks and QR', card: 'Stripe hosted checkout', cash: 'Desk review', crypto_bot: 'Automated wallet route', manual: 'Configured instructions' };
-  return hints[key] || 'Configured route';
+  const hints = {
+    bank: t('funding.bank_hint', 'Wire and bank details'),
+    crypto: t('funding.crypto_hint', 'Wallet networks and QR'),
+    card: t('funding.card_hint', 'Stripe hosted checkout'),
+    cash: t('funding.cash_hint', 'Desk review'),
+    crypto_bot: t('funding.crypto_bot_hint', 'Automated wallet route'),
+    manual: t('funding.manual_hint', 'Configured instructions'),
+  };
+  return hints[key] || t('funding.configured_route', 'Configured route');
 }
 
 function isStripeMethod(method) {
@@ -907,11 +1155,11 @@ function isStripeMethod(method) {
 }
 
 function validateAmount(method, amount) {
-  if (!Number.isFinite(amount) || amount <= 0) return 'Enter the amount to continue.';
+  if (!Number.isFinite(amount) || amount <= 0) return t('funding.enter_amount_continue', 'Enter the amount to continue.');
   const min = Number(method?.min_amount || 0);
   const max = Number(method?.max_amount || 0);
-  if (min > 0 && amount < min) return `Minimum for this method is ${money(min)} ${method.currency || 'USDT'}.`;
-  if (max > 0 && amount > max) return `Maximum for this method is ${money(max)} ${method.currency || 'USDT'}.`;
+  if (min > 0 && amount < min) return `${t('funding.minimum_for_method', 'Minimum for this method is')} ${money(min)} ${method.currency || 'USDT'}.`;
+  if (max > 0 && amount > max) return `${t('funding.maximum_for_method', 'Maximum for this method is')} ${money(max)} ${method.currency || 'USDT'}.`;
   return '';
 }
 
@@ -926,7 +1174,7 @@ function showSuccessPanel(container, isDeposit, amount, method) {
   if (!panel || !isDeposit) return;
   clearCountdown(container);
   panel.className = 'deposit-transfer-panel is-success';
-  panel.innerHTML = `<div class="funding-success-panel"><span>${icons.deposit}</span><strong>Transfer confirmation sent</strong><small>${money(amount)} ${esc(method?.currency || 'USDT')} via ${esc(method?.title || method?.code || 'selected method')} is being processed.</small></div>`;
+  panel.innerHTML = `<div class="funding-success-panel"><span>${icons.deposit}</span><strong>${t('funding.transfer_confirmation_sent', 'Transfer confirmation sent')}</strong><small>${money(amount)} ${esc(method?.currency || 'USDT')} ${t('funding.via', 'via')} ${esc(method?.title || method?.code || t('funding.selected_method', 'selected method'))} ${t('funding.is_being_processed', 'is being processed.')}</small></div>`;
 }
 
 function setStatus(el, message, type = 'info') {
@@ -983,8 +1231,8 @@ function normalizeFieldName(value) {
 
 function copyAddress(btn) {
   navigator.clipboard?.writeText(btn.dataset.copyAddress || '').then(() => {
-    btn.textContent = 'Copied';
-    setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+    btn.textContent = t('common.copied', 'Copied');
+    setTimeout(() => { btn.textContent = t('common.copy', 'Copy'); }, 1200);
   }).catch(() => {});
 }
 
@@ -1003,7 +1251,8 @@ function resolveTab(params = {}) {
 }
 
 function activeTabLabel(tab) {
-  return TABS.find(item => item.key === tab)?.label || 'Deposit';
+  const item = TABS.find(row => row.key === tab);
+  return item ? t(item.label, item.fallback) : t('funding.deposit', 'Deposit');
 }
 
 function summaryTile(label, value, sub) {
@@ -1011,7 +1260,7 @@ function summaryTile(label, value, sub) {
 }
 
 function checkItem(label, done) {
-  return `<div class="funding-check-item ${done ? 'is-done' : 'is-pending'}"><i>${done ? icons.deposit : icons.lock}</i><div><strong>${esc(label)}</strong><small>${done ? 'Ready' : 'Required'}</small></div></div>`;
+  return `<div class="funding-check-item ${done ? 'is-done' : 'is-pending'}"><i>${done ? icons.deposit : icons.lock}</i><div><strong>${esc(label)}</strong><small>${done ? t('funding.ready', 'Ready') : t('funding.required', 'Required')}</small></div></div>`;
 }
 
 function detailPill(label, value) {
@@ -1027,9 +1276,62 @@ function statusBadge(status) {
 }
 
 function historyTitle(kind) {
-  if (kind === 'withdraw') return 'Withdrawal';
-  if (kind === 'ledger') return 'Ledger entry';
-  return 'Deposit';
+  if (kind === 'withdraw') return t('funding.withdrawal', 'Withdrawal');
+  if (kind === 'ledger') return t('funding.ledger_entry', 'Ledger entry');
+  return t('funding.deposit_entry', 'Deposit');
+}
+
+function historyFilterLabel(key) {
+  const labels = {
+    all: t('common.all', 'All'),
+    deposit: t('funding.deposit', 'Deposit'),
+    withdraw: t('funding.withdraw', 'Withdraw'),
+    ledger: t('funding.ledger', 'Ledger'),
+    pending: t('funding.pending', 'Pending'),
+    completed: t('funding.completed', 'Completed'),
+    failed: t('funding.failed', 'Failed'),
+  };
+  return labels[key] || titleCase(key);
+}
+
+function statusLabel(status) {
+  const s = String(status || '').toLowerCase();
+  const labels = {
+    approved: t('funding.status_approved', 'Approved'),
+    confirmed: t('funding.status_confirmed', 'Confirmed'),
+    completed: t('funding.status_completed', 'Completed'),
+    paid: t('funding.status_paid', 'Paid'),
+    posted: t('funding.status_posted', 'Posted'),
+    pending: t('funding.status_pending', 'Pending'),
+    requested: t('funding.status_requested', 'Requested'),
+    processing: t('funding.status_processing', 'Processing'),
+    review: t('funding.status_review', 'Under review'),
+    rejected: t('funding.status_rejected', 'Rejected'),
+    failed: t('funding.status_failed', 'Failed'),
+    cancelled: t('funding.status_cancelled', 'Cancelled'),
+    canceled: t('funding.status_cancelled', 'Cancelled'),
+    'not submitted': t('funding.status_not_submitted', 'Not submitted'),
+  };
+  return labels[s] || titleCase(s || 'pending');
+}
+
+function historyMethodLabel(method) {
+  const key = normalizeKey(method);
+  const labels = {
+    trade_open: t('funding.ledger_trade_open', 'Trade open'),
+    trade_close: t('funding.ledger_trade_close', 'Trade close'),
+    trade_pnl: t('funding.ledger_trade_pnl', 'Trade PnL'),
+    deposit_credit: t('funding.ledger_deposit_credit', 'Deposit credit'),
+    withdrawal: t('funding.withdrawal', 'Withdrawal'),
+    withdraw: t('funding.withdrawal', 'Withdrawal'),
+    invest_payout: t('funding.ledger_invest_payout', 'Investment payout'),
+    ledger: t('funding.ledger_entry', 'Ledger entry'),
+    stripe: t('funding.card_visa', 'Card / Visa'),
+    bank: t('funding.bank_transfer', 'Bank transfer'),
+    crypto: t('funding.crypto', 'Crypto'),
+    manual: t('funding.manual', 'Manual'),
+  };
+  return labels[key] || titleCase(method || 'manual');
 }
 
 function titleCase(value) {
