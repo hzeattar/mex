@@ -23,10 +23,32 @@ function vp_user_confirmed_deposit_total(PDO $pdo, int $uid): float {
   }
 }
 
+function vp_level_token(string $value): string {
+  return preg_replace('/[^a-z0-9]+/', '', strtolower(trim($value))) ?: '';
+}
+
+function vp_is_generated_numeric_level_token(string $token): bool {
+  return $token === 'level1' || $token === 'tier1' || (bool)preg_match('/^(?:level|tier)[0-9]+$/', $token);
+}
+
+function vp_is_hidden_customer_level(array $row): bool {
+  $tokens = [];
+  foreach (['level_code', 'name', 'name_en', 'name_ar', 'name_ru'] as $key) {
+    $token = vp_level_token((string)($row[$key] ?? ''));
+    if ($token !== '') $tokens[] = $token;
+  }
+  if (!$tokens) return true;
+  foreach ($tokens as $token) {
+    if (vp_is_generated_numeric_level_token($token)) return true;
+  }
+  return false;
+}
+
 function vp_get_customer_levels(PDO $pdo, string $lang = 'en', bool $activeOnly = true): array {
   vp_feature_bootstrap($pdo, db_driver());
   $sql = "SELECT * FROM customer_levels" . ($activeOnly ? " WHERE status='active'" : '') . " ORDER BY min_deposit_total ASC, sort_order ASC, id ASC";
   $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  $rows = array_values(array_filter($rows, fn(array $r): bool => !vp_is_hidden_customer_level($r)));
   return array_map(function(array $r) use ($lang): array {
     return [
       'id' => (int)($r['id'] ?? 0),

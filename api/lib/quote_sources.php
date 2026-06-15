@@ -245,6 +245,124 @@ if (!function_exists('twelvedata_quote_many_cached')) {
 // Env: QUOTES_FCS_KEY (optional, works without key with limits)
 // ──────────────────────────────────────────────────────────────
 
+if (!function_exists('twelvedata_interval_for_tf')) {
+    function twelvedata_interval_for_tf(string $tf): ?string {
+        return match (strtolower(trim($tf))) {
+            '1m' => '1min',
+            '3m' => '3min',
+            '5m' => '5min',
+            '15m' => '15min',
+            '30m' => '30min',
+            '1h' => '1h',
+            '2h' => '2h',
+            '4h' => '4h',
+            '8h' => '8h',
+            '1d' => '1day',
+            '1w' => '1week',
+            default => null,
+        };
+    }
+}
+
+if (!function_exists('twelvedata_time_series_candles')) {
+    function twelvedata_time_series_candles(string $ticker, string $tf, int $limit, int $end = 0, int $timeoutSec = 4): array {
+        if (!twelvedata_enabled()) return [];
+        $key = trim((string)env('QUOTES_TWELVEDATA_KEY', ''));
+        $ticker = trim($ticker);
+        $interval = twelvedata_interval_for_tf($tf);
+        if ($key === '' || $ticker === '' || $interval === null) return [];
+
+        $maxOutput = max(10, min(5000, (int)env('TWELVEDATA_CANDLES_MAX_OUTPUTSIZE', '5000')));
+        $outputSize = max(10, min($maxOutput, $limit));
+        $params = [
+            'symbol' => $ticker,
+            'interval' => $interval,
+            'outputsize' => (string)$outputSize,
+            'format' => 'JSON',
+            'timezone' => 'UTC',
+            'apikey' => $key,
+        ];
+        if ($end > 0) {
+            $params['end_date'] = gmdate('Y-m-d H:i:s', $end);
+        }
+        $url = 'https://api.twelvedata.com/time_series?' . http_build_query($params);
+
+        $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+        $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+            'connect_timeout' => max(1, min(3, $timeoutSec)),
+            'timeout' => max(2, min(8, $timeoutSec + 2)),
+            'retries' => 0,
+        ];
+        try {
+            $j = http_get_json($url);
+        } catch (Throwable $e) {
+            $j = null;
+        }
+        if ($prevTimeout !== null) {
+            $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout;
+        } else {
+            unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+        }
+
+        if (!is_array($j) || strtolower((string)($j['status'] ?? 'ok')) === 'error') return [];
+        $rows = $j['values'] ?? [];
+        if (!is_array($rows)) return [];
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            $dt = trim((string)($row['datetime'] ?? ''));
+            if ($dt === '') continue;
+            $ts = strtotime($dt . ' UTC');
+            if ($ts === false || $ts <= 0) continue;
+            if ($end > 0 && $ts > $end) continue;
+            $open = (float)($row['open'] ?? 0);
+            $high = (float)($row['high'] ?? 0);
+            $low = (float)($row['low'] ?? 0);
+            $close = (float)($row['close'] ?? 0);
+            if (!($open > 0 && $high > 0 && $low > 0 && $close > 0)) continue;
+            $items[] = [
+                'time' => (int)$ts,
+                'open' => $open,
+                'high' => $high,
+                'low' => $low,
+                'close' => $close,
+                'volume' => (float)($row['volume'] ?? 0),
+            ];
+        }
+
+        usort($items, static fn($a, $b) => ((int)$a['time']) <=> ((int)$b['time']));
+        if (count($items) > $limit) $items = array_slice($items, -$limit);
+        return $items;
+    }
+}
+
+if (!function_exists('twelvedata_time_series_candles_cached')) {
+    function twelvedata_time_series_candles_cached(string $ticker, string $tf, int $limit, int $end = 0, int $ttl = 60): array {
+        $ttl = max(5, min(3600, $ttl));
+        $dir = __DIR__ . '/../data/cache';
+        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        $cacheKey = 'td_candles_' . md5(strtolower($ticker) . '|' . strtolower($tf) . '|' . $limit . '|' . $end);
+        $cacheFile = $dir . '/' . $cacheKey . '.json';
+        $now = time();
+
+        if (is_file($cacheFile)) {
+            $age = $now - (int)@filemtime($cacheFile);
+            if ($age >= 0 && $age < $ttl) {
+                $raw = @file_get_contents($cacheFile);
+                $d = $raw ? json_decode($raw, true) : null;
+                if (is_array($d)) return $d;
+            }
+        }
+
+        $result = twelvedata_time_series_candles($ticker, $tf, $limit, $end);
+        if ($result) {
+            @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        }
+        return $result;
+    }
+}
+
 if (!function_exists('fcsapi_enabled')) {
     function fcsapi_enabled(): bool {
         return strtolower((string)env('FCSAPI_ENABLED', '1')) !== '0';

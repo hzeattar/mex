@@ -47,7 +47,18 @@ $cacheKeyList = $list;
 sort($cacheKeyList);
 $cacheKey = sha1(json_encode(['quote_active', $type, $market, $scope, $visible ? 1 : 0, $focus ? 1 : 0, $cacheKeyList], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 $cacheFile = $cacheDir . '/quote_active_' . $cacheKey . '.json';
-$cacheTtl = $allowLive ? 0 : ($single ? 2 : 2);
+$defaultCacheTtl = $single ? 3 : 5;
+$typeCacheTtl = match($type) {
+  'crypto' => (int)env('QUOTE_ACTIVE_RESPONSE_TTL_CRYPTO', (string)$defaultCacheTtl),
+  'forex' => (int)env('QUOTE_ACTIVE_RESPONSE_TTL_FOREX', (string)$defaultCacheTtl),
+  'commodities' => (int)env('QUOTE_ACTIVE_RESPONSE_TTL_COMMODITIES', '6'),
+  'futures' => (int)env('QUOTE_ACTIVE_RESPONSE_TTL_FUTURES', '6'),
+  'stocks', 'arab' => (int)env('QUOTE_ACTIVE_RESPONSE_TTL_DELAYED', '10'),
+  default => (int)env('QUOTE_ACTIVE_RESPONSE_TTL_DEFAULT', (string)$defaultCacheTtl),
+};
+$typeCacheTtl = max(1, min(30, $typeCacheTtl));
+$liveResponseTtl = max(0, min(5, (int)env('QUOTE_ACTIVE_LIVE_RESPONSE_TTL', '1')));
+$cacheTtl = $allowLive ? $liveResponseTtl : $typeCacheTtl;
 if ($cacheTtl > 0 && is_file($cacheFile)) {
   $age = time() - (int)@filemtime($cacheFile);
   if ($age >= 0 && $age <= $cacheTtl) {
@@ -346,6 +357,8 @@ $out = [
   'market' => $market,
   'live_count' => $liveCount,
   'authority' => 'active',
+  'cache_first' => !$allowLive,
+  'response_ttl' => $cacheTtl,
 ];
 $json = json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 if ($cacheTtl > 0 && $json !== false) {

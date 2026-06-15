@@ -35,12 +35,13 @@ export function render() {
   const mode = get('mode') === 'real' ? 'real' : 'demo';
   const earnGate = homeEarnGate();
   const level = get('level') || {};
-  const currentLevel = level.current || {};
-  const nextLevel = level.next || {};
-  const confirmedTotal = Number(level.confirmed_deposit_total || level.total_deposits || level.deposit_total || 0);
-  const nextRequired = Number(nextLevel.min_deposit_total || nextLevel.min_total_deposit || nextLevel.required_deposit || 0);
-  const remainingToNext = Math.max(0, nextRequired - confirmedTotal);
-  const levelProgress = nextRequired > 0 ? Math.min(100, Math.round((confirmedTotal / nextRequired) * 100)) : (confirmedTotal > 0 ? 100 : 0);
+  const visibleLevelContext = getVisibleLevelContext(level);
+  const currentLevel = visibleLevelContext.currentLevel;
+  const nextLevel = visibleLevelContext.nextLevel;
+  const confirmedTotal = visibleLevelContext.confirmedTotal;
+  const nextRequired = visibleLevelContext.nextRequired;
+  const remainingToNext = visibleLevelContext.remainingToNext;
+  const levelProgress = visibleLevelContext.levelProgress;
   const demoNeedsKyc = mode === 'demo' && !isKycApproved();
   const walletBalance = Number(wallet.balance || wallet.available || 0);
   const balance = Number(metrics.total_balance ?? walletBalance);
@@ -48,8 +49,7 @@ export function render() {
   const holds = Number(metrics.in_use_balance ?? wallet.holds ?? wallet.locked ?? 0);
   const pnl24 = Number(metrics.pnl_24_live ?? 0);
   const pnlTotal = Number(metrics.pnl_total_live ?? 0);
-  const tierLabel = currentLevel.name || currentLevel.name_en || currentLevel.level_code || 'Starter';
-  const nextLabel = nextLevel.name || nextLevel.name_en || 'next tier';
+  const tierLabel = levelTitle(currentLevel, 0);
 
   return `
     <div class="pro-dashboard animate-fade-in pro-dashboard-compact">
@@ -450,14 +450,15 @@ function renderConvertedBalances(container) {
 
 function updateLevelOverview(container) {
   const level = get('level') || {};
-  const currentLevel = level.current || {};
-  const nextLevel = level.next || {};
-  const confirmedTotal = Number(level.confirmed_deposit_total || level.total_deposits || level.deposit_total || 0);
-  const nextRequired = Number(nextLevel.min_deposit_total || nextLevel.min_total_deposit || nextLevel.required_deposit || 0);
-  const remainingToNext = Math.max(0, nextRequired - confirmedTotal);
-  const levelProgress = nextRequired > 0 ? Math.min(100, Math.round((confirmedTotal / nextRequired) * 100)) : (confirmedTotal > 0 ? 100 : 0);
+  const visibleLevelContext = getVisibleLevelContext(level);
+  const currentLevel = visibleLevelContext.currentLevel;
+  const nextLevel = visibleLevelContext.nextLevel;
+  const confirmedTotal = visibleLevelContext.confirmedTotal;
+  const nextRequired = visibleLevelContext.nextRequired;
+  const remainingToNext = visibleLevelContext.remainingToNext;
+  const levelProgress = visibleLevelContext.levelProgress;
   const title = container.querySelector('.pro-level-scroll-card .pro-section-head h2');
-  if (title) title.textContent = `${currentLevel.name || currentLevel.name_en || currentLevel.level_code || 'Starter'} ${t('level.progress_suffix', 'progress')}`;
+  if (title) title.textContent = `${levelTitle(currentLevel, 0)} ${t('level.progress_suffix', 'progress')}`;
   const pctEl = container.querySelector('#home-level-percent');
   if (pctEl) pctEl.textContent = `${levelProgress}%`;
   const bar = container.querySelector('#home-level-progress');
@@ -861,12 +862,13 @@ function renderLevelRail(level, ctx) {
   const currentId = ctx.currentLevel?.id;
   const currentCode = String(ctx.currentLevel?.level_code || '').toLowerCase();
   const currentKey = levelIdentity(ctx.currentLevel);
-  const normalized = levels.length ? levels : [ctx.currentLevel, ctx.nextLevel].filter(Boolean);
+  const visibleLevels = levels.filter(isVisibleLevel);
+  const normalized = visibleLevels.length ? visibleLevels : [ctx.currentLevel, ctx.nextLevel].filter(Boolean);
 
   const listMap = new Map();
   const seen = new Set();
   const addLevel = (lvl) => {
-    if (!lvl || typeof lvl !== 'object') return;
+    if (!lvl || typeof lvl !== 'object' || !isVisibleLevel(lvl)) return;
     const key = levelIdentity(lvl);
     if (key && seen.has(key)) return;
     if (key) seen.add(key);
@@ -899,14 +901,14 @@ function renderLevelRail(level, ctx) {
     const isCompleted = currentIndex >= 0 && index < currentIndex;
     const min = levelMinimum(lvl);
     const progress = isCurrent ? ctx.levelProgress : (isCompleted ? 100 : 0);
-    const title = lvl.name || lvl.name_en || lvl.level_code || `Tier ${index + 1}`;
-    const nextName = ctx.nextLevel?.name || ctx.nextLevel?.name_en || 'next tier';
+    const title = levelTitle(lvl, index);
+    const nextName = ctx.nextLevel ? levelTitle(ctx.nextLevel, index + 1) : t('level.next_tier', 'next tier');
     cards.push(levelProgramCard({
       label: isCurrent ? t('level.current_tier', 'Current tier') : (isCompleted ? t('level.completed', 'Completed tier') : t('level.locked', 'Locked tier')),
       title,
       sub: isCurrent
         ? (ctx.nextRequired > 0 ? `${money(ctx.remainingToNext)} USDT ${t('level.to_next', 'to')} ${nextName}` : t('level.top_active', 'Top tier permissions are active'))
-        : (isCompleted ? t('level.unlocked_completed', 'Unlocked and completed') : (min > 0 ? `${money(min)} USDT ${t('level.required', 'required')}` : t('level.starter_access', 'Starter access'))),
+        : (isCompleted ? t('level.unlocked_completed', 'Unlocked and completed') : (min > 0 ? (Number(ctx.confirmedTotal) > 0 ? `${money(Math.max(0, min - Number(ctx.confirmedTotal)))} USDT ${t('level.left_to_unlock', 'left to unlock')}` : `${money(min)} USDT ${t('level.required', 'required')}`) : t('level.starter_access', 'Starter access'))),
       progress,
       state: isCurrent ? 'current' : (isCompleted ? 'completed' : 'locked'),
       isCurrent,
@@ -918,32 +920,105 @@ function renderLevelRail(level, ctx) {
   return cards.join('');
 }
 
+function getVisibleLevelContext(level) {
+  const levels = Array.isArray(level?.levels) ? level.levels : [];
+  const visibleLevels = levels.filter(isVisibleLevel);
+  const rawCurrent = level.current || {};
+  const rawNext = level.next || {};
+  const confirmedTotal = Number(level.confirmed_deposit_total || level.total_deposits || level.deposit_total || 0);
+  const nextLevel = rawNext && isVisibleLevel(rawNext) ? rawNext : (visibleLevels.find((lvl) => {
+    const min = levelMinimum(lvl);
+    return min > confirmedTotal + 1e-9;
+  }) || null);
+  const currentLevel = rawCurrent && isVisibleLevel(rawCurrent) ? rawCurrent : (visibleLevels.reduce((eligible, lvl) => {
+    const min = levelMinimum(lvl);
+    return confirmedTotal + 1e-9 >= min ? lvl : eligible;
+  }, null) || visibleLevels[0] || fallbackStarterLevel());
+  const nextRequired = Number(nextLevel?.min_deposit_total || nextLevel?.min_total_deposit || nextLevel?.required_deposit || 0);
+  const remainingToNext = Math.max(0, nextRequired - confirmedTotal);
+  const levelProgress = nextRequired > 0 ? Math.min(100, Math.round((confirmedTotal / nextRequired) * 100)) : (confirmedTotal > 0 ? 100 : 0);
+  return { currentLevel, nextLevel, confirmedTotal, nextRequired, remainingToNext, levelProgress };
+}
+
+function isVisibleLevel(level) {
+  if (!level || typeof level !== 'object') return false;
+  const values = [level.level_code, level.name, level.name_en, level.name_ar, level.name_ru]
+    .map(normalizeLevelToken)
+    .filter(Boolean);
+  if (!values.length) return false;
+  return !values.some(isGeneratedNumericLevel);
+}
+
 function levelIdentity(level) {
-  return String(level?.id || level?.level_code || level?.name || level?.name_en || '').toLowerCase();
+  return String(level?.id || level?.level_code || level?.name || level?.name_en || level?.name_ar || '').toLowerCase();
 }
 
 function levelMinimum(level) {
   return Number(level?.min_deposit_total || level?.min_total_deposit || level?.required_deposit || 0);
 }
 
+function levelTitle(level, index) {
+  if (!level || typeof level !== 'object') return t('level.starter', 'Starter');
+  const direct = String(level.name || level.name_en || level.name_ar || level.name_ru || '').trim();
+  if (direct && !isGeneratedNumericLevel(direct)) return direct;
+  const codeLabel = levelCodeLabel(level.level_code);
+  if (codeLabel) return codeLabel;
+  return index === 0 ? t('level.starter', 'Starter') : `${t('level.label', 'Level')} ${index + 1}`;
+}
+
+function normalizeLevelToken(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function isGeneratedNumericLevel(value) {
+  const token = normalizeLevelToken(value);
+  return token === 'tier1' || token === 'level1' || /^(tier|level)[0-9]+$/.test(token);
+}
+
+function levelCodeLabel(code) {
+  const raw = String(code || '').trim();
+  if (!raw || isGeneratedNumericLevel(raw)) return '';
+  return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function fallbackStarterLevel() {
+  return {
+    id: 0,
+    level_code: 'starter',
+    name: t('level.starter', 'Starter'),
+    name_en: 'Starter',
+    min_deposit_total: 0,
+    sort_order: 0,
+    features: { trading: true },
+  };
+}
+
+function levelFeatureItems(features) {
+  const feats = features || {};
+  const items = [];
+  if (feats.trading) items.push({ key: 'trading', icon: icons.trade, label: t('feat.trading', 'Trading') });
+  if (feats.copy_bot) items.push({ key: 'copy_bot', icon: icons.refresh, label: t('feat.copy_bot', 'Copy Bot') });
+  if (feats.contracts) items.push({ key: 'contracts', icon: icons.earn, label: t('feat.contracts', 'Contracts') });
+  if (feats.support) items.push({ key: 'support', icon: icons.support, label: t('feat.support', 'Support') });
+  if (feats.portfolio_manager) items.push({ key: 'portfolio_manager', icon: icons.account, label: t('feat.portfolio_manager', 'Manager') });
+  return items;
+}
+
 function levelProgramCard({ label, title, sub, progress, state, perks, isCurrent, features }) {
   const pctValue = progress == null ? null : Math.max(0, Math.min(100, Number(progress) || 0));
   const perkItems = Array.isArray(perks) ? perks : [String(perks || '')].filter(Boolean);
-  const feats = features || {};
-  const featIcons = [];
-  if (feats.trading) featIcons.push({ key: 'trading', icon: '📈', label: t('feat.trading', 'Trading') });
-  if (feats.copy_bot) featIcons.push({ key: 'copy_bot', icon: '🤖', label: t('feat.copy_bot', 'Copy Bot') });
-  if (feats.contracts) featIcons.push({ key: 'contracts', icon: '📋', label: t('feat.contracts', 'Contracts') });
-  if (feats.support) featIcons.push({ key: 'support', icon: '🎧', label: t('feat.support', 'Support') });
-  if (feats.portfolio_manager) featIcons.push({ key: 'portfolio_manager', icon: '👔', label: t('feat.portfolio_manager', 'Manager') });
+  const featIcons = levelFeatureItems(features);
   return `<article class="pro-level-rail-card is-${escAttr(state || 'locked')}"${isCurrent ? ' data-current-level-card="1"' : ''}>
-    <div class="pro-level-card-row"><span>${esc(label)}</span>${pctValue == null ? '' : `<b>${pctValue}%</b>`}</div>
+    <div class="pro-level-card-row">
+      <span class="pro-level-status">${esc(label)}</span>
+      ${pctValue == null ? '' : `<b>${pctValue}%</b>`}
+    </div>
     <strong>${esc(title)}</strong>
     <small>${esc(sub || '')}</small>
     ${pctValue == null ? '' : `<div class="pro-mini-progress"><i style="width:${pctValue}%"></i></div>`}
-    ${featIcons.length ? `<div class="pro-level-features">${featIcons.map(f => `<span class="pro-level-feat ${f.key}" title="${esc(f.label)}">${f.icon} <small>${esc(f.label)}</small></span>`).join('')}</div>` : ''}
+    ${featIcons.length ? `<div class="pro-level-features">${featIcons.map(f => `<span class="pro-level-feat ${f.key}" title="${escAttr(f.label)}">${f.icon}<small>${esc(f.label)}</small></span>`).join('')}</div>` : ''}
     <ul class="pro-level-benefits">
-      ${perkItems.slice(0, 5).map((item) => `<li>${esc(item)}</li>`).join('')}
+      ${perkItems.slice(0, 6).map((item) => `<li>${esc(item)}</li>`).join('')}
     </ul>
   </article>`;
 }
@@ -954,7 +1029,7 @@ function levelPerks(level, fallback) {
   if (!raw) return fallbackItems.filter(Boolean);
   const clean = String(raw).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   const items = clean.split(/[\n\r,;|•·]+/).map((x) => x.trim()).filter(Boolean);
-  return (items.length > 1 ? items : [clean]).slice(0, 5);
+  return (items.length > 1 ? items : [clean]).slice(0, 6);
 }
 
 function defaultLevelPerks(title, isCurrent, mode) {
@@ -1320,30 +1395,19 @@ function botDirectionChip(direction) {
   return `<span class="bot-direction-chip is-${dir.toLowerCase()}">${esc(dir)}</span>`;
 }
 
-function syncLevelRailCenterPadding(rail, card) {
-  const railW = rail.clientWidth || rail.getBoundingClientRect().width || window.innerWidth || 360;
-  const cardW = card?.getBoundingClientRect?.().width || 285;
-  const sidePad = Math.max(2, Math.round((railW - cardW) / 2));
-  rail.style.setProperty('--level-rail-side-pad', `${sidePad}px`);
-  return { railW, cardW, sidePad };
-}
-
 function scrollCurrentLevelRail(rail, smooth = false) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
   const doScroll = () => {
-    syncLevelRailCenterPadding(rail, card);
-    const railRect = rail.getBoundingClientRect();
-    const cardRect = card.getBoundingClientRect();
-    if (!railRect.width || !cardRect.width) return;
-    const isRTL = getComputedStyle(rail).direction === 'rtl';
-    let target;
-    if (isRTL) {
-      target = (rail.scrollWidth - rail.clientWidth) - card.offsetLeft + (rail.clientWidth - card.offsetWidth) / 2;
-    } else {
-      target = card.offsetLeft - (rail.clientWidth - card.offsetWidth) / 2;
+    if (!rail.clientWidth || !card.getBoundingClientRect().width) return;
+    try {
+      card.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest', inline: 'start' });
+      return;
+    } catch (_e) {
+      // Fallback for older WebViews.
     }
+    const target = card.offsetLeft - Number.parseFloat(getComputedStyle(rail).paddingInlineStart || '0');
     const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
     const left = Math.max(0, Math.min(maxScroll, target));
     rail.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });

@@ -35,11 +35,22 @@ $requiredLevelId = (int)($p['required_level_id'] ?? 0);
 if ($requiredLevelId > 0) {
   $requiredLevel = vp_level_row_by_id($pdo, $requiredLevelId, 'en');
   $depositTotal = vp_user_confirmed_deposit_total($pdo, $uid);
-  if ($requiredLevel && $depositTotal + 1e-9 < (float)($requiredLevel['min_deposit_total'] ?? 0)) {
+  $requiredMin = $requiredLevel ? (float)($requiredLevel['min_deposit_total'] ?? 0) : 0.0;
+  $missingDeposit = max(0.0, $requiredMin - $depositTotal);
+  if (!$requiredLevel || $missingDeposit > 1e-9) {
     json_response([
       'ok'=>false,
       'error'=>'Level requirement not met',
+      'error_code'=>'level_requirement_not_met',
       'required_level'=>$requiredLevel,
+      'level_gate'=>[
+        'locked'=>true,
+        'reason'=>$requiredLevel ? 'confirmed_deposit_total_below_required_level' : 'required_level_not_found',
+        'required_level_id'=>$requiredLevelId,
+        'required_min_deposit_total'=>$requiredMin,
+        'confirmed_deposit_total'=>$depositTotal,
+        'missing_deposit_total'=>$missingDeposit,
+      ],
       'confirmed_deposit_total'=>$depositTotal,
     ], 422);
   }
@@ -121,7 +132,7 @@ try {
     ]);
   } catch (Throwable $e2) {}
 
-  $resp = ['ok'=>true,'investment_id'=>$id,'product_kind'=>$productKind,'is_perpetual'=>$isPerpetual ? 1 : 0];
+  $resp = ['ok'=>true,'investment_id'=>$id,'product_kind'=>$productKind,'is_perpetual'=>$isPerpetual ? 1 : 0,'required_level_id'=>$requiredLevelId ?: null];
   idem_store_response($idem['user_id'], $idem['key'], $idem['scope'], $resp);
   json_response($resp);
 } catch (Throwable $e) {

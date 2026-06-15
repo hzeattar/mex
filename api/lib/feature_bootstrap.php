@@ -148,14 +148,44 @@ function vp_feature_bootstrap(PDO $pdo, string $driver): void {
     ['platinum', 'Platinum', 'بلاتيني',      'Platinum',  75000,  40, "Trading\nCopy bot\nContracts\nDedicated support\nPortfolio manager", "تداول\nبوت نسخ\nعقود\nدعم مخصص\nمدير محفظة", "Trading\nCopy bot\nContracts\nDedicated support\nPortfolio manager", 1,1,1,1,1],
     ['vip',      'VIP',      'كبار العملاء', 'VIP',       150000, 50, "All features\nVIP contracts\nPrivate desk\nCustom limits", "جميع المزايا\nعقود VIP\nمنصة خاصة\nحدود مخصصة", "All features\nVIP contracts\nPrivate desk\nCustom limits",       1,1,1,1,1],
   ];
+  // Authoritative level content (overrides any stale $seed values). Synced once per version.
+  $levelOverride = [
+    'starter'  => [250,   ["Dedicated account manager","Ongoing support"], ["مدير حساب","دعم مستمر"], 1,0,0,1,1],
+    'silver'   => [1200,  ["Senior account manager","Ongoing support","5% bonus on every deposit"], ["مدير حساب ذو خبرة عالية","دعم مستمر","بونص 5% على كل إيداع"], 1,0,0,1,1],
+    'gold'     => [5000,  ["Senior account manager","AI copy trading","Ready-to-buy contracts","10% bonus on every deposit"], ["مدير حساب ذو خبرة عالية","نسخ صفقات بالذكاء الاصطناعي","عقود جاهزة للشراء","بونص 10% على كل إيداع"], 1,1,1,1,1],
+    'platinum' => [20000, ["Senior account manager","AI copy trading","Ready-to-buy contracts","20% bonus on every deposit"], ["مدير حساب ذو خبرة عالية","نسخ صفقات بالذكاء الاصطناعي","عقود جاهزة للشراء","بونص 20% على كل إيداع"], 1,1,1,1,1],
+    'vip'      => [50000, ["Senior account manager","AI copy trading","Ready-to-buy contracts","UAE investor certificate","Legal advisor for Golden Residency","30% bonus on every deposit"], ["مدير حساب ذو خبرة عالية","نسخ صفقات بالذكاء الاصطناعي","عقود جاهزة للشراء","شهادة مستثمر داخل الإمارات","مستشار قانوني للحصول على الإقامة الذهبية","بونص 30% على كل إيداع"], 1,1,1,1,1],
+  ];
   $existingLevels = 0;
   try { $existingLevels = (int)($pdo->query("SELECT COUNT(*) FROM customer_levels")->fetchColumn() ?: 0); } catch (Throwable $e) { $existingLevels = 0; }
-  if ($existingLevels === 0) {
+  require_once __DIR__ . '/settings.php';
+  $levelsSeedVer = 'mex-levels-2026-06-v3';
+  $applyLevels = ($existingLevels === 0);
+  if (!$applyLevels) {
+    try { $applyLevels = ((string)setting_get('customer_levels_seed_version', '') !== $levelsSeedVer); } catch (Throwable $e) { $applyLevels = false; }
+  }
+  if ($applyLevels) {
     foreach ($seed as [$code,$en,$ar,$ru,$min,$sort,$perksEn,$perksAr,$perksRu,$ft,$fcb,$fc,$fs,$fpm]) {
+      $ov = $levelOverride[$code] ?? null;
+      if ($ov) {
+        $min = $ov[0];
+        $perksEn = implode("\n", $ov[1]);
+        $perksAr = implode("\n", $ov[2]);
+        $perksRu = $perksEn;
+        $ft = $ov[3]; $fcb = $ov[4]; $fc = $ov[5]; $fs = $ov[6]; $fpm = $ov[7];
+      }
       try {
-        $sql = "INSERT INTO customer_levels(level_code,name_en,name_ar,name_ru,perks_en,perks_ar,perks_ru,feat_trading,feat_copy_bot,feat_contracts,feat_support,feat_portfolio_manager,min_deposit_total,sort_order,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
-        $pdo->prepare($sql)->execute([$code,$en,$ar,$ru,$perksEn,$perksAr,$perksRu,$ft,$fcb,$fc,$fs,$fpm,$min,$sort,'active',$now,$now]);
+        $exists = false;
+        try { $chk = $pdo->prepare("SELECT 1 FROM customer_levels WHERE level_code=? LIMIT 1"); $chk->execute([$code]); $exists = (bool)$chk->fetchColumn(); } catch (Throwable $e) { $exists = false; }
+        if ($exists) {
+          $sql = "UPDATE customer_levels SET name_en=?,name_ar=?,name_ru=?,perks_en=?,perks_ar=?,perks_ru=?,feat_trading=?,feat_copy_bot=?,feat_contracts=?,feat_support=?,feat_portfolio_manager=?,min_deposit_total=?,sort_order=?,status=?,updated_at=? WHERE level_code=?";
+          $pdo->prepare($sql)->execute([$en,$ar,$ru,$perksEn,$perksAr,$perksRu,$ft,$fcb,$fc,$fs,$fpm,$min,$sort,'active',$now,$code]);
+        } else {
+          $sql = "INSERT INTO customer_levels(level_code,name_en,name_ar,name_ru,perks_en,perks_ar,perks_ru,feat_trading,feat_copy_bot,feat_contracts,feat_support,feat_portfolio_manager,min_deposit_total,sort_order,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+          $pdo->prepare($sql)->execute([$code,$en,$ar,$ru,$perksEn,$perksAr,$perksRu,$ft,$fcb,$fc,$fs,$fpm,$min,$sort,'active',$now,$now]);
+        }
       } catch (Throwable $e) {}
     }
+    try { setting_set('customer_levels_seed_version', $levelsSeedVer); } catch (Throwable $e) {}
   }
 }

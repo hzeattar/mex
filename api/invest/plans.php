@@ -81,7 +81,16 @@ $items = array_map(function($r) use ($lang, $totalDeposits, $currentLevelId) {
     'name' => vp_pick_lang_value(['name_en'=>$r['level_name_en'] ?? '', 'name_ar'=>$r['level_name_ar'] ?? '', 'name_ru'=>$r['level_name_ru'] ?? ''], 'name', $lang),
     'min_deposit_total' => (float)($r['min_deposit_total'] ?? 0),
   ] : null;
-  $eligible = !$requiredLevel || $totalDeposits + 1e-9 >= (float)$requiredLevel['min_deposit_total'];
+  $missingDeposit = $requiredLevel ? max(0.0, (float)$requiredLevel['min_deposit_total'] - $totalDeposits) : 0.0;
+  $eligible = !$requiredLevel || $missingDeposit <= 1e-9;
+  $levelGate = $requiredLevel ? [
+    'locked' => !$eligible,
+    'reason' => $eligible ? null : 'confirmed_deposit_total_below_required_level',
+    'required_level_id' => $requiredLevelId,
+    'required_min_deposit_total' => (float)$requiredLevel['min_deposit_total'],
+    'confirmed_deposit_total' => $totalDeposits,
+    'missing_deposit_total' => $missingDeposit,
+  ] : ['locked' => false, 'reason' => null, 'missing_deposit_total' => 0.0];
   return [
     'id' => (string)($r['id'] ?? ''),
     'name' => vp_pick_lang_value($r, 'name', $lang),
@@ -102,6 +111,7 @@ $items = array_map(function($r) use ($lang, $totalDeposits, $currentLevelId) {
     'is_perpetual' => (int)($r['is_perpetual'] ?? 0),
     'required_level' => $requiredLevel,
     'eligible' => $eligible,
+    'level_gate' => $levelGate,
     'user_level_id' => $currentLevelId,
   ];
 }, $rows);

@@ -24,18 +24,22 @@ $typeRaw   = strtolower(trim((string)($_GET['type'] ?? 'crypto'))); // crypto|fo
 $type = vp_normalize_asset_type($typeRaw);
 $market = strtolower(trim((string)($_GET['market'] ?? (($type === 'futures' || $typeRaw === 'perpetual' || $typeRaw === 'perp') ? 'perp' : 'spot')))); // spot|perp
 $tf     = (string)($_GET['tf'] ?? '1m'); // Binance intervals
-$limit  = (int)($_GET['limit'] ?? 200);
+$defaultLimit = max(80, min(500, (int)env('CANDLES_DEFAULT_LIMIT', '180')));
+$limit  = (int)($_GET['limit'] ?? $defaultLimit);
+$requestedLimit = $limit;
 $end    = (int)($_GET['end'] ?? 0); // unix seconds (optional) for pagination
 $fast   = ((int)($_GET['fast'] ?? 0) === 1);
 $forceRefresh = ((int)($_GET['refresh'] ?? 0) === 1);
 
 if ($symbol === '') json_response(['ok'=>false,'error'=>'Missing symbol'], 422);
-$limit = max(10, min(2000, $limit));
 $uid = session_user_id();
-if ($uid <= 0 && $limit > 100) {
+$maxLimit = $uid > 0
+  ? max(500, min(5000, (int)env('CANDLES_AUTH_MAX_LIMIT', '2500')))
+  : 100;
+$limit = max(10, min($maxLimit, $limit));
+if ($uid <= 0 && $requestedLimit > 100) {
   json_response(['ok'=>false,'error'=>'login_required','message'=>'Guest access limited to 100 candles','guest_limit'=>100], 401);
 }
-if ($uid <= 0) $limit = min($limit, 100);
 
 $GLOBALS['CANDLES_REQUEST_STARTED_AT'] = microtime(true);
 $GLOBALS['CANDLES_REQUEST_BUDGET_MS'] = max(2000, min(15000, (int)env('CANDLES_REQUEST_BUDGET_MS', '6000')));
@@ -301,7 +305,7 @@ function candles_db_save(string $symbol, string $market, string $tf, string $typ
       $quality = !empty($c['synthetic']) ? 'synthetic' : (string)($c['quality'] ?? 'real');
       $st->execute([$symbol, $type, $market, $tf, $t, $o, $h, $l, $cl, (float)($c['volume'] ?? 0), (string)($c['source'] ?? $source), (int)($c['provider_ts'] ?? $t), $now, $quality]);
       $written++;
-      if ($written >= 5000) break;
+      if ($written >= 2500) break;
     }
   } catch (Throwable $e) {}
 }
@@ -602,6 +606,7 @@ function candles_finalize_items(array $items, string $symbol, string $market, st
 function candles_sync_live_tail(array $items, string $symbol, string $market, string $assetType, int $step, int $end = 0): array {
   if ($end > 0 || !$items || $step <= 0) return $items;
   if ((int)env('CANDLES_SYNC_LIVE_TAIL', '1') !== 1) return $items;
+  if (vp_normalize_asset_type($assetType) !== 'crypto' && (int)env('CANDLES_SYNC_LIVE_TAIL_NONCRYPTO', '0') !== 1) return $items;
   if (candles_request_over_budget((int)env('CANDLES_LIVE_TAIL_RESERVE_MS', '1000'))) return $items;
   try {
     // Read from central cache first (no upstream hit), fallback to quote_price
@@ -797,10 +802,10 @@ try {
       candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic_seed_fast','fast'=>true], candles_finalize_items($items, $symbol, $market, $type, $step, 0), $limit, 0);
     }
   }
-  if ($end <= 0 && $cachedAll) {
+  if ($end <= 0 && $cachedAll && !$forceRefresh) {
     $age = is_file($cacheFile) ? (time() - (int)@filemtime($cacheFile)) : 999999;
-    $baseStale = (int)env('CANDLES_MAX_STALE_FAST', '180'); // seconds
-    $maxStale = in_array($providerType, ['stocks','arab','commodities','futures','forex'], true) ? max(60, min(1800, (int)env('CANDLES_MAX_STALE_FAST_NONCRYPTO', '900'))) : max(10, min(900, $baseStale));
+    $baseStale = (int)env('CANDLES_MAX_STALE_FAST', '240'); // seconds
+    $maxStale = in_array($providerType, ['stocks','arab','commodities','futures','forex'], true) ? max(300, min(3600, (int)env('CANDLES_MAX_STALE_FAST_NONCRYPTO', '1200'))) : max(30, min(1200, $baseStale));
     $step = tf_seconds($tf);
     $cacheRecentEnough = candles_cache_recent_enough($cachedAll, $step, $providerType, 0);
     if ($age >= 0 && $age < $maxStale && $cacheRecentEnough) {
@@ -813,7 +818,7 @@ try {
       }
       $fastMatchesLive = candles_series_matches_live($fastItems, $symbol, $market, $type);
       if ($fastMatchesLive && ($providerType !== 'crypto' || $cacheDeepEnough)) {
-        candles_json_response(['ok'=>true,'cached'=>true, 'warm'=>false], $fastItems, $limit, 0);
+        candles_json_response(['ok'=>true,'cached'=>true, 'warm'=>false, 'cache_age'=>$age, 'cache_ttl'=>$maxStale], $fastItems, $limit, 0);
       }
       @unlink($cacheFile);
     }
@@ -949,6 +954,31 @@ try {
   $hasAggsProvider = $paidAggsKey !== '';
   $preferAggsForSymbol = $hasAggsProvider && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $typeRaw ?: $providerType)));
   $triedYahooChart = false;
+
+  if (in_array($providerType, ['stocks','arab','futures','commodities','forex','indices'], true)
+      && function_exists('twelvedata_enabled')
+      && twelvedata_enabled()
+      && !candles_request_over_budget(2200)) {
+    try {
+      $tdSymbol = twelvedata_symbol_for_market($symbol, $type, $meta)
+        ?: twelvedata_symbol_for_market($symbol, $providerType, $meta);
+      if ($tdSymbol) {
+        $tdTtl = max(10, min(3600, (int)env('TWELVEDATA_CANDLES_TTL', '60')));
+        $items = twelvedata_time_series_candles_cached($tdSymbol, $tf, $limit, $end, $tdTtl);
+        if (count($items) > 0) {
+          $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
+          $merged = array_merge($cachedAll, $items);
+          $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
+          candles_cache_save($symbol,$market,$tf, $merged, $type);
+          if (candles_has_display_history($out, $limit, $providerType)) {
+            candles_json_response(['ok'=>true,'source'=>'twelvedata_time_series','warm'=>true], $out, $limit, $end);
+          }
+        }
+      }
+    } catch (Throwable $e) {
+      // fall through to Yahoo / EODHD / aggs
+    }
+  }
 
   // ── Yahoo FIRST for non-crypto intraday (faster and more reliable than EODHD) ──
   if (!$preferAggsForSymbol && in_array($providerType, ['stocks','arab','futures','commodities','forex'], true)) {

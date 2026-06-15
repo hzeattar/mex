@@ -105,8 +105,24 @@ const FALLBACK_MARKETS = {
 };
 
 const TFS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '12h', '1d', '1w'];
-const CHART_INITIAL_LIMIT = 1500;
-const CHART_PAGE_LIMIT = 1500;
+const CHART_HISTORY_DAYS = 31;
+const CHART_MIN_INITIAL_LIMIT = 1500;
+const CHART_MAX_INITIAL_LIMIT = 9000;
+const CHART_MAX_PAGE_LIMIT = 9000;
+const CHART_MONTH_PREFETCH_MAX_PAGES = 10;
+const CHART_MONTH_PREFETCH_DELAY = 750;
+
+function chartTargetBars(tf) {
+  return Math.max(CHART_MIN_INITIAL_LIMIT, Math.ceil((CHART_HISTORY_DAYS * 86400) / Math.max(60, tfSeconds(tf))));
+}
+
+function chartInitialLimit(tf) {
+  return Math.max(CHART_MIN_INITIAL_LIMIT, Math.min(CHART_MAX_INITIAL_LIMIT, chartTargetBars(tf)));
+}
+
+function chartPageLimit(tf) {
+  return Math.max(CHART_MIN_INITIAL_LIMIT, Math.min(CHART_MAX_PAGE_LIMIT, chartTargetBars(tf)));
+}
 
 function defaultMarketForType(type) {
   return normalizeType(type) === 'futures' ? 'perp' : 'spot';
@@ -421,6 +437,7 @@ export function mount(container) {
 
 export function cleanup() {
   tradeRunId += 1;
+  if (currentSetup?.container) cancelMonthHistoryPrefetch(currentSetup.container);
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
@@ -560,7 +577,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
   const quoteType = type === 'favorites' ? 'crypto' : type;
   const active = get('symbol');
   const isCrypto = quoteType === 'crypto';
-  const max = isCrypto ? 42 : 10;
+  const max = isCrypto ? 42 : 24;
   const symbols = [...new Set(marketItems
     .slice(0, max)
     .map(m => String(m.symbol || '').toUpperCase())
@@ -573,7 +590,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
     if (!isCurrentRun(runId, active, get('type'))) return;
     updateSymbolListPrices(container, items);
   }, null, {
-    interval: isCrypto ? 4000 : 3500,
+    interval: isCrypto ? 4000 : 2500,
     initialDelay: 500,
     fallbackAfter: 2200,
     maxSymbols: max,
@@ -892,6 +909,14 @@ function shouldAcceptQuote(container, q, symbol) {
   return true;
 }
 
+function flashPriceNode(el, direction) {
+  if (!el || !direction) return;
+  const cls = direction === 'down' ? 'animate-price-down' : 'animate-price-up';
+  el.classList.remove('animate-price-up', 'animate-price-down');
+  void el.offsetWidth;
+  requestAnimationFrame(() => el.classList.add(cls));
+}
+
 function updatePrice(container, q, runId = tradeRunId) {
   if (!isCurrentRun(runId, String(q?.symbol || get('symbol')).toUpperCase(), q?.type || get('type'))) return;
   const p = Number(q.price || q.q_price || 0);
@@ -909,9 +934,11 @@ function updatePrice(container, q, runId = tradeRunId) {
     livePrice.className = `text-xs font-mono font-bold ${liveTrend}`;
     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     if (p > 0 && lastFlashPrice > 0 && p !== lastFlashPrice && now - lastPriceFlashAt > 550) {
-      const dir = p > lastFlashPrice ? 'price-flash-up' : 'price-flash-down';
+      const direction = p > lastFlashPrice ? 'up' : 'down';
+      const dir = direction === 'up' ? 'price-flash-up' : 'price-flash-down';
       livePrice.classList.remove('price-flash-up', 'price-flash-down');
       requestAnimationFrame(() => livePrice.classList.add(dir));
+      flashPriceNode(livePrice, direction);
       lastPriceFlashAt = now;
     }
     if (p > 0) lastFlashPrice = p;
@@ -1004,7 +1031,7 @@ function renderSymbolList(container, items) {
         <div class="text-[9px] text-muted truncate">${esc(m.name || type)}</div>
       </div>
       <div class="text-right shrink-0">
-        <div class="text-[11px] font-mono text-text" data-price-cell>${p > 0 ? price(p, type) : '--'}</div>
+        <div class="text-[11px] font-mono text-text" data-price-cell data-raw-price="${p > 0 ? String(p) : ''}">${p > 0 ? price(p, type) : '--'}</div>
         <div class="text-[9px] ${unavailable ? 'text-muted' : (chg >= 0 ? 'text-buy' : 'text-sell')}" data-change-cell>${unavailable ? '--' : pct(chg)}</div>
       </div>
     </div>`;
@@ -1082,8 +1109,11 @@ function updateSymbolListPrices(container, items) {
     const changeCell = $('[data-change-cell]', row);
     if (priceCell) {
       const nextPrice = price(p, type);
+      const previous = Number(priceCell.dataset.rawPrice || 0);
       if (priceCell.textContent !== nextPrice) priceCell.textContent = nextPrice;
-      if (priceCell.className !== 'text-[11px] font-mono text-text') priceCell.className = 'text-[11px] font-mono text-text';
+      priceCell.dataset.rawPrice = String(p);
+      priceCell.className = 'text-[11px] font-mono text-text';
+      if (previous > 0 && previous !== p) flashPriceNode(priceCell, p > previous ? 'up' : 'down');
     }
     if (changeCell) {
       const nextChange = pct(chg);
@@ -1827,6 +1857,7 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
 }
 
 function clearChartForSwitch(container) {
+  cancelMonthHistoryPrefetch(container);
   cancelLiveCandleFrame();
   chartSeriesKey = '';
   lastCandle = null;
@@ -1927,11 +1958,46 @@ function toggleChartFullscreen(container) {
   }, 60);
 }
 
-async function loadOlderCandles(container) {
+function monthHistoryStartTime() {
+  return Math.floor(Date.now() / 1000) - (CHART_HISTORY_DAYS * 86400);
+}
+
+function hasMonthHistoryLoaded() {
+  return allCandles.length > 0 && Number(allCandles[0]?.time || 0) <= monthHistoryStartTime();
+}
+
+function cancelMonthHistoryPrefetch(container) {
+  if (container?.__monthHistoryTimer) {
+    clearTimeout(container.__monthHistoryTimer);
+    container.__monthHistoryTimer = null;
+  }
+  if (container) container.__monthHistoryPrefetchKey = '';
+}
+
+function scheduleMonthHistoryPrefetch(container, runId = tradeRunId) {
+  if (!container || hasMonthHistoryLoaded()) return;
+  cancelMonthHistoryPrefetch(container);
+  const key = currentChartKey();
+  let pages = 0;
+  const tick = async () => {
+    if (!isCurrentRun(runId) || currentChartKey() !== key || chartSeriesKey !== key) return;
+    if (hasMonthHistoryLoaded() || chartHistory.done) return;
+    if (pages >= CHART_MONTH_PREFETCH_MAX_PAGES) return;
+    pages += 1;
+    await loadOlderCandles(container, { force: true }).catch(() => false);
+    if (!isCurrentRun(runId) || currentChartKey() !== key || chartSeriesKey !== key) return;
+    if (hasMonthHistoryLoaded() || chartHistory.done) return;
+    container.__monthHistoryTimer = setTimeout(tick, CHART_MONTH_PREFETCH_DELAY);
+  };
+  container.__monthHistoryPrefetchKey = key;
+  container.__monthHistoryTimer = setTimeout(tick, CHART_MONTH_PREFETCH_DELAY);
+}
+
+async function loadOlderCandles(container, options = {}) {
   if (!chart || chartHistory.loading || chartHistory.done) return;
   if (!allCandles.length || allCandles.length < 50) return;
   const now = Date.now();
-  if (now < chartHistory.nextAt) return;
+  if (!options.force && now < chartHistory.nextAt) return;
   const key = currentChartKey();
   if (chartSeriesKey !== key) return;
   chartHistory.loading = true;
@@ -1940,8 +2006,9 @@ async function loadOlderCandles(container) {
     const type = get('type');
     const tf = get('tf');
     const oldest = allCandles[0].time;
+    const pageLimit = chartPageLimit(tf);
     const data = await api(
-      `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${CHART_PAGE_LIMIT}&end=${oldest - 1}`,
+      `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${pageLimit}&end=${oldest - 1}`,
       { timeout: 12000, retry: 0, cacheTtl: 0 }
     );
     if (chartSeriesKey !== key || currentChartKey() !== key) return;
@@ -2363,13 +2430,15 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
   }
   try {
     const refreshParam = options.refresh ? '&refresh=1' : '';
+    const initialLimit = chartInitialLimit(tf);
     // No cache-buster param: lets the nginx micro-cache share identical candle
     // responses across users (the request itself is already no-store client-side).
-    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${CHART_INITIAL_LIMIT}&fast=1${refreshParam}`;
+    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${initialLimit}&fast=1${refreshParam}`;
     const candles = await api(url, { timeout: options.silent ? 10000 : 14000, retry: 1, cacheTtl: 0, cache: 'no-store' });
     await chartReady;
     if (!isCurrentRun(runId, symbol, type)) return;
     if (reqKey !== currentChartKey()) return; // stale response for a previous symbol/timeframe
+    let chartPainted = false;
     let chartItems = candles?.items || [];
     if (options.refresh && chartItems.length) {
       const activeBucket = currentBucketTime(0, type);
@@ -2387,6 +2456,7 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       } else {
         await initChart(container, chartItems, runId);
       }
+      chartPainted = true;
     } else {
       if (options.silent || options.refresh) return;
       const fallbackPrice = chartFallbackPrice(container, symbol);
@@ -2404,6 +2474,7 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
         hideChartOverlay(container);
       }
     }
+    if (chartPainted && !options.silent && !options.refresh) scheduleMonthHistoryPrefetch(container, runId);
   } catch (e) {
     if (!isCurrentRun(runId, symbol, type)) return;
     console.error('Chart:', e);
