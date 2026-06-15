@@ -568,6 +568,48 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           $rescue = quote_try_yahoo_rescue_row($sym, $assetType, is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [], $now);
           if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
         }
+        if (in_array($providerType, ['stocks','arab'], true) && quote_primary_row_is_stale($liveRow, $assetType, $now) && finnhub_enabled()) {
+          $fhTicker = finnhub_symbol_for_market($sym, $assetType, is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : []);
+          if ($fhTicker) {
+            try {
+              $fhBulk = finnhub_quote_many_cached([$fhTicker], 5);
+              $fhRow = is_array($fhBulk[$fhTicker] ?? null) ? $fhBulk[$fhTicker] : null;
+              if ($fhRow && (float)($fhRow['price'] ?? 0) > 0) {
+                $liveRow = [
+                  'symbol' => $sym,
+                  'type' => $assetType,
+                  'price' => (float)($fhRow['price'] ?? 0),
+                  'change_pct' => (float)($fhRow['change_pct'] ?? 0.0),
+                  'updated_at' => $now,
+                  'source' => 'finnhub',
+                ];
+              }
+            } catch (Throwable $e) {}
+          }
+        }
+        // Also try Finnhub/Tiingo rescue for stocks/arab when EODHD is older than 2 hours
+        if (in_array($providerType, ['stocks','arab'], true) && !quote_primary_row_is_stale($liveRow, $assetType, $now) && strtolower(trim((string)($liveRow['source'] ?? ''))) === 'eodhd') {
+          $eodhdAge = quote_live_row_age_sec($liveRow, $now);
+          if ($eodhdAge > 7200 && finnhub_enabled()) {
+            $fhTicker = finnhub_symbol_for_market($sym, $assetType, is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : []);
+            if ($fhTicker) {
+              try {
+                $fhBulk = finnhub_quote_many_cached([$fhTicker], 5);
+                $fhRow = is_array($fhBulk[$fhTicker] ?? null) ? $fhBulk[$fhTicker] : null;
+                if ($fhRow && (float)($fhRow['price'] ?? 0) > 0) {
+                  $liveRow = [
+                    'symbol' => $sym,
+                    'type' => $assetType,
+                    'price' => (float)($fhRow['price'] ?? 0),
+                    'change_pct' => (float)($fhRow['change_pct'] ?? 0.0),
+                    'updated_at' => $now,
+                    'source' => 'finnhub',
+                  ];
+                }
+              } catch (Throwable $e) {}
+            }
+          }
+        }
         if ($providerType === 'commodities') {
           $rescue = quote_try_spot_metal_proxy_rescue_row($sym, $assetType, $liveRow, is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [], $now);
           if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
