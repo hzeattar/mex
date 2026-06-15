@@ -533,8 +533,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       $fcs = fcsapi_symbol_for_market($sym, $assetType, $meta);
       if ($fcs) $fcsapiBySym[$sym] = $fcs;
     }
-    // Finnhub fallback for forex, stocks, commodities, arab
-    if (finnhub_enabled() && in_array($providerType, ['forex','stocks','commodities','arab'], true)) {
+    // Finnhub fallback for US stocks (free tier only supports stocks)
+    if (finnhub_enabled() && in_array($providerType, ['stocks'], true)) {
       $fh = finnhub_symbol_for_market($sym, $assetType, $meta);
       if ($fh) $finnhubBySym[$sym] = $fh;
     }

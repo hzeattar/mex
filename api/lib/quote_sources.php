@@ -391,28 +391,12 @@ if (!function_exists('finnhub_symbol_for_market')) {
         $fh = trim((string)($meta['finnhub_ticker'] ?? ''));
         if ($fh !== '') return $fh;
 
-        if ($providerType === 'forex') {
-            // EURUSD → OANDA:EUR_USD
-            if (preg_match('/^([A-Z]{3})([A-Z]{3})$/', $symbol, $m)) {
-                return 'OANDA:' . $m[1] . '_' . $m[2];
-            }
-            return null;
-        }
+        // Finnhub free tier only supports US stocks — forex/commodities/arab return 403
+        if ($providerType !== 'stocks') return null;
 
-        if ($providerType === 'commodities') {
-            // XAUUSD → OANDA:XAU_USD
-            if (preg_match('/^(XAU|XAG|XPT|XPD)(USD)$/', $symbol, $m)) {
-                return 'OANDA:' . $m[1] . '_' . $m[2];
-            }
-            return null;
-        }
-
-        // Stocks, arab — use raw ticker
-        if (in_array($providerType, ['stocks', 'arab'], true)) {
-            // Strip exchange suffix for Finnhub: 2222.SR → just 2222.SR (Finnhub supports .SR)
-            if (preg_match('/^[A-Z0-9._\-]{1,30}$/', $symbol)) {
-                return $symbol;
-            }
+        // US stocks — use raw ticker
+        if (preg_match('/^[A-Z0-9._\-]{1,30}$/', $symbol)) {
+            return $symbol;
         }
 
         return null;
