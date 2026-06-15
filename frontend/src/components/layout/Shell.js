@@ -39,7 +39,7 @@ export function renderShell(app) {
   const logoUrl = brand.logo_url || '/assets/img/mex_global_logo.png';
 
   app.innerHTML = `
-    <div class="flex flex-col h-screen overflow-hidden" id="shell">
+    <div class="flex flex-col h-[100dvh] overflow-hidden" id="shell">
       <!-- Desktop Top Navigation Bar -->
       <header class="hidden lg:flex items-center h-12 px-4 border-b border-line bg-surface shrink-0 z-50">
         <a href="#/home" class="mex-shell-brand mr-6">

@@ -1401,12 +1401,6 @@ function scrollCurrentLevelRail(rail, smooth = false) {
   if (!card) return;
   const doScroll = () => {
     if (!rail.clientWidth || !card.getBoundingClientRect().width) return;
-    try {
-      card.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest', inline: 'start' });
-      return;
-    } catch (_e) {
-      // Fallback for older WebViews.
-    }
     const target = card.offsetLeft - Number.parseFloat(getComputedStyle(rail).paddingInlineStart || '0');
     const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
     const left = Math.max(0, Math.min(maxScroll, target));
