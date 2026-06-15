@@ -5,6 +5,9 @@ require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/marketdata.php';
 require_once __DIR__ . '/market_resolver.php';
 require_once __DIR__ . '/quote_sources.php';
+require_once __DIR__ . '/quote_fcsapi.php';
+require_once __DIR__ . '/quote_currencyfreaks.php';
+require_once __DIR__ . '/quote_polygon.php';
 
 function market_meta($meta): array {
   if (is_array($meta)) return $meta;
@@ -384,10 +387,12 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
       WHEN 'eodhd_rest' THEN 91
       WHEN 'finnhub' THEN 89
       WHEN 'tiingo' THEN 87
+      WHEN 'fcsapi' THEN 85
+      WHEN 'polygon' THEN 84
+      WHEN 'currencyfreaks' THEN 82
       WHEN 'yahoo' THEN 72
       WHEN 'yahoo_chart_live' THEN 72
       WHEN 'massive' THEN 20
-      WHEN 'polygon' THEN 20
       WHEN 'provider_fallback' THEN 20
       WHEN 'fx_fallback' THEN 20
       WHEN 'frankfurter' THEN 20
@@ -804,6 +809,50 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'updated_at' => $now,
           'source' => 'tiingo',
         ];
+      }
+    } catch (Throwable $e) {}
+  }
+
+  // CurrencyFreaks fallback for forex
+  if ($providerType === 'forex' && currencyfreaks_enabled()) {
+    try {
+      $missingPairs = array_filter($symbols, fn($s) => !isset($out[$s]) || (float)($out[$s]['price'] ?? 0) <= 0);
+      if ($missingPairs) {
+        $cfRates = currencyfreaks_forex_latest(array_values($missingPairs));
+        foreach ($cfRates as $sym => $row) {
+          if ((float)($row['price'] ?? 0) > 0) {
+            $out[$sym] = [
+              'symbol' => $sym,
+              'type' => $assetType,
+              'price' => (float)$row['price'],
+              'change_pct' => (float)($row['change_pct'] ?? 0.0),
+              'updated_at' => $now,
+              'source' => 'currencyfreaks',
+            ];
+          }
+        }
+      }
+    } catch (Throwable $e) {}
+  }
+
+  // Polygon.io fallback for US stocks
+  if ($providerType === 'stocks' && polygon_enabled()) {
+    try {
+      $missingStocks = array_filter($symbols, fn($s) => !isset($out[$s]) || (float)($out[$s]['price'] ?? 0) <= 0);
+      if ($missingStocks) {
+        $polyRates = polygon_stock_latest(array_values($missingStocks));
+        foreach ($polyRates as $sym => $row) {
+          if ((float)($row['price'] ?? 0) > 0) {
+            $out[$sym] = [
+              'symbol' => $sym,
+              'type' => $assetType,
+              'price' => (float)$row['price'],
+              'change_pct' => (float)($row['change_pct'] ?? 0.0),
+              'updated_at' => $now,
+              'source' => 'polygon',
+            ];
+          }
+        }
       }
     } catch (Throwable $e) {}
   }

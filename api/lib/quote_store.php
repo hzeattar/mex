@@ -178,10 +178,12 @@ function qa_quote_rows_by_symbols(array $symbols, ?string $typeAlias = null): ar
         WHEN 'eodhd_rest' THEN 91
         WHEN 'finnhub' THEN 89
         WHEN 'tiingo' THEN 87
+        WHEN 'fcsapi' THEN 85
+        WHEN 'polygon' THEN 84
+        WHEN 'currencyfreaks' THEN 82
         WHEN 'yahoo' THEN 72
         WHEN 'yahoo_chart_live' THEN 72
         WHEN 'massive' THEN 20
-        WHEN 'polygon' THEN 20
         WHEN 'provider_fallback' THEN 20
         WHEN 'fx_fallback' THEN 20
         WHEN 'frankfurter' THEN 20
