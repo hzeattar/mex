@@ -5,7 +5,7 @@ declare(strict_types=1);
 // common.php stores this value into /api/data/.schema_version after a successful migration.
 // Use a monotonic, human-readable value.
 // Bump when schema_upgrade adds new columns so existing installs auto-upgrade.
-const SCHEMA_VERSION = '2026-05-30.1';
+const SCHEMA_VERSION = '2026-06-14.2';
 
 /**
  * Schema installer for MySQL (production) or SQLite (local/demo).
@@ -267,6 +267,12 @@ function schema_install(PDO $pdo, string $driver): void {
       username VARCHAR(64) NULL,
       first_name VARCHAR(128) NULL,
       last_name VARCHAR(128) NULL,
+      country_code VARCHAR(2) NULL,
+      country_name VARCHAR(128) NULL,
+      phone_dial_code VARCHAR(8) NULL,
+      phone_number VARCHAR(32) NULL,
+      phone_e164 VARCHAR(32) NULL,
+      birth_date DATE NULL,
       locale VARCHAR(8) NOT NULL DEFAULT 'en',
       support_locale VARCHAR(8) NULL DEFAULT NULL,
       max_leverage INT NULL DEFAULT NULL,
@@ -282,6 +288,12 @@ function schema_install(PDO $pdo, string $driver): void {
       username TEXT,
       first_name TEXT,
       last_name TEXT,
+      country_code TEXT,
+      country_name TEXT,
+      phone_dial_code TEXT,
+      phone_number TEXT,
+      phone_e164 TEXT,
+      birth_date TEXT,
       locale TEXT NOT NULL DEFAULT 'en',
       support_locale TEXT,
       max_leverage INTEGER,
@@ -871,6 +883,54 @@ function schema_install(PDO $pdo, string $driver): void {
     }
   } catch (Throwable $e) {}
 
+  // Market candles (durable OHLC history used by /api/trade/candles.php).
+  $pdo->exec($driver === 'mysql' ?
+    "CREATE TABLE IF NOT EXISTS market_candles (
+      id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+      symbol VARCHAR(32) NOT NULL,
+      type VARCHAR(16) NOT NULL,
+      market VARCHAR(16) NOT NULL DEFAULT 'spot',
+      tf VARCHAR(8) NOT NULL,
+      time INT UNSIGNED NOT NULL,
+      open DECIMAL(20,8) NOT NULL DEFAULT 0,
+      high DECIMAL(20,8) NOT NULL DEFAULT 0,
+      low DECIMAL(20,8) NOT NULL DEFAULT 0,
+      close DECIMAL(20,8) NOT NULL DEFAULT 0,
+      volume DECIMAL(24,8) NOT NULL DEFAULT 0,
+      source VARCHAR(48) NOT NULL DEFAULT '',
+      provider_ts INT UNSIGNED NULL,
+      ingested_at INT UNSIGNED NOT NULL DEFAULT 0,
+      quality VARCHAR(16) NOT NULL DEFAULT 'real',
+      UNIQUE KEY uniq_market_candle (symbol, type, market, tf, time),
+      KEY idx_market_candles_lookup (symbol, type, market, tf, time),
+      KEY idx_market_candles_type_tf (type, tf, time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" :
+    "CREATE TABLE IF NOT EXISTS market_candles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      symbol TEXT NOT NULL,
+      type TEXT NOT NULL,
+      market TEXT NOT NULL DEFAULT 'spot',
+      tf TEXT NOT NULL,
+      time INTEGER NOT NULL,
+      open REAL NOT NULL DEFAULT 0,
+      high REAL NOT NULL DEFAULT 0,
+      low REAL NOT NULL DEFAULT 0,
+      close REAL NOT NULL DEFAULT 0,
+      volume REAL NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT '',
+      provider_ts INTEGER,
+      ingested_at INTEGER NOT NULL DEFAULT 0,
+      quality TEXT NOT NULL DEFAULT 'real'
+    );"
+  );
+  try {
+    if ($driver !== 'mysql') {
+      $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS uniq_market_candle ON market_candles(symbol, type, market, tf, time)");
+      $pdo->exec("CREATE INDEX IF NOT EXISTS idx_market_candles_lookup ON market_candles(symbol, type, market, tf, time)");
+      $pdo->exec("CREATE INDEX IF NOT EXISTS idx_market_candles_type_tf ON market_candles(type, tf, time)");
+    }
+  } catch (Throwable $e) {}
+
   // Trading Signals
   $pdo->exec($driver === 'mysql' ?
     "CREATE TABLE IF NOT EXISTS trading_signals (
@@ -1249,6 +1309,24 @@ function schema_install(PDO $pdo, string $driver): void {
     }
     if (!schema_column_exists($pdo, 'users', 'display_name', $driver)) {
       schema_add_column($pdo, 'users', "display_name VARCHAR(191) NULL", "display_name TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'users', 'country_code', $driver)) {
+      schema_add_column($pdo, 'users', "country_code VARCHAR(2) NULL", "country_code TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'users', 'country_name', $driver)) {
+      schema_add_column($pdo, 'users', "country_name VARCHAR(128) NULL", "country_name TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'users', 'phone_dial_code', $driver)) {
+      schema_add_column($pdo, 'users', "phone_dial_code VARCHAR(8) NULL", "phone_dial_code TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'users', 'phone_number', $driver)) {
+      schema_add_column($pdo, 'users', "phone_number VARCHAR(32) NULL", "phone_number TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'users', 'phone_e164', $driver)) {
+      schema_add_column($pdo, 'users', "phone_e164 VARCHAR(32) NULL", "phone_e164 TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'users', 'birth_date', $driver)) {
+      schema_add_column($pdo, 'users', "birth_date DATE NULL", "birth_date TEXT", $driver);
     }
     try {
       if ($driver === 'mysql') {
@@ -1831,11 +1909,15 @@ function schema_install(PDO $pdo, string $driver): void {
       status VARCHAR(16) NOT NULL DEFAULT 'pending',
       full_name VARCHAR(200) NULL,
       country VARCHAR(80) NULL,
+      phone_e164 VARCHAR(32) NULL,
+      birth_date DATE NULL,
       doc_type VARCHAR(40) NULL,
       doc_number VARCHAR(120) NULL,
       front_path VARCHAR(255) NULL,
       back_path VARCHAR(255) NULL,
       selfie_path VARCHAR(255) NULL,
+      contract_path VARCHAR(255) NULL,
+      extra_paths_json MEDIUMTEXT NULL,
       admin_note TEXT NULL,
       created_at INT NOT NULL DEFAULT 0,
       updated_at INT NOT NULL DEFAULT 0,
@@ -1849,16 +1931,35 @@ function schema_install(PDO $pdo, string $driver): void {
       status TEXT NOT NULL DEFAULT 'pending',
       full_name TEXT,
       country TEXT,
+      phone_e164 TEXT,
+      birth_date TEXT,
       doc_type TEXT,
       doc_number TEXT,
       front_path TEXT,
       back_path TEXT,
       selfie_path TEXT,
+      contract_path TEXT,
+      extra_paths_json TEXT,
       admin_note TEXT,
       created_at INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL DEFAULT 0
     );"
   );
+
+  if (schema_table_exists($pdo, 'kyc_requests', $driver)) {
+    if (!schema_column_exists($pdo, 'kyc_requests', 'phone_e164', $driver)) {
+      schema_add_column($pdo, 'kyc_requests', "phone_e164 VARCHAR(32) NULL", "phone_e164 TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'kyc_requests', 'birth_date', $driver)) {
+      schema_add_column($pdo, 'kyc_requests', "birth_date DATE NULL", "birth_date TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'kyc_requests', 'contract_path', $driver)) {
+      schema_add_column($pdo, 'kyc_requests', "contract_path VARCHAR(255) NULL", "contract_path TEXT", $driver);
+    }
+    if (!schema_column_exists($pdo, 'kyc_requests', 'extra_paths_json', $driver)) {
+      schema_add_column($pdo, 'kyc_requests', "extra_paths_json MEDIUMTEXT NULL", "extra_paths_json TEXT", $driver);
+    }
+  }
 
   // Normalize fx->forex (if any old rows)
   try { $pdo->exec("UPDATE markets SET type='forex' WHERE type='fx'"); } catch (Throwable $e) {}
@@ -2421,6 +2522,12 @@ function schema_upgrade(PDO $pdo, string $driver = 'sqlite') {
     $addColumn('users', 'updated_at', 'INTEGER');
     $addColumn('users', 'max_leverage', 'INTEGER');
     $addColumn('users', 'force_mode', 'VARCHAR(10)');
+    $addColumn('users', 'country_code', 'VARCHAR(2)');
+    $addColumn('users', 'country_name', 'VARCHAR(128)');
+    $addColumn('users', 'phone_dial_code', 'VARCHAR(8)');
+    $addColumn('users', 'phone_number', 'VARCHAR(32)');
+    $addColumn('users', 'phone_e164', 'VARCHAR(32)');
+    $addColumn('users', 'birth_date', $driver === 'mysql' ? 'DATE' : 'TEXT');
     $addColumn('tg_sessions', 'updated_at', 'INTEGER');
 
     // Ensure UNIQUE index on users.tg_id for SQLite
@@ -2592,6 +2699,12 @@ function schema_upgrade(PDO $pdo, string $driver = 'sqlite') {
     $addColumn('withdrawals', 'admin_note', 'LONGTEXT');
     $addColumn('withdrawals', 'completed_at', 'INTEGER');
     $addColumn('withdrawals', 'updated_at', 'INTEGER', '0');
+
+    // KYC: signed contract and profile fields collected from registration.
+    $addColumn('kyc_requests', 'phone_e164', 'VARCHAR(32)');
+    $addColumn('kyc_requests', 'birth_date', $driver === 'mysql' ? 'DATE' : 'TEXT');
+    $addColumn('kyc_requests', 'contract_path', 'VARCHAR(255)');
+    $addColumn('kyc_requests', 'extra_paths_json', 'LONGTEXT');
 
     // best-effort backfill
     try {
@@ -3002,6 +3115,8 @@ function schema_upgrade_market_quotes_authority(PDO $pdo, string $driver = 'sqli
           WHEN 'provider_live' THEN 92
           WHEN 'eodhd' THEN 91
           WHEN 'eodhd_rest' THEN 91
+          WHEN 'finnhub' THEN 89
+          WHEN 'tiingo' THEN 87
           WHEN 'yahoo' THEN 72
           WHEN 'yahoo_chart_live' THEN 72
           WHEN 'massive' THEN 20

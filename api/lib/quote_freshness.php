@@ -12,6 +12,8 @@ function qa_source_rank(?string $source): int {
     'trade_stream', 'stream' => 96,
     'provider_live' => 92,
     'eodhd', 'eodhd_rest' => 91,
+    'finnhub' => 89,
+    'tiingo' => 87,
     'yahoo', 'yahoo_chart_live' => 72,
     'massive', 'polygon', 'provider_fallback', 'fx_fallback', 'frankfurter', 'stooq' => 20,
     'eodhd_intraday' => 12,
@@ -113,7 +115,9 @@ function qa_quote_timing_class($row, string $assetType): string {
   if (quote_source_is_untrusted($source)) return 'seed';
   if ($source === 'eodhd_intraday' || $source === 'yahoo_chart_live') return 'candle_fallback';
   if ($assetType !== 'crypto' && !quote_source_is_liveish($source, $assetType)) return 'stale';
-  if (($assetType !== 'crypto' && $source === 'yahoo') || in_array($assetType, ['stocks','arab'], true) || !empty($row['delayed'])) {
+  // Finnhub and Tiingo provide real-time quotes — treat as live even for stocks/arab
+  $isRealtimeProvider = in_array($source, ['finnhub','tiingo','binance','trade_stream','stream'], true);
+  if (!$isRealtimeProvider && (($assetType !== 'crypto' && $source === 'yahoo') || in_array($assetType, ['stocks','arab'], true) || !empty($row['delayed']))) {
     if (!qa_quote_is_usable($row, $assetType, false)) return 'stale';
     return qa_market_is_open($assetType) ? 'delayed' : 'market_closed';
   }

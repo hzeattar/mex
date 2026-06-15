@@ -136,18 +136,18 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
   if ($providerType === 'crypto') {
-    return in_array($src, ['binance','trade_stream','stream','provider_live','twelvedata'], true);
+    return in_array($src, ['binance','trade_stream','stream','provider_live','twelvedata','finnhub','tiingo'], true);
   }
   if ($assetType === 'forex') {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','twelvedata','fcsapi'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','twelvedata','fcsapi','finnhub','tiingo'], true);
   }
   if ($assetType === 'stocks') {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','stooq','twelvedata'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo','yahoo_chart_live','stooq','twelvedata','finnhub','tiingo'], true);
   }
   if (in_array($assetType, ['arab','commodities','futures'], true)) {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo_chart_live','yahoo','twelvedata','fcsapi'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','yahoo_chart_live','yahoo','twelvedata','fcsapi','finnhub','tiingo'], true);
   }
-  if (in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','fcsapi'], true)) return true;
+  if (in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','fcsapi','finnhub','tiingo'], true)) return true;
   return false;
 }
 
@@ -382,6 +382,8 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
       WHEN 'provider_live' THEN 92
       WHEN 'eodhd' THEN 91
       WHEN 'eodhd_rest' THEN 91
+      WHEN 'finnhub' THEN 89
+      WHEN 'tiingo' THEN 87
       WHEN 'yahoo' THEN 72
       WHEN 'yahoo_chart_live' THEN 72
       WHEN 'massive' THEN 20
@@ -488,6 +490,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   $yahooBySym = [];
   $massiveBySym = [];
   $eodhdBySym = [];
+  $finnhubBySym = [];
+  $tiingoBySym = [];
   $twelvedataBySym = [];
   $fcsapiBySym = [];
   $preferredProvider = strtolower((string)env('PRICE_PROVIDER', 'eodhd'));
@@ -528,6 +532,16 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
     if (fcsapi_enabled() && in_array($providerType, ['forex','commodities'], true)) {
       $fcs = fcsapi_symbol_for_market($sym, $assetType, $meta);
       if ($fcs) $fcsapiBySym[$sym] = $fcs;
+    }
+    // Finnhub fallback for forex, stocks, commodities, arab
+    if (finnhub_enabled() && in_array($providerType, ['forex','stocks','commodities','arab'], true)) {
+      $fh = finnhub_symbol_for_market($sym, $assetType, $meta);
+      if ($fh) $finnhubBySym[$sym] = $fh;
+    }
+    // Tiingo fallback for forex and stocks
+    if (tiingo_enabled() && in_array($providerType, ['forex','stocks'], true)) {
+      $tg = tiingo_symbol_for_market($sym, $assetType, $meta);
+      if ($tg) $tiingoBySym[$sym] = $tg;
     }
   }
 
@@ -696,6 +710,57 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
           'updated_at' => $now,
           'source' => 'twelvedata',
+        ];
+      }
+    } catch (Throwable $e) {}
+  }
+
+  if ($finnhubBySym) {
+    try {
+      $ttl = max(3, min(30, (int)env('FINNHUB_PRICE_TTL', '5')));
+      $fetchMap = $finnhubBySym;
+      $bulk = finnhub_quote_many_cached(array_values(array_unique(array_values($fetchMap))), $ttl);
+      foreach ($fetchMap as $sym => $ticker) {
+        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
+        $row = is_array($bulk[$ticker] ?? null) ? $bulk[$ticker] : null;
+        if (!$row) continue;
+        $p = (float)($row['price'] ?? 0);
+        if (!($p > 0)) continue;
+        $out[$sym] = [
+          'symbol' => $sym,
+          'type' => $assetType,
+          'price' => $p,
+          'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'updated_at' => $now,
+          'source' => 'finnhub',
+        ];
+      }
+    } catch (Throwable $e) {}
+  }
+
+  if ($tiingoBySym) {
+    try {
+      $ttl = max(3, min(30, (int)env('TIINGO_PRICE_TTL', '5')));
+      $fetchMap = $tiingoBySym;
+      $bulk = tiingo_quote_many_cached(array_values(array_unique(array_values($fetchMap))), $assetType, $ttl);
+      foreach ($fetchMap as $sym => $ticker) {
+        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
+        // Tiingo returns tickers in lowercase for forex, uppercase for stocks
+        $lookupKeys = [$ticker, strtolower($ticker), strtoupper($ticker)];
+        $row = null;
+        foreach ($lookupKeys as $lk) {
+          if (isset($bulk[$lk]) && is_array($bulk[$lk])) { $row = $bulk[$lk]; break; }
+        }
+        if (!$row) continue;
+        $p = (float)($row['price'] ?? 0);
+        if (!($p > 0)) continue;
+        $out[$sym] = [
+          'symbol' => $sym,
+          'type' => $assetType,
+          'price' => $p,
+          'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'updated_at' => $now,
+          'source' => 'tiingo',
         ];
       }
     } catch (Throwable $e) {}

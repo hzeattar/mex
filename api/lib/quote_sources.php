@@ -12,6 +12,8 @@ if (!function_exists('vp_quote_source_rank')) {
             'binance' => 100,
             'trade_stream', 'stream' => 96,
             'provider_live' => 92,
+            'finnhub' => 89,
+            'tiingo' => 87,
             'twelvedata' => 86,
             'massive', 'polygon' => 90,
             'eodhd', 'eodhd_rest', 'eodhd_intraday' => 88,
@@ -360,6 +362,324 @@ if (!function_exists('fcsapi_quote_many_cached')) {
         }
 
         $result = fcsapi_quote_many($tickers);
+        if ($result) {
+            @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        }
+        return $result;
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Finnhub provider — free tier: 60 calls/min, WebSocket available
+// Covers: forex (OANDA), stocks, commodities, crypto
+// Env: FINNHUB_KEY (required)
+// ──────────────────────────────────────────────────────────────
+
+if (!function_exists('finnhub_enabled')) {
+    function finnhub_enabled(): bool {
+        $key = trim((string)env('FINNHUB_KEY', ''));
+        return $key !== '' && strtolower((string)env('FINNHUB_ENABLED', '1')) !== '0';
+    }
+}
+
+if (!function_exists('finnhub_symbol_for_market')) {
+    function finnhub_symbol_for_market(string $symbol, string $assetType, array $meta = []): ?string {
+        $symbol = strtoupper(trim($symbol));
+        $assetType = vp_normalize_asset_type($assetType);
+        $providerType = vp_provider_asset_type($assetType);
+
+        $fh = trim((string)($meta['finnhub_ticker'] ?? ''));
+        if ($fh !== '') return $fh;
+
+        if ($providerType === 'forex') {
+            // EURUSD → OANDA:EUR_USD
+            if (preg_match('/^([A-Z]{3})([A-Z]{3})$/', $symbol, $m)) {
+                return 'OANDA:' . $m[1] . '_' . $m[2];
+            }
+            return null;
+        }
+
+        if ($providerType === 'commodities') {
+            // XAUUSD → OANDA:XAU_USD
+            if (preg_match('/^(XAU|XAG|XPT|XPD)(USD)$/', $symbol, $m)) {
+                return 'OANDA:' . $m[1] . '_' . $m[2];
+            }
+            return null;
+        }
+
+        // Stocks, arab — use raw ticker
+        if (in_array($providerType, ['stocks', 'arab'], true)) {
+            // Strip exchange suffix for Finnhub: 2222.SR → just 2222.SR (Finnhub supports .SR)
+            if (preg_match('/^[A-Z0-9._\-]{1,30}$/', $symbol)) {
+                return $symbol;
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('finnhub_quote_many')) {
+    /**
+     * Fetch real-time quotes from Finnhub REST API.
+     * Finnhub quote endpoint: /quote?symbol=TICKER
+     * Returns: { c: currentPrice, h: high, l: low, o: open, pc: prevClose, dp: changePct }
+     * Returns: [ticker => ['price'=>float,'change_pct'=>float,'source'=>'finnhub'], ...]
+     */
+    function finnhub_quote_many(array $tickers, int $timeoutSec = 3): array {
+        if (!finnhub_enabled() || !$tickers) return [];
+        $key = trim((string)env('FINNHUB_KEY', ''));
+        if ($key === '') return [];
+
+        $tickers = array_values(array_unique(array_filter($tickers)));
+        if (!$tickers) return [];
+
+        $out = [];
+
+        // Finnhub quote endpoint is per-symbol only (no batch), but very fast
+        foreach ($tickers as $ticker) {
+            try {
+                $url = "https://finnhub.io/api/v1/quote?symbol=" . rawurlencode($ticker) . "&token=" . rawurlencode($key);
+
+                $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+                $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+                    'connect_timeout' => max(1, min(3, $timeoutSec)),
+                    'timeout' => max(2, min(6, $timeoutSec + 2)),
+                    'retries' => 0,
+                ];
+
+                $j = http_get_json($url);
+
+                if ($prevTimeout !== null) {
+                    $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout;
+                } else {
+                    unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+                }
+
+                if (!is_array($j)) continue;
+
+                $price = (float)($j['c'] ?? 0);
+                if ($price <= 0) continue;
+                $chgPct = (float)($j['dp'] ?? 0);
+
+                $out[$ticker] = [
+                    'price' => $price,
+                    'change_pct' => $chgPct,
+                    'source' => 'finnhub',
+                ];
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('finnhub_quote_many_cached')) {
+    function finnhub_quote_many_cached(array $tickers, int $ttl = 5): array {
+        $ttl = max(1, min(60, $ttl));
+        $dir = __DIR__ . '/../data/cache';
+        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        $cacheKey = 'fh_' . md5(implode(',', $tickers));
+        $cacheFile = $dir . '/' . $cacheKey . '.json';
+        $now = time();
+
+        if (is_file($cacheFile)) {
+            $age = $now - (int)@filemtime($cacheFile);
+            if ($age >= 0 && $age < $ttl) {
+                $raw = @file_get_contents($cacheFile);
+                $d = $raw ? json_decode($raw, true) : null;
+                if (is_array($d)) return $d;
+            }
+        }
+
+        $result = finnhub_quote_many($tickers);
+        if ($result) {
+            @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        }
+        return $result;
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Tiingo provider — free tier: REST API for forex, stocks, crypto
+// Covers: forex, stocks, commodities (metals), crypto
+// Env: TIINGO_KEY (required)
+// ──────────────────────────────────────────────────────────────
+
+if (!function_exists('tiingo_enabled')) {
+    function tiingo_enabled(): bool {
+        $key = trim((string)env('TIINGO_KEY', ''));
+        return $key !== '' && strtolower((string)env('TIINGO_ENABLED', '1')) !== '0';
+    }
+}
+
+if (!function_exists('tiingo_symbol_for_market')) {
+    function tiingo_symbol_for_market(string $symbol, string $assetType, array $meta = []): ?string {
+        $symbol = strtoupper(trim($symbol));
+        $assetType = vp_normalize_asset_type($assetType);
+        $providerType = vp_provider_asset_type($assetType);
+
+        $tg = trim((string)($meta['tiingo_ticker'] ?? ''));
+        if ($tg !== '') return $tg;
+
+        if ($providerType === 'forex') {
+            // EURUSD → eurusd (Tiingo forex uses lowercase pair)
+            if (preg_match('/^([A-Z]{3})([A-Z]{3})$/', $symbol, $m)) {
+                return strtolower($m[1] . $m[2]);
+            }
+            return null;
+        }
+
+        if ($providerType === 'commodities') {
+            // Spot metals not directly available on Tiingo free tier
+            return null;
+        }
+
+        // Stocks, arab — use as-is (Tiingo supports standard tickers)
+        if (in_array($providerType, ['stocks', 'arab'], true)) {
+            // For arab stocks, Tiingo may not support .SR suffix
+            // Only use Tiingo for US stocks
+            if ($providerType === 'arab') return null;
+            if (preg_match('/^[A-Z0-9._\-]{1,20}$/', $symbol)) {
+                return $symbol;
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('tiingo_quote_many')) {
+    /**
+     * Fetch real-time quotes from Tiingo REST API.
+     * Forex: https://api.tiingo.com/tiingo/fx/top?tickers=eurusd&token=KEY
+     * Stocks: https://api.tiingo.com/iex/?tickers=AAPL&token=KEY
+     * Returns: [ticker => ['price'=>float,'change_pct'=>float,'source'=>'tiingo'], ...]
+     */
+    function tiingo_quote_many(array $tickers, string $assetType = 'forex', int $timeoutSec = 3): array {
+        if (!tiingo_enabled() || !$tickers) return [];
+        $key = trim((string)env('TIINGO_KEY', ''));
+        if ($key === '') return [];
+
+        $tickers = array_values(array_unique(array_filter($tickers)));
+        if (!$tickers) return [];
+
+        $assetType = vp_normalize_asset_type($assetType);
+        $providerType = vp_provider_asset_type($assetType);
+        $out = [];
+
+        if ($providerType === 'forex') {
+            // Tiingo FX endpoint: /tiingo/fx/top?tickers=eurusd,gbpusd&token=KEY
+            try {
+                $symList = implode(',', array_map('strtolower', $tickers));
+                $url = "https://api.tiingo.com/tiingo/fx/top?tickers=" . rawurlencode($symList) . "&token=" . rawurlencode($key);
+
+                $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+                $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+                    'connect_timeout' => max(1, min(3, $timeoutSec)),
+                    'timeout' => max(2, min(6, $timeoutSec + 2)),
+                    'retries' => 0,
+                ];
+
+                $j = http_get_json($url);
+
+                if ($prevTimeout !== null) {
+                    $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout;
+                } else {
+                    unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+                }
+
+                if (!is_array($j)) return [];
+
+                foreach ($j as $item) {
+                    if (!is_array($item)) continue;
+                    $mid = (float)($item['midPrice'] ?? 0);
+                    $bid = (float)($item['bidPrice'] ?? 0);
+                    $ask = (float)($item['askPrice'] ?? 0);
+                    $price = $mid > 0 ? $mid : ($bid > 0 && $ask > 0 ? ($bid + $ask) / 2 : 0);
+                    if ($price <= 0) continue;
+                    $ticker = strtolower(trim((string)($item['ticker'] ?? '')));
+                    if ($ticker === '') continue;
+                    $out[$ticker] = [
+                        'price' => $price,
+                        'change_pct' => 0.0,
+                        'source' => 'tiingo',
+                    ];
+                }
+            } catch (Throwable $e) {
+                // ignore
+            }
+            return $out;
+        }
+
+        if ($providerType === 'stocks') {
+            // Tiingo IEX endpoint: /iex/?tickers=AAPL,MSFT&token=KEY
+            try {
+                $symList = implode(',', array_map('strtoupper', $tickers));
+                $url = "https://api.tiingo.com/iex/?tickers=" . rawurlencode($symList) . "&token=" . rawurlencode($key);
+
+                $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+                $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+                    'connect_timeout' => max(1, min(3, $timeoutSec)),
+                    'timeout' => max(2, min(6, $timeoutSec + 2)),
+                    'retries' => 0,
+                ];
+
+                $j = http_get_json($url);
+
+                if ($prevTimeout !== null) {
+                    $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout;
+                } else {
+                    unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+                }
+
+                if (!is_array($j)) return [];
+
+                foreach ($j as $item) {
+                    if (!is_array($item)) continue;
+                    $price = (float)($item['last'] ?? $item['tngoLast'] ?? $item['prevClose'] ?? 0);
+                    if ($price <= 0) continue;
+                    $prevClose = (float)($item['prevClose'] ?? 0);
+                    $chgPct = $prevClose > 0 ? ((($price - $prevClose) / $prevClose) * 100.0) : 0.0;
+                    $ticker = strtoupper(trim((string)($item['ticker'] ?? '')));
+                    if ($ticker === '') continue;
+                    $out[$ticker] = [
+                        'price' => $price,
+                        'change_pct' => $chgPct,
+                        'source' => 'tiingo',
+                    ];
+                }
+            } catch (Throwable $e) {
+                // ignore
+            }
+            return $out;
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('tiingo_quote_many_cached')) {
+    function tiingo_quote_many_cached(array $tickers, string $assetType = 'forex', int $ttl = 5): array {
+        $ttl = max(1, min(60, $ttl));
+        $dir = __DIR__ . '/../data/cache';
+        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        $cacheKey = 'tg_' . md5($assetType . '_' . implode(',', $tickers));
+        $cacheFile = $dir . '/' . $cacheKey . '.json';
+        $now = time();
+
+        if (is_file($cacheFile)) {
+            $age = $now - (int)@filemtime($cacheFile);
+            if ($age >= 0 && $age < $ttl) {
+                $raw = @file_get_contents($cacheFile);
+                $d = $raw ? json_decode($raw, true) : null;
+                if (is_array($d)) return $d;
+            }
+        }
+
+        $result = tiingo_quote_many($tickers, $assetType);
         if ($result) {
             @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
         }

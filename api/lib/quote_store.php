@@ -176,6 +176,8 @@ function qa_quote_rows_by_symbols(array $symbols, ?string $typeAlias = null): ar
         WHEN 'provider_live' THEN 92
         WHEN 'eodhd' THEN 91
         WHEN 'eodhd_rest' THEN 91
+        WHEN 'finnhub' THEN 89
+        WHEN 'tiingo' THEN 87
         WHEN 'yahoo' THEN 72
         WHEN 'yahoo_chart_live' THEN 72
         WHEN 'massive' THEN 20
