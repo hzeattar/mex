@@ -1,0 +1,1 @@
+{"id":true,"user_id":true,"plan_id":true,"amount":true,"expected_return":true,"debit_ledger_id":true,"payout_ledger_id":true,"payout_schedule":true,"last_accrual_at":true,"paid_total":true,"status":true,"start_at":true,"end_at":true,"created_at":true,"product_kind":true,"is_perpetual":true,"cycle_roi_percent":true,"required_level_id":true}

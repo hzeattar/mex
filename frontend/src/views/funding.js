@@ -476,7 +476,7 @@ function renderMethodCards(container) {
         <span class="method-icon">${methodIcon(m)}</span>
       </span>
       <strong>${esc(m.title || m.name || m.code || t('funding.method', 'Method'))}</strong>
-      <em>${money(m.min_amount || 0)}${m.max_amount ? ` - ${money(m.max_amount)}` : '+'}</em>
+    
     </button>`;
   }).join('');
 }

@@ -1,0 +1,1 @@
+{"id":true,"symbol":true,"type":true,"price":true,"change_pct":true,"updated_at":true,"source":true,"as_of":true,"ingested_at":true,"source_priority":true,"market":true,"provider":true,"provider_ts":true,"received_at":true,"source_strength":true,"is_stale":true,"debug_meta":true,"mark_price":true,"index_price":true,"funding_rate":true,"next_funding_time":true}

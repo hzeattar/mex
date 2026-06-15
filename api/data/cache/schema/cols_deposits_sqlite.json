@@ -1,0 +1,1 @@
+{"id":true,"user_id":true,"provider":true,"method_code":true,"currency":true,"amount":true,"status":true,"external_ref":true,"created_at":true,"updated_at":true,"confirmed_at":true,"details_json":true,"admin_note":true}
