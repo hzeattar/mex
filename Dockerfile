@@ -46,7 +46,7 @@ RUN set -eux; \
     chmod +x ops/start-nginx-fpm.sh
 
 ENV PORT=9000
-ENV BUILD_REV=20260615f
+ENV BUILD_REV=20260615g
 ENV WORKER_MODE=web
 
 EXPOSE 9000
