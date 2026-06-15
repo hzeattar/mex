@@ -1,5 +1,12 @@
 ﻿FROM composer:2 AS composer-bin
 
+FROM node:20-slim AS frontend-build
+WORKDIR /build
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --prefer-offline 2>/dev/null || npm install
+COPY frontend/ ./
+RUN npm run build
+
 FROM php:8.2-fpm
 
 WORKDIR /app
@@ -27,6 +34,7 @@ RUN set -eux; \
 COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
 
 COPY . /app
+COPY --from=frontend-build /assets/dist /app/assets/dist
 
 RUN set -eux; \
     if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi; \
