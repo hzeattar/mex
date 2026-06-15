@@ -1337,13 +1337,18 @@ function scrollCurrentLevelRail(rail, smooth = false) {
     const railRect = rail.getBoundingClientRect();
     const cardRect = card.getBoundingClientRect();
     if (!railRect.width || !cardRect.width) return;
-    const delta = (cardRect.left + cardRect.width / 2) - (railRect.left + railRect.width / 2);
-    const target = rail.scrollLeft + delta;
+    const isRTL = getComputedStyle(rail).direction === 'rtl';
+    let target;
+    if (isRTL) {
+      target = (rail.scrollWidth - rail.clientWidth) - card.offsetLeft + (rail.clientWidth - card.offsetWidth) / 2;
+    } else {
+      target = card.offsetLeft - (rail.clientWidth - card.offsetWidth) / 2;
+    }
     const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
     const left = Math.max(0, Math.min(maxScroll, target));
     rail.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
   };
-  setTimeout(doScroll, 80);
-  setTimeout(doScroll, 350);
-  requestAnimationFrame(() => setTimeout(doScroll, 500));
+  doScroll();
+  setTimeout(doScroll, 120);
+  setTimeout(doScroll, 400);
 }
