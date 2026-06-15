@@ -1,5 +1,5 @@
 // Service Worker for MEX Group - aggressive caching
-const CACHE_NAME = 'mex-v1';
+const CACHE_NAME = 'mex-v2';
 const STATIC_ASSETS = [
   '/',
   '/app.php',
