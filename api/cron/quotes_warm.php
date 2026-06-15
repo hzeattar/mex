@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
+require_once __DIR__ . '/../lib/quote_central.php';
 
 function cron_input_token_qw(): string {
   $web = trim((string)($_GET['token'] ?? ''));
@@ -17,6 +18,20 @@ function cron_input_token_qw(): string {
     }
     $envTok = trim((string)(getenv('CRON_KEY') ?: ''));
     if ($envTok !== '') return $envTok;
+  }
+  return '';
+}
+
+function cron_cli_arg_qw(string $name): string {
+  if (PHP_SAPI !== 'cli') return '';
+  global $argv;
+  $name = trim($name);
+  if ($name === '') return '';
+  foreach ((array)($argv ?? []) as $arg) {
+    $arg = trim((string)$arg);
+    if ($arg === '') continue;
+    if (str_starts_with($arg, $name . '=')) return trim(substr($arg, strlen($name) + 1));
+    if (str_starts_with($arg, '--' . $name . '=')) return trim(substr($arg, strlen($name) + 3));
   }
   return '';
 }
@@ -150,12 +165,7 @@ $requestedTypesRaw = trim((string)($_GET['types'] ?? $_GET['type'] ?? ''));
 // (e.g. `php quotes_warm.php types=forex`) so each run stays light instead of
 // warming all six asset classes at once and starving the web container.
 if ($requestedTypesRaw === '' && PHP_SAPI === 'cli') {
-  foreach ((array)($argv ?? []) as $arg) {
-    $arg = trim((string)$arg);
-    if (str_starts_with($arg, 'types=')) { $requestedTypesRaw = trim(substr($arg, 6)); break; }
-    if (str_starts_with($arg, '--types=')) { $requestedTypesRaw = trim(substr($arg, 8)); break; }
-    if (str_starts_with($arg, 'type=')) { $requestedTypesRaw = trim(substr($arg, 5)); break; }
-  }
+  $requestedTypesRaw = cron_cli_arg_qw('types') ?: cron_cli_arg_qw('type');
 }
 $types = $allTypes;
 if ($requestedTypesRaw !== '') {
@@ -166,10 +176,18 @@ if ($requestedTypesRaw !== '') {
   }
   if ($requested) $types = $requested;
 }
-$deepWarm = ((int)($_GET['deep'] ?? 0) === 1) || count($types) === 1;
-$perType = max(6, min(300, (int)($_GET['per_type'] ?? 150)));
+$deepRaw = trim((string)($_GET['deep'] ?? ''));
+if ($deepRaw === '') $deepRaw = cron_cli_arg_qw('deep');
+if ($deepRaw === '') $deepRaw = '0';
+$perTypeRaw = trim((string)($_GET['per_type'] ?? ''));
+if ($perTypeRaw === '') $perTypeRaw = cron_cli_arg_qw('per_type');
+if ($perTypeRaw === '') $perTypeRaw = cron_cli_arg_qw('limit');
+if ($perTypeRaw === '') $perTypeRaw = '150';
+$deepWarm = ((int)$deepRaw === 1) || count($types) === 1;
+$perType = max(6, min(300, (int)$perTypeRaw));
 $results = [];
 $totalUpserts = 0;
+$centralWrites = 0;
 $now = time();
 $supportedDefs = cron_supported_quote_defs_qw($pdo, $types);
 
@@ -208,6 +226,7 @@ foreach ($types as $type) {
   $live = [];
   try { $live = quote_bulk_live(array_values(array_unique($symbols)), $type, $metaBySymbol, $opts); } catch (Throwable $e) { $live = []; }
   $upserts = 0;
+  $centralBySymbol = [];
   foreach ($symbols as $sym) {
     $row = is_array($live[$sym] ?? null) ? $live[$sym] : null;
     $price = (float)($row['price'] ?? 0);
@@ -220,9 +239,39 @@ foreach ($types as $type) {
       $upserts++;
       $totalUpserts++;
     } catch (Throwable $e) {}
+    try {
+      $entry = [
+        'symbol' => $sym,
+        'type' => $type,
+        'price' => $price,
+        'change_pct' => $change,
+        'updated_at' => $updated,
+        'source' => $source,
+        'central_ts' => $now,
+        'received_at' => (int)($row['received_at'] ?? $now),
+        'ingested_at' => (int)($row['ingested_at'] ?? $now),
+      ];
+      quote_central_write($sym, $type, $entry);
+      $centralBySymbol[$sym] = $entry;
+      $centralWrites++;
+    } catch (Throwable $e) {}
   }
-  $results[$type] = ['count'=>count($symbols),'upserts'=>$upserts];
+  if ($centralBySymbol) {
+    try { quote_central_bundle_write($type, $centralBySymbol); } catch (Throwable $e) {}
+  }
+  $results[$type] = ['count'=>count($symbols),'upserts'=>$upserts,'central_writes'=>count($centralBySymbol)];
 }
+
+try {
+  $typeCounts = [];
+  foreach ($results as $type => $res) $typeCounts[$type] = (int)($res['central_writes'] ?? 0);
+  quote_central_manifest_write([
+    'type_counts' => $typeCounts,
+    'total_written' => $centralWrites,
+    'total_upserted' => $totalUpserts,
+    'fallback_cron' => true,
+  ]);
+} catch (Throwable $e) {}
 
 $payload = [
   'ok' => true,
@@ -231,8 +280,9 @@ $payload = [
   'deep' => $deepWarm,
   'per_type' => $perType,
   'total_upserts' => $totalUpserts,
+  'central_writes' => $centralWrites,
   'results' => $results,
-  'hint' => 'Run every minute via cron using token=CRON_KEY'
+  'hint' => 'Run every 30-60 seconds via cron using token=CRON_KEY when the feed worker daemon is unavailable'
 ];
 try { tp_status_write('quotes_warm', $payload); } catch (Throwable $e) {}
 

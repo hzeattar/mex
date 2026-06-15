@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/schema.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/crypto.php';
 require_once __DIR__ . '/../lib/affiliates.php';
+require_once __DIR__ . '/../lib/user_notifications.php';
 
 require_method('POST');
 $pdo = db();
@@ -38,6 +39,7 @@ if($kind==='deposit'){
   $st = $pdo->prepare("INSERT INTO deposits (user_id, provider, method_code, currency, amount, status, external_ref, created_at, updated_at) VALUES (?,?,?,?,?,'pending',?,?,?)");
   $st->execute([$user_id,'bot', $method ?: null, $currency, $amount, $proof ?: null, $now, $now]);
   $id = (int)$pdo->lastInsertId();
+  user_notify_funding_status($user_id, 'deposit', $amount, $currency, 'pending', $id);
   // Notify manager (best effort)
   try {
     aff_notify_manager_for_user($user_id, 'dep_created', [
@@ -62,6 +64,7 @@ if($kind==='deposit'){
     $st->execute([$user_id, $method ?: 'bot', $currency, $amount, $enc, $holdId, $now, $now]);
     $id = (int)$pdo->lastInsertId();
     $pdo->commit();
+    user_notify_funding_status($user_id, 'withdrawal', $amount, $currency, 'requested', $id);
     // Notify manager (best effort)
     try {
       aff_notify_manager_for_user($user_id, 'wdr_created', [

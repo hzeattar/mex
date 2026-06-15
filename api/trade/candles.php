@@ -30,7 +30,7 @@ $fast   = ((int)($_GET['fast'] ?? 0) === 1);
 $forceRefresh = ((int)($_GET['refresh'] ?? 0) === 1);
 
 if ($symbol === '') json_response(['ok'=>false,'error'=>'Missing symbol'], 422);
-$limit = max(10, min(1000, $limit));
+$limit = max(10, min(2000, $limit));
 $uid = session_user_id();
 if ($uid <= 0 && $limit > 100) {
   json_response(['ok'=>false,'error'=>'login_required','message'=>'Guest access limited to 100 candles','guest_limit'=>100], 401);
@@ -197,15 +197,14 @@ function candles_cached_or_empty_response(string $symbol, string $market, string
   $cached = candles_cache_load($symbol, $market, $tf, $type);
   if ($cached) {
     $items = candles_from_cache($cached, $end, $limit);
-    json_response([
+    candles_json_response([
       'ok' => true,
-      'items' => candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end),
       'cached' => true,
       'source' => 'cache_' . $source,
       'soft_error' => $softError,
-    ]);
+    ], candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end), $limit, $end);
   }
-  json_response(['ok' => true, 'items' => [], 'source' => 'empty_' . $source, 'soft_error' => $softError]);
+  candles_json_response(['ok' => true, 'source' => 'empty_' . $source, 'soft_error' => $softError], [], $limit, $end);
 }
 
 
@@ -215,18 +214,109 @@ function candles_cache_path(string $symbol, string $market, string $tf, string $
   $safeType = preg_replace('/[^a-z0-9_]/', '_', strtolower($type ?: 'generic'));
   return __DIR__ . '/../data/candles_' . strtolower($market) . '_' . $safeType . '_' . strtolower($safe) . '_' . strtolower($tf) . '.json';
 }
+function candles_retention_days(string $type, string $tf): int {
+  $kind = vp_normalize_asset_type($type ?: 'generic');
+  $tf = strtolower(trim($tf));
+  if ($tf === '1m') return 90;
+  if (in_array($tf, ['3m','5m','15m'], true)) return 365;
+  if (in_array($tf, ['30m','1h','2h','4h','6h','8h','12h'], true)) return 1095;
+  if (in_array($tf, ['1d','3d','1w'], true)) return 3650;
+  if (in_array($kind, ['stocks','arab','futures','commodities','forex'], true)) return 365;
+  return 90;
+}
+function candles_db_enabled(): bool {
+  return (int)env('CANDLES_DB_ENABLED', '1') === 1;
+}
+function candles_db_load(string $symbol, string $market, string $tf, string $type = '', int $end = 0, int $limit = 0): array {
+  if (!candles_db_enabled()) return [];
+  $symbol = strtoupper(trim($symbol));
+  $type = vp_normalize_asset_type($type ?: 'generic');
+  $market = strtolower(trim($market ?: 'spot'));
+  $tf = strtolower(trim($tf ?: '1m'));
+  $limit = $limit > 0 ? $limit : max(1000, min(15000, (int)env('CANDLES_DB_READ_LIMIT', '5000')));
+  try {
+    $pdo = db();
+    $args = [$symbol, $type, $market, $tf];
+    $where = 'symbol=? AND type=? AND market=? AND tf=?';
+    if ($end > 0) {
+      $where .= ' AND time<=?';
+      $args[] = $end;
+    }
+    $sql = "SELECT time,open,high,low,close,volume,source,provider_ts,quality
+            FROM market_candles
+            WHERE {$where}
+            ORDER BY time DESC
+            LIMIT " . max(10, min(20000, $limit));
+    $st = $pdo->prepare($sql);
+    $st->execute($args);
+    $rows = array_reverse($st->fetchAll(PDO::FETCH_ASSOC) ?: []);
+    $out = [];
+    foreach ($rows as $r) {
+      $out[] = [
+        'time' => (int)($r['time'] ?? 0),
+        'open' => (float)($r['open'] ?? 0),
+        'high' => (float)($r['high'] ?? 0),
+        'low' => (float)($r['low'] ?? 0),
+        'close' => (float)($r['close'] ?? 0),
+        'volume' => (float)($r['volume'] ?? 0),
+        'source' => (string)($r['source'] ?? ''),
+        'provider_ts' => (int)($r['provider_ts'] ?? 0),
+        'quality' => (string)($r['quality'] ?? 'real'),
+      ];
+    }
+    return array_values(array_filter($out, static fn($c) => (int)($c['time'] ?? 0) > 0));
+  } catch (Throwable $e) {
+    return [];
+  }
+}
+function candles_db_save(string $symbol, string $market, string $tf, string $type, array $candles, string $source = 'cache'): void {
+  if (!candles_db_enabled() || !$candles) return;
+  $symbol = strtoupper(trim($symbol));
+  $type = vp_normalize_asset_type($type ?: 'generic');
+  $market = strtolower(trim($market ?: 'spot'));
+  $tf = strtolower(trim($tf ?: '1m'));
+  $cut = time() - (candles_retention_days($type, $tf) * 86400);
+  $driver = db_driver();
+  $now = time();
+  try {
+    $pdo = db();
+    if ($driver === 'mysql') {
+      $sql = "INSERT INTO market_candles(symbol,type,market,tf,time,open,high,low,close,volume,source,provider_ts,ingested_at,quality)
+              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              ON DUPLICATE KEY UPDATE open=VALUES(open),high=VALUES(high),low=VALUES(low),close=VALUES(close),volume=VALUES(volume),source=VALUES(source),provider_ts=VALUES(provider_ts),ingested_at=VALUES(ingested_at),quality=VALUES(quality)";
+    } else {
+      $sql = "INSERT OR REPLACE INTO market_candles(symbol,type,market,tf,time,open,high,low,close,volume,source,provider_ts,ingested_at,quality)
+              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+    }
+    $st = $pdo->prepare($sql);
+    $written = 0;
+    foreach ($candles as $c) {
+      $t = (int)($c['time'] ?? 0);
+      if ($t <= 0 || $t < $cut) continue;
+      $o = (float)($c['open'] ?? 0);
+      $h = (float)($c['high'] ?? 0);
+      $l = (float)($c['low'] ?? 0);
+      $cl = (float)($c['close'] ?? 0);
+      if (!($o > 0) || !($h > 0) || !($l > 0) || !($cl > 0)) continue;
+      $quality = !empty($c['synthetic']) ? 'synthetic' : (string)($c['quality'] ?? 'real');
+      $st->execute([$symbol, $type, $market, $tf, $t, $o, $h, $l, $cl, (float)($c['volume'] ?? 0), (string)($c['source'] ?? $source), (int)($c['provider_ts'] ?? $t), $now, $quality]);
+      $written++;
+      if ($written >= 5000) break;
+    }
+  } catch (Throwable $e) {}
+}
 function candles_cache_load(string $symbol, string $market, string $tf, string $type = ''): array {
   $p = candles_cache_path($symbol,$market,$tf,$type);
-  if (!is_file($p)) return [];
-  $raw = file_get_contents($p);
-  $j = json_decode($raw ?: '[]', true);
-  return is_array($j) ? $j : [];
+  if (is_file($p)) {
+    $raw = file_get_contents($p);
+    $j = json_decode($raw ?: '[]', true);
+    if (is_array($j) && $j) return $j;
+  }
+  return candles_db_load($symbol, $market, $tf, $type);
 }
 function candles_cache_save(string $symbol, string $market, string $tf, array $candles, string $type = ''): void {
   $kind = vp_normalize_asset_type($type ?: 'generic');
-  $keepDays = 90;
-  if (in_array($kind, ['stocks','arab','futures','commodities'], true)) $keepDays = 365;
-  elseif ($kind === 'forex') $keepDays = 365;
+  $keepDays = candles_retention_days($kind, $tf);
   $cut = time() - ($keepDays * 24 * 3600);
   $by = [];
   foreach ($candles as $c) {
@@ -243,7 +333,9 @@ function candles_cache_save(string $symbol, string $market, string $tf, array $c
   }
   ksort($by);
   $p = candles_cache_path($symbol,$market,$tf,$type);
-  @file_put_contents($p, json_encode(array_values($by), JSON_UNESCAPED_SLASHES));
+  $items = array_values($by);
+  @file_put_contents($p, json_encode($items, JSON_UNESCAPED_SLASHES));
+  candles_db_save($symbol, $market, $tf, $type, $items, 'cache');
 }
 function candles_from_cache(array $candles, int $end, int $limit): array {
   if (!$candles) return [];
@@ -254,6 +346,27 @@ function candles_from_cache(array $candles, int $end, int $limit): array {
   $n = count($candles);
   if ($n <= $limit) return $candles;
   return array_slice($candles, $n - $limit);
+}
+
+function candles_payload(array $payload, array $items, int $limit, int $end = 0): array {
+  $items = array_values($items);
+  $count = count($items);
+  $first = $count ? (int)($items[0]['time'] ?? 0) : 0;
+  $last = $count ? (int)($items[$count - 1]['time'] ?? 0) : 0;
+  $payload['items'] = $items;
+  $payload['count'] = $count;
+  $payload['has_more'] = $count >= max(10, min(2000, $limit));
+  $payload['next_end'] = $first > 0 ? ($first - 1) : null;
+  $payload['coverage'] = [
+    'from' => $first ?: null,
+    'to' => $last ?: null,
+    'requested_end' => $end > 0 ? $end : null,
+  ];
+  return $payload;
+}
+
+function candles_json_response(array $payload, array $items, int $limit, int $end = 0): void {
+  json_response(candles_payload($payload, $items, $limit, $end));
 }
 
 function candles_last_time(array $candles): int {
@@ -279,7 +392,10 @@ function candles_cache_recent_enough(array $candles, int $step, string $provider
 function candles_cache_depth_enough(array $candles, int $limit, string $providerType, string $tf = ''): bool {
   if (!$candles) return false;
   $count = count($candles);
-  if ($providerType === 'crypto') return $count >= max(30, min($limit, 80));
+  if ($providerType === 'crypto') {
+    $needed = $limit >= 1000 ? min($limit, 1500) : max(30, min($limit, 80));
+    return $count >= $needed;
+  }
   $tf = strtolower(trim($tf));
   $baseNeed = max(60, (int)ceil($limit * 0.72));
   if (in_array($providerType, ['commodities','forex'], true)) $baseNeed = max(80, (int)ceil($limit * 0.78));
@@ -317,6 +433,49 @@ function map_klines_to_candles(array $klines): array {
     ];
   }
   return $out;
+}
+
+function candles_binance_spot_klines_paged(string $path, array $query, int $targetLimit): array {
+  $targetLimit = max(10, min(2000, $targetLimit));
+  $pageLimit = min(1000, $targetLimit);
+  $endMs = isset($query['endTime']) ? (int)$query['endTime'] : 0;
+  $all = [];
+  for ($page = 0; $page < 3 && count($all) < $targetLimit; $page++) {
+    $q = $query;
+    $q['limit'] = min($pageLimit, $targetLimit - count($all));
+    if ($endMs > 0) $q['endTime'] = $endMs;
+    else unset($q['endTime']);
+    $kl = binance_spot_json($path, $q);
+    if (!is_array($kl) || !$kl) break;
+    $all = array_merge($kl, $all);
+    $first = is_array($kl[0] ?? null) ? (int)($kl[0][0] ?? 0) : 0;
+    if ($first <= 0 || count($kl) < (int)$q['limit']) break;
+    $endMs = $first - 1;
+    if (candles_request_over_budget(1200)) break;
+  }
+  return array_slice($all, -$targetLimit);
+}
+
+function candles_binance_http_klines_paged(string $baseUrl, string $symbol, string $tf, int $targetLimit, int $endMs = 0): array {
+  $targetLimit = max(10, min(2000, $targetLimit));
+  $pageLimit = min(1000, $targetLimit);
+  $all = [];
+  for ($page = 0; $page < 3 && count($all) < $targetLimit; $page++) {
+    $limit = min($pageLimit, $targetLimit - count($all));
+    $url = $baseUrl
+      . '?symbol=' . urlencode($symbol)
+      . '&interval=' . urlencode($tf)
+      . '&limit=' . $limit;
+    if ($endMs > 0) $url .= '&endTime=' . $endMs;
+    $kl = http_get_json($url);
+    if (!is_array($kl) || !$kl) break;
+    $all = array_merge($kl, $all);
+    $first = is_array($kl[0] ?? null) ? (int)($kl[0][0] ?? 0) : 0;
+    if ($first <= 0 || count($kl) < $limit) break;
+    $endMs = $first - 1;
+    if (candles_request_over_budget(1200)) break;
+  }
+  return array_slice($all, -$targetLimit);
 }
 
 function candles_series_has_real_movement(array $items, int $sample = 24): bool {
@@ -368,7 +527,7 @@ function candles_crypto_respond_from_provider(array $newItems, string $source, s
   candles_cache_save($symbol, $market, $tf, $merged, $type);
   $items = candles_from_cache($merged, $end, $limit);
   $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
-  json_response(['ok'=>true,'items'=>$out,'source'=>$source,'provider_count'=>count($newItems)]);
+  candles_json_response(['ok'=>true,'source'=>$source,'provider_count'=>count($newItems)], $out, $limit, $end);
 }
 
 
@@ -618,14 +777,16 @@ try {
   // Then refresh in the background (shared hosting friendly).
   $cacheFile = candles_cache_path($symbol,$market,$tf,$type);
   $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
+  if ($end > 0) {
+    $dbPage = candles_db_load($symbol, $market, $tf, $type, $end, max($limit * 3, 1500));
+    if ($dbPage) $cachedAll = $dbPage;
+  }
   if ($fast && !$forceRefresh && $end <= 0) {
     $step = tf_seconds($tf);
     if ($cachedAll) {
       $fastItems = candles_finalize_items(candles_from_cache($cachedAll, 0, $limit), $symbol, $market, $type, $step, 0);
       if ($fastItems && candles_has_display_history($fastItems, $limit, $providerType)) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok'=>true,'items'=>$fastItems,'cached'=>true,'source'=>'cache_fast','fast'=>true], JSON_UNESCAPED_SLASHES);
-        exit;
+        candles_json_response(['ok'=>true,'cached'=>true,'source'=>'cache_fast','fast'=>true], $fastItems, $limit, 0);
       }
       @unlink($cacheFile);
       $cachedAll = [];
@@ -633,9 +794,7 @@ try {
     $seedPrice = ((int)env('CANDLES_FAST_SEED_FALLBACK', '0') === 1) ? candles_cached_seed_price($symbol, $type) : 0.0;
     if ($seedPrice > 0) {
       $items = candles_quote_seed_items($seedPrice, time(), $step, $limit);
-      header('Content-Type: application/json; charset=utf-8');
-      echo json_encode(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, $step, 0),'synthetic'=>true,'source'=>'synthetic_seed_fast','fast'=>true], JSON_UNESCAPED_SLASHES);
-      exit;
+      candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic_seed_fast','fast'=>true], candles_finalize_items($items, $symbol, $market, $type, $step, 0), $limit, 0);
     }
   }
   if ($end <= 0 && $cachedAll) {
@@ -650,15 +809,11 @@ try {
       $cacheDeepEnough = candles_cache_depth_enough($fastItems, $limit, $providerType, $tf);
       $cacheMovesEnough = candles_series_has_real_movement($fastItems, 24);
       if ($allowWarmNonCrypto && $cacheDeepEnough && $cacheMovesEnough) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok'=>true,'items'=>$fastItems, 'cached'=>true, 'warm'=>true, 'source'=>'cache_warm'], JSON_UNESCAPED_SLASHES);
-        exit;
+        candles_json_response(['ok'=>true,'cached'=>true, 'warm'=>true, 'source'=>'cache_warm'], $fastItems, $limit, 0);
       }
       $fastMatchesLive = candles_series_matches_live($fastItems, $symbol, $market, $type);
-      if ($fastMatchesLive) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok'=>true,'items'=>$fastItems, 'cached'=>true, 'warm'=>false], JSON_UNESCAPED_SLASHES);
-        exit;
+      if ($fastMatchesLive && ($providerType !== 'crypto' || $cacheDeepEnough)) {
+        candles_json_response(['ok'=>true,'cached'=>true, 'warm'=>false], $fastItems, $limit, 0);
       }
       @unlink($cacheFile);
     }
@@ -687,43 +842,43 @@ try {
     // If this is a paginated (older) request and cache already satisfies it, avoid upstream.
     if ($end > 0 && $cachedAll) {
       $itemsCached = candles_from_cache($cachedAll, $end, $limit);
-      if (count($itemsCached) >= max(10, (int)($limit*0.6))) {
-        json_response(['ok'=>true,'items'=>$itemsCached,'cached'=>true]);
+      if (count($itemsCached) >= $limit) {
+        candles_json_response(['ok'=>true,'cached'=>true], $itemsCached, $limit, $end);
       }
     }
 
     // If cache is fresh enough, skip refresh and just return cache (when not already silent).
     if ($skipRefresh && $cachedAll && $end <= 0 && candles_cache_recent_enough($cachedAll, tf_seconds($tf), $providerType, 0)) {
       $cachedItems = candles_finalize_items(candles_from_cache($cachedAll, 0, $limit), $symbol, $market, $type, tf_seconds($tf), 0);
-      if (candles_series_matches_live($cachedItems, $symbol, $market, $type)) {
-        json_response(['ok'=>true,'items'=>$cachedItems,'cached'=>true]);
+      if (candles_cache_depth_enough($cachedItems, $limit, $providerType, $tf) && candles_series_matches_live($cachedItems, $symbol, $market, $type)) {
+        candles_json_response(['ok'=>true,'cached'=>true], $cachedItems, $limit, 0);
       }
     }
 
     $endMs = 0;
     if ($end > 0) {
-      // cap lookback to ~365 days
-      $min = time() - (365 * 86400);
+      // cap lookback to the configured retention window for this timeframe.
+      $min = time() - (candles_retention_days($type, $tf) * 86400);
       if ($end < $min) $end = $min;
       $endMs = $end * 1000;
     }
     $providerErrors = [];
     $providers = [];
     if ($market === 'perp') {
-      $url = 'https://fapi.binance.com/fapi/v1/klines?symbol=' . urlencode($symbol) . '&interval=' . urlencode($tf) . '&limit=' . $limit;
-      if ($endMs > 0) $url .= '&endTime=' . $endMs;
-      $providers[] = ['source' => 'binance_futures_klines', 'url' => $url];
+      $providers[] = ['source' => 'binance_futures_klines', 'futures_base' => 'https://fapi.binance.com/fapi/v1/klines', 'end_ms' => $endMs];
     }
     $spotPath = '/api/v3/klines';
-    $spotQuery = ['symbol' => $symbol, 'interval' => $tf, 'limit' => $limit];
+    $spotQuery = ['symbol' => $symbol, 'interval' => $tf, 'limit' => min(1000, $limit)];
     if ($endMs > 0) $spotQuery['endTime'] = $endMs;
     $providers[] = ['source' => 'binance_spot_klines', 'spot_path' => $spotPath, 'query' => $spotQuery];
 
     foreach ($providers as $provider) {
       try {
-        $kl = isset($provider['spot_path'])
-          ? binance_spot_json((string)$provider['spot_path'], (array)$provider['query'])
-          : http_get_json((string)$provider['url']);
+        if (isset($provider['spot_path'])) {
+          $kl = candles_binance_spot_klines_paged((string)$provider['spot_path'], (array)$provider['query'], $limit);
+        } else {
+          $kl = candles_binance_http_klines_paged((string)$provider['futures_base'], $symbol, $tf, $limit, (int)($provider['end_ms'] ?? 0));
+        }
         $newItems = map_klines_to_candles($kl);
         if (count($newItems) >= 2 && candles_series_has_real_movement($newItems, 24)) {
           candles_crypto_respond_from_provider($newItems, (string)$provider['source'], $symbol, $market, $type, $tf, $end, $limit);
@@ -759,7 +914,8 @@ try {
     $cached = candles_cache_load($symbol,$market,$tf,$type);
     if ($cached && candles_series_has_real_movement($cached, 24)) {
       $items = candles_from_cache($cached, $end, $limit);
-      json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end),'cached'=>true,'source'=>'cache_preserve','provider_errors'=>$providerErrors]);
+      $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+      candles_json_response(['ok'=>true,'cached'=>true,'source'=>'cache_preserve','provider_errors'=>$providerErrors], $out, $limit, $end);
     }
 
     throw new RuntimeException('Crypto candle providers unavailable: ' . implode(' | ', array_slice($providerErrors, -3)));
@@ -808,12 +964,12 @@ try {
           candles_cache_save($symbol,$market,$tf, $merged, $type);
           if (in_array($providerType, ['stocks','arab','commodities','futures'], true)) {
             if (candles_has_display_history($out, $limit, $providerType)) {
-              json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart','warm'=>true]);
+              candles_json_response(['ok'=>true,'source'=>'yahoo_chart','warm'=>true], $out, $limit, $end);
             }
           }
           $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
           if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
-            json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart','warm'=>false]);
+            candles_json_response(['ok'=>true,'source'=>'yahoo_chart','warm'=>false], $out, $limit, $end);
           }
         }
       }
@@ -845,7 +1001,7 @@ try {
           $merged = array_merge($cachedAll, $items);
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
           candles_cache_save($symbol,$market,$tf, $merged, $type);
-          json_response(['ok'=>true,'items'=>$out,'source'=>'eodhd_intraday','warm'=>false]);
+          candles_json_response(['ok'=>true,'source'=>'eodhd_intraday','warm'=>false], $out, $limit, $end);
         }
       }
     } catch (Throwable $e) {
@@ -898,12 +1054,12 @@ try {
       candles_cache_save($symbol,$market,$tf, $merged, $type);
       if (in_array($providerType, ['stocks','arab','commodities','futures','forex'], true)) {
         if (candles_has_display_history($out, $limit, $providerType)) {
-          json_response(['ok'=>true,'items'=>$out,'source'=>'aggs','warm'=>true]);
+          candles_json_response(['ok'=>true,'source'=>'aggs','warm'=>true], $out, $limit, $end);
         }
       }
       $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
       if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
-        json_response(['ok'=>true,'items'=>$out,'source'=>'aggs','warm'=>false]);
+        candles_json_response(['ok'=>true,'source'=>'aggs','warm'=>false], $out, $limit, $end);
       }
     }
   } catch (Throwable $e) {
@@ -928,12 +1084,12 @@ try {
           candles_cache_save($symbol,$market,$tf, $merged, $type);
           if (in_array($providerType, ['forex','commodities'], true)) {
             if (candles_has_display_history($out, $limit, $providerType)) {
-              json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart_fallback','warm'=>true]);
+              candles_json_response(['ok'=>true,'source'=>'yahoo_chart_fallback','warm'=>true], $out, $limit, $end);
             }
           }
           $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
           if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
-            json_response(['ok'=>true,'items'=>$out,'source'=>'yahoo_chart_fallback','warm'=>false]);
+            candles_json_response(['ok'=>true,'source'=>'yahoo_chart_fallback','warm'=>false], $out, $limit, $end);
           }
         }
       }
@@ -950,7 +1106,7 @@ try {
   if (!empty($cachedAll)) {
     $cachedOut = candles_finalize_items(candles_from_cache($cachedAll, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
     if (count($cachedOut) >= max(24, (int)ceil($limit * 0.25))) {
-      json_response(['ok'=>true,'items'=>$cachedOut,'cached'=>true,'source'=>'cache_preserve']);
+      candles_json_response(['ok'=>true,'cached'=>true,'source'=>'cache_preserve'], $cachedOut, $limit, $end);
     }
   }
 
@@ -980,12 +1136,12 @@ try {
   if (!($last > 0)) $last = candles_cached_seed_price($symbol, $type);
   $price = $last > 0 ? $last : 0.0;
   if (!($price > 0)) {
-    json_response(['ok'=>true,'items'=>[],'source'=>'empty_fallback']);
+    candles_json_response(['ok'=>true,'source'=>'empty_fallback'], [], $limit, $end);
   }
   // Honest charts: do not fabricate synthetic price action by default.
   // Return "no data" so the UI shows a loading/empty state instead of fake candles.
   if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
-    json_response(['ok'=>true,'items'=>[],'source'=>'no_data','synthetic'=>false]);
+    candles_json_response(['ok'=>true,'source'=>'no_data','synthetic'=>false], [], $limit, $end);
   }
   $alignedNow = (int)(floor($now / $step) * $step);
   for ($i = $limit-1; $i >= 0; $i--) {
@@ -1001,11 +1157,14 @@ try {
     $items[] = ['time'=>$t,'open'=>$o,'high'=>$h,'low'=>$l,'close'=>$c,'volume'=>$vol*1000];
     $price = $c;
   }
-  json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end), 'synthetic'=>true, 'source'=>'synthetic']);} catch (Throwable $e) {
+  $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+  candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic'], $out, $limit, $end);
+} catch (Throwable $e) {
   try {
     $fallbackCached = candles_cache_load($symbol,$market,$tf,$type);
     if ($fallbackCached) {
-      json_response(['ok'=>true,'items'=>candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end), 'cached'=>true, 'soft_error'=>'provider_unavailable']);
+      $out = candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
+      candles_json_response(['ok'=>true,'cached'=>true,'soft_error'=>'provider_unavailable'], $out, $limit, $end);
     }
     $allowFallbackLiveLookup = (int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1;
     $last = 0.0;
@@ -1033,17 +1192,18 @@ try {
     }
     if (!($last > 0)) $last = candles_cached_seed_price($symbol, $type);
     if (!($last > 0)) {
-      json_response(['ok'=>true,'items'=>[],'soft_error'=>'provider_unavailable','source'=>'empty_error_fallback']);
+      candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'empty_error_fallback'], [], $limit, $end);
     }
     // Honest charts: do not fabricate synthetic price action by default.
     if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
-      json_response(['ok'=>true,'items'=>[],'soft_error'=>'provider_unavailable','source'=>'no_data','synthetic'=>false]);
+      candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'no_data','synthetic'=>false], [], $limit, $end);
     }
     $price = $last;
     $step = max(1, tf_seconds($tf));
     $items = candles_quote_seed_items($price, time(), $step, $limit);
-    json_response(['ok'=>true,'items'=>candles_finalize_items($items, $symbol, $market, $type, $step, $end),'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>'provider_unavailable']);
+    $out = candles_finalize_items($items, $symbol, $market, $type, $step, $end);
+    candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>'provider_unavailable'], $out, $limit, $end);
   } catch (Throwable $ignored2) {
-    json_response(['ok'=>true,'items'=>[],'source'=>'empty_error_fallback','soft_error'=>'provider_unavailable']);
+    candles_json_response(['ok'=>true,'source'=>'empty_error_fallback','soft_error'=>'provider_unavailable'], [], $limit, $end);
   }
 }

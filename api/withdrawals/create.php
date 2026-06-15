@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/idempotency.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/crypto.php';
 require_once __DIR__ . '/../lib/affiliates.php';
+require_once __DIR__ . '/../lib/user_notifications.php';
 
 require_method('POST');
 $idem = idem_require('withdraw_create');
@@ -99,6 +100,8 @@ try {
   $stmt->execute([$uid,$method,$currency,$amount,'requested',$enc,json_encode($details, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),$holdId,0,$now,$now]);
   $wid = (int)$pdo->lastInsertId();
   $pdo->commit();
+
+  user_notify_funding_status($uid, 'withdrawal', $amount, $currency, 'requested', $wid);
 
   try {
     aff_notify_manager_for_user($uid, 'wdr_created', [

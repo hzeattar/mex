@@ -5,6 +5,7 @@ require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
 require_once __DIR__ . '/../lib/trade_mode.php';
 require_once __DIR__ . '/../lib/affiliates.php';
+require_once __DIR__ . '/../lib/quote_snapshot.php';
 
 require_method('POST');
 $uid = require_auth();
@@ -61,59 +62,54 @@ if ($sl <= 0) $sl = 0.0;
 // (No merge by symbol/side; each position is independent.)
 $mergePositions = false;
 
-$mark = 0.0;
-$cachedPriceForSanity = 0.0;
-// Fast-path: use latest cached quote (avoids slow upstream calls during order placement).
-// Non-crypto providers are delayed/polled and can be slower than the order timeout, so
-// a safe stale window is better than aborting the trade request after the UI already has a quote.
-$maxAge = (int)(env('ENTRY_QUOTE_MAX_AGE','3') ?? '3');
-$maxAgeByType = [
-  'crypto' => max(3, min(30, (int)env('ENTRY_QUOTE_MAX_AGE_CRYPTO', (string)$maxAge))),
-  'forex' => max(60, min(7200, (int)env('ENTRY_QUOTE_MAX_AGE_FOREX', '1800'))),
-  'commodities' => max(60, min(14400, (int)env('ENTRY_QUOTE_MAX_AGE_COMMODITIES', '3600'))),
-  'futures' => max(60, min(14400, (int)env('ENTRY_QUOTE_MAX_AGE_FUTURES', '3600'))),
-  'stocks' => max(300, min(86400, (int)env('ENTRY_QUOTE_MAX_AGE_STOCKS', '21600'))),
-  'arab' => max(300, min(86400, (int)env('ENTRY_QUOTE_MAX_AGE_ARAB', '21600'))),
-];
-$maxAge = $maxAgeByType[$assetType] ?? max(3, min(120, $maxAge));
-try {
-  $q0 = quote_get($symbol, $assetType);
-  if ($q0) {
-    $upd0 = (int)($q0['updated_at'] ?? 0);
-    $age0 = ($upd0 > 0) ? (time() - $upd0) : 999999;
-    $cachedPriceForSanity = (float)($q0['price'] ?? 0);
-    if ($age0 <= $maxAge) {
-      if ($marketType === 'perp') {
-        $mp0 = (float)($q0['mark_price'] ?? 0);
-        $mark = ($mp0 > 0) ? $mp0 : $cachedPriceForSanity;
-      } else {
-        $mark = $cachedPriceForSanity;
-      }
-    }
-  }
-} catch (Throwable $e) { /* ignore */ }
+$quoteSnapshot = qs_snapshot($symbol, $assetType, $marketType, ['mode' => 'execution']);
+$mark = !empty($quoteSnapshot['execution_allowed']) ? qs_execution_price($quoteSnapshot, $side) : 0.0;
+$cachedPriceForSanity = (float)($quoteSnapshot['price'] ?? 0);
 
-if ($mark <= 0 && $clientPrice > 0) {
+if ($isReal && (empty($quoteSnapshot['execution_allowed']) || !($mark > 0))) {
+  json_response([
+    'ok' => false,
+    'error' => 'Live executable price unavailable. Please wait for the quote to refresh and try again.',
+    'code' => 'price_not_executable',
+    'quote' => qs_public_item($quoteSnapshot),
+  ], 409);
+}
+
+if ($mark <= 0 && !$isReal && $clientPrice > 0) {
   $allowedDrift = in_array($assetType, ['forex'], true) ? 0.03 : 0.08;
   $driftOk = $cachedPriceForSanity <= 0 || abs($clientPrice - $cachedPriceForSanity) / max($cachedPriceForSanity, 0.00000001) <= $allowedDrift;
   if ($driftOk) $mark = $clientPrice;
 }
 
 try {
-  if ($mark <= 0) {
+  if ($mark <= 0 && !$isReal) {
     $mark = quote_price($symbol, (string)$marketType ?: 'spot', (string)$assetType ?: 'crypto');
+    if ($mark > 0) {
+      $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
+        'symbol' => $symbol,
+        'type' => $assetType,
+        'market' => $marketType,
+        'price' => $mark,
+        'change_pct' => 0,
+        'updated_at' => time(),
+        'source' => 'demo_live_fallback',
+      ], ['mode' => 'display']);
+    }
   }
 } catch (Throwable $e) {
   json_response(['ok'=>false,'error'=>'Price unavailable. Please wait for the live quote to refresh and try again.'], 503);
+}
+if (!($mark > 0)) {
+  json_response(['ok'=>false,'error'=>'Price unavailable. Please wait for the live quote to refresh and try again.','code'=>'price_unavailable'], 503);
 }
 
 $fill = $mark;
 if ($orderType === 'LIMIT') {
   if ($limit <= 0) json_response(['ok'=>false,'error'=>'Limit price required'], 422);
-  // simple fill rule: buy fills if limit >= mark, sell fills if limit <= mark
+  // Limit fills only when it crosses the executable side price.
   $canFill = ($side === 'BUY') ? ($limit >= $mark) : ($limit <= $mark);
   if (!$canFill) json_response(['ok'=>false,'error'=>'Limit not reached (demo rule)'], 409);
-  $fill = $limit;
+  $fill = $mark;
 }
 
 // Derive sizing.
@@ -184,6 +180,7 @@ try {
     'price'=>$fill,
     'leverage'=>$leverage,
     'mode'=>$mode,
+    'quote_snapshot'=>qs_meta($quoteSnapshot),
   ]);
 
   if ($fee > 0) {
@@ -208,9 +205,15 @@ try {
   $ins->execute([$uid,$storeSymbol,$assetType,$marketType,$side,$qty,$fill,$leverage,$marginMode,$cost,$fee,$liq, ($tp>0?$tp:null), ($sl>0?$sl:null), $ts, $ts, 'open']);
   $positionId = (int)$pdo->lastInsertId();
   // Record order
-  $o = $pdo->prepare('INSERT INTO orders(user_id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,reduce_only,client_order_id,position_id,fee_paid,status,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-  $o->execute([$uid,$storeSymbol,$assetType,$marketType,$side,$orderType,$qty,$orderType==='LIMIT'?$limit:null,$fill,($marketType==='perp'?($usdAmount ?? $notional):$notional),($tp>0?$tp:null),($sl>0?$sl:null),$leverage,0,null,$positionId,$fee,'filled', now_ts()]);
+  $orderMeta = json_encode([
+    'source' => 'trade_open',
+    'mode' => $mode,
+    'quote_snapshot' => qs_meta($quoteSnapshot),
+    'requested_limit_price' => $orderType === 'LIMIT' ? $limit : null,
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  $o = $pdo->prepare('INSERT INTO orders(user_id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,reduce_only,client_order_id,position_id,fee_paid,meta,status,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  $o->execute([$uid,$storeSymbol,$assetType,$marketType,$side,$orderType,$qty,$orderType==='LIMIT'?$limit:null,$fill,($marketType==='perp'?($usdAmount ?? $notional):$notional),($tp>0?$tp:null),($sl>0?$sl:null),$leverage,0,null,$positionId,$fee,$orderMeta,'filled', now_ts()]);
   $orderId = (int)$pdo->lastInsertId();
 
   $pdo->commit();

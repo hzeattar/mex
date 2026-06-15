@@ -3,6 +3,7 @@
 // POST JSON: {"external_ref":"DUM-...","status":"confirmed"}
 require_once __DIR__ . '/../../lib/common.php';
 require_once __DIR__ . '/../../lib/ledger.php';
+require_once __DIR__ . '/../../lib/user_notifications.php';
 
 require_method('POST');
 
@@ -38,6 +39,7 @@ try {
   if ($status === 'failed') {
     $pdo->prepare('UPDATE deposits SET status="failed", updated_at=? WHERE id=?')->execute([$now, (int)$dep['id']]);
     $pdo->commit();
+    user_notify_funding_status((int)$dep['user_id'], 'deposit', (float)$dep['amount'], (string)$dep['currency'], 'failed', (int)$dep['id']);
     json_response(['ok'=>true,'status'=>'failed']);
   }
 
@@ -47,6 +49,7 @@ try {
   $pdo->prepare('UPDATE deposits SET status="confirmed", updated_at=?, confirmed_at=? WHERE id=?')->execute([$now, $now, (int)$dep['id']]);
 
   $pdo->commit();
+  user_notify_funding_status((int)$dep['user_id'], 'deposit', (float)$dep['amount'], (string)$dep['currency'], 'confirmed', (int)$dep['id']);
   json_response(['ok'=>true,'status'=>'confirmed']);
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();

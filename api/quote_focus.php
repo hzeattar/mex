@@ -8,6 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/market_resolver.php';
 require_once __DIR__ . '/lib/quote_central.php';
+require_once __DIR__ . '/lib/quote_snapshot.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: public, max-age=1');
@@ -26,49 +27,9 @@ if (!$list) {
   json_response(['ok' => false, 'error' => 'symbols required'], 400);
 }
 
-// Crypto fast lane: one batched Binance 24hr call (1s file cache) shared by
-// every user thanks to the nginx 1s micro-cache → at most ~1 upstream call
-// per second regardless of user count. Central cache stays as the fallback.
+// Cache-only focus endpoint. Provider calls are handled by the feed worker;
+// this request must not block on Binance/Yahoo during active chart polling.
 $items = null;
-if ($type === 'crypto') {
-  require_once __DIR__ . '/lib/marketdata.php';
-  try {
-    $map = binance_ticker_24hr_many_cached($list, 1);
-  } catch (Throwable $e) {
-    $map = [];
-  }
-  if ($map) {
-    $now = time();
-    $items = [];
-    $missingLive = [];
-    foreach ($list as $sym) {
-      $m = $map[$sym] ?? null;
-      if (is_array($m) && (float)($m['price'] ?? 0) > 0) {
-        $items[] = [
-          'symbol' => $sym,
-          'type' => 'crypto',
-          'price' => (float)$m['price'],
-          'change_pct' => (float)($m['change_pct'] ?? 0),
-          'updated_at' => $now,
-          'provider_updated_at' => $now,
-          'received_at' => $now,
-          'cache_updated_at' => $now,
-          'source' => 'binance',
-          'delayed' => false,
-          'timing_class' => 'live',
-          'age_sec' => 0,
-        ];
-      } else {
-        $missingLive[] = $sym;
-      }
-    }
-    // Symbols Binance doesn't list fall back to the central cache below.
-    $list = $missingLive;
-    if (!$list) {
-      json_response(['ok' => true, 'items' => $items, 'authority' => 'binance', 'mode' => 'focus_live', 'source' => 'binance']);
-    }
-  }
-}
 
 // Two-tier central read. Tier 1 enforces a freshness window so a stale local
 // file cache falls through to the DB (which the feed worker keeps fresh) and
@@ -78,7 +39,7 @@ $freshAge = match ($type) {
   'forex' => max(5, (int)env('QUOTE_FOCUS_FRESH_AGE_FOREX', '20')),
   default => max(10, (int)env('QUOTE_FOCUS_FRESH_AGE_DEFAULT', '90')),
 };
-$centralItems = quote_central_items($list, $type, $freshAge);
+$centralItems = qs_public_items(qs_snapshots($list, $type, 'spot', ['mode' => 'display']));
 $items = is_array($items) ? array_merge($items, $centralItems) : $centralItems;
 
 $stale = [];
@@ -91,7 +52,7 @@ if ($stale) {
   foreach ($lastKnown as $lk) {
     $sym = (string)($lk['symbol'] ?? '');
     if ($sym !== '' && isset($stale[$sym]) && (float)($lk['price'] ?? 0) > 0) {
-      $items[$stale[$sym]] = $lk;
+      $items[$stale[$sym]] = qs_public_item(qs_snapshot_from_row($sym, $type, 'spot', $lk, ['mode' => 'display']));
       unset($stale[$sym]);
     }
   }
@@ -114,22 +75,7 @@ if ($missing) {
       $q = null;
     }
     if (is_array($q) && (float)($q['price'] ?? 0) > 0) {
-      $upd = (int)($q['updated_at'] ?? 0);
-      $items[$i] = [
-        'symbol' => $sym,
-        'type' => $type,
-        'price' => (float)$q['price'],
-        'change_pct' => (float)($q['change_pct'] ?? 0),
-        'updated_at' => $upd,
-        'provider_updated_at' => (int)($q['provider_ts'] ?? $upd),
-        'received_at' => (int)($q['received_at'] ?? 0),
-        'ingested_at' => (int)($q['ingested_at'] ?? 0),
-        'cache_updated_at' => $upd,
-        'source' => (string)($q['source'] ?? 'cache'),
-        'delayed' => $type !== 'crypto',
-        'timing_class' => $type !== 'crypto' ? 'delayed' : 'live',
-        'age_sec' => $upd > 0 ? max(0, $now - $upd) : null,
-      ];
+      $items[$i] = qs_public_item(qs_snapshot_from_row($sym, $type, 'spot', $q, ['mode' => 'display']));
     }
   }
 }

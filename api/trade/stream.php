@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/quote_central.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
 require_once __DIR__ . '/../lib/quote_authority.php';
+require_once __DIR__ . '/../lib/quote_snapshot.php';
 require_once __DIR__ . '/../lib/risk.php';
 
 require_method('GET');
@@ -788,6 +789,13 @@ foreach ($quotes as $sym => &$q) {
   }
 }
 unset($q);
+
+foreach ($quotes as $sym => $q) {
+  if (!is_array($q)) continue;
+  $assetTypeForSym = vp_normalize_asset_type((string)($q['type'] ?? $returnType ?: $reqType ?: 'crypto')) ?: 'crypto';
+  $marketForSym = (string)($q['market'] ?? $reqMarket ?? 'spot');
+  $quotes[$sym] = qs_public_item(qs_snapshot_from_row((string)$sym, $assetTypeForSym, $marketForSym, $q, ['mode' => 'display']));
+}
 
 $quoteSingle = null;
 if (count($symbols) === 1) {

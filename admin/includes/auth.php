@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../api/lib/common.php';
 require_once __DIR__ . '/../../api/lib/schema.php';
 require_once __DIR__ . '/../../api/lib/crypto.php';
 require_once __DIR__ . '/../../api/lib/affiliates.php';
+require_once __DIR__ . '/../../api/lib/user_notifications.php';
 
 function admin_request_is_secure(): bool {
   $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
@@ -820,6 +821,8 @@ function admin_tpl_text(string $baseKey, string $lang, string $defaultTpl, array
 }
 
 function admin_notify_deposit_status(int $user_id, float $amount, string $currency, string $status, int $deposit_id = 0): void {
+  user_notify_funding_status($user_id, 'deposit', $amount, $currency, $status, $deposit_id);
+
   $l = admin_user_locale($user_id);
   $amt = number_format($amount, 2, '.', '');
   $cur = htmlspecialchars($currency, ENT_QUOTES);
@@ -851,6 +854,8 @@ function admin_notify_deposit_status(int $user_id, float $amount, string $curren
 }
 
 function admin_notify_withdrawal_status(int $user_id, float $amount, string $currency, string $status, int $withdrawal_id = 0): void {
+  user_notify_funding_status($user_id, 'withdrawal', $amount, $currency, $status, $withdrawal_id);
+
   $l = admin_user_locale($user_id);
   $amt = number_format($amount, 2, '.', '');
   $cur = htmlspecialchars($currency, ENT_QUOTES);

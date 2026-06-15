@@ -56,6 +56,28 @@ function upstream_slim_url(string $url): string {
   return $out ?: 'unknown';
 }
 
+function upstream_configure_tls($ch): void {
+  if (!is_resource($ch) && !($ch instanceof CurlHandle)) return;
+
+  if (defined('CURLOPT_SSL_OPTIONS') && defined('CURLSSLOPT_NATIVE_CA') && (int)env('UPSTREAM_USE_NATIVE_CA', '1') === 1) {
+    @curl_setopt($ch, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+  }
+
+  $configuredCa = trim((string)env('UPSTREAM_CAINFO', ''));
+  $candidateCa = [];
+  if ($configuredCa !== '') $candidateCa[] = $configuredCa;
+  $iniCurlCa = (string)ini_get('curl.cainfo');
+  $iniOpenSslCa = (string)ini_get('openssl.cafile');
+  if ($iniCurlCa !== '') $candidateCa[] = $iniCurlCa;
+  if ($iniOpenSslCa !== '') $candidateCa[] = $iniOpenSslCa;
+  foreach ($candidateCa as $caFile) {
+    if ($caFile !== '' && is_file($caFile)) {
+      @curl_setopt($ch, CURLOPT_CAINFO, $caFile);
+      break;
+    }
+  }
+}
+
 
 /**
  * HTTP GET JSON with:
@@ -127,6 +149,7 @@ function http_get_json(string $url, array $headers = []): array {
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    upstream_configure_tls($ch);
     $connectTimeout = (int)env('UPSTREAM_CONNECT_TIMEOUT','3');
     $requestTimeout = (int)env('UPSTREAM_TIMEOUT','5');
     if (is_array($timeoutOverride)) {
@@ -207,6 +230,7 @@ function binance_ticker_24h(array $symbols): array {
 function http_get_raw(string $url, array $headers = []): string {
   $ch = curl_init($url);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  upstream_configure_tls($ch);
   $timeoutOverride = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
   $connectTimeout = 8;
   $requestTimeout = 12;

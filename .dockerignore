@@ -23,6 +23,10 @@ api/uploads/**
 *.prepatch
 *.orig
 *.patch
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 
 node_modules
 frontend/node_modules

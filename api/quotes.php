@@ -3,6 +3,7 @@ require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/quote_central.php';
 require_once __DIR__ . '/lib/quote_authority.php';
 require_once __DIR__ . '/lib/quote_cache_policy.php';
+require_once __DIR__ . '/lib/quote_snapshot.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -28,11 +29,11 @@ $list = qa_parse_symbols($symbolsRaw);
 // When the feed worker is running and the central cache is warm, serve ALL
 // standard quote requests directly from cache — never hit upstream.
 // This is the default path for 99% of requests.
-$centralWarm = quote_central_is_warm($typeAlias);
+$centralWarm = $typeAlias === 'all' ? true : quote_central_is_warm($typeAlias);
 $bypassCentral = $fresh || $direct || $strictLive; // explicit upstream request
 
 if ($centralWarm && !$bypassCentral && $list) {
-  $items = quote_central_items($list, $typeAlias, 60);
+  $items = qs_public_items(qs_snapshots($list, $typeAlias, 'spot', ['mode' => 'display']));
   $hasCoverage = qa_payload_has_coverage(['items' => $items], $typeAlias, count($list));
   if ($hasCoverage) {
     json_response([
@@ -58,7 +59,7 @@ if ($centralWarm && $bypassCentral && $list) {
     'forex', 'commodities', 'futures' => max(5, min(120, (int)env('QUOTES_FRESH_CENTRAL_MAX_AGE_FOREX', '25'))),
     default => max(10, min(300, (int)env('QUOTES_FRESH_CENTRAL_MAX_AGE_OTHER', '60'))),
   };
-  $items = quote_central_items($list, $typeAlias, $freshWindow);
+  $items = qs_public_items(qs_snapshots($list, $typeAlias, 'spot', ['mode' => 'display']));
   $liveItems = array_values(array_filter($items, static function ($it) use ($freshWindow) {
     return (float)($it['price'] ?? 0) > 0 && (int)($it['age_sec'] ?? PHP_INT_MAX) <= $freshWindow;
   }));
@@ -134,9 +135,56 @@ function quotes_daily_change_rescue(string $symbol, string $assetType, array $me
   return null;
 }
 
+function quotes_group_symbols_by_resolved_type(array $list): array {
+  $symbols = array_values(array_unique(array_filter(array_map(static function($sym) {
+    $sym = strtoupper(trim((string)$sym));
+    return $sym !== '' ? $sym : '';
+  }, $list))));
+  if (!$symbols) return [];
+
+  $metaRows = [];
+  try {
+    if (function_exists('qa_market_meta_by_symbols')) $metaRows = qa_market_meta_by_symbols($symbols);
+  } catch (Throwable $e) {
+    $metaRows = [];
+  }
+
+  $groups = [];
+  foreach ($symbols as $sym) {
+    $assetType = vp_normalize_asset_type((string)($metaRows[$sym]['type'] ?? ''));
+    if ($assetType === '' || $assetType === 'all') $assetType = 'crypto';
+    $groups[$assetType][] = $sym;
+  }
+  return $groups;
+}
+
 function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive = true): array {
   $typeAlias = vp_normalize_asset_type($typeAlias);
-  if ($typeAlias === '' || $typeAlias === 'all') $typeAlias = 'crypto';
+  if ($typeAlias === 'all') {
+    $bySymbol = [];
+    foreach (quotes_group_symbols_by_resolved_type($list) as $assetType => $groupSymbols) {
+      $payload = quotes_degraded_payload($assetType, $groupSymbols, $allowLive);
+      foreach ((array)($payload['items'] ?? []) as $row) {
+        if (!is_array($row)) continue;
+        $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+        if ($sym !== '') $bySymbol[$sym] = $row;
+      }
+    }
+    $ordered = [];
+    foreach ($list as $sym) {
+      $sym = strtoupper(trim((string)$sym));
+      if ($sym === '') continue;
+      if (isset($bySymbol[$sym])) $ordered[] = $bySymbol[$sym];
+    }
+    return [
+      'ok' => true,
+      'items' => $ordered,
+      'authority' => 'quote_authority',
+      'degraded' => true,
+      'mixed_types' => true,
+    ];
+  }
+  if ($typeAlias === '') $typeAlias = 'crypto';
   $metaRows = function_exists('qa_market_meta_by_symbols') ? qa_market_meta_by_symbols($list) : [];
   $live = [];
   if ($allowLive && $list) {
@@ -317,6 +365,23 @@ function quotes_fill_missing_display_prices(array $payload, string $typeAlias, a
   return $payload;
 }
 
+function quotes_apply_snapshot_shape(array $payload, string $typeAlias): array {
+  $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+  if (!$items) return $payload;
+  $out = [];
+  foreach ($items as $row) {
+    if (!is_array($row)) continue;
+    $sym = strtoupper(trim((string)($row['symbol'] ?? '')));
+    if ($sym === '') continue;
+    $assetType = vp_normalize_asset_type((string)($row['type'] ?? $typeAlias));
+    if ($assetType === '' || $assetType === 'all') $assetType = $typeAlias ?: 'crypto';
+    $market = (string)($row['market'] ?? 'spot');
+    $out[] = qs_public_item(qs_snapshot_from_row($sym, $assetType, $market, $row, ['mode' => 'display']));
+  }
+  $payload['items'] = $out;
+  return $payload;
+}
+
 if (!$list) {
   try {
     $pdo = db();
@@ -385,6 +450,7 @@ if ($isUiFastPath) {
     $fastAllowLive = false;
   }
   $fastPayload = quotes_degraded_payload($typeAlias, $list, $fastAllowLive);
+  $fastPayload = quotes_apply_snapshot_shape($fastPayload, $typeAlias);
   $fastPayload['mode'] = $fastAllowLive ? ($isWatchlistRequest ? 'watchlist_live_fast' : 'focus_fast') : 'cache_fast';
   $fastPayload['cache_first'] = true;
   $fastPayload['live_count'] = count(array_filter($fastPayload['items'] ?? [], static function($row): bool {
@@ -412,6 +478,7 @@ if ($isFocusRequest) {
     $quickPayload = quotes_degraded_payload($typeAlias, $list, false);
   }
   if (quotes_focus_cache_payload_usable($quickPayload, $typeAlias, count($list))) {
+    $quickPayload = quotes_apply_snapshot_shape($quickPayload, $typeAlias);
     $quickPayload['mode'] = 'focus_cache';
     $quickPayload['cache_first'] = true;
     json_response($quickPayload);
@@ -448,6 +515,7 @@ try {
 if (!$focusNonCrypto) {
   $payload = quotes_fill_missing_display_prices($payload, $typeAlias, $list);
 }
+$payload = quotes_apply_snapshot_shape($payload, $typeAlias);
 $payload['mode'] = $mode;
 
 if ($cacheTtl > 0 && qa_payload_has_coverage($payload, $typeAlias, count($list))) {

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="96" viewBox="0 0 160 96" role="img" aria-label="Stripe">
+  <rect width="160" height="96" rx="18" fill="#635BFF"/>
+  <path d="M45 38c0-5 4-8 11-8 8 0 17 2 24 6V22c-8-3-16-4-24-4-19 0-32 10-32 26 0 25 35 21 35 32 0 4-4 6-9 6-8 0-18-3-26-8v14c8 4 17 6 26 6 20 0 34-10 34-27 0-27-39-22-39-29z" fill="#ffffff"/>
+  <path d="M92 19h18v57c0 4 2 6 6 6 2 0 4 0 6-1v14c-4 1-8 1-12 1-12 0-18-7-18-19V19zm38 0h18v76h-18V19z" fill="#ffffff" opacity=".92"/>
+</svg>

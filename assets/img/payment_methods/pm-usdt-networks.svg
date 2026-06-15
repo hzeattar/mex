@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="140" viewBox="0 0 220 140" role="img" aria-label="USDT TRC20 ERC20">
+  <defs>
+    <radialGradient id="coin" cx="38%" cy="25%" r="72%">
+      <stop stop-color="#8df5d3"/>
+      <stop offset=".45" stop-color="#27c69b"/>
+      <stop offset="1" stop-color="#0d6f5c"/>
+    </radialGradient>
+    <linearGradient id="bg" x1="20" y1="10" x2="196" y2="132" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#151c2b"/>
+      <stop offset=".52" stop-color="#05070d"/>
+      <stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="16" stdDeviation="12" flood-color="#000000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <rect width="220" height="140" rx="28" fill="url(#bg)"/>
+  <path d="M24 33c38-24 109-30 172-5" stroke="#ffffff" stroke-opacity=".08" stroke-width="2"/>
+  <g filter="url(#shadow)">
+    <ellipse cx="82" cy="78" rx="48" ry="45" fill="#06281f"/>
+    <circle cx="78" cy="70" r="42" fill="url(#coin)"/>
+    <path d="M88 62.5c-1 .1-5.1.3-10.2.3s-8.9-.2-10.2-.3v-6.1H88v6.1zm22.5-21.4h-65v15.3h21v4.8c-17.4 1.1-30.3 5-30.3 9.8s12.9 8.7 30.3 9.8v24.9h21V80.8c17.4-1.1 30.3-5 30.3-9.8s-12.9-8.7-30.3-9.8v-4.8h23V41.1z" fill="#ffffff"/>
+    <circle cx="62" cy="49" r="10" fill="#ffffff" opacity=".18"/>
+  </g>
+  <text x="151" y="55" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="950" text-anchor="middle">USDT</text>
+  <rect x="124" y="68" width="64" height="20" rx="10" fill="#111827" stroke="#50AF95" stroke-width="1.5"/>
+  <text x="156" y="82" fill="#8df5d3" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="900" text-anchor="middle">TRC20</text>
+  <rect x="124" y="94" width="64" height="20" rx="10" fill="#111827" stroke="#8ba1cf" stroke-width="1.5"/>
+  <text x="156" y="108" fill="#dce8ff" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="900" text-anchor="middle">ERC20</text>
+</svg>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="140" viewBox="0 0 220 140" role="img" aria-label="Bank transfer">
+  <defs>
+    <linearGradient id="bg" x1="18" y1="10" x2="202" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172036"/>
+      <stop offset=".56" stop-color="#060a13"/>
+      <stop offset="1" stop-color="#01030a"/>
+    </linearGradient>
+    <linearGradient id="stone" x1="61" y1="35" x2="161" y2="105" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset=".52" stop-color="#eaf2ff"/>
+      <stop offset="1" stop-color="#9fb2d1"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="44" y1="21" x2="174" y2="85" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#62e6c8"/>
+      <stop offset=".55" stop-color="#2f7dff"/>
+      <stop offset="1" stop-color="#243a88"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="13" flood-color="#000000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <rect width="220" height="140" rx="28" fill="url(#bg)"/>
+  <path d="M24 28c40-18 123-22 174 8" stroke="#ffffff" stroke-opacity=".08" stroke-width="2"/>
+  <g filter="url(#shadow)">
+    <path d="M43 66h134v13H43z" fill="url(#stone)"/>
+    <path d="M56 103h108v11H56z" fill="url(#stone)"/>
+    <path d="M66 80h15v21H66zM94 80h15v21H94zM122 80h15v21h-15zM150 80h15v21h-15z" fill="url(#stone)"/>
+    <path d="M36 57 110 23l74 34v10H36z" fill="url(#roof)"/>
+    <circle cx="110" cy="55" r="10" fill="#06101f"/>
+    <circle cx="110" cy="55" r="5" fill="#62e6c8"/>
+  </g>
+  <rect x="137" y="26" width="45" height="19" rx="9.5" fill="#101827" stroke="#62e6c8" stroke-width="1.4"/>
+  <text x="159.5" y="39.5" fill="#dffdf7" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="900" text-anchor="middle">IBAN</text>
+  <rect x="145" y="48" width="44" height="19" rx="9.5" fill="#101827" stroke="#8ba1cf" stroke-width="1.4"/>
+  <text x="167" y="61.5" fill="#eaf2ff" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="900" text-anchor="middle">SWIFT</text>
+</svg>

@@ -265,7 +265,26 @@ function quote_central_bundle_write(string $type, array $bySymbol): void {
 }
 
 function quote_central_manifest_write(array $meta): void {
-  $meta['updated_at'] = time();
+  $now = time();
+  $existing = quote_central_manifest_read();
+  if (!is_array($existing)) $existing = [];
+
+  $incomingTypeCounts = is_array($meta['type_counts'] ?? null) ? $meta['type_counts'] : [];
+  $merged = array_merge($existing, $meta);
+  if ($incomingTypeCounts) {
+    $typeCounts = is_array($existing['type_counts'] ?? null) ? $existing['type_counts'] : [];
+    $typeUpdatedAt = is_array($existing['type_updated_at'] ?? null) ? $existing['type_updated_at'] : [];
+    foreach ($incomingTypeCounts as $type => $count) {
+      $type = vp_normalize_asset_type((string)$type);
+      if ($type === '') continue;
+      $typeCounts[$type] = (int)$count;
+      $typeUpdatedAt[$type] = $now;
+    }
+    $merged['type_counts'] = $typeCounts;
+    $merged['type_updated_at'] = $typeUpdatedAt;
+  }
+  $merged['updated_at'] = $now;
+  $meta = $merged;
 
   // Write to file
   $file = quote_central_dir() . '/_manifest.json';
@@ -311,12 +330,23 @@ function quote_central_manifest_read(): array {
 function quote_central_is_warm(string $type = ''): bool {
   $manifest = quote_central_manifest_read();
   $lastRun = (int)($manifest['updated_at'] ?? 0);
-  if ($lastRun <= 0 || (time() - $lastRun) > 120) return false;
+  $now = time();
+  if ($lastRun <= 0 || ($now - $lastRun) > 120) return false;
   if ($type !== '') {
     $typeCounts = $manifest['type_counts'] ?? [];
+    $typeUpdatedAt = $manifest['type_updated_at'] ?? [];
     $type = strtolower(vp_normalize_asset_type($type));
     $count = (int)($typeCounts[$type] ?? 0);
-    return $count > 0;
+    $typeTs = (int)($typeUpdatedAt[$type] ?? $lastRun);
+    return $count > 0 && $typeTs > 0 && ($now - $typeTs) <= 120;
+  }
+  $typeUpdatedAt = is_array($manifest['type_updated_at'] ?? null) ? $manifest['type_updated_at'] : [];
+  if ($typeUpdatedAt) {
+    foreach ($typeUpdatedAt as $ts) {
+      $ts = (int)$ts;
+      if ($ts > 0 && ($now - $ts) <= 120) return true;
+    }
+    return false;
   }
   return true;
 }

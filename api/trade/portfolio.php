@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
 require_once __DIR__ . '/../lib/trade_mode.php';
+require_once __DIR__ . '/../lib/quote_snapshot.php';
 
 $uid = require_auth();
 $fast = ((int)($_GET['fast'] ?? 1) === 1);
@@ -91,6 +92,7 @@ $posCopySel = trade_optional_select($pdo, 'positions', [
 ]);
 $orderMetaSel = trade_optional_select($pdo, 'orders', [
   'meta' => "''",
+  'entry_price' => '0',
 ]);
 
 function sym_strip_prefix(string $s): string {
@@ -127,30 +129,27 @@ if ($mode === 'real') {
 }
 $positions = $ps->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-// Prefetch quotes for all position symbols in one DB query (avoid N+1).
-$posSymbols = [];
+// Prefetch quote snapshots grouped by asset type/market so PnL uses the same
+// authority as order execution and live lists.
+$symbolsByCtx = [];
 foreach ($positions as $p) {
   $symUi = strtoupper(sym_strip_prefix((string)($p['symbol'] ?? '')));
-  if ($symUi !== '' && preg_match('/^[A-Z0-9:._-]{1,32}$/', $symUi)) $posSymbols[] = $symUi;
+  if ($symUi === '' || !preg_match('/^[A-Z0-9:._-]{1,32}$/', $symUi)) continue;
+  $assetType = vp_normalize_asset_type((string)($p['asset_type'] ?? 'crypto')) ?: 'crypto';
+  $marketType = strtolower((string)($p['market_type'] ?? 'spot'));
+  if (!in_array($marketType, ['spot','perp'], true)) $marketType = 'spot';
+  $ctxKey = $assetType . '|' . $marketType;
+  $symbolsByCtx[$ctxKey]['type'] = $assetType;
+  $symbolsByCtx[$ctxKey]['market'] = $marketType;
+  $symbolsByCtx[$ctxKey]['symbols'][] = $symUi;
 }
-$posSymbols = array_values(array_unique($posSymbols));
 
 $qMap = [];
-if ($posSymbols) {
-  $in = implode(',', array_fill(0, count($posSymbols), '?'));
-  $drv = db_driver();
-  $hasMark = function_exists('schema_column_exists') ? schema_column_exists($pdo, 'market_quotes', 'mark_price', $drv) : true;
-  $sel = $hasMark ? 'symbol,price,mark_price,updated_at' : 'symbol,price,price AS mark_price,updated_at';
-  $st = $pdo->prepare("SELECT {$sel} FROM market_quotes WHERE symbol IN ($in)");
-  $st->execute($posSymbols);
-  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-  foreach ($rows as $r) {
-    $sym = (string)$r['symbol'];
-    $qMap[$sym] = [
-      'price' => (float)($r['price'] ?? 0),
-      'mark_price' => isset($r['mark_price']) ? (float)$r['mark_price'] : 0.0,
-      'updated_at' => (int)($r['updated_at'] ?? 0),
-    ];
+foreach ($symbolsByCtx as $ctx) {
+  $snapshots = qs_snapshots(array_values(array_unique($ctx['symbols'] ?? [])), (string)$ctx['type'], (string)$ctx['market'], ['mode' => 'display']);
+  foreach ($snapshots as $snap) {
+    $key = strtoupper((string)($snap['symbol'] ?? '')) . '|' . (string)($snap['type'] ?? '') . '|' . (string)($snap['market'] ?? '');
+    if ($key !== '||') $qMap[$key] = $snap;
   }
 }
 
@@ -161,19 +160,13 @@ foreach ($positions as $p) {
   $symbolRaw = (string)($p['symbol'] ?? '');
   $symUi = strtoupper(sym_strip_prefix($symbolRaw));
 
-  $assetType = (string)($p['asset_type'] ?? 'crypto');
+  $assetType = vp_normalize_asset_type((string)($p['asset_type'] ?? 'crypto')) ?: 'crypto';
   $marketType = strtolower((string)($p['market_type'] ?? 'spot'));
   if (!in_array($marketType, ['spot','perp'], true)) $marketType = 'spot';
 
-  $mark = 0.0;
-  if (isset($qMap[$symUi])) {
-    $q = $qMap[$symUi];
-    if ($marketType === 'perp') {
-      $mark = ($q['mark_price'] > 0) ? (float)$q['mark_price'] : (float)$q['price'];
-    } else {
-      $mark = (float)$q['price'];
-    }
-  }
+  $quoteKey = $symUi . '|' . $assetType . '|' . $marketType;
+  $quoteSnapshot = is_array($qMap[$quoteKey] ?? null) ? $qMap[$quoteKey] : null;
+  $mark = is_array($quoteSnapshot) ? (float)($quoteSnapshot['mark'] ?? $quoteSnapshot['price'] ?? 0) : 0.0;
   $qty = (float)($p['qty'] ?? 0);
   $entry = (float)($p['entry_price'] ?? 0);
   if ($mark <= 0 && $allowLiveFetch) {
@@ -214,6 +207,7 @@ foreach ($positions as $p) {
     'tp_price'=> isset($p['tp_price']) ? (float)$p['tp_price'] : null,
     'sl_price'=> isset($p['sl_price']) ? (float)$p['sl_price'] : null,
     'mark_price'=>$mark,
+    'quote'=> is_array($quoteSnapshot) ? qs_public_item($quoteSnapshot) : null,
     'unrealized_pnl'=>$pnl,
     'roe_pct'=>$roe,
     'created_at'=>$p['created_at'] ?? null,
@@ -227,10 +221,10 @@ foreach ($positions as $p) {
 
 // orders
 if ($mode === 'real') {
-  $os = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at{$orderMetaSel} FROM orders WHERE user_id = ? AND symbol LIKE ? ORDER BY id DESC LIMIT 50");
+  $os = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at{$orderMetaSel} FROM orders WHERE user_id = ? AND symbol LIKE ? ORDER BY id DESC LIMIT 200");
   $os->execute([$uid, $realPrefix.'%']);
 } else {
-  $os = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at{$orderMetaSel} FROM orders WHERE user_id = ? AND symbol NOT LIKE ? ORDER BY id DESC LIMIT 50");
+  $os = $pdo->prepare("SELECT id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,fee_paid,status,created_at,pnl_usd,close_reason,closed_at{$orderMetaSel} FROM orders WHERE user_id = ? AND symbol NOT LIKE ? ORDER BY id DESC LIMIT 200");
   $os->execute([$uid, $realPrefix.'%']);
 }
 $orders = $os->fetchAll(PDO::FETCH_ASSOC) ?: [];

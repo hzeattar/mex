@@ -3331,36 +3331,41 @@
 .payment-logos-strip {
   grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(10,20,40,.96), rgba(6,12,27,.98));
-  border: 1px solid rgba(137,160,210,.10);
+  background: linear-gradient(180deg, rgba(11,24,48,.78), rgba(6,13,29,.86));
+  border: 1px solid rgba(137,160,210,.13);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
 }
 .payment-logos-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .payment-logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 32px;
-  border-radius: 4px;
+  width: 42px;
+  height: 28px;
+  border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
-  opacity: .92;
-  transition: opacity .2s, transform .2s;
+  opacity: .9;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07);
+  transition: opacity .2s, transform .2s, border-color .2s;
 }
 .payment-logo:hover {
   opacity: 1;
   transform: translateY(-1px);
+  border-color: rgba(137,160,210,.20);
 }
 .payment-logo svg {
   width: 100%;
@@ -3369,10 +3374,10 @@
 }
 .payment-logos-caption {
   font-size: 11px;
-  font-weight: 600;
-  color: rgba(137,160,210,.72);
-  text-align: center;
-  letter-spacing: .2px;
+  font-weight: 800;
+  color: rgba(207,225,255,.68);
+  text-align: right;
+  letter-spacing: 0;
 }
 .funding-flow-main,
 .funding-sidebar-card,
@@ -3396,9 +3401,9 @@
 }
 .funding-category-rail button {
   min-width: 0;
-  min-height: 78px;
+  min-height: 70px;
   border: 1px solid rgba(137,160,210,.13);
-  border-radius: 8px;
+  border-radius: 9px;
   background: rgba(5,12,26,.58);
   padding: 10px;
   color: var(--text);
@@ -3428,8 +3433,7 @@
   width: 17px;
   height: 17px;
 }
-.funding-category-rail button strong,
-.funding-category-rail button small {
+.funding-category-rail button strong {
   min-width: 0;
   display: block;
 }
@@ -3439,12 +3443,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.funding-category-rail button small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.35;
 }
 .funding-category-rail button.active {
   border-color: rgba(24,201,143,.32);
@@ -3640,6 +3638,17 @@
     top: 0;
     z-index: 20;
   }
+  .payment-logos-strip {
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+  .payment-logos-row {
+    justify-content: center;
+  }
+  .payment-logos-caption {
+    text-align: center;
+  }
   .funding-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3653,7 +3662,8 @@
     display: none;
   }
   .funding-category-rail button {
-    flex: 0 0 min(250px, 78vw);
+    flex: 0 0 min(210px, 70vw);
+    min-height: 68px;
   }
   .withdraw-fields-grid {
     grid-template-columns: 1fr;
@@ -4033,6 +4043,11 @@
   font-size: 9px;
   line-height: 1;
   font-weight: 900;
+}
+.method-card-badges b.is-bonus {
+  border-color: rgba(246,201,69,.42);
+  background: linear-gradient(135deg, rgba(24,201,143,.18), rgba(246,201,69,.16));
+  color: #f8d86a;
 }
 .method-payment-preview {
   display: grid;

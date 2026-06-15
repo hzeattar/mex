@@ -6,6 +6,7 @@ import { api } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
 import { currentLocale, setLocale, t, LANG_NAMES, LANG_FLAGS, SUPPORTED } from '../utils/i18n.js';
+import { isKycApproved, trySwitchToReal } from '../utils/gates.js';
 
 let homeDocClick = null;
 // Listeners bound to the persistent #view container; disposed on cleanup to avoid accumulation.
@@ -32,6 +33,7 @@ export function render() {
   const portfolio = get('portfolio') || {};
   const metrics = portfolio.metrics || {};
   const mode = get('mode') === 'real' ? 'real' : 'demo';
+  const earnGate = homeEarnGate();
   const level = get('level') || {};
   const currentLevel = level.current || {};
   const nextLevel = level.next || {};
@@ -39,6 +41,7 @@ export function render() {
   const nextRequired = Number(nextLevel.min_deposit_total || nextLevel.min_total_deposit || nextLevel.required_deposit || 0);
   const remainingToNext = Math.max(0, nextRequired - confirmedTotal);
   const levelProgress = nextRequired > 0 ? Math.min(100, Math.round((confirmedTotal / nextRequired) * 100)) : (confirmedTotal > 0 ? 100 : 0);
+  const demoNeedsKyc = mode === 'demo' && !isKycApproved();
   const walletBalance = Number(wallet.balance || wallet.available || 0);
   const balance = Number(metrics.total_balance ?? walletBalance);
   const available = Number(metrics.available_balance ?? wallet.available ?? balance ?? 0);
@@ -50,12 +53,13 @@ export function render() {
 
   return `
     <div class="pro-dashboard animate-fade-in pro-dashboard-compact">
+      ${demoNeedsKyc ? kycVerifyBanner() : ''}
       <section class="pro-card pro-balance-overview" aria-label="Account overview">
         <div class="pro-balance-topline">
           <div class="pro-hero-kicker">
             <span class="badge-accent">${esc(brand.name || 'MEX Group')}</span>
             <span class="pro-pill ${mode === 'real' ? 'is-live' : 'is-demo'}"><i></i>${mode === 'real' ? t('mode.real_workspace', 'Real workspace') : t('mode.demo_workspace', 'Demo workspace')}</span>
-            ${levelBadge(currentLevel)}
+            ${mode === 'real' ? levelBadge(currentLevel) : ''}
           </div>
           <div class="pro-balance-actions">
             ${languageSwitcher()}
@@ -87,7 +91,7 @@ export function render() {
         </div>
       </section>
 
-      <section class="pro-card pro-level-scroll-card">
+      ${mode === 'real' ? `<section class="pro-card pro-level-scroll-card">
         <div class="pro-section-head">
           <div><span>${t('level.program', 'Level program')}</span><h2>${esc(tierLabel)} ${t('level.progress_suffix', 'progress')}</h2></div>
           <b class="pro-level-percent" id="home-level-percent">${levelProgress}%</b>
@@ -96,24 +100,33 @@ export function render() {
         <div class="pro-level-rail" aria-label="Level benefits and next tiers">
           ${renderLevelRail(level, { currentLevel, nextLevel, confirmedTotal, remainingToNext, nextRequired, levelProgress, mode })}
         </div>
-      </section>
+      </section>` : ''}
 
-      <section class="pro-card pro-card-section pro-earn-rail-card blur-gate ${mode !== 'real' ? 'blur-active' : ''}">
+      ${mode === 'real' ? `<section class="pro-card pro-card-section pro-earn-rail-card blur-gate ${earnGate ? 'blur-active' : ''}">
         <div class="pro-section-head">
           <div><span>${t('earn.desk', 'Earn desk')}</span><h2>${t('earn.copy_contracts', 'Copy trading & contracts')}</h2><p>${t('earn.dashboard_copy', 'Swipe through live signals, recommended copies and level-linked contracts.')}</p></div>
-          <a href="#/invest" class="btn-ghost btn-sm">${t('common.view_all', 'View all')}</a>
+          ${earnGate
+            ? `<button type="button" class="btn-ghost btn-sm" data-home-gate-trigger>${t('common.view_all', 'View all')}</button>`
+            : `<a href="#/invest" class="btn-ghost btn-sm">${t('common.view_all', 'View all')}</a>`}
         </div>
         <div class="blur-gate-content relative" id="home-copy-section">
           ${copyScrollerPlaceholder(mode)}
         </div>
-        ${mode !== 'real' ? `<div class="blur-gate-overlay"><span class="badge">${t('earn.real_account_only', 'Real account only')}</span></div>` : ''}
-      </section>
+        ${earnGate ? `<div class="blur-gate-overlay">
+          <button type="button" class="gate-card home-gate-card" data-home-gate-trigger>
+            <span class="gate-icon">${icons.lock}</span>
+            <strong>${esc(earnGate.title)}</strong>
+            <p>${esc(earnGate.body)}</p>
+            <span class="btn-primary btn-sm">${esc(earnGate.action)}</span>
+          </button>
+        </div>` : ''}
+      </section>` : ''}
 
       <section class="pro-main-layout pro-main-layout-single">
         <div class="pro-main-stack">
           <section class="pro-card pro-card-section">
             <div class="pro-section-head">
-              <div><span>${t('nav.markets', 'Markets')}</span><h2>${t('market.live_watchlist', 'Live watchlist')}</h2></div>
+              <div><span>${t('nav.markets', 'Markets')}</span><h2>${t('market.live_watchlist', 'Watchlist')}</h2></div>
               <a href="#/trade" class="btn-ghost btn-sm">${t('nav.trade', 'Trade')}</a>
             </div>
             <div class="pro-market-tabs" id="home-market-tabs">
@@ -145,6 +158,12 @@ export function mount(container) {
     const rail = container.querySelector('.pro-level-rail');
     if (rail) scrollCurrentLevelRail(rail, false);
   });
+  const onHomeResize = () => {
+    const rail = container.querySelector('.pro-level-rail');
+    if (rail) scrollCurrentLevelRail(rail, false);
+  };
+  window.addEventListener('resize', onHomeResize);
+  homeDisposers.push(() => window.removeEventListener('resize', onHomeResize));
 
   // Attach logo fallback handlers (not inline onerror)
   const onHomeImgError = (e) => {
@@ -166,6 +185,21 @@ export function mount(container) {
   }, 50);
 
   const onHomeClick = (e) => {
+    const gateTrigger = e.target.closest('[data-home-gate-trigger]');
+    if (gateTrigger) {
+      e.preventDefault();
+      const gate = homeEarnGate();
+      if (gate) showHomeGateDialog(gate);
+      return;
+    }
+
+    const gateAction = e.target.closest('[data-home-gate-action]');
+    if (gateAction) {
+      e.preventDefault();
+      applyHomeGateAction(gateAction.dataset.homeGateAction || homeEarnGate()?.kind);
+      return;
+    }
+
     const langTrigger = e.target.closest('[data-home-lang-trigger]');
     if (langTrigger) {
       e.preventDefault();
@@ -240,9 +274,12 @@ export function mount(container) {
   loadHomeData(container);
   loadHomeFx(container, selectedHomeCurrency());
 
-  // Soft-refresh balances/portfolio every 8s while on home (cache-backed, low cost)
-  container.__homeRefreshTimer = setInterval(() => { loadHomeData(container); }, 8000);
+  // Soft-refresh balances/portfolio every 6s while on home (cache-backed, low cost)
+  container.__homeRefreshTimer = setInterval(() => { loadHomeData(container); }, 6000);
   homeDisposers.push(() => { if (container.__homeRefreshTimer) { clearInterval(container.__homeRefreshTimer); container.__homeRefreshTimer = null; } });
+
+  container.__homeQuoteRefreshTimer = setInterval(() => { refreshVisibleHomeQuotes(container); }, 2500);
+  homeDisposers.push(() => { if (container.__homeQuoteRefreshTimer) { clearInterval(container.__homeQuoteRefreshTimer); container.__homeQuoteRefreshTimer = null; } });
 }
 
 export function cleanup() {
@@ -289,7 +326,7 @@ async function loadHomeData(container) {
     })
     .catch(() => null);
 
-  api('/markets.php?scope=home&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=50', { timeout: 0, retry: 1, cacheTtl: 15000 })
+  api('/markets.php?scope=home&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=50', { timeout: 0, retry: 1, cacheTtl: 7000 })
     .then((markets) => {
       if (markets && Array.isArray(markets.items) && markets.items.length) {
         container.__homeAllMarkets = markets.items;
@@ -300,7 +337,7 @@ async function loadHomeData(container) {
       }
     })
     .catch(() => {
-      api('/markets.php?scope=home&supported=1&lite=1&limit=30', { timeout: 8000, retry: 0, cacheTtl: 30000 })
+      api('/markets.php?scope=home&supported=1&lite=1&limit=30', { timeout: 8000, retry: 0, cacheTtl: 12000 })
         .then((markets) => {
           if (markets && Array.isArray(markets.items) && markets.items.length) {
             container.__homeAllMarkets = markets.items;
@@ -427,7 +464,6 @@ function updateLevelOverview(container) {
   if (bar) bar.style.width = `${levelProgress}%`;
   const rail = container.querySelector('.pro-level-rail');
   if (rail) {
-    const oldScrollLeft = rail.scrollLeft;
     rail.innerHTML = renderLevelRail(level, {
       currentLevel,
       nextLevel,
@@ -437,9 +473,7 @@ function updateLevelOverview(container) {
       levelProgress,
       mode: get('mode') === 'real' ? 'real' : 'demo',
     });
-    if (rail.scrollLeft === 0) {
-      setTimeout(() => scrollCurrentLevelRail(rail), 300);
-    }
+    setTimeout(() => scrollCurrentLevelRail(rail), 120);
   }
 }
 
@@ -543,20 +577,33 @@ function renderMarkets(container, items) {
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
           <div class="font-semibold text-sm truncate">${esc(m.symbol)}</div>
-          ${quoteStateChip(m)}
         </div>
         <div class="text-[11px] text-muted truncate">${esc(m.name || m.symbol)}</div>
         <div class="mini-spark" aria-hidden="true">${miniSpark(m.symbol)}</div>
       </div>
       <div class="text-right">
-        <div class="text-sm font-mono font-semibold" data-home-price>${formatMarketPrice(m.price || m.q_price, m.type)}</div>
+        <div class="text-sm font-mono font-semibold" data-home-price data-price="${escAttr(Number(m.price || m.q_price || 0))}">${formatMarketPrice(m.price || m.q_price, m.type)}</div>
         <div class="text-[11px] ${Number(m.change_pct || m.q_change || 0) >= 0 ? 'text-buy' : 'text-sell'}" data-home-change>${pct(m.change_pct || m.q_change || 0)}</div>
-        <div class="text-[9px] text-muted uppercase mt-1" data-home-source>${quoteStateText(m)}</div>
       </div>
     </button>
   `).join('');
   grid.querySelectorAll('[data-symbol]').forEach((btn) => {
-    btn.addEventListener('click', () => navigate('trade', { symbol: btn.dataset.symbol, type: btn.dataset.type }));
+    btn.addEventListener('click', () => {
+      const symbol = String(btn.dataset.symbol || '').toUpperCase();
+      const type = normalizeHomeMarketType(btn.dataset.type || 'crypto');
+      const market = defaultHomeMarketForType(type);
+      if (!symbol) return;
+      set('symbol', symbol);
+      set('type', type);
+      set('market', market);
+      set('activeQuote', null);
+      try {
+        localStorage.setItem('vp_symbol', symbol);
+        localStorage.setItem('vp_type', type);
+        localStorage.setItem('vp_market', market);
+      } catch (_e) {}
+      navigate('trade', { symbol, type, market });
+    });
   });
 }
 
@@ -577,6 +624,40 @@ function renderMarketsByTab(container, tab = 'all') {
   hydrateMarketQuotes(container, visible);
 }
 
+async function refreshVisibleHomeQuotes(container) {
+  if (!container || document.hidden || container.__homeQuoteRefreshing) return;
+  const cards = [...container.querySelectorAll('#home-markets .home-market-card[data-symbol]')];
+  if (!cards.length) return;
+  const groups = new Map();
+  cards.slice(0, 30).forEach((card) => {
+    const symbol = String(card.dataset.symbol || '').toUpperCase();
+    const type = normalizeHomeMarketType(card.dataset.type || 'crypto');
+    if (!symbol) return;
+    if (!groups.has(type)) groups.set(type, []);
+    groups.get(type).push(symbol);
+  });
+  if (!groups.size) return;
+  container.__homeQuoteRefreshing = true;
+  try {
+    await Promise.all([...groups.entries()].map(async ([type, symbols]) => {
+      const unique = [...new Set(symbols)];
+      const chunkSize = type === 'crypto' ? 18 : 6;
+      for (let i = 0; i < unique.length; i += chunkSize) {
+        const chunk = unique.slice(i, i + chunkSize);
+        const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist_tick&_=${Date.now()}`, {
+          timeout: type === 'crypto' ? 2200 : 3000,
+          retry: 0,
+          cacheTtl: 250,
+          cache: 'no-store',
+        }).catch(() => null);
+        if (data?.items?.length) data.items.forEach((q) => applyQuoteToMarketCard(container, q, type));
+      }
+    }));
+  } finally {
+    container.__homeQuoteRefreshing = false;
+  }
+}
+
 function normalizeHomeMarketType(type) {
   const value = String(type || 'crypto').toLowerCase();
   if (value === 'commodity') return 'commodities';
@@ -586,12 +667,16 @@ function normalizeHomeMarketType(type) {
   return value;
 }
 
+function defaultHomeMarketForType(type) {
+  return normalizeHomeMarketType(type) === 'futures' ? 'perp' : 'spot';
+}
+
 async function hydrateMarketQuotes(container, items) {
   const refreshTargets = (items || []).filter((item) => {
     const price = Number(item?.price || item?.q_price || 0);
     if (!(price > 0)) return true;
     const state = quoteState(item);
-    return state === 'stale' || state === 'unavailable';
+    return state === 'stale' || state === 'unavailable' || state === 'cached';
   });
   if (!refreshTargets.length) return;
   const groups = new Map();
@@ -680,7 +765,6 @@ function applyQuoteToMarketCard(container, q, fallbackType) {
   const chg = Number(q.change_pct || q.q_change || 0);
   const priceEl = card.querySelector('[data-home-price]');
   const changeEl = card.querySelector('[data-home-change]');
-  const sourceEl = card.querySelector('[data-home-source]');
   if (priceEl && p > 0) {
     const oldPrice = parseFloat(priceEl.dataset.price || '0');
     priceEl.textContent = price(p, type);
@@ -697,12 +781,6 @@ function applyQuoteToMarketCard(container, q, fallbackType) {
   if (changeEl) {
     changeEl.textContent = pct(chg);
     changeEl.className = `text-[11px] ${chg >= 0 ? 'text-buy' : 'text-sell'}`;
-  }
-  if (sourceEl && p > 0) sourceEl.textContent = quoteStateText(q);
-  const chip = card.querySelector('[data-quote-chip]');
-  if (chip && p > 0) {
-    chip.className = `status-chip ${quoteStateClass(q)}`;
-    chip.textContent = quoteStateText(q);
   }
 }
 
@@ -1074,44 +1152,125 @@ function activeWallet() {
   return mode === 'real' ? (w.real || { balance: 0, available: 0, currency: 'USDT' }) : (w.demo || { balance: 10000, available: 10000, currency: 'USDT_DEMO' });
 }
 
+function kycVerifyBanner() {
+  return `<section class="home-kyc-banner">
+    <span class="home-kyc-icon">${icons.kyc || icons.lock}</span>
+    <div>
+      <strong>${t('kyc.banner_title', 'Verify your account')}</strong>
+      <p>${t('kyc.banner_body', 'Your demo workspace is ready. Complete verification to unlock the real account, deposits, withdrawals, levels, copy trading, and contracts.')}</p>
+    </div>
+    <a href="#/kyc" class="btn-primary btn-sm">${t('earn.open_kyc', 'Open KYC')}</a>
+  </section>`;
+}
+
+function homeEarnGate() {
+  if (get('mode') !== 'real') {
+    return {
+      kind: 'real',
+      title: t('funding.real_required', 'Real account required'),
+      body: t('earn.real_required_copy', 'Copies and contracts are visible in Demo, but activation requires an approved Real account.'),
+      action: t('earn.switch_real', 'Switch to Real'),
+    };
+  }
+  if (!homeKycApproved()) {
+    return {
+      kind: 'kyc',
+      title: t('earn.kyc_required', 'KYC approval required'),
+      body: t('earn.kyc_required_copy', 'Submit and approve KYC before copying signals or subscribing to contracts.'),
+      action: t('earn.open_kyc', 'Open KYC'),
+    };
+  }
+  return null;
+}
+
+function homeKycApproved() {
+  return isKycApproved();
+}
+
+function showHomeGateDialog(gate) {
+  closeHomeGateDialog();
+  const wrap = document.createElement('div');
+  wrap.className = 'dialog-backdrop';
+  wrap.setAttribute('data-home-gate-dialog', '1');
+  wrap.innerHTML = `<div class="dialog-card">
+    <button class="dialog-close" aria-label="${escAttr(t('common.close', 'Close'))}" data-home-gate-close>${icons.close}</button>
+    <div class="text-center space-y-3">
+      <span class="gate-icon mx-auto">${icons.lock}</span>
+      <h2 class="text-lg font-bold">${esc(gate.title)}</h2>
+      <p class="text-sm text-muted">${esc(gate.body)}</p>
+      <button class="btn-primary btn-sm" data-home-gate-action="${escAttr(gate.kind)}">${esc(gate.action)}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', (event) => {
+    if (event.target === wrap || event.target.closest('[data-home-gate-close]')) closeHomeGateDialog();
+    const action = event.target.closest('[data-home-gate-action]');
+    if (action) {
+      event.preventDefault();
+      applyHomeGateAction(action.dataset.homeGateAction || gate.kind);
+    }
+  });
+}
+
+function closeHomeGateDialog() {
+  document.querySelector('[data-home-gate-dialog]')?.remove();
+}
+
+function applyHomeGateAction(kind) {
+  closeHomeGateDialog();
+  if (kind === 'real') {
+    trySwitchToReal('earn');
+    return;
+  }
+  location.hash = '#/kyc';
+}
+
 function formatMarketPrice(value, type) {
   const n = Number(value || 0);
   return n > 0 ? price(n, type) : '--';
 }
 
+function quoteTimestamp(value) {
+  const n = Number(value || 0);
+  if (!(n > 0)) return 0;
+  return n > 1000000000000 ? Math.floor(n / 1000) : Math.floor(n);
+}
+
+function quoteAgeSeconds(m) {
+  const ts = Math.max(
+    quoteTimestamp(m.provider_updated_at),
+    quoteTimestamp(m.provider_ts),
+    quoteTimestamp(m.as_of),
+    quoteTimestamp(m.updated_at),
+    quoteTimestamp(m.cache_updated_at),
+    quoteTimestamp(m.received_at),
+    quoteTimestamp(m.ingested_at),
+  );
+  return ts > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - ts) : null;
+}
+
+function quoteFreshWindow(type) {
+  const value = normalizeHomeMarketType(type);
+  if (value === 'crypto') return 90;
+  if (['forex', 'commodities', 'futures'].includes(value)) return 180;
+  if (['stocks', 'arab'].includes(value)) return 15 * 60;
+  return 300;
+}
+
 function quoteState(m) {
   const source = String(m.source || m.provider || '').toLowerCase();
   const timing = String(m.timing_class || '').toLowerCase();
+  const type = m.type || 'crypto';
+  const age = quoteAgeSeconds(m);
+  const freshWindow = quoteFreshWindow(type);
+  const staleWindow = freshWindow * 3;
   if (Number(m.price || m.q_price || 0) <= 0) return 'unavailable';
-  if (timing === 'stale' || m.is_stale) return 'stale';
   if (timing === 'market_closed') return 'closed';
-  if (m.delayed || timing === 'delayed' || source.includes('yahoo')) return 'delayed';
-  if (source.includes('binance') || source.includes('stream') || timing === 'live') return 'live';
+  if (age === null || age <= freshWindow) return 'live';
+  if (timing === 'stale' || m.is_stale) return age <= staleWindow ? 'cached' : 'stale';
+  if (m.delayed || timing === 'delayed' || source.includes('yahoo')) return 'cached';
+  if (source.includes('binance') || source.includes('stream') || timing === 'live') return age <= staleWindow ? 'cached' : 'stale';
   return 'cached';
-}
-
-function quoteStateText(m) {
-  const state = quoteState(m);
-  const labels = {
-    live:        t('quote.live', 'Live'),
-    delayed:     t('quote.delayed', 'Delayed'),
-    stale:       t('quote.stale', 'Stale'),
-    closed:      t('quote.closed', 'Closed'),
-    unavailable: t('quote.unavailable', 'Unavailable'),
-    cached:      t('quote.cached', 'Cached'),
-  };
-  return labels[state] || state;
-}
-
-function quoteStateClass(m) {
-  const state = quoteState(m);
-  if (state === 'live') return 'status-chip-live';
-  if (state === 'unavailable') return 'status-chip-locked';
-  return 'status-chip-delayed';
-}
-
-function quoteStateChip(m) {
-  return `<span data-quote-chip class="status-chip ${quoteStateClass(m)}">${quoteStateText(m)}</span>`;
 }
 
 function levelBadge(level) {
@@ -1161,30 +1320,30 @@ function botDirectionChip(direction) {
   return `<span class="bot-direction-chip is-${dir.toLowerCase()}">${esc(dir)}</span>`;
 }
 
-/**
- * Scroll the level rail so the current level card is the first visible card.
- * Previous (completed) levels remain scrollable to the left.
- * @param {Element} rail  - the .pro-level-rail element
- * @param {boolean} smooth - use smooth scrolling (true after data refresh, false on mount)
- */
-function scrollCurrentLevelRail(rail) {
+function syncLevelRailCenterPadding(rail, card) {
+  const railW = rail.clientWidth || rail.getBoundingClientRect().width || window.innerWidth || 360;
+  const cardW = card?.getBoundingClientRect?.().width || 285;
+  const sidePad = Math.max(2, Math.round((railW - cardW) / 2));
+  rail.style.setProperty('--level-rail-side-pad', `${sidePad}px`);
+  return { railW, cardW, sidePad };
+}
+
+function scrollCurrentLevelRail(rail, smooth = false) {
   if (!rail) return;
   const card = rail.querySelector('[data-current-level-card="1"]');
   if (!card) return;
-  const idx = [...rail.children].indexOf(card);
-  const gap = 12;
-  const cardW = 285;
   const doScroll = () => {
-    const vw = rail.clientWidth || rail.getBoundingClientRect().width || window.innerWidth || 360;
-    if (!vw) return;
-    const cardLeft = idx * (cardW + gap);
-    const target = Math.max(0, cardLeft - (vw / 2) + (cardW / 2));
-    rail.scrollTo({ left: target, behavior: 'instant' });
+    syncLevelRailCenterPadding(rail, card);
+    const railRect = rail.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    if (!railRect.width || !cardRect.width) return;
+    const delta = (cardRect.left + cardRect.width / 2) - (railRect.left + railRect.width / 2);
+    const target = rail.scrollLeft + delta;
+    const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    const left = Math.max(0, Math.min(maxScroll, target));
+    rail.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
   };
-  // Initial attempt after layout settles
   setTimeout(doScroll, 80);
-  // Second attempt after paint
   setTimeout(doScroll, 350);
-  // Final attempt after full hydration
   requestAnimationFrame(() => setTimeout(doScroll, 500));
 }

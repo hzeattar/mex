@@ -6,6 +6,7 @@ import { api, postApi } from '../services/api.js';
 import { icons } from '../components/common/Icons.js';
 import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
 import { currentLocale, t } from '../utils/i18n.js';
+import { trySwitchToReal } from '../utils/gates.js';
 
 // Listeners bound to the persistent #view container; disposed on cleanup to avoid accumulation.
 let investDisposers = [];
@@ -61,11 +62,13 @@ export function mount(container) {
   investDisposers.push(delegate(container, '[data-cancel-copy]', 'click', (_e, btn) => cancelCopySubscription(btn.dataset.cancelCopy, container)));
   investDisposers.push(delegate(container, '[data-contract-subscribe]', 'click', (_e, btn) => openContractDialog(btn.dataset.contractSubscribe, container)));
   investDisposers.push(delegate(container, '[data-switch-real]', 'click', () => {
-    localStorage.setItem('vp_mode', 'real');
-    set('mode', 'real');
-    location.reload();
+    trySwitchToReal('earn');
   }));
   investDisposers.push(delegate(container, '[data-open-kyc]', 'click', () => { location.hash = '#/kyc'; }));
+  investDisposers.push(delegate(container, '[data-dismiss-earn-gate]', 'click', (event, btn) => {
+    event.preventDefault();
+    btn.closest('.gate-overlay')?.classList.add('is-dismissed');
+  }));
 }
 
 export function cleanup() {
@@ -97,7 +100,14 @@ function renderContent(container) {
   const tab = get('invest.tab') || localStorage.getItem('vp_earn_tab') || 'copy';
   const gate = earnGate();
   const content = tab === 'copy' ? copyView() : contractsView();
-  el.innerHTML = gate ? gatedWrap(content, gate) : content;
+  el.innerHTML = gate ? gatedWrap(content, gate, tab) : content;
+  if (gate && tab === 'contracts') {
+    requestAnimationFrame(() => {
+      const view = document.querySelector('#view');
+      const top = Math.max(0, el.offsetTop - 12);
+      if (view && view.scrollTop > top) view.scrollTo({ top, behavior: 'auto' });
+    });
+  }
   // Update tab active states
   container.querySelectorAll('[data-earn-tab]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.earnTab === tab);
@@ -449,11 +459,12 @@ function earnGate() {
   return null;
 }
 
-function gatedWrap(content, gate) {
-  return `<div class="gate-wrap">
+function gatedWrap(content, gate, tab = '') {
+  return `<div class="gate-wrap ${tab === 'contracts' ? 'gate-wrap-contracts' : ''}">
     <div class="gate-blur">${content}</div>
-    <div class="gate-overlay">
+    <div class="gate-overlay gate-overlay-viewport">
       <div class="gate-card">
+        <button class="gate-card-close" type="button" aria-label="${escAttr(t('common.close', 'Close'))}" data-dismiss-earn-gate>${icons.close}</button>
         <span class="gate-icon">${icons.lock}</span>
         <strong>${esc(gate.title)}</strong>
         <p>${esc(gate.body)}</p>
@@ -473,8 +484,7 @@ function showGateDialog(gate) {
   document.querySelector(`[${gate.attr}]`)?.addEventListener('click', () => {
     closeDialog();
     if (gate.attr === 'data-switch-real') {
-      localStorage.setItem('vp_mode', 'real');
-      location.reload();
+      trySwitchToReal('earn');
     } else {
       location.hash = '#/kyc';
     }

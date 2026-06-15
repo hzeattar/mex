@@ -156,12 +156,32 @@ export async function formApi(path, formData, options = {}) {
   const controller = new AbortController();
   activeControllers.add(controller);
   const timeoutMs = options.timeout === 0 ? 0 : Math.max(1000, Number(options.timeout ?? 22000));
-  const timeout = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  let didTimeout = false;
+  const timeout = timeoutMs > 0 ? setTimeout(() => { didTimeout = true; controller.abort(); }, timeoutMs) : null;
   try {
     const res = await fetch(`${BASE}${path}`, { method: 'POST', body: formData, signal: controller.signal, credentials: 'same-origin' });
     if (timeout) clearTimeout(timeout);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const text = await res.text();
+    let data = null;
+    if (text) {
+      try { data = JSON.parse(text); } catch (_e) { data = null; }
+    }
+    if (!res.ok) {
+      const err = new Error(data?.error || data?.message || `HTTP ${res.status}`);
+      err.status = res.status;
+      err.code = data?.code || '';
+      err.payload = data;
+      throw err;
+    }
+    return data || {};
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      const friendly = new Error(didTimeout ? 'Request timed out. Please try again.' : 'Request was cancelled.');
+      friendly.name = 'RequestAbortError';
+      friendly.code = didTimeout ? 'timeout' : 'aborted';
+      throw friendly;
+    }
+    throw err;
   } finally {
     if (timeout) clearTimeout(timeout);
     activeControllers.delete(controller);

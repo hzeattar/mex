@@ -117,6 +117,10 @@ try {
     window.__BRAND_PRODUCT = <?php echo json_encode($productName, JSON_UNESCAPED_UNICODE); ?>;
     window.__BRAND_TAGLINE = <?php echo json_encode(site_setting('site.tagline', 'Professional trading & investment platform'), JSON_UNESCAPED_UNICODE); ?>;
     window.__SUPPORT_EMAIL = <?php echo $supportEmail; ?>;
+    window.__ENV = {
+      FINNHUB_KEY: <?php echo json_encode(trim((string)getenv('FINNHUB_KEY') ?: ''), JSON_UNESCAPED_SLASHES); ?>,
+      TIINGO_KEY: <?php echo json_encode(trim((string)getenv('TIINGO_KEY') ?: ''), JSON_UNESCAPED_SLASHES); ?>,
+    };
   </script>
   <?php if ($jsFile): ?>
   <script type="module" src="./assets/dist/<?php echo $jsFile; ?>"></script>

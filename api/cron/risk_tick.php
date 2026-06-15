@@ -1,11 +1,9 @@
 <?php
 /**
- * Risk tick for DEMO perps only (liquidation + TP/SL auto-close).
+ * Risk tick for open trading positions (liquidation + TP/SL auto-close).
  * Run via cron every 5-15 seconds if desired.
  *
- * IMPORTANT:
- * - REAL positions (symbol prefixed with @R@) are NOT auto-closed here.
- *   This prevents accidental closures on refresh / wrong-wallet credits.
+ * REAL positions are closed only when QuoteSnapshot marks the price executable.
  *
  * Usage: /api/cron/risk_tick.php?token=CRON_KEY
  */
@@ -28,6 +26,7 @@ require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/risk.php';
 require_once __DIR__ . '/../lib/trading_bot_engine.php';
+require_once __DIR__ . '/../lib/trade_close.php';
 
 function cron_input_token_rt(): string {
   $web = trim((string)($_GET['token'] ?? $_GET['key'] ?? ''));
@@ -57,7 +56,6 @@ if ($token === '' || !hash_equals((string)env('CRON_KEY',''), $token)) {
 
 $pdo = db();
 $now = time();
-$demoCur = (string)env('DEMO_CURRENCY', 'USDT_DEMO');
 
 $armedOpened = 0;
 try {
@@ -103,42 +101,57 @@ try {
   }
 } catch (Throwable $e) {}
 
-$rows = $pdo->query("SELECT * FROM positions WHERE status='open' AND market_type='perp' AND symbol NOT LIKE '@R@%'")
+$rows = $pdo->query("SELECT * FROM positions
+  WHERE status='open'
+    AND (
+      COALESCE(tp_price,0) > 0
+      OR COALESCE(sl_price,0) > 0
+      OR (market_type='perp' AND COALESCE(liquidation_price,0) > 0)
+    )
+  ORDER BY id ASC
+  LIMIT 500")
   ->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $liquidated = 0;
 $tpClosed = 0;
 $slClosed = 0;
 $skippedNoPrice = 0;
+$skippedRealNotExecutable = 0;
+$closeFailed = 0;
 
 foreach ($rows as $pos) {
   $id = (int)($pos['id'] ?? 0);
   $uid = (int)($pos['user_id'] ?? 0);
   if ($id <= 0 || $uid <= 0) continue;
 
-  $symbol = strtoupper((string)($pos['symbol'] ?? ''));
+  $symbolDb = (string)($pos['symbol'] ?? '');
+  $symbol = strtoupper(trade_close_strip_symbol_prefix($symbolDb));
   $assetType = strtolower((string)($pos['asset_type'] ?? 'crypto'));
+  $marketType = strtolower((string)($pos['market_type'] ?? 'spot'));
+  if (!in_array($marketType, ['spot', 'perp'], true)) $marketType = 'spot';
+  $mode = str_starts_with($symbolDb, '@R@') ? 'real' : 'demo';
   $side = strtoupper((string)($pos['side'] ?? 'BUY'));
   $qty = (float)($pos['qty'] ?? 0);
   $entry = (float)($pos['entry_price'] ?? 0);
   $leverage = (int)($pos['leverage'] ?? 1);
-  $marginInitial = (float)($pos['margin_initial'] ?? 0);
 
-  if ($symbol === '' || $qty <= 0 || $entry <= 0 || $marginInitial <= 0) continue;
+  if ($symbol === '' || $qty <= 0 || $entry <= 0) continue;
 
-  // Mark price (never liquidate on missing price)
-  $mark = 0.0;
   try {
-    $q = quote_get($symbol, $assetType);
-    $mp = $q ? (float)($q['mark_price'] ?? 0) : 0.0;
-    $mark = ($mp > 0) ? $mp : (float)quote_price($symbol, 'perp', $assetType);
+    $priceInfo = trade_close_resolve_price($symbol, $assetType, $marketType, $mode, $side);
+    $mark = (float)($priceInfo['price'] ?? 0);
+  } catch (TradeCloseException $e) {
+    $skippedNoPrice++;
+    if ($mode === 'real' && $e->publicCode === 'price_not_executable') $skippedRealNotExecutable++;
+    continue;
   } catch (Throwable $e) {
-    $mark = 0.0;
+    $skippedNoPrice++;
+    continue;
   }
   if ($mark <= 0) { $skippedNoPrice++; continue; }
 
   $liq = (float)($pos['liquidation_price'] ?? 0);
-  if ($liq <= 0) {
+  if ($marketType === 'perp' && $liq <= 0) {
     $calc = perp_calc_liquidation_price($entry, $qty, $side, $leverage);
     $liq = $calc ? (float)$calc : 0.0;
   }
@@ -147,7 +160,7 @@ foreach ($rows as $pos) {
   $sl = (float)($pos['sl_price'] ?? 0.0);
 
   $hitLiq = false;
-  if ($liq > 0) $hitLiq = ($side === 'BUY') ? ($mark <= $liq) : ($mark >= $liq);
+  if ($marketType === 'perp' && $liq > 0) $hitLiq = ($side === 'BUY') ? ($mark <= $liq) : ($mark >= $liq);
   $hitTP = ($tp > 0) ? (($side === 'BUY') ? ($mark >= $tp) : ($mark <= $tp)) : false;
   $hitSL = ($sl > 0) ? (($side === 'BUY') ? ($mark <= $sl) : ($mark >= $sl)) : false;
 
@@ -157,71 +170,10 @@ foreach ($rows as $pos) {
   elseif ($hitSL) $reason = 'stop_loss';
   if (!$reason) continue;
 
-  $pnl = perp_calc_pnl($entry, $mark, $qty, $side);
-
-  // Isolated: loss cannot exceed initial margin
-  $maxLoss = -abs($marginInitial);
-  if ($pnl < $maxLoss) $pnl = $maxLoss;
-
-  $copySharePct = (float)($pos['copy_profit_share_pct'] ?? 0);
-  $copyCommission = ((int)($pos['copied_from_admin'] ?? 0) === 1 && $pnl > 0 && $copySharePct > 0) ? ($pnl * ($copySharePct / 100.0)) : 0.0;
-  if ($copyCommission > $pnl) $copyCommission = $pnl;
-  $credit = $marginInitial + $pnl - $copyCommission;
-  if ($credit < 0) $credit = 0.0;
-
-  $closedAt = now_ts();
-
-  $pdo->beginTransaction();
   try {
-    $w = ensure_wallet($uid, $demoCur);
-    $wid = (int)($w['id'] ?? 0);
-    if ($wid <= 0) { throw new RuntimeException('Bad wallet'); }
-    if (db_driver() === 'mysql') {
-      $pdo->prepare('SELECT id FROM wallets WHERE id=? FOR UPDATE')->execute([$wid]);
-    }
-
-    if ($credit > 0) {
-      ledger_add($uid, $wid, $demoCur, $credit, 'trade_close', 'position', (string)$id, [
-        'reason'=>$reason,
-        'symbol'=>$symbol,
-        'asset_type'=>$assetType,
-        'side'=>$side,
-        'qty'=>$qty,
-        'entry'=>$entry,
-        'exit'=>$mark,
-        'pnl'=>$pnl,
-        'margin_initial'=>$marginInitial,
-        'leverage'=>$leverage,
-      ]);
-    }
-
-    if ($copyCommission > 0) {
-      $pdo->prepare('INSERT INTO trading_bot_commissions(user_id,subscription_id,signal_id,position_id,pnl_gross,share_pct,amount,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
-          ->execute([$uid, (int)($pos['copy_subscription_id'] ?? 0) ?: null, (int)($pos['source_signal_id'] ?? 0) ?: null, $id, $pnl, $copySharePct, $copyCommission, 'pending', $closedAt]);
-    }
-
-    // Update open order if present
-    $st = $pdo->prepare("SELECT id FROM orders WHERE position_id=? AND status='filled' ORDER BY id DESC LIMIT 1");
-    $st->execute([$id]);
-    $openOrderId = (int)($st->fetchColumn() ?: 0);
-
-    if ($openOrderId > 0) {
-      $pdo->prepare("UPDATE orders SET status='closed', close_reason=?, pnl_usd=?, limit_price=?, closed_at=?, updated_at=? WHERE id=?")
-          ->execute([$reason, $pnl, $mark, $closedAt, $closedAt, $openOrderId]);
-    } else {
-      // Fallback close row
-      $o = $pdo->prepare('INSERT INTO orders(user_id,symbol,asset_type,market_type,side,order_type,qty,limit_price,fill_price,usd_amount,tp_price,sl_price,leverage,reduce_only,client_order_id,position_id,pnl_usd,close_reason,closed_at,fee_paid,meta,updated_at,status,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-      $o->execute([
-        $uid,$symbol,$assetType,'perp','CLOSE','MARKET',$qty,$mark,$mark,null,null,null,$leverage,1,null,$id,$pnl,$reason,$closedAt,0,null,$closedAt,'closed',$closedAt
-      ]);
-    }
-
-    $pdo->prepare('DELETE FROM positions WHERE id=?')->execute([$id]);
-
-    $pdo->commit();
+    trade_close_position($pdo, $uid, $id, ['reason' => $reason]);
   } catch (Throwable $e) {
-    $pdo->rollBack();
+    $closeFailed++;
     continue;
   }
 
@@ -238,6 +190,8 @@ $payload = [
   'tp_closed'=>$tpClosed,
   'sl_closed'=>$slClosed,
   'skipped_no_price'=>$skippedNoPrice,
+  'skipped_real_not_executable'=>$skippedRealNotExecutable,
+  'close_failed'=>$closeFailed,
   'armed_opened'=>$armedOpened,
 ];
 try { tp_status_write('risk_tick', $payload); } catch (Throwable $e) {}

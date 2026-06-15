@@ -17,9 +17,13 @@ foreach (mex_countries_sorted($lang) as $it) {
   $label = (string)($it['label'] ?? '');
   if ($cc === '') continue;
   $flag  = mex_flag_emoji($cc);
+  $dialCode = mex_country_dial_code($cc);
   $items[] = [
     'code' => $cc,
+    'label' => $label,
     'name' => trim($flag . ' ' . $label),
+    'flag' => $flag,
+    'dial_code' => $dialCode,
   ];
 }
 

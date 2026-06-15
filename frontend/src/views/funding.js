@@ -474,10 +474,8 @@ function renderMethodCards(container) {
     return `<button type="button" class="method-card ${id === container.__fundingSelectedMethodId ? 'active' : ''}" data-method="${escAttr(id)}">
       <span class="method-card-top">
         <span class="method-icon">${methodIcon(m)}</span>
-        ${methodBrandStrip(m)}
       </span>
       <strong>${esc(m.title || m.name || m.code || t('funding.method', 'Method'))}</strong>
-      <span class="method-card-badges">${methodBadges(m, isDeposit)}</span>
       <em>${money(m.min_amount || 0)}${m.max_amount ? ` - ${money(m.max_amount)}` : '+'}</em>
     </button>`;
   }).join('');
@@ -1086,9 +1084,9 @@ function methodLogoFile(method) {
 function methodIcon(m) {
   const label = m?.title || m?.name || m?.code || t('funding.payment_method', 'Payment method');
   const uploaded = normalizePaymentImageUrl(m?.image_url);
-  if (uploaded) return paymentImage(uploaded, label, 'payment-method-logo');
+  if (uploaded) return `<img src="${escAttr(uploaded)}" alt="${escAttr(label)}" style="height:28px;object-fit:contain;">`;
   const file = methodLogoFile(m);
-  if (file) return paymentImage(paymentAsset(file), label, 'payment-method-logo');
+  if (file) return `<img src="${escAttr(paymentAsset(file))}" alt="${escAttr(label)}" style="height:28px;object-fit:contain;">`;
   return categoryIcon(methodCategory(m));
 }
 

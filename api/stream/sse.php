@@ -18,6 +18,7 @@ ob_start();
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quote_central.php';
 require_once __DIR__ . '/../lib/quote_authority.php';
+require_once __DIR__ . '/../lib/quote_snapshot.php';
 
 // Auth check (non-blocking)
 $uid = 0;
@@ -118,7 +119,7 @@ while (true) {
 
     if ($useCentral) {
       // ── Central cache path: FAST, no upstream hits ──
-      $items = quote_central_items($symbols, $type, 60);
+      $items = qs_public_items(qs_snapshots($symbols, $type, 'spot', ['mode' => 'display']));
     } else {
       // ── Legacy fallback: only if central cache is cold ──
       $count = count($symbols);
@@ -136,7 +137,14 @@ while (true) {
         'chart_budget_ms' => $providerType === 'crypto' ? 500 : 1800,
         'allow_direct_batch' => $providerType !== 'crypto',
       ]);
-      $items = $payload['items'] ?? [];
+      $legacyItems = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+      $items = [];
+      foreach ($legacyItems as $legacyItem) {
+        if (!is_array($legacyItem)) continue;
+        $sym = strtoupper(trim((string)($legacyItem['symbol'] ?? '')));
+        if ($sym === '') continue;
+        $items[] = qs_public_item(qs_snapshot_from_row($sym, (string)($legacyItem['type'] ?? $type), (string)($legacyItem['market'] ?? 'spot'), $legacyItem, ['mode' => 'display']));
+      }
       // Re-check if central is warm now (worker may have started)
       $useCentral = quote_central_is_warm($type);
       if ($useCentral) {

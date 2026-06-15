@@ -10,6 +10,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/stripe_bootstrap.php';
 require_once __DIR__ . '/../lib/ledger.php';
+require_once __DIR__ . '/../lib/user_notifications.php';
 
 require_method('POST');
 $uid = require_auth();
@@ -70,7 +71,9 @@ try {
     $details['checkout_status'] = 'expired';
     $upd = $pdo->prepare("UPDATE deposits SET status='failed', details_json=?, updated_at=? WHERE id=? AND status='pending'");
     $upd->execute([json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $now, $depositId]);
+    $changedRows = $upd->rowCount();
     $pdo->commit();
+    if ($changedRows > 0) user_notify_funding_status((int)$dep['user_id'], 'deposit', (float)$dep['amount'], (string)$dep['currency'], 'failed', $depositId);
     json_response(['ok' => true, 'status' => 'failed']);
   }
 
@@ -87,7 +90,9 @@ try {
     $details['checkout_status'] = 'amount_mismatch';
     $upd = $pdo->prepare("UPDATE deposits SET status='failed', details_json=?, updated_at=? WHERE id=? AND status='pending'");
     $upd->execute([json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $now, $depositId]);
+    $changedRows = $upd->rowCount();
     $pdo->commit();
+    if ($changedRows > 0) user_notify_funding_status((int)$dep['user_id'], 'deposit', (float)$dep['amount'], (string)$dep['currency'], 'failed', $depositId);
     json_response(['ok' => false, 'error' => 'Stripe amount mismatch'], 409);
   }
 
@@ -105,8 +110,12 @@ try {
       ['provider' => 'stripe', 'session_id' => $sessionId, 'event' => 'stripe_sync'],
       $now
     );
+    $shouldNotifyConfirmed = true;
+  } else {
+    $shouldNotifyConfirmed = false;
   }
   $pdo->commit();
+  if ($shouldNotifyConfirmed) user_notify_funding_status((int)$dep['user_id'], 'deposit', (float)$dep['amount'], (string)$dep['currency'], 'confirmed', $depositId);
   json_response(['ok' => true, 'status' => 'confirmed']);
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();

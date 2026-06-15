@@ -5,6 +5,7 @@ require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/idempotency.php';
 require_once __DIR__ . '/../lib/stripe_bootstrap.php';
 require_once __DIR__ . '/../lib/ledger.php';
+require_once __DIR__ . '/../lib/user_notifications.php';
 
 require_method('POST');
 
@@ -88,6 +89,7 @@ try {
   ]);
   $depositId = (int)$pdo->lastInsertId();
   $pdo->commit();
+  user_notify_funding_status($uid, 'deposit', $amount, $currency, 'pending', $depositId);
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();
   $resp = ['ok' => false, 'error' => 'Could not create deposit'];
@@ -176,6 +178,7 @@ try {
     $failDetails['stripe_error'] = $e->getMessage();
     $upd = $pdo->prepare("UPDATE deposits SET status='failed', details_json=?, updated_at=? WHERE id=? AND status='pending'");
     $upd->execute([json_encode($failDetails, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), time(), $depositId]);
+    user_notify_funding_status($uid, 'deposit', $amount, $currency, 'failed', (int)$depositId);
   } catch (Throwable $ignored) {}
 
   $resp = [

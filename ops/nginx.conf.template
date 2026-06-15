@@ -70,6 +70,7 @@ ${EXTRA_LISTEN}
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://js.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.binance.com https://api.twelvedata.com https://fcsapi.com https://api.stripe.com https://checkout.stripe.com wss:; frame-src https://telegram.org https://js.stripe.com https://checkout.stripe.com; object-src 'none';" always;
 
     location ^~ /.git { return 404; }
+    location ^~ /scripts { return 404; }
     location ^~ /api/data { return 404; }
     location ^~ /api/uploads { return 404; }
     location ~ /\.(?!well-known/) { return 404; }

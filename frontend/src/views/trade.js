@@ -20,14 +20,22 @@ let ema20Series = null;
 let bollUpperSeries = null;
 let bollMidSeries = null;
 let bollLowerSeries = null;
+let rsiSeries = null;
+let rsiRefLine30 = null;
+let rsiRefLine70 = null;
+let macdSeries = null;
+let macdSignalSeries = null;
+let macdHistSeries = null;
+let stochKSeries = null;
+let stochDSeries = null;
 let chartLegendEl = null;
 let chartSeriesKey = '';          // `${SYMBOL}|${tf}` the rendered series belongs to
 let allCandles = [];              // full merged dataset for the current key (oldest -> newest)
 let chartHistory = { loading: false, done: false, nextAt: 0 };
 let chartType = (() => { try { return localStorage.getItem('vp_chart_type') || 'candles'; } catch (_e) { return 'candles'; } })();
 let chartIndicators = (() => {
-  try { return Object.assign({ ma: true, ema: false, boll: false }, JSON.parse(localStorage.getItem('vp_chart_ind') || '{}')); }
-  catch (_e) { return { ma: true, ema: false, boll: false }; }
+  try { return Object.assign({ ma: true, ema: false, boll: false, rsi: false, macd: false, stoch: false }, JSON.parse(localStorage.getItem('vp_chart_ind') || '{}')); }
+  catch (_e) { return { ma: true, ema: false, boll: false, rsi: false, macd: false, stoch: false }; }
 })();
 let lastFlashPrice = 0;
 let sseClean = null;
@@ -579,6 +587,10 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   const quoteType = normalizeType(type) === 'favorites' ? 'crypto' : normalizeType(type);
   // Use Binance WebSocket for real-time crypto prices (instant trades, TradingView parity)
   if (quoteType === 'crypto') startBinanceWs(container, symbol, quoteType, runId);
+  // Finnhub WS for forex & stocks (free, ~100ms)
+  else if (quoteType === 'forex' || quoteType === 'stocks') startFinnhubWs(container, symbol, quoteType, runId);
+  // Tiingo WS for commodities/metals (free, gold/silver as FX pairs)
+  else if (quoteType === 'commodities') startTiingoWs(container, symbol, quoteType, runId);
   // Fast path: /quote_focus.php reads only the central cache (worker-fed) and
   // sits behind a 1s nginx micro-cache shared by all users, so polling can be
   // aggressive without load concerns. No cache-buster: shared cache key.
@@ -610,6 +622,8 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
 
 function stopActiveQuote() {
   stopBinanceWs();
+  stopFinnhubWs();
+  stopTiingoWs();
   if (activeQuoteTimer) {
     clearTimeout(activeQuoteTimer);
     activeQuoteTimer = null;
@@ -652,6 +666,150 @@ function stopBinanceWs() {
   if (binanceWs) {
     try { binanceWs.close(); } catch (_e) {}
     binanceWs = null;
+  }
+}
+
+/* ── Finnhub WebSocket for Forex & Stocks (free, ~100ms) ─────────────── */
+let finnhubWs = null;
+let finnhubSubs = [];
+
+function finnhubSymbol(symbol, type) {
+  if (type === 'forex') return 'OANDA:' + symbol.replace(/^([^A-Z])/, '').replace('USDT','USD').substring(0,3) + '_' + symbol.substring(3,6);
+  return symbol; // stocks: just AAPL, MSFT, etc.
+}
+
+function startFinnhubWs(container, symbol, quoteType, runId) {
+  stopFinnhubWs();
+  const apiKey = (window.__ENV || {})?.FINNHUB_KEY || '';
+  if (!apiKey) return; // No API key — fall back to polling
+  const fsym = finnhubSymbol(symbol, quoteType);
+  let ws;
+  try { ws = new WebSocket(`wss://ws.finnhub.io?token=${apiKey}`); } catch (_e) { return; }
+  finnhubWs = ws;
+  ws.addEventListener('open', () => {
+    if (finnhubWs !== ws) return;
+    ws.send(JSON.stringify({ type: 'subscribe', symbol: fsym }));
+    finnhubSubs.push(fsym);
+  });
+  ws.addEventListener('message', (evt) => {
+    if (!isCurrentRun(runId, symbol, quoteType)) { try { ws.close(); } catch (_e) {} return; }
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.type !== 'trade' || !Array.isArray(msg.data)) return;
+      const t = msg.data[0];
+      if (!t || !(t.p > 0)) return;
+      updatePrice(container, {
+        symbol, type: quoteType, price: t.p,
+        source: 'finnhub_ws',
+        provider_updated_at: Math.floor(t.t / 1000),
+      }, runId);
+    } catch (_e) {}
+  });
+  ws.addEventListener('error', () => { if (finnhubWs === ws) finnhubWs = null; });
+  ws.addEventListener('close', () => { if (finnhubWs === ws) finnhubWs = null; });
+}
+
+function stopFinnhubWs() {
+  if (finnhubWs) {
+    try { finnhubWs.close(); } catch (_e) {}
+    finnhubWs = null;
+  }
+  finnhubSubs = [];
+}
+
+/* ── Tiingo WebSocket for Commodities/Metals (free, XAUUSD as FX) ──── */
+let tiingoWs = null;
+let tiingoPollTimer = null;
+
+function tiingoForexSymbol(symbol) {
+  // XAUUSD -> xauusd, XAGUSD -> xagusd for Tiingo FX format
+  return symbol.toLowerCase();
+}
+
+function startTiingoWs(container, symbol, quoteType, runId) {
+  stopTiingoWs();
+  const apiKey = (window.__ENV || {})?.TIINGO_KEY || '';
+  if (!apiKey) return; // No API key — fall back to polling
+  let ws;
+  try { ws = new WebSocket('wss://api.tiingo.com/fx'); } catch (_e) {
+    // WS failed, fall back to REST polling
+    startTiingoPoll(container, symbol, quoteType, runId, apiKey);
+    return;
+  }
+  tiingoWs = ws;
+  let wsOk = false;
+  ws.addEventListener('open', () => {
+    if (tiingoWs !== ws) return;
+    const tiingoSym = tiingoForexSymbol(symbol);
+    ws.send(JSON.stringify({
+      eventName: 'subscribe',
+      event: { symbols: tiingoSym, thresholdLevel: 5 },
+      authorization: apiKey
+    }));
+    wsOk = true;
+  });
+  ws.addEventListener('message', (evt) => {
+    if (!isCurrentRun(runId, symbol, quoteType)) { try { ws.close(); } catch (_e) {} return; }
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.messageType === 'I') return; // info/heartbeat
+      if (msg.messageType === 'A' && msg.data) {
+        const d = msg.data;
+        const p = parseFloat(d[5] || d[4] || d[6] || 0); // midPrice, bidPrice, or askPrice
+        if (!(p > 0)) return;
+        updatePrice(container, {
+          symbol, type: quoteType, price: p,
+          source: 'tiingo_ws',
+          provider_updated_at: Math.floor(Date.now() / 1000),
+        }, runId);
+      }
+    } catch (_e) {}
+  });
+  ws.addEventListener('error', () => {
+    if (tiingoWs === ws) tiingoWs = null;
+    if (wsOk) startTiingoPoll(container, symbol, quoteType, runId, apiKey);
+  });
+  ws.addEventListener('close', () => {
+    if (tiingoWs === ws) tiingoWs = null;
+    if (!wsOk) startTiingoPoll(container, symbol, quoteType, runId, apiKey);
+  });
+}
+
+function startTiingoPoll(container, symbol, quoteType, runId, apiKey) {
+  stopTiingoPoll();
+  const tiingoSym = tiingoForexSymbol(symbol);
+  const poll = async () => {
+    if (!isCurrentRun(runId, symbol, quoteType)) { stopTiingoPoll(); return; }
+    try {
+      const r = await fetch(`https://api.tiingo.com/tiingo/fx/top?tickers=${tiingoSym}&token=${apiKey}`);
+      if (!r.ok) return;
+      const arr = await r.json();
+      if (arr?.[0]) {
+        const d = arr[0];
+        const p = parseFloat(d.midPrice || d.bidPrice || d.askPrice || 0);
+        if (p > 0) {
+          updatePrice(container, {
+            symbol, type: quoteType, price: p,
+            source: 'tiingo_rest',
+            provider_updated_at: Math.floor(Date.now() / 1000),
+          }, runId);
+        }
+      }
+    } catch (_e) {}
+  };
+  poll();
+  tiingoPollTimer = setInterval(poll, 10000); // every 10s
+}
+
+function stopTiingoPoll() {
+  if (tiingoPollTimer) { clearInterval(tiingoPollTimer); tiingoPollTimer = null; }
+}
+
+function stopTiingoWs() {
+  stopTiingoPoll();
+  if (tiingoWs) {
+    try { tiingoWs.close(); } catch (_e) {}
+    tiingoWs = null;
   }
 }
 
@@ -1074,21 +1232,77 @@ function renderOrdersMarkup(orders) {
 function renderHistoryActivity(container, history) {
   const body = $('#activity-body', container);
   if (!body) return;
-  if (!history.length) {
+
+  // History filter state
+  if (!container.__histFilter) container.__histFilter = { symbol: '', side: '', period: 'all' };
+  const hf = container.__histFilter;
+
+  // Apply filters
+  let filtered = history;
+  if (hf.symbol) filtered = filtered.filter(o => orderSymbol(o).toUpperCase().includes(hf.symbol.toUpperCase()));
+  if (hf.side) filtered = filtered.filter(o => (String(o.side || 'buy').toUpperCase()) === hf.side);
+  const now = Math.floor(Date.now() / 1000);
+  if (hf.period === 'today') filtered = filtered.filter(o => Number(o.closed_at || o.created_at || 0) >= now - 86400);
+  else if (hf.period === '7d') filtered = filtered.filter(o => Number(o.closed_at || o.created_at || 0) >= now - 7 * 86400);
+  else if (hf.period === '30d') filtered = filtered.filter(o => Number(o.closed_at || o.created_at || 0) >= now - 30 * 86400);
+
+  // Summary stats
+  const totalPnl = filtered.reduce((s, o) => s + Number(o.pnl_usd || o.pnl || 0), 0);
+  const wins = filtered.filter(o => Number(o.pnl_usd || o.pnl || 0) > 0).length;
+  const losses = filtered.filter(o => Number(o.pnl_usd || o.pnl || 0) < 0).length;
+  const winRate = filtered.length > 0 ? ((wins / filtered.length) * 100).toFixed(1) : '0.0';
+  const totalFees = filtered.reduce((s, o) => s + Number(o.fee_paid || 0), 0);
+
+  if (!filtered.length && !history.length) {
     body.innerHTML = `<p class="text-muted text-[11px] text-center py-4">${t('trade.no_closed_trades', 'No closed trades yet')}</p>`;
     return;
   }
 
+  const periodOpts = [
+    ['all', t('trade.all_time', 'All')], ['today', t('trade.today', 'Today')],
+    ['7d', '7D'], ['30d', '30D']
+  ];
+
   body.innerHTML = `
+    <div class="trade-hist-filters flex items-center gap-2 px-2 py-1.5 border-b border-line/40 text-[10px] flex-wrap">
+      <input type="text" class="input text-[10px] py-0.5 px-1.5 w-[72px]" placeholder="Symbol" data-hist-filter-symbol value="${escAttr(hf.symbol)}">
+      <select class="input text-[10px] py-0.5 px-1" data-hist-filter-side>
+        <option value="">${t('trade.all_sides', 'All sides')}</option>
+        <option value="BUY" ${hf.side === 'BUY' ? 'selected' : ''}>BUY</option>
+        <option value="SELL" ${hf.side === 'SELL' ? 'selected' : ''}>SELL</option>
+      </select>
+      <select class="input text-[10px] py-0.5 px-1" data-hist-filter-period>
+        ${periodOpts.map(([v, l]) => `<option value="${v}" ${hf.period === v ? 'selected' : ''}>${l}</option>`).join('')}
+      </select>
+      <button class="btn-ghost btn-xs text-[9px]" data-hist-export-csv>CSV</button>
+      <span class="ml-auto text-muted">${filtered.length} ${t('trade.trades', 'trades')}</span>
+    </div>
+    <div class="trade-hist-summary flex items-center gap-3 px-2 py-1 text-[10px] border-b border-line/30">
+      <span>PnL <b class="${totalPnl >= 0 ? 'text-buy' : 'text-sell'}">${money(totalPnl)}</b></span>
+      <span>W/L <b class="text-buy">${wins}</b>/<b class="text-sell">${losses}</b></span>
+      <span>${t('trade.win_rate', 'Win%')} <b>${winRate}%</b></span>
+      <span>${t('trade.fees', 'Fees')} <b class="text-muted">${money(totalFees)}</b></span>
+    </div>
     <div class="trade-position-cards lg:hidden">
-      ${history.slice(0, 18).map(tradeHistoryCard).join('')}
+      ${filtered.slice(0, 30).map(tradeHistoryCard).join('')}
     </div>
     <div class="hidden lg:block overflow-x-auto"><table class="min-w-[820px] lg:min-w-0 w-full text-[11px]">
       <thead class="text-[9px] text-muted uppercase"><tr>
-        <th class="text-left px-3 py-1">${t('trade.symbol','Symbol')}</th><th class="text-left py-1">${t('trade.side','Side')}</th><th class="text-left py-1">${t('trade.type','Type')}</th><th class="text-right py-1">${t('trade.exit','Exit')}</th><th class="text-right py-1">${t('trade.used','Used')}</th><th class="text-right py-1">${t('trade.fee','Fee')}</th><th class="text-right py-1">${t('trade.pnl','PnL')}</th><th class="text-right py-1">${t('trade.opened','Opened')}</th><th class="text-right px-3 py-1">${t('trade.closed','Closed')}</th>
+        <th class="text-left px-3 py-1">${t('trade.symbol','Symbol')}</th><th class="text-left py-1">${t('trade.side','Side')}</th><th class="text-left py-1">${t('trade.type','Type')}</th><th class="text-right py-1">${t('trade.entry','Entry')}</th><th class="text-right py-1">${t('trade.exit','Exit')}</th><th class="text-right py-1">${t('trade.used','Used')}</th><th class="text-right py-1">${t('trade.fee','Fee')}</th><th class="text-right py-1">${t('trade.pnl','PnL')}</th><th class="text-right py-1">${t('trade.opened','Opened')}</th><th class="text-right px-3 py-1">${t('trade.closed','Closed')}</th>
       </tr></thead>
-      <tbody>${history.slice(0, 18).map(tradeHistoryRow).join('')}</tbody>
+      <tbody>${filtered.slice(0, 30).map(tradeHistoryRow).join('')}</tbody>
     </table></div>`;
+
+  // Bind filter events
+  const symInput = body.querySelector('[data-hist-filter-symbol]');
+  const sideSel = body.querySelector('[data-hist-filter-side]');
+  const periodSel = body.querySelector('[data-hist-filter-period]');
+  const csvBtn = body.querySelector('[data-hist-export-csv]');
+
+  if (symInput) symInput.addEventListener('input', () => { hf.symbol = symInput.value.trim(); renderHistoryActivity(container, history); });
+  if (sideSel) sideSel.addEventListener('change', () => { hf.side = sideSel.value; renderHistoryActivity(container, history); });
+  if (periodSel) periodSel.addEventListener('change', () => { hf.period = periodSel.value; renderHistoryActivity(container, history); });
+  if (csvBtn) csvBtn.addEventListener('click', () => exportHistoryCSV(filtered));
 }
 
 function tradePositionInfo(pos) {
@@ -1330,6 +1544,7 @@ function tradeHistoryRow(o) {
     <td class="px-3 py-1.5 font-semibold">${esc(orderSymbol(o))}</td>
     <td>${sideBadge(side)}</td>
     <td class="text-muted">${esc(o.market_type || o.order_type || 'spot')}</td>
+    <td class="text-right font-mono">${price(o.fill_price || o.entry_price, type)}</td>
     <td class="text-right font-mono">${price(o.exit_price || o.limit_price, type)}</td>
     <td class="text-right font-mono">${money(o.used_usdt || o.usd_amount || 0)}</td>
     <td class="text-right font-mono">${money(o.fee_paid || 0)}</td>
@@ -1352,6 +1567,7 @@ function tradeHistoryCard(o) {
       ${sideBadge(side)}
     </div>
     <div class="trade-position-metrics">
+      <span><small>${t('trade.entry', 'Entry')}</small><strong>${price(o.fill_price || o.entry_price, type)}</strong></span>
       <span><small>${t('trade.exit', 'Exit')}</small><strong>${price(o.exit_price || o.limit_price, type)}</strong></span>
       <span><small>${t('trade.opened', 'Opened')}</small><strong>${esc(orderDate(o.created_at))}</strong></span>
       <span><small>${t('trade.closed', 'Closed')}</small><strong>${esc(orderDate(o.closed_at || o.created_at))}</strong></span>
@@ -1360,6 +1576,31 @@ function tradeHistoryCard(o) {
       <span><small>${t('trade.fee', 'Fee')}</small><strong>${money(o.fee_paid || 0)}</strong></span>
     </div>
   </article>`;
+}
+
+function exportHistoryCSV(orders) {
+  const header = 'Symbol,Side,Type,Entry,Exit,Used,Fee,PnL,Opened,Closed,Close Reason';
+  const rows = orders.map(o => [
+    orderSymbol(o),
+    orderSide(o),
+    o.market_type || o.order_type || 'spot',
+    o.fill_price || o.entry_price || '',
+    o.exit_price || o.limit_price || '',
+    o.used_usdt || o.usd_amount || 0,
+    o.fee_paid || 0,
+    o.pnl_usd || o.pnl || 0,
+    o.created_at || '',
+    o.closed_at || '',
+    o.close_reason || ''
+  ].join(','));
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'trade_history_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function sideBadge(side) {
@@ -1554,6 +1795,31 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
     bollMidSeries.setData(bands.mid);
     bollLowerSeries.setData(bands.lower);
   }
+  if (rsiSeries) {
+    const rsiData = chartIndicators.rsi ? calcRSI(closes, 14) : [];
+    rsiSeries.setData(rsiData);
+    // RSI reference lines at 30 and 70
+    if (rsiRefLine30 && rsiRefLine70 && rsiData.length) {
+      const ref30 = rsiData.map(p => ({ time: p.time, value: 30 }));
+      const ref70 = rsiData.map(p => ({ time: p.time, value: 70 }));
+      rsiRefLine30.setData(chartIndicators.rsi ? ref30 : []);
+      rsiRefLine70.setData(chartIndicators.rsi ? ref70 : []);
+    }
+    try { chart.priceScale('rsi').applyOptions({ visible: chartIndicators.rsi }); } catch (_e) {}
+  }
+  if (macdSeries && macdSignalSeries && macdHistSeries) {
+    const m = chartIndicators.macd ? calcMACD(closes, 12, 26, 9) : { macd: [], signal: [], hist: [] };
+    macdSeries.setData(m.macd);
+    macdSignalSeries.setData(m.signal);
+    macdHistSeries.setData(m.hist);
+    try { chart.priceScale('macd').applyOptions({ visible: chartIndicators.macd }); } catch (_e) {}
+  }
+  if (stochKSeries && stochDSeries) {
+    const s = chartIndicators.stoch ? calcStochastic(closes, 14, 3, 3) : { k: [], d: [] };
+    stochKSeries.setData(s.k);
+    stochDSeries.setData(s.d);
+    try { chart.priceScale('stoch').applyOptions({ visible: chartIndicators.stoch }); } catch (_e) {}
+  }
   lastCandle = { ...data[data.length - 1] };
   if (savedRange) { try { chart.timeScale().setVisibleRange(savedRange); } catch (_e) {} }
   else if (fit) chart.timeScale().fitContent();
@@ -1578,6 +1844,14 @@ function clearChartForSwitch(container) {
     if (bollUpperSeries) bollUpperSeries.setData([]);
     if (bollMidSeries) bollMidSeries.setData([]);
     if (bollLowerSeries) bollLowerSeries.setData([]);
+    if (rsiSeries) rsiSeries.setData([]);
+    if (rsiRefLine30) rsiRefLine30.setData([]);
+    if (rsiRefLine70) rsiRefLine70.setData([]);
+    if (macdSeries) macdSeries.setData([]);
+    if (macdSignalSeries) macdSignalSeries.setData([]);
+    if (macdHistSeries) macdHistSeries.setData([]);
+    if (stochKSeries) stochKSeries.setData([]);
+    if (stochDSeries) stochDSeries.setData([]);
   } catch (_e) {}
   updateChartLegend(null);
   if (chart) showChartOverlay(container);
@@ -1701,6 +1975,9 @@ function buildChartToolbar(container) {
     '<button type="button" data-chart-ind="ma" title="MA 7/25">MA</button>' +
     '<button type="button" data-chart-ind="ema" title="EMA 20">EMA</button>' +
     '<button type="button" data-chart-ind="boll" title="Bollinger Bands">BOLL</button>' +
+    '<button type="button" data-chart-ind="rsi" title="RSI 14">RSI</button>' +
+    '<button type="button" data-chart-ind="macd" title="MACD 12/26/9">MACD</button>' +
+    '<button type="button" data-chart-ind="stoch" title="Stochastic 14/3/3">STOCH</button>' +
     '<span class="chart-toolbar-sep"></span>' +
     '<button type="button" data-chart-fullscreen="1" title="Fullscreen">⛶</button>';
   bar.addEventListener('click', (e) => {
@@ -1769,6 +2046,23 @@ async function initChart(container, candles, runId = tradeRunId) {
   bollUpperSeries = chart.addLineSeries({ color: 'rgba(186,104,200,0.45)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
   bollMidSeries = chart.addLineSeries({ color: 'rgba(186,104,200,0.30)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
   bollLowerSeries = chart.addLineSeries({ color: 'rgba(186,104,200,0.45)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+
+  // RSI (separate price scale)
+  rsiSeries = chart.addLineSeries({ color: '#e040fb', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, priceScaleId: 'rsi', visible: false });
+  rsiRefLine30 = chart.addLineSeries({ color: 'rgba(0,192,135,0.25)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'rsi', visible: false });
+  rsiRefLine70 = chart.addLineSeries({ color: 'rgba(246,70,93,0.25)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'rsi', visible: false });
+  chart.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.76, bottom: 0.02 }, visible: false });
+
+  // MACD (separate price scale)
+  macdSeries = chart.addLineSeries({ color: '#5d7cff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'macd', visible: false });
+  macdSignalSeries = chart.addLineSeries({ color: '#ff6d00', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'macd', visible: false });
+  macdHistSeries = chart.addHistogramSeries({ priceFormat: { type: 'price', precision: 4 }, priceScaleId: 'macd', visible: false });
+  chart.priceScale('macd').applyOptions({ scaleMargins: { top: 0.76, bottom: 0.02 }, visible: false });
+
+  // Stochastic (separate price scale)
+  stochKSeries = chart.addLineSeries({ color: '#00bcd4', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, priceScaleId: 'stoch', visible: false });
+  stochDSeries = chart.addLineSeries({ color: '#ff9800', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'stoch', visible: false });
+  chart.priceScale('stoch').applyOptions({ scaleMargins: { top: 0.76, bottom: 0.02 }, visible: false });
 
   // Overlay UI: OHLC legend (top-left) + toolbar (top-right)
   chartLegendEl = document.createElement('div');
@@ -2810,6 +3104,94 @@ function calcBoll(closes, period = 20, mult = 2) {
     lower.push({ time: t, value: avg - mult * sd });
   }
   return { upper, mid, lower };
+}
+
+function calcRSI(closes, period = 14) {
+  if (closes.length < period + 1) return [];
+  const result = [];
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = closes[i].close - closes[i - 1].close;
+    if (diff > 0) avgGain += diff; else avgLoss -= diff;
+  }
+  avgGain /= period;
+  avgLoss /= period;
+  result.push({ time: closes[period].time, value: avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss) });
+  for (let i = period + 1; i < closes.length; i++) {
+    const diff = closes[i].close - closes[i - 1].close;
+    avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+    result.push({ time: closes[i].time, value: avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss) });
+  }
+  return result;
+}
+
+function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
+  if (closes.length < slow + signal) return { macd: [], signal: [], hist: [] };
+  const emaFast = calcEMA(closes, fast);
+  const emaSlow = calcEMA(closes, slow);
+  const macdLine = [];
+  const minLen = Math.min(emaFast.length, emaSlow.length);
+  let fi = emaFast.length - minLen, si = emaSlow.length - minLen;
+  for (let k = 0; k < minLen; k++) {
+    macdLine.push({ time: emaFast[fi + k].time, value: emaFast[fi + k].value - emaSlow[si + k].value });
+  }
+  const signalLine = [];
+  const k2 = 2 / (signal + 1);
+  let sema = 0;
+  for (let i = 0; i < signal && i < macdLine.length; i++) sema += macdLine[i].value;
+  sema /= Math.min(signal, macdLine.length);
+  if (macdLine.length > 0) signalLine.push({ time: macdLine[Math.min(signal - 1, macdLine.length - 1)].time, value: sema });
+  for (let i = signal; i < macdLine.length; i++) {
+    sema = macdLine[i].value * k2 + sema * (1 - k2);
+    signalLine.push({ time: macdLine[i].time, value: sema });
+  }
+  const hist = [];
+  const minH = Math.min(macdLine.length, signalLine.length);
+  for (let i = 0; i < minH; i++) {
+    if (macdLine[macdLine.length - minH + i].time === signalLine[signalLine.length - minH + i].time) {
+      hist.push({ time: macdLine[macdLine.length - minH + i].time, value: macdLine[macdLine.length - minH + i].value - signalLine[signalLine.length - minH + i].value, color: macdLine[macdLine.length - minH + i].value - signalLine[signalLine.length - minH + i].value >= 0 ? 'rgba(0,192,135,0.6)' : 'rgba(246,70,93,0.6)' });
+    }
+  }
+  return { macd: macdLine, signal: signalLine, hist };
+}
+
+function calcStochastic(candles, kPeriod = 14, kSmooth = 3, dSmooth = 3) {
+  if (candles.length < kPeriod) return { k: [], d: [] };
+  const rawK = [];
+  for (let i = kPeriod - 1; i < candles.length; i++) {
+    let highest = -Infinity, lowest = Infinity;
+    for (let j = 0; j < kPeriod; j++) {
+      const h = candles[i - j].high;
+      const l = candles[i - j].low;
+      if (h > highest) highest = h;
+      if (l < lowest) lowest = l;
+    }
+    const range = highest - lowest;
+    const kVal = range === 0 ? 50 : ((candles[i].close - lowest) / range) * 100;
+    rawK.push({ time: candles[i].time, value: kVal });
+  }
+  // Smooth %K
+  const smoothK = [];
+  if (rawK.length < kSmooth) return { k: rawK, d: [] };
+  let sum = 0;
+  for (let i = 0; i < kSmooth; i++) sum += rawK[i].value;
+  smoothK.push({ time: rawK[kSmooth - 1].time, value: sum / kSmooth });
+  for (let i = kSmooth; i < rawK.length; i++) {
+    sum += rawK[i].value - rawK[i - kSmooth].value;
+    smoothK.push({ time: rawK[i].time, value: sum / kSmooth });
+  }
+  // %D = SMA of smoothK
+  const dLine = [];
+  if (smoothK.length < dSmooth) return { k: smoothK, d: [] };
+  let dSum = 0;
+  for (let i = 0; i < dSmooth; i++) dSum += smoothK[i].value;
+  dLine.push({ time: smoothK[dSmooth - 1].time, value: dSum / dSmooth });
+  for (let i = dSmooth; i < smoothK.length; i++) {
+    dSum += smoothK[i].value - smoothK[i - dSmooth].value;
+    dLine.push({ time: smoothK[i].time, value: dSum / dSmooth });
+  }
+  return { k: smoothK, d: dLine };
 }
 
 

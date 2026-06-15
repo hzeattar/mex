@@ -3,6 +3,7 @@ require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/idempotency.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/affiliates.php';
+require_once __DIR__ . '/../lib/user_notifications.php';
 
 require_method('POST');
 $idem = idem_require('deposit_create');
@@ -84,6 +85,8 @@ try {
   $stmt->execute([$uid,$provider,$method,$currency,$amount,'pending',$external,json_encode($details, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),$now,$now]);
   $id = (int)$pdo->lastInsertId();
   $pdo->commit();
+
+  user_notify_funding_status($uid, 'deposit', $amount, $currency, 'pending', $id);
 
   try {
     aff_notify_manager_for_user($uid, 'dep_created', [
