@@ -577,7 +577,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
   const quoteType = type === 'favorites' ? 'crypto' : type;
   const active = get('symbol');
   const isCrypto = quoteType === 'crypto';
-  const max = isCrypto ? 42 : 24;
+  const max = isCrypto ? 42 : 30;
   const symbols = [...new Set(marketItems
     .slice(0, max)
     .map(m => String(m.symbol || '').toUpperCase())
@@ -590,11 +590,11 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
     if (!isCurrentRun(runId, active, get('type'))) return;
     updateSymbolListPrices(container, items);
   }, null, {
-    interval: isCrypto ? 4000 : 2500,
+    interval: isCrypto ? 4000 : 1500,
     initialDelay: 0,
-    fallbackAfter: 1500,
+    fallbackAfter: 1200,
     maxSymbols: max,
-    timeout: isCrypto ? 9000 : 9000,
+    timeout: isCrypto ? 9000 : 7000,
     forcePolling: false,
   });
 }
@@ -604,14 +604,16 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   const quoteType = normalizeType(type) === 'favorites' ? 'crypto' : normalizeType(type);
   // Use Binance WebSocket for real-time crypto prices (instant trades, TradingView parity)
   if (quoteType === 'crypto') startBinanceWs(container, symbol, quoteType, runId);
-  // Finnhub WS for forex & stocks (free, ~100ms)
-  else if (quoteType === 'forex' || quoteType === 'stocks') startFinnhubWs(container, symbol, quoteType, runId);
+  // Finnhub WS for forex, stocks, commodities, arab (free, ~100ms)
+  else if (quoteType === 'forex' || quoteType === 'stocks' || quoteType === 'arab') startFinnhubWs(container, symbol, quoteType, runId);
   // Tiingo WS for commodities/metals (free, gold/silver as FX pairs)
   else if (quoteType === 'commodities') startTiingoWs(container, symbol, quoteType, runId);
+  // Twelve Data WS for any type if key available (best non-crypto source)
+  if (quoteType !== 'crypto') startTwelveDataWs(container, symbol, quoteType, runId);
   // Fast path: /quote_focus.php reads only the central cache (worker-fed) and
   // sits behind a 1s nginx micro-cache shared by all users, so polling can be
   // aggressive without load concerns. No cache-buster: shared cache key.
-  const interval = quoteType === 'crypto' ? 3000 : 1800; // slower for crypto — WS is primary
+  const interval = quoteType === 'crypto' ? 3000 : 1000;
   const focusUrl = `/quote_focus.php?symbols=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}`;
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
@@ -642,6 +644,7 @@ function stopActiveQuote() {
   stopBinanceKlineWs();
   stopFinnhubWs();
   stopTiingoWs();
+  stopTwelveDataWs();
   if (activeQuoteTimer) {
     clearTimeout(activeQuoteTimer);
     activeQuoteTimer = null;
@@ -761,7 +764,15 @@ let finnhubWs = null;
 let finnhubSubs = [];
 
 function finnhubSymbol(symbol, type) {
-  if (type === 'forex') return 'OANDA:' + symbol.replace(/^([^A-Z])/, '').replace('USDT','USD').substring(0,3) + '_' + symbol.substring(3,6);
+  if (type === 'forex') {
+    const s = symbol.replace('USDT','USD').replace('BTCEUR','BTCUSDT');
+    if (s.length >= 6) return 'OANDA:' + s.substring(0,3) + '_' + s.substring(3,6);
+    return 'OANDA:' + s;
+  }
+  if (type === 'arab') {
+    // Arab stocks: e.g. 2222.SR (Saudi), ISAT.CA (Egypt)
+    return symbol.includes('.') ? symbol : symbol + '.SR';
+  }
   return symbol; // stocks: just AAPL, MSFT, etc.
 }
 
@@ -898,6 +909,80 @@ function stopTiingoWs() {
     try { tiingoWs.close(); } catch (_e) {}
     tiingoWs = null;
   }
+}
+
+/* ── Twelve Data WebSocket for all non-crypto markets ──────────────── */
+let twelveDataWs = null;
+let twelveDataSubs = [];
+
+function twelveDataSymbol(symbol, type) {
+  // Twelve Data uses: EUR/USD, AAPL, XAU/USD, GC=F
+  if (type === 'forex') {
+    const s = symbol.replace('USDT','USD');
+    if (s.length >= 6) return s.substring(0,3) + '/' + s.substring(3,6);
+    return s;
+  }
+  if (type === 'commodities') {
+    // Gold: XAUUSD -> XAU/USD, Silver: XAGUSD -> XAG/USD
+    if (symbol.startsWith('XAU')) return 'XAU/USD';
+    if (symbol.startsWith('XAG')) return 'XAG/USD';
+    if (symbol.startsWith('XPT')) return 'XPT/USD';
+    if (symbol.startsWith('XPD')) return 'XPD/USD';
+    return symbol;
+  }
+  if (type === 'futures') {
+    // Twelve Data uses exchange codes: GC1! (Gold), CL1! (Crude Oil)
+    const futuresMap = { 'GC=F':'GC1!','CL=F':'CL1!','SI=F':'SI1!','HG=F':'HG1!','NG=F':'NG1!','ZC=F':'ZC1!','ZW=F':'ZW1!','ZS=F':'ZS1!','ES=F':'ES1!','NQ=F':'NQ1!','YM=F':'YM1!','RTY=F':'RTY1!','DX=F':'DX1!' };
+    return futuresMap[symbol] || symbol;
+  }
+  return symbol; // stocks, arab: as-is
+}
+
+function startTwelveDataWs(container, symbol, quoteType, runId) {
+  stopTwelveDataWs();
+  const apiKey = (window.__ENV || {})?.TWELVEDATA_KEY || '';
+  if (!apiKey) return;
+  const tdsym = twelveDataSymbol(symbol, quoteType);
+  let ws;
+  try {
+    ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?token=${apiKey}`);
+  } catch (_e) { return; }
+  twelveDataWs = ws;
+  ws.addEventListener('open', () => {
+    if (twelveDataWs !== ws) return;
+    ws.send(JSON.stringify({ action: 'subscribe', params: { symbols: tdsym } }));
+    twelveDataSubs.push(tdsym);
+  });
+  ws.addEventListener('message', (evt) => {
+    if (!isCurrentRun(runId, symbol, quoteType)) { try { ws.close(); } catch (_e) {} return; }
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.event === 'heartbeat') return;
+      if (msg.event === 'subscribe') return; // ack
+      if (msg.event === 'price' && msg.price) {
+        const p = parseFloat(msg.price);
+        if (!(p > 0)) return;
+        const changePct = parseFloat(msg.change_percent || msg.change_pct || 0);
+        updatePrice(container, {
+          symbol, type: quoteType, price: p, change_pct: changePct,
+          open: parseFloat(msg.open || 0),
+          prev_close: parseFloat(msg.close || msg.previous_close || 0),
+          source: 'twelvedata_ws',
+          provider_updated_at: Math.floor(Date.now() / 1000),
+        }, runId);
+      }
+    } catch (_e) {}
+  });
+  ws.addEventListener('error', () => { if (twelveDataWs === ws) twelveDataWs = null; });
+  ws.addEventListener('close', () => { if (twelveDataWs === ws) twelveDataWs = null; });
+}
+
+function stopTwelveDataWs() {
+  if (twelveDataWs) {
+    try { twelveDataWs.close(); } catch (_e) {}
+    twelveDataWs = null;
+  }
+  twelveDataSubs = [];
 }
 
 function stopActivityRefresh() {

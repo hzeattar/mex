@@ -88,10 +88,10 @@ while (true) {
       'ttl' => $providerType === 'crypto' ? 1 : 2,
       'yahoo_ttl' => 2,
       'massive_ttl' => 2,
-      'direct_budget' => $providerType === 'crypto' ? min($count, 36) : min($count, 6),
-      'direct_yahoo_budget' => $providerType === 'crypto' ? 0 : min($count, 3),
-      'chart_budget' => $providerType === 'crypto' ? min($count, 12) : min($count, 4),
-      'chart_budget_ms' => $providerType === 'crypto' ? 500 : 1800,
+      'direct_budget' => $providerType === 'crypto' ? min($count, 36) : min($count, 10),
+      'direct_yahoo_budget' => $providerType === 'crypto' ? 0 : min($count, 5),
+      'chart_budget' => $providerType === 'crypto' ? min($count, 12) : min($count, 6),
+      'chart_budget_ms' => $providerType === 'crypto' ? 500 : 1200,
       'allow_direct_batch' => $providerType !== 'crypto',
     ]);
 

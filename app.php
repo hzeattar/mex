@@ -120,6 +120,7 @@ try {
     window.__ENV = {
       FINNHUB_KEY: <?php echo json_encode(trim((string)getenv('FINNHUB_KEY') ?: ''), JSON_UNESCAPED_SLASHES); ?>,
       TIINGO_KEY: <?php echo json_encode(trim((string)getenv('TIINGO_KEY') ?: ''), JSON_UNESCAPED_SLASHES); ?>,
+      TWELVEDATA_KEY: <?php echo json_encode(trim((string)getenv('QUOTES_TWELVEDATA_KEY') ?: ''), JSON_UNESCAPED_SLASHES); ?>,
     };
   </script>
   <?php if ($jsFile): ?>

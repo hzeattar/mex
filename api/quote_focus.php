@@ -36,10 +36,12 @@ $items = null;
 // re-warms the file. Tier 2 serves the last-known price (better than '--').
 $freshAge = match ($type) {
   'crypto' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_CRYPTO', '5')),
-  'forex' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_FOREX', '8')),
-  'commodities' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_COMMODITIES', '8')),
-  'futures' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_FUTURES', '8')),
-  default => max(5, (int)env('QUOTE_FOCUS_FRESH_AGE_DEFAULT', '30')),
+  'forex' => max(2, (int)env('QUOTE_FOCUS_FRESH_AGE_FOREX', '4')),
+  'commodities' => max(2, (int)env('QUOTE_FOCUS_FRESH_AGE_COMMODITIES', '4')),
+  'futures' => max(2, (int)env('QUOTE_FOCUS_FRESH_AGE_FUTURES', '4')),
+  'stocks' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_STOCKS', '5')),
+  'arab' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_ARAB', '5')),
+  default => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_DEFAULT', '10')),
 };
 $centralItems = qs_public_items(qs_snapshots($list, $type, 'spot', ['mode' => 'display']));
 $items = is_array($items) ? array_merge($items, $centralItems) : $centralItems;
