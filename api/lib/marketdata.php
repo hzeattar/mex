@@ -1101,6 +1101,8 @@ function yahoo_quote_many(array $symbols): array {
       $out[$sym] = [
         'price' => (float)$p,
         'change_pct' => is_numeric($chg) ? (float)$chg : 0.0,
+        'open' => (float)($r['regularMarketOpen'] ?? 0),
+        'prev_close' => (float)($r['regularMarketPreviousClose'] ?? $r['previousClose'] ?? 0),
         'updated_at' => $updatedAt,
         'source' => 'yahoo',
       ];
@@ -1289,6 +1291,8 @@ function yahoo_chart_meta_quote(string $symbol, string $tf = '1m'): ?array {
   return [
     'price' => $price,
     'change_pct' => $changePct,
+    'open' => (float)($meta['regularMarketOpen'] ?? 0),
+    'prev_close' => $prev > 0 ? $prev : 0.0,
     'updated_at' => $updatedAt,
     'source' => 'yahoo_chart_live',
   ];

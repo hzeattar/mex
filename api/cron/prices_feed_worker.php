@@ -215,6 +215,8 @@ function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbo
         'type' => $type,
         'price' => $price,
         'change_pct' => (float)($row['change_pct'] ?? 0),
+        'open' => (float)($row['open'] ?? 0),
+        'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
         'updated_at' => (int)($row['updated_at'] ?? $now),
         'source' => (string)($row['source'] ?? 'provider_live'),
         'central_ts' => $now,

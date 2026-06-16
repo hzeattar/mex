@@ -566,6 +566,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'type' => $assetType,
           'price' => $p,
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'open' => (float)($row['open'] ?? 0),
+          'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
           'updated_at' => quote_row_provider_ts($row, $now),
           'source' => (string)($row['source'] ?? 'eodhd'),
         ];
@@ -649,6 +651,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
               'type' => $assetType,
               'price' => $p,
               'change_pct' => (float)($row['change_pct'] ?? 0.0),
+              'open' => (float)($row['open'] ?? 0),
+              'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
               'updated_at' => quote_row_provider_ts($row, $now),
               'source' => (string)($row['source'] ?? 'yahoo'),
             ];
@@ -676,6 +680,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'type' => $assetType,
           'price' => $p,
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'open' => (float)($row['open'] ?? 0),
+          'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
           'updated_at' => quote_row_provider_ts($row, $now),
           'source' => (string)($row['source'] ?? 'yahoo'),
         ];
@@ -706,6 +712,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
               'type' => $assetType,
               'price' => $p,
               'change_pct' => (float)($row['change_pct'] ?? 0.0),
+              'open' => (float)($row['open'] ?? 0),
+              'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
               'updated_at' => quote_row_provider_ts($row, $now),
               'source' => (string)($row['source'] ?? 'yahoo'),
             ];

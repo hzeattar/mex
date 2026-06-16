@@ -92,11 +92,14 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
         ]);
 
     $price = 0.0; $change = 0.0; $updatedAt = 0; $source = 'unavailable';
+    $openPrice = 0.0; $prevClose = 0.0;
     $providerUpdatedAt = 0; $receivedAt = 0; $ingestedAt = 0; $cacheUpdatedAt = 0; $timingClass = 'unavailable';
     $delayed = in_array($assetType, ['stocks','arab'], true);
     if ($chosen) {
       $price = (float)($chosen['price'] ?? 0);
       $change = (float)($chosen['change_pct'] ?? 0);
+      $openPrice = (float)($chosen['open'] ?? 0);
+      $prevClose = (float)($chosen['prev_close'] ?? $chosen['previous_close'] ?? 0);
       $updatedAt = qa_quote_row_ts($chosen);
       $providerUpdatedAt = $updatedAt;
       $receivedAt = isset($chosen['received_at']) && is_numeric($chosen['received_at']) ? (int)$chosen['received_at'] : 0;
@@ -152,11 +155,16 @@ function qa_quote_payload(string $typeAlias, array $symbols, array $opts = []): 
       }
     }
 
+    if ($change == 0.0 && $prevClose > 0 && $price > 0 && abs($price - $prevClose) > 0.0000001) {
+      $change = (($price - $prevClose) / $prevClose) * 100.0;
+    }
     $items[] = [
       'symbol' => $sym,
       'type' => $assetType,
       'price' => $price,
       'change_pct' => $change,
+      'open' => $openPrice,
+      'prev_close' => $prevClose,
       'updated_at' => $updatedAt,
       'provider_updated_at' => $providerUpdatedAt,
       'received_at' => $receivedAt,

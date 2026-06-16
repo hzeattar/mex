@@ -537,6 +537,8 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
       if (vp_market_quote_source_blocked($symbol, $type, $src)) continue;
       $items[$entry['index']]['price'] = $price;
       $items[$entry['index']]['change_pct'] = (float)($row['change_pct'] ?? 0);
+      $items[$entry['index']]['open'] = (float)($row['open'] ?? 0);
+      $items[$entry['index']]['prev_close'] = (float)($row['prev_close'] ?? $row['previous_close'] ?? 0);
       $items[$entry['index']]['updated_at'] = (int)($row['updated_at'] ?? time());
       $items[$entry['index']]['source'] = $src;
       $items[$entry['index']]['is_stale'] = !empty($row['is_stale']);

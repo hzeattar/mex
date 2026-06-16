@@ -891,6 +891,13 @@ function quoteQuality(q) {
   };
 }
 
+function deriveChangePct(q) {
+  const p = Number(q?.price || 0);
+  const open = Number(q?.open || q?.prev_close || q?.previous_close || q?.q_open || 0);
+  if (p > 0 && open > 0 && p !== open) return ((p - open) / open) * 100;
+  return 0;
+}
+
 function shouldAcceptQuote(container, q, symbol) {
   const p = Number(q?.price || q?.q_price || 0);
   if (!(p > 0)) return false;
@@ -920,7 +927,7 @@ function updatePrice(container, q, runId = tradeRunId) {
   if (!isCurrentRun(runId, String(q?.symbol || get('symbol')).toUpperCase(), q?.type || get('type'))) return;
   const p = Number(q.price || q.q_price || 0);
   if (!shouldAcceptQuote(container, { ...q, price: p }, q.symbol || get('symbol'))) return;
-  const chg = Number(q.change_pct || q.q_change || 0);
+  const chg = Number(q.change_pct || q.q_change || 0) || deriveChangePct(q);
   const assetType = get('type');
   set('activeQuote', { ...q, price: p, change_pct: chg });
   const liveTrend = trendClass(container, q.symbol || get('symbol'), p, chg);
@@ -1019,7 +1026,7 @@ function renderSymbolList(container, items) {
     const symbol = String(m.symbol || '').toUpperCase();
     const type = m.type || get('type');
     const p = Number(m.price || m.q_price || 0);
-    const chg = Number(m.change_pct || m.q_change || 0);
+    const chg = Number(m.change_pct || m.q_change || 0) || deriveChangePct(m);
     const unavailable = !(p > 0);
     return `<div class="symbol-row ${symbol === active ? 'active' : ''}" data-sym="${escAttr(symbol)}" data-stype="${escAttr(type)}">
       ${marketLogo(symbol, type, 'w-7 h-7 rounded-md shrink-0')}
@@ -1103,7 +1110,7 @@ function updateSymbolListPrices(container, items) {
     const p = Number(q.price || q.q_price || 0);
     if (!(p > 0)) return;
     if (!shouldAcceptQuote(container, { ...q, price: p }, symbol)) return;
-    const chg = Number(q.change_pct || q.q_change || 0);
+    const chg = Number(q.change_pct || q.q_change || 0) || deriveChangePct(q);
     const priceCell = $('[data-price-cell]', row);
     const changeCell = $('[data-change-cell]', row);
     if (priceCell) {
