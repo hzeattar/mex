@@ -591,11 +591,11 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
     updateSymbolListPrices(container, items);
   }, null, {
     interval: isCrypto ? 4000 : 2500,
-    initialDelay: 500,
-    fallbackAfter: 2200,
+    initialDelay: 0,
+    fallbackAfter: 1500,
     maxSymbols: max,
     timeout: isCrypto ? 9000 : 9000,
-    forcePolling: !isCrypto,
+    forcePolling: false,
   });
 }
 
