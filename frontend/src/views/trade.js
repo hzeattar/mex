@@ -1,4 +1,4 @@
-import { get, set } from '../state/store.js';
+﻿import { get, set } from '../state/store.js';
 import { money, qty, pct, price, esc, escAttr } from '../utils/format.js';
 import { $, $$, delegate } from '../utils/dom.js';
 import { api, clearCacheFor } from '../services/api.js';
@@ -67,13 +67,13 @@ function bindDelegate(container, selector, event, handler) {
 
 function getTypes() {
   return [
-    { key: 'favorites', label: t('market.type.favorites', 'المفضلة') },
-    { key: 'crypto', label: t('markets.crypto', 'الكريبتو') },
-    { key: 'forex', label: t('markets.fx', 'الفوركس') },
-    { key: 'stocks', label: t('markets.stocks', 'الأسهم') },
-    { key: 'commodities', label: t('markets.commodities', 'السلع') },
-    { key: 'futures', label: t('market.type.futures', 'العقود الآجلة') },
-    { key: 'arab', label: t('markets.arab_stocks', 'الأسهم العربية') },
+    { key: 'favorites', label: t('market.type.favorites', 'Ø§Ù„Ù…ÙØ¶Ù„Ø©') },
+    { key: 'crypto', label: t('markets.crypto', 'Ø§Ù„ÙƒØ±ÙŠØ¨ØªÙˆ') },
+    { key: 'forex', label: t('markets.fx', 'Ø§Ù„ÙÙˆØ±ÙƒØ³') },
+    { key: 'stocks', label: t('markets.stocks', 'Ø§Ù„Ø£Ø³Ù‡Ù…') },
+    { key: 'commodities', label: t('markets.commodities', 'Ø§Ù„Ø³Ù„Ø¹') },
+    { key: 'futures', label: t('market.type.futures', 'Ø§Ù„Ø¹Ù‚ÙˆØ¯ Ø§Ù„Ø¢Ø¬Ù„Ø©') },
+    { key: 'arab', label: t('markets.arab_stocks', 'Ø§Ù„Ø£Ø³Ù‡Ù… Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©') },
   ];
 }
 
@@ -230,7 +230,7 @@ export function render(params) {
               <button class="active" data-activity-tab="active">${t('trade.active_trades', 'Active trades')} <b id="active-count">0</b></button>
               <button data-activity-tab="closed">${t('trade.closed_trades', 'Closed trades')} <b id="closed-count">0</b></button>
             </div>
-            <button class="activity-expand-btn" data-toggle-activity-expand title="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}" aria-label="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}">${icons.fullscreen || icons.expand || '⛶'}</button>
+            <button class="activity-expand-btn" data-toggle-activity-expand title="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}" aria-label="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}">${icons.fullscreen || icons.expand || 'â›¶'}</button>
           </div>
         </div>
         <div id="activity-body"><p class="text-muted text-[11px] text-center py-4">${t('common.loading', 'Loading...')}</p></div>
@@ -325,7 +325,7 @@ function renderOrderPanel() {
       <input type="range" min="1" max="100" value="${escAttr(String(lev))}" class="w-full mt-1 accent-accent" data-leverage />
     </label>` : `
     <div class="order-spot-note" id="leverage-row">
-      <span class="text-[10px] text-muted">${t('trade.spot_no_leverage','Spot order — no leverage')}</span>
+      <span class="text-[10px] text-muted">${t('trade.spot_no_leverage','Spot order â€” no leverage')}</span>
     </div>`}
     <div class="grid grid-cols-2 gap-2">
       <label class="block">
@@ -604,12 +604,9 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   const quoteType = normalizeType(type) === 'favorites' ? 'crypto' : normalizeType(type);
   // Use Binance WebSocket for real-time crypto prices (instant trades, TradingView parity)
   if (quoteType === 'crypto') startBinanceWs(container, symbol, quoteType, runId);
-  // Finnhub WS for forex, stocks, commodities, arab (free, ~100ms)
-  else if (quoteType === 'forex' || quoteType === 'stocks' || quoteType === 'arab') startFinnhubWs(container, symbol, quoteType, runId);
-  // Tiingo WS for commodities/metals (free, gold/silver as FX pairs)
-  else if (quoteType === 'commodities') startTiingoWs(container, symbol, quoteType, runId);
-  // Twelve Data WS for any type if key available (best non-crypto source)
-  if (quoteType !== 'crypto') startTwelveDataWs(container, symbol, quoteType, runId);
+  // Non-crypto: server-side aggregator feeds the central cache via WS;
+  // polling /quote_focus.php (1s nginx micro-cached) gives near-real-time prices.
+  // Finnhub/Tiingo/TwelveData WS removed from client â€” API keys unsafe + wastes credits.
   // Fast path: /quote_focus.php reads only the central cache (worker-fed) and
   // sits behind a 1s nginx micro-cache shared by all users, so polling can be
   // aggressive without load concerns. No cache-buster: shared cache key.
@@ -630,7 +627,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
       if (!isCurrentRun(runId, symbol, type)) return;
       if (item) updatePrice(container, item, runId);
     } catch (_e) {
-      // Abort/timeout errors are normal during cleanup — don't surface to UI.
+      // Abort/timeout errors are normal during cleanup â€” don't surface to UI.
       if (isCurrentRun(runId, symbol, type)) markDisconnected(container);
     } finally {
       if (isCurrentRun(runId, symbol, type)) activeQuoteTimer = setTimeout(poll, interval);
@@ -642,9 +639,6 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
 function stopActiveQuote() {
   stopBinanceWs();
   stopBinanceKlineWs();
-  stopFinnhubWs();
-  stopTiingoWs();
-  stopTwelveDataWs();
   if (activeQuoteTimer) {
     clearTimeout(activeQuoteTimer);
     activeQuoteTimer = null;
@@ -690,7 +684,7 @@ function stopBinanceWs() {
   }
 }
 
-/* ── Binance Kline WebSocket for real-time chart candles ─────────── */
+/* â”€â”€ Binance Kline WebSocket for real-time chart candles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function startBinanceKlineWs(symbol, tf, runId) {
   stopBinanceKlineWs();
   const wsSymbol = symbol.toLowerCase();
@@ -759,231 +753,12 @@ function stopBinanceKlineWs() {
   }
 }
 
-/* ── Finnhub WebSocket for Forex & Stocks (free, ~100ms) ─────────────── */
-let finnhubWs = null;
-let finnhubSubs = [];
+/* â”€â”€ Client-side Finnhub/Tiingo/TwelveData WS removed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ *  Server-side aggregator (api/ws/aggregator.php) now handles all
+ *  WS connections. Non-crypto prices via /quote_focus.php polling
+ *  which reads from the aggregator-fed central cache.
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-function finnhubSymbol(symbol, type) {
-  if (type === 'forex') {
-    const s = symbol.replace('USDT','USD').replace('BTCEUR','BTCUSDT');
-    if (s.length >= 6) return 'OANDA:' + s.substring(0,3) + '_' + s.substring(3,6);
-    return 'OANDA:' + s;
-  }
-  if (type === 'arab') {
-    // Arab stocks: e.g. 2222.SR (Saudi), ISAT.CA (Egypt)
-    return symbol.includes('.') ? symbol : symbol + '.SR';
-  }
-  return symbol; // stocks: just AAPL, MSFT, etc.
-}
-
-function startFinnhubWs(container, symbol, quoteType, runId) {
-  stopFinnhubWs();
-  const apiKey = (window.__ENV || {})?.FINNHUB_KEY || '';
-  if (!apiKey) return; // No API key — fall back to polling
-  const fsym = finnhubSymbol(symbol, quoteType);
-  let ws;
-  try { ws = new WebSocket(`wss://ws.finnhub.io?token=${apiKey}`); } catch (_e) { return; }
-  finnhubWs = ws;
-  ws.addEventListener('open', () => {
-    if (finnhubWs !== ws) return;
-    ws.send(JSON.stringify({ type: 'subscribe', symbol: fsym }));
-    finnhubSubs.push(fsym);
-  });
-  ws.addEventListener('message', (evt) => {
-    if (!isCurrentRun(runId, symbol, quoteType)) { try { ws.close(); } catch (_e) {} return; }
-    try {
-      const msg = JSON.parse(evt.data);
-      if (msg.type !== 'trade' || !Array.isArray(msg.data)) return;
-      const t = msg.data[0];
-      if (!t || !(t.p > 0)) return;
-      updatePrice(container, {
-        symbol, type: quoteType, price: t.p,
-        source: 'finnhub_ws',
-        provider_updated_at: Math.floor(t.t / 1000),
-      }, runId);
-    } catch (_e) {}
-  });
-  ws.addEventListener('error', () => { if (finnhubWs === ws) finnhubWs = null; });
-  ws.addEventListener('close', () => { if (finnhubWs === ws) finnhubWs = null; });
-}
-
-function stopFinnhubWs() {
-  if (finnhubWs) {
-    try { finnhubWs.close(); } catch (_e) {}
-    finnhubWs = null;
-  }
-  finnhubSubs = [];
-}
-
-/* ── Tiingo WebSocket for Commodities/Metals (free, XAUUSD as FX) ──── */
-let tiingoWs = null;
-let tiingoPollTimer = null;
-
-function tiingoForexSymbol(symbol) {
-  // XAUUSD -> xauusd, XAGUSD -> xagusd for Tiingo FX format
-  return symbol.toLowerCase();
-}
-
-function startTiingoWs(container, symbol, quoteType, runId) {
-  stopTiingoWs();
-  const apiKey = (window.__ENV || {})?.TIINGO_KEY || '';
-  if (!apiKey) return; // No API key — fall back to polling
-  let ws;
-  try { ws = new WebSocket('wss://api.tiingo.com/fx'); } catch (_e) {
-    // WS failed, fall back to REST polling
-    startTiingoPoll(container, symbol, quoteType, runId, apiKey);
-    return;
-  }
-  tiingoWs = ws;
-  let wsOk = false;
-  ws.addEventListener('open', () => {
-    if (tiingoWs !== ws) return;
-    const tiingoSym = tiingoForexSymbol(symbol);
-    ws.send(JSON.stringify({
-      eventName: 'subscribe',
-      event: { symbols: tiingoSym, thresholdLevel: 5 },
-      authorization: apiKey
-    }));
-    wsOk = true;
-  });
-  ws.addEventListener('message', (evt) => {
-    if (!isCurrentRun(runId, symbol, quoteType)) { try { ws.close(); } catch (_e) {} return; }
-    try {
-      const msg = JSON.parse(evt.data);
-      if (msg.messageType === 'I') return; // info/heartbeat
-      if (msg.messageType === 'A' && msg.data) {
-        const d = msg.data;
-        const p = parseFloat(d[5] || d[4] || d[6] || 0); // midPrice, bidPrice, or askPrice
-        if (!(p > 0)) return;
-        updatePrice(container, {
-          symbol, type: quoteType, price: p,
-          source: 'tiingo_ws',
-          provider_updated_at: Math.floor(Date.now() / 1000),
-        }, runId);
-      }
-    } catch (_e) {}
-  });
-  ws.addEventListener('error', () => {
-    if (tiingoWs === ws) tiingoWs = null;
-    if (wsOk) startTiingoPoll(container, symbol, quoteType, runId, apiKey);
-  });
-  ws.addEventListener('close', () => {
-    if (tiingoWs === ws) tiingoWs = null;
-    if (!wsOk) startTiingoPoll(container, symbol, quoteType, runId, apiKey);
-  });
-}
-
-function startTiingoPoll(container, symbol, quoteType, runId, apiKey) {
-  stopTiingoPoll();
-  const tiingoSym = tiingoForexSymbol(symbol);
-  const poll = async () => {
-    if (!isCurrentRun(runId, symbol, quoteType)) { stopTiingoPoll(); return; }
-    try {
-      const r = await fetch(`https://api.tiingo.com/tiingo/fx/top?tickers=${tiingoSym}&token=${apiKey}`);
-      if (!r.ok) return;
-      const arr = await r.json();
-      if (arr?.[0]) {
-        const d = arr[0];
-        const p = parseFloat(d.midPrice || d.bidPrice || d.askPrice || 0);
-        if (p > 0) {
-          updatePrice(container, {
-            symbol, type: quoteType, price: p,
-            source: 'tiingo_rest',
-            provider_updated_at: Math.floor(Date.now() / 1000),
-          }, runId);
-        }
-      }
-    } catch (_e) {}
-  };
-  poll();
-  tiingoPollTimer = setInterval(poll, 10000); // every 10s
-}
-
-function stopTiingoPoll() {
-  if (tiingoPollTimer) { clearInterval(tiingoPollTimer); tiingoPollTimer = null; }
-}
-
-function stopTiingoWs() {
-  stopTiingoPoll();
-  if (tiingoWs) {
-    try { tiingoWs.close(); } catch (_e) {}
-    tiingoWs = null;
-  }
-}
-
-/* ── Twelve Data WebSocket for all non-crypto markets ──────────────── */
-let twelveDataWs = null;
-let twelveDataSubs = [];
-
-function twelveDataSymbol(symbol, type) {
-  // Twelve Data uses: EUR/USD, AAPL, XAU/USD, GC=F
-  if (type === 'forex') {
-    const s = symbol.replace('USDT','USD');
-    if (s.length >= 6) return s.substring(0,3) + '/' + s.substring(3,6);
-    return s;
-  }
-  if (type === 'commodities') {
-    // Gold: XAUUSD -> XAU/USD, Silver: XAGUSD -> XAG/USD
-    if (symbol.startsWith('XAU')) return 'XAU/USD';
-    if (symbol.startsWith('XAG')) return 'XAG/USD';
-    if (symbol.startsWith('XPT')) return 'XPT/USD';
-    if (symbol.startsWith('XPD')) return 'XPD/USD';
-    return symbol;
-  }
-  if (type === 'futures') {
-    // Twelve Data uses exchange codes: GC1! (Gold), CL1! (Crude Oil)
-    const futuresMap = { 'GC=F':'GC1!','CL=F':'CL1!','SI=F':'SI1!','HG=F':'HG1!','NG=F':'NG1!','ZC=F':'ZC1!','ZW=F':'ZW1!','ZS=F':'ZS1!','ES=F':'ES1!','NQ=F':'NQ1!','YM=F':'YM1!','RTY=F':'RTY1!','DX=F':'DX1!' };
-    return futuresMap[symbol] || symbol;
-  }
-  return symbol; // stocks, arab: as-is
-}
-
-function startTwelveDataWs(container, symbol, quoteType, runId) {
-  stopTwelveDataWs();
-  const apiKey = (window.__ENV || {})?.TWELVEDATA_KEY || '';
-  if (!apiKey) return;
-  const tdsym = twelveDataSymbol(symbol, quoteType);
-  let ws;
-  try {
-    ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?token=${apiKey}`);
-  } catch (_e) { return; }
-  twelveDataWs = ws;
-  ws.addEventListener('open', () => {
-    if (twelveDataWs !== ws) return;
-    ws.send(JSON.stringify({ action: 'subscribe', params: { symbols: tdsym } }));
-    twelveDataSubs.push(tdsym);
-  });
-  ws.addEventListener('message', (evt) => {
-    if (!isCurrentRun(runId, symbol, quoteType)) { try { ws.close(); } catch (_e) {} return; }
-    try {
-      const msg = JSON.parse(evt.data);
-      if (msg.event === 'heartbeat') return;
-      if (msg.event === 'subscribe') return; // ack
-      if (msg.event === 'price' && msg.price) {
-        const p = parseFloat(msg.price);
-        if (!(p > 0)) return;
-        const changePct = parseFloat(msg.change_percent || msg.change_pct || 0);
-        updatePrice(container, {
-          symbol, type: quoteType, price: p, change_pct: changePct,
-          open: parseFloat(msg.open || 0),
-          prev_close: parseFloat(msg.close || msg.previous_close || 0),
-          source: 'twelvedata_ws',
-          provider_updated_at: Math.floor(Date.now() / 1000),
-        }, runId);
-      }
-    } catch (_e) {}
-  });
-  ws.addEventListener('error', () => { if (twelveDataWs === ws) twelveDataWs = null; });
-  ws.addEventListener('close', () => { if (twelveDataWs === ws) twelveDataWs = null; });
-}
-
-function stopTwelveDataWs() {
-  if (twelveDataWs) {
-    try { twelveDataWs.close(); } catch (_e) {}
-    twelveDataWs = null;
-  }
-  twelveDataSubs = [];
-}
 
 function stopActivityRefresh() {
   if (activityRefreshTimer) {
@@ -1252,7 +1027,7 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId, listType 
 
 function updateSymbolListPrices(container, items) {
   if (!items?.length) return;
-  // Build the symbol→row lookup once per batch instead of re-scanning the DOM per quote (was O(rows×quotes)).
+  // Build the symbolâ†’row lookup once per batch instead of re-scanning the DOM per quote (was O(rowsÃ—quotes)).
   const rows = $$('.symbol-row', container);
   if (!rows.length) return;
   const rowMap = new Map();
@@ -1579,7 +1354,7 @@ function tradePositionRow(pos) {
     <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
     <td class="text-right font-mono"><span data-pos-mark-cell>${mark > 0 ? price(mark, posType) : '--'}</span></td>
     <td class="text-right font-mono">${qty(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
-    <td class="text-right font-mono">${isPerp ? `${esc(String(pos.leverage || 1))}x` : '<span class="text-muted text-[9px]">—</span>'}</td>
+    <td class="text-right font-mono">${isPerp ? `${esc(String(pos.leverage || 1))}x` : '<span class="text-muted text-[9px]">â€”</span>'}</td>
     <td class="text-right font-mono"><span class="${pnl >= 0 ? 'text-buy' : 'text-sell'}" data-pos-pnl-cell>${money(pnl)}</span></td>
     <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">${t('common.close', 'Close')}</button>` : ''}</td>
   </tr>`;
@@ -2209,7 +1984,7 @@ function buildChartToolbar(container) {
     '<button type="button" data-chart-ind="macd" title="MACD 12/26/9">MACD</button>' +
     '<button type="button" data-chart-ind="stoch" title="Stochastic 14/3/3">STOCH</button>' +
     '<span class="chart-toolbar-sep"></span>' +
-    '<button type="button" data-chart-fullscreen="1" title="Fullscreen">⛶</button>';
+    '<button type="button" data-chart-fullscreen="1" title="Fullscreen">â›¶</button>';
   bar.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -2332,7 +2107,7 @@ async function initChart(container, candles, runId = tradeRunId) {
     chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) });
   });
   resizeObserver.observe(el);
-  // Force correct size on first paint — el.clientWidth may be 0 before layout settles
+  // Force correct size on first paint â€” el.clientWidth may be 0 before layout settles
   requestAnimationFrame(() => {
     if (!chart || !el) return;
     const w = Math.max(320, el.clientWidth);
@@ -2509,7 +2284,7 @@ function bindEvents(container) {
         </label>`;
       } else {
         levRow.outerHTML = `<div class="order-spot-note" id="leverage-row">
-          <span class="text-[10px] text-muted">Spot order — no leverage</span>
+          <span class="text-[10px] text-muted">Spot order â€” no leverage</span>
         </div>`;
       }
     });
@@ -2519,7 +2294,7 @@ function bindEvents(container) {
     set('leverage', Number(el.value));
     syncOrderField(container, 'leverage', el.value);
     updateOrderInfo(container);
-    // Risk color gradient: green (low) → yellow (mid) → red (high)
+    // Risk color gradient: green (low) â†’ yellow (mid) â†’ red (high)
     const val = Number(el.value);
     const max = Number(el.max) || 100;
     const pct = val / max;
@@ -2678,7 +2453,7 @@ function toggleActivityExpand(container) {
   if (btn) {
     btn.setAttribute('aria-label', open ? t('trade.close_activity', 'Close trading activity') : t('trade.expand_activity', 'Expand trading activity'));
     btn.setAttribute('title', open ? t('trade.close_activity', 'Close trading activity') : t('trade.expand_activity', 'Expand trading activity'));
-    btn.innerHTML = open ? icons.close : (icons.fullscreen || icons.expand || '⛶');
+    btn.innerHTML = open ? icons.close : (icons.fullscreen || icons.expand || 'â›¶');
   }
   if (chart && !open) setTimeout(() => chart.timeScale?.().fitContent?.(), 80);
 }
@@ -2702,7 +2477,7 @@ async function closePosition(container, trigger) {
     btn.dataset.prevText = btn.textContent;
     btn.textContent = t('trade.closing', 'Closing...');
   });
-  // Attempt close — up to 2 tries (auto-retry once on price_not_executable after 1.5s)
+  // Attempt close â€” up to 2 tries (auto-retry once on price_not_executable after 1.5s)
   const attempt = async (retry = false) => {
     const clientPrice = Number(get('activeQuote')?.price || 0);
     return api('/trade/close_position.php', {
@@ -2756,7 +2531,7 @@ async function closePosition(container, trigger) {
 function closePositionErrorMessage(error) {
   const code = String(error?.code || error?.payload?.code || '').toLowerCase();
   if (code === 'price_not_executable' || code === 'price_unavailable') {
-    return t('trade.close_price_stale', 'Price is updating — retried automatically. If this persists, reload the page.');
+    return t('trade.close_price_stale', 'Price is updating â€” retried automatically. If this persists, reload the page.');
   }
   return error?.message || t('trade.could_not_close', 'Could not close this position now.');
 }
@@ -3054,7 +2829,7 @@ async function placeOrder(side, container, formRoot) {
       showOrderStatus(root, res.error || 'Order failed', 'error');
       return;
     }
-    showOrderStatus(root, `${side === 'BUY' ? t('trade.buy', 'شراء') : t('trade.sell', 'بيع')} — ${t('trade.order_success', 'تم فتح الصفقة بنجاح')}`, 'success');
+    showOrderStatus(root, `${side === 'BUY' ? t('trade.buy', 'Ø´Ø±Ø§Ø¡') : t('trade.sell', 'Ø¨ÙŠØ¹')} â€” ${t('trade.order_success', 'ØªÙ… ÙØªØ­ Ø§Ù„ØµÙÙ‚Ø© Ø¨Ù†Ø¬Ø§Ø­')}`, 'success');
     // Bust cache so the new position appears immediately (no waiting for the 4s TTL)
     clearCacheFor('/trade/portfolio.php', '/trade/orders.php');
     await loadTradeActivity(container, tradeRunId, false, true);
@@ -3074,9 +2849,9 @@ async function placeOrder(side, container, formRoot) {
       String(e?.message || '').toLowerCase().includes('aborted') ||
       String(e?.message || '').toLowerCase().includes('cancelled');
     const msg = e?.code === 'timeout'
-      ? 'Request timed out — please wait for the live price to refresh and try again.'
+      ? 'Request timed out â€” please wait for the live price to refresh and try again.'
       : isAbortLike
-        ? 'Order was interrupted. Check Open Positions — if the trade is not listed, place the order again.'
+        ? 'Order was interrupted. Check Open Positions â€” if the trade is not listed, place the order again.'
         : (e.message || 'Order failed. Please try again.');
     showOrderStatus(root, msg, 'error');
   } finally {
@@ -3084,7 +2859,7 @@ async function placeOrder(side, container, formRoot) {
   }
 }
 
-/* ── Order Confirmation Dialog ── */
+/* â”€â”€ Order Confirmation Dialog â”€â”€ */
 function showOrderConfirmation({ side, symbol, type, amount, leverage, tp, sl, marketType, orderType, currentPrice, limitInput, mode }) {
   return new Promise(resolve => {
     const existing = document.getElementById('order-confirm-modal');
@@ -3103,8 +2878,8 @@ function showOrderConfirmation({ side, symbol, type, amount, leverage, tp, sl, m
       <div class="absolute inset-0 bg-black/70" id="confirm-backdrop"></div>
       <div class="relative w-full max-w-md mx-4 mb-4 sm:mb-0 bg-surface border border-line rounded-2xl shadow-2xl overflow-hidden">
         <div class="px-5 py-4 border-b border-line text-center">
-          <h3 class="text-lg font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}">${isBuy ? t('trade.buy', 'شراء') : t('trade.sell', 'بيع')} — ${t('trade.order', 'الأمر')}</h3>
-          <p class="text-xs text-muted mt-1">${t('trade.review_confirm', 'راجع وأكد الأمر')}</p>
+          <h3 class="text-lg font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}">${isBuy ? t('trade.buy', 'Ø´Ø±Ø§Ø¡') : t('trade.sell', 'Ø¨ÙŠØ¹')} â€” ${t('trade.order', 'Ø§Ù„Ø£Ù…Ø±')}</h3>
+          <p class="text-xs text-muted mt-1">${t('trade.review_confirm', 'Ø±Ø§Ø¬Ø¹ ÙˆØ£ÙƒØ¯ Ø§Ù„Ø£Ù…Ø±')}</p>
         </div>
         <div class="px-5 py-4 space-y-3">
           <div class="flex justify-between text-sm"><span class="text-muted">${t('Symbol')}</span><strong>${esc(symbol)}</strong></div>
@@ -3222,7 +2997,7 @@ function setMobileSubmitSide(container, side) {
   const label = $('#mobile-order-side-label', container);
   if (btn) {
     btn.dataset.submitOrder = side;
-    btn.textContent = side === 'BUY' ? t('trade.order.buy_now', 'شراء الآن') : t('trade.order.sell_now', 'بيع الآن');
+    btn.textContent = side === 'BUY' ? t('trade.order.buy_now', 'Ø´Ø±Ø§Ø¡ Ø§Ù„Ø¢Ù†') : t('trade.order.sell_now', 'Ø¨ÙŠØ¹ Ø§Ù„Ø¢Ù†');
     btn.className = `${side === 'BUY' ? 'btn-buy' : 'btn-sell'} w-full py-3`;
   }
   if (label) label.textContent = side === 'BUY' ? t('trade.order.buy_order', 'BUY order') : t('trade.order.sell_order', 'SELL order');

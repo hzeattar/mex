@@ -37,4 +37,13 @@ if ! kill -0 "$FPM_PID" 2>/dev/null; then
 fi
 
 echo "[start] PHP-FPM started, nginx listening on ${PORT} with internal PHP-FPM upstream 127.0.0.1:9070"
+
+# Start WS Aggregator in background if enabled
+if [ "${WS_AGGREGATOR_ENABLED}" = "1" ]; then
+  echo "[start] Starting WS Aggregator daemon..."
+  php /app/api/ws/aggregator.php >> /app/api/data/logs/aggregator.log 2>&1 &
+  AGG_PID="$!"
+  echo "[start] WS Aggregator started (PID=${AGG_PID})"
+fi
+
 exec nginx -c /tmp/nginx.conf -g 'daemon off;'
