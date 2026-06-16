@@ -35,9 +35,11 @@ $items = null;
 // file cache falls through to the DB (which the feed worker keeps fresh) and
 // re-warms the file. Tier 2 serves the last-known price (better than '--').
 $freshAge = match ($type) {
-  'crypto' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_CRYPTO', '8')),
-  'forex' => max(5, (int)env('QUOTE_FOCUS_FRESH_AGE_FOREX', '20')),
-  default => max(10, (int)env('QUOTE_FOCUS_FRESH_AGE_DEFAULT', '90')),
+  'crypto' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_CRYPTO', '5')),
+  'forex' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_FOREX', '8')),
+  'commodities' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_COMMODITIES', '8')),
+  'futures' => max(3, (int)env('QUOTE_FOCUS_FRESH_AGE_FUTURES', '8')),
+  default => max(5, (int)env('QUOTE_FOCUS_FRESH_AGE_DEFAULT', '30')),
 };
 $centralItems = qs_public_items(qs_snapshots($list, $type, 'spot', ['mode' => 'display']));
 $items = is_array($items) ? array_merge($items, $centralItems) : $centralItems;

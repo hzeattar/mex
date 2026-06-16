@@ -113,11 +113,11 @@ echo "[feed-worker] isDaemon=" . ($isDaemon ? 'true' : 'false') . "\n"; flush();
 // ── Cycle intervals (seconds) ─────────────────────────────────────────────
 $intervals = [
   'crypto'      => max(1, min(5, (int)env('FEED_INTERVAL_CRYPTO', '2'))),
-  'forex'       => max(3, min(30, (int)env('FEED_INTERVAL_FOREX', '8'))),
-  'stocks'      => max(5, min(60, (int)env('FEED_INTERVAL_STOCKS', '15'))),
-  'arab'        => max(5, min(60, (int)env('FEED_INTERVAL_ARAB', '15'))),
-  'commodities' => max(3, min(30, (int)env('FEED_INTERVAL_COMMODITIES', '8'))),
-  'futures'     => max(3, min(30, (int)env('FEED_INTERVAL_FUTURES', '8'))),
+  'forex'       => max(2, min(15, (int)env('FEED_INTERVAL_FOREX', '3'))),
+  'stocks'      => max(5, min(60, (int)env('FEED_INTERVAL_STOCKS', '10'))),
+  'arab'        => max(5, min(60, (int)env('FEED_INTERVAL_ARAB', '10'))),
+  'commodities' => max(2, min(15, (int)env('FEED_INTERVAL_COMMODITIES', '3'))),
+  'futures'     => max(2, min(15, (int)env('FEED_INTERVAL_FUTURES', '3'))),
 ];
 
 $types = ['crypto', 'forex', 'commodities', 'futures', 'stocks', 'arab'];
@@ -345,7 +345,7 @@ if ($isDaemon) {
       $typeCounts = [];
 
       // Fast types must never starve behind slow EODHD passes.
-      $fastTypes = ['crypto', 'forex'];
+      $fastTypes = ['crypto', 'forex', 'commodities'];
       $runFastDue = function (string $currentType) use (
         &$lastCycleByType, $intervals, $symbolsByType, $metaByTypeSymbol,
         &$totalWritten, &$totalUpserted, &$typeCounts, $fastTypes

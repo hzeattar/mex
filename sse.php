@@ -53,7 +53,7 @@ while (ob_get_level() > 0) @ob_end_flush();
 echo "event: connected\ndata: " . json_encode(['symbols' => $symbols, 'type' => $type, 'scope' => $scope, 'ts' => time()]) . "\n\n";
 flush();
 
-$maxRuntime = (int)env('SSE_MAX_RUNTIME', '55');
+$maxRuntime = (int)env('SSE_MAX_RUNTIME', '90');
 $startTime = time();
 $providerType = function_exists('vp_provider_asset_type') ? vp_provider_asset_type($type) : $type;
 $isWatchlist = in_array($scope, ['watchlist', 'visible', 'markets'], true);
@@ -65,7 +65,7 @@ $allowWatchlistLive = $isWatchlist && (
 $allowLive = in_array($scope, ['focus', 'active', 'symbol'], true)
   || $allowWatchlistLive
   || (int)env('SSE_ALLOW_WATCHLIST_LIVE', '0') === 1;
-$defaultInterval = $allowLive ? ($providerType === 'crypto' ? 2 : 6) : ($providerType === 'crypto' ? 4 : 8);
+$defaultInterval = $allowLive ? ($providerType === 'crypto' ? 1 : 2) : ($providerType === 'crypto' ? 2 : 5);
 $interval = max(1, (int)env('SSE_INTERVAL', (string)$defaultInterval));
 $lastData = '';
 
