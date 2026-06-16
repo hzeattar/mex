@@ -45,6 +45,7 @@ let activityRefreshTimer = null;
 let chartRefreshTimer = null;
 let resizeObserver = null;
 let binanceWs = null;
+let binanceKlineWs = null;
 let chartLibPromise = null;
 let lastCandle = null;
 let liveCandleFrame = 0;
@@ -106,9 +107,9 @@ const FALLBACK_MARKETS = {
 
 const TFS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '12h', '1d', '1w'];
 const CHART_HISTORY_DAYS = 31;
-const CHART_MIN_INITIAL_LIMIT = 1500;
-const CHART_MAX_INITIAL_LIMIT = 9000;
-const CHART_MAX_PAGE_LIMIT = 9000;
+const CHART_MIN_INITIAL_LIMIT = 300;
+const CHART_MAX_INITIAL_LIMIT = 5000;
+const CHART_MAX_PAGE_LIMIT = 5000;
 const CHART_MONTH_PREFETCH_MAX_PAGES = 10;
 const CHART_MONTH_PREFETCH_DELAY = 750;
 
@@ -638,6 +639,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
 
 function stopActiveQuote() {
   stopBinanceWs();
+  stopBinanceKlineWs();
   stopFinnhubWs();
   stopTiingoWs();
   if (activeQuoteTimer) {
@@ -682,6 +684,75 @@ function stopBinanceWs() {
   if (binanceWs) {
     try { binanceWs.close(); } catch (_e) {}
     binanceWs = null;
+  }
+}
+
+/* ── Binance Kline WebSocket for real-time chart candles ─────────── */
+function startBinanceKlineWs(symbol, tf, runId) {
+  stopBinanceKlineWs();
+  const wsSymbol = symbol.toLowerCase();
+  const intervalMap = { '1m':'1m', '3m':'3m', '5m':'5m', '15m':'15m', '30m':'30m', '1h':'1h', '2h':'2h', '4h':'4h', '6h':'6h', '8h':'8h', '12h':'12h', '1d':'1d', '3d':'3d', '1w':'1w' };
+  const binanceInterval = intervalMap[tf] || '1m';
+  let ws;
+  try {
+    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${wsSymbol}@kline_${binanceInterval}`);
+  } catch (_e) { return; }
+  binanceKlineWs = ws;
+  ws.addEventListener('message', (evt) => {
+    if (!isCurrentRun(runId)) { try { ws.close(); } catch (_e) {} return; }
+    try {
+      const d = JSON.parse(evt.data);
+      if (!d || !d.k) return;
+      const k = d.k;
+      const p = parseFloat(k.c);
+      if (!(p > 0)) return;
+      // Feed the live candle directly for instant chart update
+      const candleTime = Math.floor(k.t / 1000);
+      const candleData = {
+        time: candleTime,
+        open: parseFloat(k.o),
+        high: parseFloat(k.h),
+        low: parseFloat(k.l),
+        close: p,
+        volume: parseFloat(k.v),
+      };
+      if (candleSeries && chartSeriesKey === currentChartKey()) {
+        // Update the live candle in the chart
+        if (lastCandle && lastCandle.time === candleTime) {
+          lastCandle = { ...candleData };
+        } else if (lastCandle && candleTime > lastCandle.time) {
+          lastCandle = { ...candleData };
+        }
+        candleSeries.update(candleData);
+        if (volumeSeries) volumeSeries.update({ time: candleTime, value: candleData.volume, color: candleData.close >= candleData.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' });
+        if (lineSeries) lineSeries.update({ time: candleTime, value: p });
+        if (areaSeries) areaSeries.update({ time: candleTime, value: p });
+        // Also update allCandles array
+        if (allCandles.length) {
+          const tail = allCandles[allCandles.length - 1];
+          if (tail.time === candleTime) allCandles[allCandles.length - 1] = { ...candleData };
+          else if (candleTime > tail.time) allCandles.push({ ...candleData });
+        }
+        updateChartLegend(null);
+      }
+      // Also feed the price for the live quote display
+      const o = parseFloat(k.o);
+      const change_pct = o > 0 ? ((p - o) / o) * 100 : 0;
+      updatePrice(document.getElementById('view') || document.body, {
+        symbol: symbol.toUpperCase(), type: 'crypto', price: p, change_pct,
+        source: 'binance_kline_ws',
+        provider_updated_at: Math.floor(Date.now() / 1000),
+      }, runId);
+    } catch (_e) {}
+  });
+  ws.addEventListener('error', () => { if (binanceKlineWs === ws) binanceKlineWs = null; });
+  ws.addEventListener('close', () => { if (binanceKlineWs === ws) binanceKlineWs = null; });
+}
+
+function stopBinanceKlineWs() {
+  if (binanceKlineWs) {
+    try { binanceKlineWs.close(); } catch (_e) {}
+    binanceKlineWs = null;
   }
 }
 
@@ -1865,6 +1936,7 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
 function clearChartForSwitch(container) {
   cancelMonthHistoryPrefetch(container);
   cancelLiveCandleFrame();
+  stopBinanceKlineWs();
   chartSeriesKey = '';
   lastCandle = null;
   allCandles = [];
@@ -2075,14 +2147,15 @@ async function initChart(container, candles, runId = tradeRunId) {
   chart = createChart(el, {
     layout: { background: { color: '#060A14' }, textColor: '#8ba1cf', fontSize: 11, fontFamily: "'Inter', system-ui, sans-serif" },
     grid: { vertLines: { color: 'rgba(129,160,220,0.04)' }, horzLines: { color: 'rgba(129,160,220,0.04)' } },
-    crosshair: { mode: 0, vertLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff' }, horzLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff' } },
-    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: 4, barSpacing: 6 },
-    rightPriceScale: { borderColor: 'rgba(129,160,220,0.08)', scaleMargins: { top: 0.1, bottom: 0.2 } },
-    watermark: { visible: true, text: 'MEX Group', color: 'rgba(93,124,255,0.08)', fontSize: 48, horzAlign: 'center', vertAlign: 'center' },
+    crosshair: { mode: 0, vertLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff', width: 1, style: 2, visible: true, labelVisible: true }, horzLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff', width: 1, style: 2, visible: true, labelVisible: true } },
+    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: 6, barSpacing: 8, minBarSpacing: 2, fixLeftEdge: false, fixRightEdge: false },
+    rightPriceScale: { borderColor: 'rgba(129,160,220,0.08)', scaleMargins: { top: 0.1, bottom: 0.2 }, autoScale: true, alignLabels: true },
+    watermark: { visible: true, text: 'MEX Group', color: 'rgba(93,124,255,0.06)', fontSize: 48, horzAlign: 'center', vertAlign: 'center' },
     width: Math.max(320, el.clientWidth),
     height: Math.max(260, el.clientHeight),
     handleScroll: { vertTouchDrag: false },
-    handleScale: { axisPressedMouseMove: true },
+    handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+    animation: true,
   });
 
   candleSeries = chart.addCandlestickSeries({
@@ -2090,11 +2163,16 @@ async function initChart(container, candles, runId = tradeRunId) {
     downColor: '#f6465d',
     borderUpColor: '#00c087',
     borderDownColor: '#f6465d',
-    wickUpColor: '#00c087',
-    wickDownColor: '#f6465d',
+    wickUpColor: '#00c08780',
+    wickDownColor: '#f6465d80',
     wickVisible: true,
     borderVisible: true,
     visible: chartType === 'candles',
+    lastValueVisible: true,
+    priceLineVisible: true,
+    priceLineWidth: 1,
+    priceLineStyle: 2,
+    priceLineColor: '#5d7cff80',
   });
   lineSeries = chart.addLineSeries({
     color: '#5d7cff', lineWidth: 2, priceLineVisible: false,
@@ -2415,7 +2493,7 @@ function stopChartRefresh() {
 function startChartRefresh(container, symbol, type, tf, runId = tradeRunId, chartReady = loadChartLib()) {
   stopChartRefresh();
   const quoteType = normalizeType(type || 'crypto');
-  const interval = quoteType === 'crypto' ? 120000 : 240000;
+  const interval = quoteType === 'crypto' ? 15000 : 20000;
   chartRefreshTimer = setInterval(() => {
     if (!isCurrentRun(runId, symbol, type)) return;
     loadChartData(container, symbol, type, tf, runId, chartReady, { silent: true, refresh: true }).catch(() => null);
@@ -2481,6 +2559,10 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       }
     }
     if (chartPainted && !options.silent && !options.refresh) scheduleMonthHistoryPrefetch(container, runId);
+    // Start Binance kline WebSocket for crypto: real-time candle updates without polling
+    if (chartPainted && normalizeType(type) === 'crypto' && !options.refresh) {
+      startBinanceKlineWs(symbol, tf, runId);
+    }
   } catch (e) {
     if (!isCurrentRun(runId, symbol, type)) return;
     console.error('Chart:', e);
