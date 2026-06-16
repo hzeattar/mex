@@ -503,9 +503,8 @@ async function setup(container) {
         container.__marketItems = mkts.items;
         renderSymbolList(container, mkts.items);
         hydrateActiveFromMarketList(container, mkts.items, runId);
-        setTimeout(() => {
-          if (isCurrentRun(runId, symbol, type)) startLiveQuotes(container, mkts.items, runId, type);
-        }, 800);
+        // Start SSE immediately (no delay) for instant price updates
+        if (isCurrentRun(runId, symbol, type)) startLiveQuotes(container, mkts.items, runId, type);
         warmVisibleQuotes(container, mkts.items, runId, type).catch(() => {});
       }
     })
