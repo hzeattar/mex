@@ -23,8 +23,10 @@ require_once __DIR__ . '/../lib/quotes.php';
 // ── Config ──────────────────────────────────────────────────────────────────
 
 $TWELVE_KEY    = trim((string)getenv('QUOTES_TWELVEDATA_KEY') ?? '');
+$FINNHUB_KEY   = trim((string)getenv('FINNHUB_KEY') ?? '');
 $BINANCE_SYMBOLS = [];
 $TWELVE_SYMBOLS  = [];
+$FINNHUB_SYMBOLS = []; // forex + stocks via Finnhub WS (free tier)
 $TICK_INTERVAL   = 5;
 $MAX_RUNTIME     = (int)getenv('WS_AGGREGATOR_MAX_RUNTIME') ?: 3600;
 $RECONNECT_DELAY = 3;
@@ -249,12 +251,13 @@ class WsClient {
 // ── Symbol Collection ───────────────────────────────────────────────────────
 
 function collectSymbols(): void {
-  global $BINANCE_SYMBOLS, $TWELVE_SYMBOLS;
+  global $BINANCE_SYMBOLS, $TWELVE_SYMBOLS, $FINNHUB_SYMBOLS;
 
   if (!function_exists('vp_supported_market_defs')) return;
   $defs = vp_supported_market_defs();
   $binanceSet = [];
   $twelveSet  = [];
+  $finnhubSet = [];
 
   foreach ($defs as $d) {
     $sym = strtoupper(trim((string)($d['symbol'] ?? '')));
@@ -265,13 +268,30 @@ function collectSymbols(): void {
       $bsym = strtolower(preg_replace('/[^A-Z0-9]/i', '', $sym));
       if ($bsym) $binanceSet[$bsym] = $sym;
     } else {
+      // Twelve Data takes precedence if key available
       $tdsym = mapToTwelveData($sym, $type);
       if ($tdsym) $twelveSet[$tdsym] = ['original' => $sym, 'type' => $type];
+
+      // Finnhub covers forex/stocks via free WS (250 symbols free tier)
+      if ($type === 'forex' || $type === 'stocks') {
+        $fsym = mapToFinnhub($sym, $type);
+        if ($fsym) $finnhubSet[$fsym] = ['original' => $sym, 'type' => $type];
+      }
     }
   }
 
   $BINANCE_SYMBOLS = $binanceSet;
   $TWELVE_SYMBOLS  = $twelveSet;
+  $FINNHUB_SYMBOLS = $finnhubSet;
+}
+
+function mapToFinnhub(string $symbol, string $type): string {
+  if ($type === 'forex') {
+    $s = str_replace('USDT', 'USD', $symbol);
+    if (strlen($s) >= 6) return 'OANDA:' . substr($s, 0, 3) . '_' . substr($s, 3, 6);
+    return 'OANDA:' . $s;
+  }
+  return $symbol; // stocks
 }
 
 function mapToTwelveData(string $symbol, string $type): string {
@@ -496,6 +516,78 @@ function runTwelveDataWs(): int {
   return $msgCount;
 }
 
+// ── Finnhub WebSocket ───────────────────────────────────────────────────────
+
+function runFinnhubWs(): int {
+  global $FINNHUB_SYMBOLS, $FINNHUB_KEY;
+  if (!$FINNHUB_KEY) {
+    echo "  [Finnhub WS] No API key, skipping\n";
+    return 0;
+  }
+  if (empty($FINNHUB_SYMBOLS)) return 0;
+
+  // Free tier: 250 symbols max, 1 connection
+  $batch = array_slice(array_keys($FINNHUB_SYMBOLS), 0, 240);
+  $url = "wss://ws.finnhub.io?token={$FINNHUB_KEY}";
+
+  echo "[" . date('H:i:s') . "] Finnhub WS: connecting to " . count($batch) . " symbols...\n";
+
+  $ws = new WsClient();
+  if (!$ws->connect($url)) {
+    echo "  [Finnhub WS] Connection failed\n";
+    return 0;
+  }
+
+  echo "  [Finnhub WS] Connected! Sending subscribe...\n";
+
+  // Subscribe after open
+  foreach ($batch as $fsym) {
+    $ws->send(json_encode(['type' => 'subscribe', 'symbol' => $fsym]));
+  }
+
+  $msgCount = 0;
+  $lastTick = time();
+
+  while ($ws->isConnected()) {
+    $messages = $ws->receiveMessages();
+
+    foreach ($messages as $raw) {
+      $msg = json_decode($raw, true);
+      if (!$msg) continue;
+
+      if (($msg['type'] ?? '') !== 'trade' || !is_array($msg['data'])) continue;
+
+      $t = $msg['data'][0] ?? null;
+      if (!$t || !(($t['p'] ?? 0) > 0)) continue;
+
+      $fsym = strtoupper(trim((string)($t['s'] ?? '')));
+      $info = $FINNHUB_SYMBOLS[$fsym] ?? null;
+      $original = $info['original'] ?? $fsym;
+      $type = $info['type'] ?? 'stocks';
+
+      // Compute change_pct if not provided
+      $changePct = 0.0;
+      $price = (float)$t['p'];
+
+      writePrice($original, $type, $price, $changePct, 0, 0, 'finnhub_ws');
+      $msgCount++;
+    }
+
+    usleep(5000);
+
+    if (time() - $lastTick >= $TICK_INTERVAL) {
+      $lastTick = time();
+      if ($msgCount > 0 && $msgCount % 100 < 10) {
+        echo "  [Finnhub WS] Processed {$msgCount} messages\n";
+      }
+    }
+  }
+
+  $ws->disconnect();
+  echo "  [Finnhub WS] Disconnected after {$msgCount} messages\n";
+  return $msgCount;
+}
+
 // ── Main Loop ───────────────────────────────────────────────────────────────
 
 echo "=== WS Aggregator Starting ===\n";
@@ -503,6 +595,7 @@ echo "Collecting symbols from market definitions...\n";
 collectSymbols();
 echo "Binance symbols: " . count($BINANCE_SYMBOLS) . "\n";
 echo "Twelve Data symbols: " . count($TWELVE_SYMBOLS) . "\n";
+echo "Finnhub symbols: " . count($FINNHUB_SYMBOLS) . "\n";
 
 $startTime = time();
 
@@ -520,7 +613,14 @@ while (true) {
     echo "  [Binance WS] Error: " . $e->getMessage() . "\n";
   }
 
-  // Run Twelve Data WS
+  // Run Finnhub WS (free forex/stocks)
+  try {
+    runFinnhubWs();
+  } catch (Throwable $e) {
+    echo "  [Finnhub WS] Error: " . $e->getMessage() . "\n";
+  }
+
+  // Run Twelve Data WS (if credits available)
   try {
     runTwelveDataWs();
   } catch (Throwable $e) {

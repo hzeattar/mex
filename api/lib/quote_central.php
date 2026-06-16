@@ -17,6 +17,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/redis.php';
 
 // ── DB-backed central cache (shared across containers) ──────────────────────
 
@@ -233,6 +234,12 @@ function quote_central_write(string $symbol, string $type, array $data): void {
 
   // Write to file cache
   quote_central_write_file($symbol, $type, $data);
+
+  // Write to Redis (fast shared + pub/sub)
+  try {
+    redis_set_quote($data, 300);
+    redis_publish_quote($data);
+  } catch (Throwable $e) {}
 
   // Write to DB (shared across containers)
   try {

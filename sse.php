@@ -2,14 +2,20 @@
 declare(strict_types=1);
 /**
  * Server-Sent Events endpoint for real-time price streaming.
+ *
+ * When REDIS_URL is set, subscribes to Redis pub/sub channels for
+ * instantaneous price pushes. Otherwise falls back to polling the
+ * central cache.
+ *
  * GET /api/stream/sse.php?symbols=BTCUSDT,ETHUSDT&type=crypto
  */
 
-// Buffer all output from includes to prevent header corruption
-ob_start();
-
 require_once __DIR__ . '/api/lib/common.php';
 require_once __DIR__ . '/api/lib/quote_authority.php';
+require_once __DIR__ . '/api/lib/redis.php';
+
+// Buffer all output from includes to prevent header corruption
+ob_start();
 
 // Auth check (non-blocking)
 $uid = 0;
@@ -27,6 +33,7 @@ $symbolLimit = $type === 'crypto'
   ? max(12, min(48, (int)env('SSE_MAX_SYMBOLS_CRYPTO', '36')))
   : max(6, min(32, (int)env('SSE_MAX_SYMBOLS_NONCRYPTO', '18')));
 $symbols = array_slice($symbols, 0, $symbolLimit);
+$symbolSet = array_flip($symbols);
 
 // CRITICAL: Clean any buffered output before sending SSE headers
 ob_end_clean();
@@ -50,11 +57,67 @@ if (function_exists('apache_setenv')) {
 while (ob_get_level() > 0) @ob_end_flush();
 
 // Send initial connection event
-echo "event: connected\ndata: " . json_encode(['symbols' => $symbols, 'type' => $type, 'scope' => $scope, 'ts' => time()]) . "\n\n";
+echo "event: connected\ndata: " . json_encode(['symbols' => $symbols, 'type' => $type, 'scope' => $scope, 'ts' => time(), 'mode' => redis_enabled() ? 'redis_pubsub' : 'cache_poll']) . "\n\n";
 flush();
 
 $maxRuntime = (int)env('SSE_MAX_RUNTIME', '90');
 $startTime = time();
+$lastData = '';
+$liveState = [];
+
+// Build state from central cache initially
+foreach ($symbols as $sym) {
+  $row = quote_central_get($sym, $type, 30);
+  if ($row) $liveState[$sym] = $row;
+}
+
+function emitState(array $state): void {
+  global $lastData;
+  $items = [];
+  foreach ($state as $sym => $row) {
+    $items[] = qa_public_item_from_central($row);
+  }
+  $data = json_encode($items, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+  if ($data !== $lastData) {
+    echo "data: " . $data . "\n\n";
+    $lastData = $data;
+    flush();
+  }
+}
+
+// ── Redis Pub/Sub Mode (instant pushes) ────────────────────────────────────
+
+if (redis_enabled()) {
+  // Fork/subscribe cannot run forever; cap runtime
+  $endAt = $startTime + min($maxRuntime, 90);
+
+  $callback = function(array $data) use ($symbols, &$liveState, $endAt) {
+    $sym = strtoupper($data['symbol'] ?? '');
+    $t = strtolower($data['type'] ?? '');
+    if (!isset($symbols[$sym])) return;
+    if ($t !== $symbols['type']) return; // ignore wrong type
+    if ((float)($data['price'] ?? 0) <= 0) return;
+
+    $liveState[$sym] = $data;
+    emitState($liveState);
+
+    if (time() >= $endAt) {
+      echo "event: reconnect\ndata: {\"reason\":\"timeout\"}\n\n";
+      flush();
+      exit;
+    }
+  };
+
+  // Emit current state once
+  emitState($liveState);
+
+  // Subscribe to Redis channel(s)
+  redis_subscribe_quotes($callback, [$type], $maxRuntime * 1000);
+  exit;
+}
+
+// ── Fallback Polling Mode ─────────────────────────────────────────────────
+
 $providerType = function_exists('vp_provider_asset_type') ? vp_provider_asset_type($type) : $type;
 $isWatchlist = in_array($scope, ['watchlist', 'visible', 'markets'], true);
 $nonCryptoLiveLimit = max(4, min(24, (int)env('SSE_WATCHLIST_LIVE_NONCRYPTO_LIMIT', '18')));
@@ -67,7 +130,6 @@ $allowLive = in_array($scope, ['focus', 'active', 'symbol'], true)
   || (int)env('SSE_ALLOW_WATCHLIST_LIVE', '0') === 1;
 $defaultInterval = $allowLive ? ($providerType === 'crypto' ? 1 : 2) : ($providerType === 'crypto' ? 2 : 5);
 $interval = max(1, (int)env('SSE_INTERVAL', (string)$defaultInterval));
-$lastData = '';
 
 while (true) {
   if ((time() - $startTime) >= $maxRuntime) {
@@ -110,4 +172,23 @@ while (true) {
   }
 
   sleep($interval);
+}
+
+// Helper: convert central row to public item (mirrors quote_authority logic)
+function qa_public_item_from_central(array $row): array {
+  $type = strtolower($row['type'] ?? 'crypto');
+  $src = strtolower(trim((string)($row['source'] ?? '')));
+  $delayed = in_array($type, ['stocks', 'arab'], true) || ($type !== 'crypto' && str_starts_with($src, 'yahoo'));
+  return [
+    'symbol' => strtoupper($row['symbol'] ?? ''),
+    'type' => $type,
+    'price' => (float)($row['price'] ?? 0),
+    'change_pct' => (float)($row['change_pct'] ?? 0),
+    'open' => (float)($row['open'] ?? 0),
+    'prev_close' => (float)($row['prev_close'] ?? 0),
+    'updated_at' => (int)($row['central_ts'] ?? $row['updated_at'] ?? 0),
+    'source' => (string)($row['source'] ?? 'central'),
+    'delayed' => $delayed,
+    'age_sec' => max(0, time() - (int)($row['central_ts'] ?? $row['updated_at'] ?? 0)),
+  ];
 }

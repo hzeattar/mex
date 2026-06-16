@@ -46,4 +46,12 @@ if [ "${WS_AGGREGATOR_ENABLED}" = "1" ]; then
   echo "[start] WS Aggregator started (PID=${AGG_PID})"
 fi
 
+# Start Yahoo REST fallback worker (free, no key needed)
+if [ "${YAHOO_FALLBACK_ENABLED}" = "1" ]; then
+  echo "[start] Starting Yahoo Fallback worker..."
+  php /app/api/ws/yahoo_fallback.php >> /app/api/data/logs/yahoo_fallback.log 2>&1 &
+  YF_PID="$!"
+  echo "[start] Yahoo Fallback started (PID=${YF_PID})"
+fi
+
 exec nginx -c /tmp/nginx.conf -g 'daemon off;'
