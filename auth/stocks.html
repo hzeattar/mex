@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="تداول أسهم الشركات الأمريكية الكبرى (Apple، Tesla، Microsoft، NVIDIA، Amazon) كعقود فروقات مع MEX Global Markets — رافعة 1:20، تنفيذ ECN." />
+<title>تداول الأسهم العالمية — MEX Global Markets</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/subpages.css" />
+<link rel="stylesheet" href="css/i18n.css" />
+<link rel="stylesheet" href="css/products.css" />
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="container top-bar__inner">
+    <div class="top-bar__left">
+      <span class="badge-live"><span class="dot"></span> <span data-i18n="top.markets_open">الأسواق مفتوحة</span></span>
+      <span class="top-bar__sep">|</span>
+      <span>أكبر 7 شركات تقنية تشكّل <b>32%</b> من S&P 500</span>
+    </div>
+    <div class="top-bar__right">
+      <a href="#" class="lang-switch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg> AR / EN</a>
+      <a href="support.html" class="top-bar__link" data-i18n="top.support">دعم 24/5</a>
+      <a href="#" class="top-bar__link" data-i18n="top.partners">شركاء IB</a>
+    </div>
+  </div>
+</div>
+
+<header class="site-header" id="siteHeader">
+  <div class="container site-header__inner">
+    <a href="index.html" class="logo" aria-label="MEX Global Markets"><img class="logo__img" src="assets/logo-mex.png" alt="MEX Global Markets" width="1280" height="561"></a>
+    <nav class="main-nav">
+      <ul>
+        <li class="has-mega"><a href="#products"><span data-i18n="nav.products">المنتجات</span> <span class="caret">▾</span></a><div class="mega"><div class="mega__col"><h5 data-i18n="nav.markets">الأسواق</h5><a href="forex.html" data-i18n="nav.forex">العملات الأجنبية (Forex)</a><a href="metals.html" data-i18n="nav.metals">المعادن النفيسة</a><a href="indices.html" data-i18n="nav.indices">المؤشرات العالمية</a><a href="stocks.html" data-i18n="nav.stocks">الأسهم</a><a href="commodities.html" data-i18n="nav.commodities">السلع</a><a href="crypto.html" data-i18n="nav.crypto">الأصول الرقمية</a></div><div class="mega__col"><h5 data-i18n="nav.specialties">تخصصات</h5><a href="cfds.html" data-i18n="nav.cfds">عقود الفروقات CFDs</a><a href="ecn.html" data-i18n="nav.ecn">ECN مباشر</a><a href="metals.html" data-i18n="nav.gold_silver">تداول الذهب والفضة</a><a href="commodities.html" data-i18n="nav.oil_energy">النفط والطاقة</a></div></div></li>
+        <li class="has-mega"><a href="index.html#accounts"><span data-i18n="nav.accounts">الحسابات</span> <span class="caret">▾</span></a><div class="mega"><div class="mega__col"><h5 data-i18n="nav.tier_levels">مستويات الحساب</h5><a href="account-beginner.html" data-i18n="register.tier.beginner">المبتدئ</a><a href="account-silver.html" data-i18n="register.tier.silver">فضي</a><a href="account-gold.html" data-i18n="register.tier.gold">ذهبي</a><a href="account-platinum.html" data-i18n="register.tier.platinum">بلاتيني</a><a href="account-vip.html" data-i18n="nav.tier_vip">كبار العملاء</a></div><div class="mega__col"><h5 data-i18n="nav.acc_mgmt">إدارة الحساب</h5><a href="deposits.html" data-i18n="nav.deposits">طرق الإيداع</a><a href="withdrawals.html" data-i18n="nav.withdrawals">طرق السحب</a><a href="rewards.html" data-i18n="nav.rewards">برامج المكافآت</a></div></div></li>
+        <li class="has-mega"><a href="about.html"><span data-i18n="nav.about">عن MEX</span> <span class="caret">▾</span></a><div class="mega"><div class="mega__col"><h5>الشركة</h5><a href="about.html">من نحن</a><a href="about.html#timeline">رحلتنا</a><a href="about.html#leadership">القيادة التنفيذية</a><a href="about.html#values">قيمنا ومبادئنا</a></div><div class="mega__col"><h5>الثقة والأمان</h5><a href="regulation.html">التراخيص والتنظيم</a><a href="security.html">حماية أموال العملاء</a><a href="security.html#cyber">الأمان السيبراني</a></div></div></li>
+        <li><a href="education.html" data-i18n="nav.education">الأكاديمية</a></li>
+        <li><a href="index.html#partners" data-i18n="nav.partners">الشراكات</a></li>
+        <li><a href="support.html" data-i18n="nav.support">الدعم</a></li>
+      </ul>
+    </nav>
+    <div class="header-actions"><a href="login.html" class="btn btn--ghost" data-i18n="nav.login">دخول</a><a href="register.html" class="btn btn--primary" data-i18n="nav.cta_open">افتح حساب حقيقي</a><button class="hamburger" id="hamburger" aria-label="القائمة" aria-expanded="false" data-i18n-aria="nav.menu_aria"><span></span><span></span><span></span></button></div>
+  </div>
+</header>
+
+<section class="product-hero">
+  <div class="product-hero__chart-bg">
+    <svg viewBox="0 0 1200 360" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="chartGrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#22d3ee" stop-opacity="0.4"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/></linearGradient>
+        <linearGradient id="chartGrid" x1="0" x2="1" y1="0" y2="0"><stop offset="0%" stop-color="rgba(255,255,255,0)"/><stop offset="50%" stop-color="rgba(255,255,255,0.04)"/><stop offset="100%" stop-color="rgba(255,255,255,0)"/></linearGradient>
+      </defs>
+      <line x1="0" y1="80" x2="1200" y2="80" stroke="url(#chartGrid)" stroke-width="1"/>
+      <line x1="0" y1="180" x2="1200" y2="180" stroke="url(#chartGrid)" stroke-width="1"/>
+      <line x1="0" y1="280" x2="1200" y2="280" stroke="url(#chartGrid)" stroke-width="1"/>
+      <polygon class="product-hero__chart-area" points="0,360 0,240 80,250 160,210 240,230 320,180 400,210 480,150 560,180 640,120 720,140 800,90 880,120 960,70 1040,90 1120,60 1200,80 1200,360"/>
+      <polyline class="product-hero__chart-line" points="0,240 80,250 160,210 240,230 320,180 400,210 480,150 560,180 640,120 720,140 800,90 880,120 960,70 1040,90 1120,60 1200,80"/>
+    </svg>
+  </div>
+  <div class="container">
+    <div class="product-hero__inner">
+      <div class="product-hero__text">
+      <div class="subpage-hero__breadcrumb">
+        <a href="index.html" data-i18n="bc.home">الرئيسية</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <a href="index.html#products" data-i18n="bc.products">المنتجات</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <span data-i18n="nav.stocks">الأسهم</span>
+      </div>
+      <span class="subpage-hero__eyebrow">GLOBAL STOCKS</span>
+      <h1 class="subpage-hero__title" data-i18n="page.stocks.h1">امتلك حصة في أكبر شركات العالم</h1>
+      <p class="subpage-hero__subtitle">
+        أكثر من <b>2,500 سهم</b> من وول ستريت، لندن، فرانكفورت وطوكيو على شكل عقود فروقات.
+        Apple، Tesla، Microsoft، NVIDIA، Amazon وغيرها — برافعة <b>1:20</b> ودون عمولة شراء.
+      </p>
+      <div class="subpage-hero__cta">
+        <a href="register.html" class="btn btn--primary btn--lg" data-i18n="hero.btn_open_real">افتح حسابًا حقيقيًا</a>
+        <a href="register.html?type=demo" class="btn btn--ghost btn--lg" data-i18n="hero.btn_demo">جرّب على الديمو</a>
+      </div>
+      <div class="asset-cats">
+        <button class="asset-cat is-active">جميع القطاعات</button>
+        <button class="asset-cat">التقنية</button>
+        <button class="asset-cat">الخدمات المالية</button>
+        <button class="asset-cat">التجزئة والاستهلاك</button>
+        <button class="asset-cat">الطاقة</button>
+      </div>
+      <div class="product-hero__metrics">
+        <div class="product-hero__metric"><span class="product-hero__metric-val">+2,500</span><span class="product-hero__metric-lbl">سهم متاح</span></div>
+        <div class="product-hero__metric"><span class="product-hero__metric-val">$0.05</span><span class="product-hero__metric-lbl">سبريد AAPL من</span></div>
+        <div class="product-hero__metric"><span class="product-hero__metric-val">1:20</span><span class="product-hero__metric-lbl">رافعة قصوى</span></div>
+        <div class="product-hero__metric"><span class="product-hero__metric-val">0%</span><span class="product-hero__metric-lbl">عمولة شراء</span></div>
+      </div>
+      </div>
+
+      <!-- Visual: Candlestick Chart -->
+      <div class="product-hero__visual">
+        <div class="phv-glow"></div>
+        <div class="phv-stocks">
+          <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <linearGradient id="trendGrad" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%" stop-color="#d4a853" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="#fde68a" stop-opacity="1"/>
+              </linearGradient>
+            </defs>
+            <!-- Grid lines -->
+            <line x1="20" y1="80" x2="380" y2="80" stroke="rgba(212,168,83,.08)" stroke-dasharray="2,4"/>
+            <line x1="20" y1="160" x2="380" y2="160" stroke="rgba(212,168,83,.08)" stroke-dasharray="2,4"/>
+            <line x1="20" y1="240" x2="380" y2="240" stroke="rgba(212,168,83,.08)" stroke-dasharray="2,4"/>
+            <line x1="20" y1="320" x2="380" y2="320" stroke="rgba(212,168,83,.08)" stroke-dasharray="2,4"/>
+            <!-- Price labels -->
+            <text x="384" y="84" fill="rgba(212,168,83,.55)" font-family="JetBrains Mono" font-size="9" font-weight="700">200</text>
+            <text x="384" y="164" fill="rgba(212,168,83,.55)" font-family="JetBrains Mono" font-size="9" font-weight="700">180</text>
+            <text x="384" y="244" fill="rgba(212,168,83,.55)" font-family="JetBrains Mono" font-size="9" font-weight="700">160</text>
+            <text x="384" y="324" fill="rgba(212,168,83,.55)" font-family="JetBrains Mono" font-size="9" font-weight="700">140</text>
+            <!-- Candlesticks (12 bars) -->
+            <g class="phv-candle"><line x1="40"  y1="180" x2="40"  y2="240" stroke="#22c55e" stroke-width="1.5"/><rect x="34"  y="200" width="12" height="30" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="68"  y1="170" x2="68"  y2="220" stroke="#22c55e" stroke-width="1.5"/><rect x="62"  y="180" width="12" height="35" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="96"  y1="160" x2="96"  y2="210" stroke="#ef4444" stroke-width="1.5"/><rect x="90"  y="175" width="12" height="28" fill="#ef4444"/></g>
+            <g class="phv-candle"><line x1="124" y1="150" x2="124" y2="200" stroke="#22c55e" stroke-width="1.5"/><rect x="118" y="160" width="12" height="32" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="152" y1="140" x2="152" y2="190" stroke="#22c55e" stroke-width="1.5"/><rect x="146" y="148" width="12" height="36" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="180" y1="135" x2="180" y2="180" stroke="#ef4444" stroke-width="1.5"/><rect x="174" y="148" width="12" height="24" fill="#ef4444"/></g>
+            <g class="phv-candle"><line x1="208" y1="120" x2="208" y2="170" stroke="#22c55e" stroke-width="1.5"/><rect x="202" y="130" width="12" height="32" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="236" y1="105" x2="236" y2="155" stroke="#22c55e" stroke-width="1.5"/><rect x="230" y="115" width="12" height="34" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="264" y1="100" x2="264" y2="145" stroke="#ef4444" stroke-width="1.5"/><rect x="258" y="115" width="12" height="22" fill="#ef4444"/></g>
+            <g class="phv-candle"><line x1="292" y1="85"  x2="292" y2="135" stroke="#22c55e" stroke-width="1.5"/><rect x="286" y="95"  width="12" height="32" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="320" y1="70"  x2="320" y2="120" stroke="#22c55e" stroke-width="1.5"/><rect x="314" y="80"  width="12" height="32" fill="#22c55e"/></g>
+            <g class="phv-candle"><line x1="348" y1="55"  x2="348" y2="105" stroke="#22c55e" stroke-width="1.5"/><rect x="342" y="62"  width="12" height="36" fill="#22c55e"/></g>
+            <!-- Trend line -->
+            <polyline class="phv-trend" points="40,215 68,197 96,189 124,176 152,166 180,160 208,146 236,132 264,126 292,111 320,96 348,80"/>
+          </svg>
+        </div>
+        <div class="phv-chip phv-chip--float" style="top: 6%; right: -2%;"><span>AAPL</span><span class="phv-chip__val">$185.42</span><span class="phv-chip__up">▲ 1.8%</span></div>
+        <div class="phv-chip phv-chip--float-2" style="top: 48%; left: -4%;"><span>NVDA</span><span class="phv-chip__val">$612.30</span><span class="phv-chip__up">▲ 3.2%</span></div>
+        <div class="phv-chip phv-chip--float-3" style="bottom: 0%; right: 5%;"><span>TSLA</span><span class="phv-chip__val">$245.80</span><span class="phv-chip__down">▼ 0.6%</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="subpage-section subpage-section--alt" id="prices">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">LIVE STREAMING</span>
+      <h2 class="subpage-section__title">جدول أسعار الأسهم الحية</h2>
+      <p class="subpage-section__subtitle">أسعار من بورصات NYSE، NASDAQ، LSE، XETRA — تتحدّث لحظياً مع نطاق اليوم.</p>
+    </div>
+    <div class="price-table" data-market="stocks">
+      <div class="price-table__bar">
+        <div class="price-table__bar-title"><span class="price-table__live-dot"></span> الأسهم العالمية — أسعار حية</div>
+        <div class="price-table__filters">
+          <button class="price-filter is-active" data-cat="all">الكل</button>
+          <button class="price-filter" data-cat="tech">تقنية</button>
+          <button class="price-filter" data-cat="finance">مالية</button>
+          <button class="price-filter" data-cat="retail">تجزئة</button>
+        </div>
+      </div>
+      <div class="price-table__head"><div>الشركة</div><div>عرض البيع</div><div>عرض الشراء</div><div>التغيّر %</div><div>أعلى</div><div>أدنى</div><div>السبريد</div><div>الحركة</div><div></div></div>
+      <div class="price-table__body" id="priceTable"></div>
+    </div>
+    <p style="text-align:center;color:rgba(255,255,255,.55);font-size:13px;margin-top:18px;">الأسعار توضيحية فقط. أسعار التداول الفعلية تظهر بعد تسجيل الدخول.</p>
+  </div>
+</section>
+
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">لماذا أسهم MEX</span>
+      <h2 class="subpage-section__title">ميزات لن تجدها مع وسطاء الأسهم التقليديين</h2>
+      <p class="subpage-section__subtitle">تنفيذ سريع، رافعة مرنة، وقدرة على الربح من النزول.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card"><div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><h3>تنفيذ بدون عمولة شراء</h3><p>0% عمولة دخول وخروج على معظم الأسهم الأمريكية في حساب Standard. السبريد فقط، أحياناً من 5 سنتات على الأسهم النشطة كـAAPL وMSFT.</p></div>
+      <div class="feature-card"><div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg></div><h3>رافعة 1:20 على الأسهم</h3><p>200$ هامش يفتح مركزاً بقيمة 4,000$ على Apple. 5 أضعاف ما يسمح به وسيط أسهم تقليدي. مناسب للسكالبينج والسوينج.</p></div>
+      <div class="feature-card"><div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg></div><h3>اربح من الصعود والهبوط</h3><p>كعقود فروقات، يمكنك بيع السهم على المكشوف بسهولة. لا قيود Short Selling، لا اقتراض، فقط زر "Sell" واستفد من الانخفاضات.</p></div>
+      <div class="feature-card"><div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><h3>تنفيذ في 14 مللي ثانية</h3><p>ربط مباشر بأنظمة DMA لبورصات نيويورك وناسداك. لا تأخير عند فتح الجلسة، لا انزلاق غير مبرّر، نفس سعر الشاشة.</p></div>
+      <div class="feature-card"><div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/></svg></div><h3>تعديل توزيعات الأرباح</h3><p>احتفظ بالمركز عند توزيعات الأرباح ⇒ تستلم تعديلاً نقدياً يعكس قيمة التوزيع تماماً (Dividend Adjustment). شفّاف ومُحاسَب آلياً.</p></div>
+      <div class="feature-card"><div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.7 1 6.4 2.6"/><path d="M21 3v6h-6"/></svg></div><h3>تداول قبل وبعد الجلسة</h3><p>على أهم الأسهم الأمريكية تتاح جلسات Pre-market وAfter-hours — تفاعل مع تقارير الأرباح فور صدورها قبل أن يفتح وول ستريت رسمياً.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="subpage-section subpage-section--alt">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">CONTRACT SPECS</span>
+      <h2 class="subpage-section__title">مواصفات أسهم مختارة</h2>
+      <p class="subpage-section__subtitle">عيّنة من الأسهم الأكثر تداولاً مع شروط الحساب.</p>
+    </div>
+    <div class="specs-table-wrap">
+      <table class="specs-table">
+        <thead><tr><th>الرمز</th><th>الشركة</th><th>القطاع</th><th>الحدّ الأدنى للوت</th><th>الرافعة</th><th>سبريد متوسط</th><th>عمولة</th></tr></thead>
+        <tbody>
+          <tr><td class="specs-table__sym">AAPL</td><td>Apple Inc.</td><td>تقنية</td><td>1 سهم</td><td><span class="specs-table__val">1:20</span></td><td><span class="specs-table__pos">$0.05</span></td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">MSFT</td><td>Microsoft Corp.</td><td>تقنية</td><td>1 سهم</td><td><span class="specs-table__val">1:20</span></td><td><span class="specs-table__pos">$0.06</span></td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">TSLA</td><td>Tesla Inc.</td><td>سيارات / تقنية</td><td>1 سهم</td><td><span class="specs-table__val">1:20</span></td><td>$0.10</td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">NVDA</td><td>NVIDIA Corp.</td><td>أشباه موصلات</td><td>1 سهم</td><td><span class="specs-table__val">1:20</span></td><td>$0.07</td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">GOOGL</td><td>Alphabet Inc.</td><td>تقنية / إعلانات</td><td>1 سهم</td><td><span class="specs-table__val">1:20</span></td><td>$0.05</td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">AMZN</td><td>Amazon.com</td><td>تجزئة / سحابة</td><td>1 سهم</td><td><span class="specs-table__val">1:20</span></td><td>$0.06</td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">META</td><td>Meta Platforms</td><td>تقنية / إعلانات</td><td>1 سهم</td><td><span class="specs-table__val">1:20</span></td><td>$0.08</td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">JPM</td><td>JPMorgan Chase</td><td>بنوك</td><td>1 سهم</td><td><span class="specs-table__val">1:10</span></td><td>$0.06</td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">V</td><td>Visa Inc.</td><td>مدفوعات</td><td>1 سهم</td><td><span class="specs-table__val">1:10</span></td><td>$0.07</td><td>0%</td></tr>
+          <tr><td class="specs-table__sym">DIS</td><td>Walt Disney</td><td>ترفيه</td><td>1 سهم</td><td><span class="specs-table__val">1:10</span></td><td>$0.05</td><td>0%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">SESSIONS</span>
+      <h2 class="subpage-section__title">جلسات تداول الأسهم</h2>
+      <p class="subpage-section__subtitle">كل بورصة لها أوقاتها الرئيسية وفرصها.</p>
+    </div>
+    <div class="hours-grid">
+      <div class="hours-card"><div class="hours-card__head"><span class="hours-card__name">ما قبل الافتتاح (Pre-market)</span><span class="hours-card__status is-closed"><span class="dot"></span> ستفتح بعد 30 دقيقة</span></div><div class="hours-card__row"><span>الافتتاح (GMT)</span><span>09:00</span></div><div class="hours-card__row"><span>الإغلاق (GMT)</span><span>13:30</span></div><div class="hours-card__row"><span>السيولة</span><span>منخفضة — حذراً</span></div><div class="hours-card__row"><span>الفرصة</span><span>تقارير الأرباح المبكّرة</span></div></div>
+      <div class="hours-card"><div class="hours-card__head"><span class="hours-card__name">الجلسة العادية (NYSE / NASDAQ)</span><span class="hours-card__status is-closed"><span class="dot"></span> ستفتح بعد ساعتين</span></div><div class="hours-card__row"><span>الافتتاح (GMT)</span><span>13:30</span></div><div class="hours-card__row"><span>الإغلاق (GMT)</span><span>20:00</span></div><div class="hours-card__row"><span>السيولة</span><span>قصوى</span></div><div class="hours-card__row"><span>الأكثر نشاطاً</span><span>الـ30 دقيقة الأولى والأخيرة</span></div></div>
+      <div class="hours-card"><div class="hours-card__head"><span class="hours-card__name">ما بعد الإغلاق (After-hours)</span><span class="hours-card__status is-closed"><span class="dot"></span> ستفتح بعد 8 ساعات</span></div><div class="hours-card__row"><span>الافتتاح (GMT)</span><span>20:00</span></div><div class="hours-card__row"><span>الإغلاق (GMT)</span><span>00:00</span></div><div class="hours-card__row"><span>السيولة</span><span>متوسطة</span></div><div class="hours-card__row"><span>الفرصة</span><span>تقارير الأرباح المسائية</span></div></div>
+      <div class="hours-card"><div class="hours-card__head"><span class="hours-card__name">بورصة لندن (LSE)</span><span class="hours-card__status is-open"><span class="dot"></span> مفتوحة</span></div><div class="hours-card__row"><span>الافتتاح (GMT)</span><span>08:00</span></div><div class="hours-card__row"><span>الإغلاق (GMT)</span><span>16:30</span></div><div class="hours-card__row"><span>السيولة</span><span>عالية</span></div><div class="hours-card__row"><span>الأكثر نشاطاً</span><span>HSBC، BP، Shell، Unilever</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="subpage-section subpage-section--alt">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">HOW IT WORKS</span>
+      <h2 class="subpage-section__title">كيف يتحرّك سعر السهم؟</h2>
+      <p class="subpage-section__subtitle">4 محرّكات أساسية تشكّل حركة كل سهم.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card"><div class="step-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg></div><h3 class="step-card__title">تقارير الأرباح الفصلية</h3><p class="step-card__text">كل 3 أشهر تُعلن الشركات نتائجها. مفاجأة إيجابية على EPS أو Revenue ترفع السهم 5-15% خلال يوم. مفاجأة سلبية تُسقطه بنفس الحدّة. تقويم الأرباح مهم لكل متداول.</p></div>
+      <div class="step-card"><div class="step-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><h3 class="step-card__title">قرارات الفائدة</h3><p class="step-card__text">رفع الفائدة يضغط على أسهم النمو (Tech) لأن قيمتها مبنية على أرباح مستقبلية تُخصم بنسب أعلى. خفض الفائدة يدعمها. القاعدة: فائدة عالية = ضغط، منخفضة = دعم.</p></div>
+      <div class="step-card"><div class="step-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg></div><h3 class="step-card__title">قطاع وسوق</h3><p class="step-card__text">بعض الأسهم تتحرّك مع قطاعها أكثر من ذاتها. NVIDIA لا يتحرّك بمعزل عن AMD وقطاع أشباه الموصلات. تتبّع XLK (ETF التقنية) يفسّر 60% من حركة الأسهم التقنية الفردية.</p></div>
+      <div class="step-card"><div class="step-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg></div><h3 class="step-card__title">أحداث خاصة بالشركة</h3><p class="step-card__text">إطلاق منتج (iPhone جديد)، تغيير CEO، استحواذات، قضايا قانونية، Stock Split. كلها تخلق فرصاً قصيرة المدى. متابعة أخبار الشركة عبر Bloomberg أو Reuters ضرورة.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">PROFESSIONAL EDGE</span>
+      <h2 class="subpage-section__title">نصائح من غرفة تداول الأسهم</h2>
+      <p class="subpage-section__subtitle">منهجية مكتب الأسهم في MEX.</p>
+    </div>
+    <div class="tips-grid">
+      <div class="tip-card"><div class="tip-card__head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><h4 class="tip-card__title">السيولة الأولى مفتاح</h4></div><p class="tip-card__text">الأسهم بأحجام تداول يومية تحت 5 ملايين سهم تنزلق سعرياً عند الأوامر الكبيرة. التزم بأسهم S&P 500 الكبرى لتنفيذ نظيف.</p></div>
+      <div class="tip-card"><div class="tip-card__head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2v20"/></svg><h4 class="tip-card__title">لا تتداول قبل الأرباح</h4></div><p class="tip-card__text">إن كنت لا تملك ميزة معلومات، فتح صفقة قبل الإعلان كرمي عملة. أغلق المراكز قبل النشر، أو تداول الحركة بعد الإعلان مع نطاق واضح.</p></div>
+      <div class="tip-card"><div class="tip-card__head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M3 21l9-9 4 4 7-7"/></svg><h4 class="tip-card__title">VWAP خط المعركة</h4></div><p class="tip-card__text">السهم فوق VWAP خلال اليوم ⇐ المؤسسات تشتري. تحته ⇐ يبيعون. تجنّب الصفقات ضد VWAP في إطار اليوم — معدّل الفشل عالٍ.</p></div>
+      <div class="tip-card"><div class="tip-card__head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg><h4 class="tip-card__title">Gap Trading يومي</h4></div><p class="tip-card__text">السهم يفتح بفجوة (Gap) فوق إغلاق أمس بسبب أخبار. 70% من الفجوات تُغلق خلال أسبوع. استراتيجية Gap Fill من الأكثر إثباتاً تاريخياً.</p></div>
+      <div class="tip-card"><div class="tip-card__head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg><h4 class="tip-card__title">إدارة كومّة المخاطر</h4></div><p class="tip-card__text">لا تفتح 5 مراكز كلها على أسهم تقنية في نفس اليوم — ستكون في الواقع صفقة واحدة. نوّع بين قطاعات غير مرتبطة (تقنية، مالية، طاقة، رعاية صحية).</p></div>
+      <div class="tip-card"><div class="tip-card__head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg><h4 class="tip-card__title">تجنّب آخر 30 دقيقة</h4></div><p class="tip-card__text">قبل إغلاق الجلسة (19:30-20:00 GMT) تتدخّل صناديق Index بكميات ضخمة لـ Rebalance. حركات قوية وغير منطقية فنياً. أفضل الإغلاق قبلها.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-section__inner">
+      <h2 class="cta-section__title">امتلك حصصاً في عمالقة وول ستريت</h2>
+      <p class="cta-section__text">+2,500 سهم — 0% عمولة شراء — رافعة 1:20 — تنفيذ مباشر.</p>
+      <div class="cta-section__actions">
+        <a href="register.html" class="btn btn--primary btn--lg">افتح حساب حقيقي</a>
+        <a href="support.html" class="btn btn--ghost btn--lg">تواصل مع مستشار</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <a href="index.html" class="logo" aria-label="MEX Global Markets"><img class="logo__img" src="assets/logo-mex.png" alt="MEX Global Markets" width="1280" height="561"></a>
+        <p>MEX Global Markets شركة فرعية مملوكة بالكامل لمجموعة MultiBank Group، أحد أكبر مزوّدي المشتقات المالية عالمياً.</p>
+      </div>
+      <div class="footer__col"><h5>الشركة</h5><a href="about.html">من نحن</a><a href="about.html#timeline">رحلتنا</a><a href="about.html#leadership">القيادة</a><a href="#">الوظائف</a><a href="#">الأخبار</a></div>
+      <div class="footer__col"><h5>المنتجات</h5><a href="forex.html">العملات الأجنبية</a><a href="metals.html">المعادن</a><a href="stocks.html">الأسهم</a><a href="indices.html">المؤشرات</a><a href="crypto.html">الأصول الرقمية</a></div>
+      <div class="footer__col"><h5>الأمان والامتثال</h5><a href="regulation.html">التراخيص</a><a href="security.html">حماية الأموال</a><a href="security.html#cyber">الأمن السيبراني</a><a href="#">سياسة AML</a></div>
+    </div>
+
+    <div class="footer__bottom"><p>© 2026 MEX Global Markets. جميع الحقوق محفوظة. شركة تابعة لمجموعة MultiBank Group.</p><div class="footer__bottom-links"><span>المقر: دبي</span><span class="dot-sep">•</span><span>مرخّصة من MAS</span></div></div>
+  <div class="footer__legal-bar">
+      <div class="footer__legal-row">
+        <div class="footer-payments">
+          <span class="footer-payments__label">نقبل:</span>
+          <div class="footer-payments__logos">
+            <span class="fpay fpay--neteller">NETELLER<sup>®</sup></span>
+            <span class="fpay fpay--skrill">Skrill</span>
+            <span class="fpay fpay--swift"><span class="fpay-globe">🌐</span> SWIFT</span>
+            <span class="fpay fpay--visa">VISA</span>
+            <span class="fpay fpay--mc"><span class="fpay-mc__c1"></span><span class="fpay-mc__c2"></span></span>
+          </div>
+        </div>
+        <ul class="footer-legal-links">
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_PrivacyPolicy_14062023.pdf" target="_blank" rel="noopener">سياسة الخصوصية</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_CookiePolicy_14062023_flat.pdf" target="_blank" rel="noopener">سياسة ملفات الارتباط</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/AGR_MEXATL_AE_ClientAgreement_v11_15062023.pdf" target="_blank" rel="noopener">الشروط والأحكام</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_Disclaimer_14062023_flat.pdf" target="_blank" rel="noopener">إخلاء المسؤولية عن الموقع</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_RiskWarning_14062023.pdf" target="_blank" rel="noopener">تحذير من المخاطر</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEX_Atlantic_Swap_Free_Trading_Account_Agreement.pdf" target="_blank" rel="noopener">أحكام حسابات التداول الخالية من فوائد التبيت</a></li>
+        </ul>
+      </div>
+      <p class="footer__final-disclaimer">
+        حقوق النشر &copy; 2026 MEX Global Markets. جميع الحقوق محفوظة. MEX Global علامة تجارية تعمل من خلال مجموعة من الكيانات المرخّصة دولياً، تشمل: MEX Global Markets PTE. LTD (سنغافورة، مرخّصة من سُلطة النقد MAS برقم CMS101174)، MEX Global Financial Services LLC (الإمارات، مرخّصة من ECMA رقم 20200000031)، MEX Australia Pty Ltd (أستراليا، مرخّصة من ASIC برقم AFSL 416279)، MEX Europe LTD (قبرص، مرخّصة من CySEC رقم 430/23)، إلى جانب كيانات أخرى مرخّصة في ألمانيا (BaFin) والنمسا (FMA) والمملكة المتحدة (FMC) والهند. ينطوي تداول العملات الأجنبية وعقود الفروقات (CFDs) باستخدام الرافعة المالية على درجة عالية من المخاطر، وقد لا يكون مناسباً لجميع المستثمرين، إذ قد تتجاوز الخسائر رأس المال المودَع. لا تستثمر أموالاً لا يمكنك تحمّل خسارتها. يُرجى الاطّلاع على وثائق المخاطر الخاصة بكل كيان عند فتح الحساب، والاستعانة بمستشار مالي مستقل عند الحاجة.
+      </p>
+    </div>
+  </div>
+  </footer>
+<button class="back-to-top" id="backToTop" aria-label="العودة للأعلى"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg></button>
+
+<script src="js/translations.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/main.js"></script>
+<script src="js/products.js"></script>
+
+<!--Start of Conferbot Script-->
+<script type="text/javascript">
+(function (d, s, id) {
+  var js, el = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s);
+  js.async = true;
+  js.src = 'https://cdn.conferbot.com/dist/v1/widget.min.js';
+  js.id = id;
+  js.charset = 'UTF-8';
+  el.parentNode.insertBefore(js, el);
+  js.onload = function () {
+    var w = window.ConferbotWidget("6a395b09afa317d6bb00edbf", "live_chat");
+  };
+})(document, 'script', 'conferbot-js');
+</script>
+<script src="js/chat-fix.js"></script>
+<!--End of Conferbot Script-->
+
+</body>
+</html>

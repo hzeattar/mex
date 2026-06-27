@@ -130,6 +130,9 @@ function auth_normalize_registration_payload(array $body, string $lang = 'en'): 
     return ['ok' => false, 'error_key' => 'birth_date'];
   }
 
+  $currency = strtoupper(trim((string)($body['currency'] ?? 'USD')));
+  if (!in_array($currency, ['USD','EUR','GBP','AED','SAR'], true)) $currency = 'USD';
+
   return [
     'ok' => true,
     'data' => [
@@ -144,6 +147,7 @@ function auth_normalize_registration_payload(array $body, string $lang = 'en'): 
       'phone_number' => $phoneNumber,
       'phone_e164' => '+' . $totalDigits,
       'birth_date' => $birthDate,
+      'currency' => $currency,
     ],
   ];
 }

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="أكاديمية MEX التعليمية — دورات تداول، بث مباشر، مكتبة كتب إلكترونية، شهادات معتمدة. تعلّم من خبراء حقيقيين في الأسواق العالمية." />
+<title>الأكاديمية — MEX Global Markets</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/subpages.css" />
+<link rel="stylesheet" href="css/i18n.css" />
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="container top-bar__inner">
+    <div class="top-bar__left">
+      <span class="badge-live"><span class="dot"></span> <span data-i18n="top.markets_open">الأسواق مفتوحة</span></span>
+    </div>
+    <div class="top-bar__right">
+      <a href="#" class="lang-switch">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+        AR / EN
+      </a>
+      <a href="support.html" class="top-bar__link" data-i18n="top.support">دعم 24/5</a>
+      <a href="#" class="top-bar__link" data-i18n="top.partners">شركاء IB</a>
+    </div>
+  </div>
+</div>
+
+<header class="site-header" id="siteHeader">
+  <div class="container site-header__inner">
+    <a href="index.html" class="logo" aria-label="MEX Global Markets">
+      <img class="logo__img" src="assets/logo-mex.png" alt="MEX Global Markets" width="1280" height="561">
+    </a>
+    <nav class="main-nav">
+      <ul>
+        <li class="has-mega">
+          <a href="index.html#products"><span data-i18n="nav.products">المنتجات</span> <span class="caret">▾</span></a>
+          <div class="mega">
+            <div class="mega__col">
+              <h5 data-i18n="nav.markets">الأسواق</h5>
+              <a href="forex.html" data-i18n="nav.forex">العملات الأجنبية (Forex)</a>
+              <a href="metals.html" data-i18n="nav.metals">المعادن النفيسة</a>
+              <a href="indices.html" data-i18n="nav.indices">المؤشرات العالمية</a>
+              <a href="stocks.html" data-i18n="nav.stocks">الأسهم</a>
+              <a href="commodities.html" data-i18n="nav.commodities">السلع</a>
+              <a href="crypto.html" data-i18n="nav.crypto">الأصول الرقمية</a>
+            </div>
+            <div class="mega__col">
+              <h5 data-i18n="nav.specialties">تخصصات</h5>
+              <a href="cfds.html" data-i18n="nav.cfds">عقود الفروقات CFDs</a>
+              <a href="ecn.html" data-i18n="nav.ecn">ECN مباشر</a>
+              <a href="metals.html" data-i18n="nav.gold_silver">تداول الذهب والفضة</a>
+              <a href="commodities.html" data-i18n="nav.oil_energy">النفط والطاقة</a>
+            </div>
+          </div>
+        </li>
+        <li class="has-mega"><a href="index.html#accounts"><span data-i18n="nav.accounts">الحسابات</span> <span class="caret">▾</span></a><div class="mega"><div class="mega__col"><h5 data-i18n="nav.tier_levels">مستويات الحساب</h5><a href="account-beginner.html" data-i18n="register.tier.beginner">المبتدئ</a><a href="account-silver.html" data-i18n="register.tier.silver">فضي</a><a href="account-gold.html" data-i18n="register.tier.gold">ذهبي</a><a href="account-platinum.html" data-i18n="register.tier.platinum">بلاتيني</a><a href="account-vip.html" data-i18n="nav.tier_vip">كبار العملاء</a></div><div class="mega__col"><h5 data-i18n="nav.acc_mgmt">إدارة الحساب</h5><a href="deposits.html" data-i18n="nav.deposits">طرق الإيداع</a><a href="withdrawals.html" data-i18n="nav.withdrawals">طرق السحب</a><a href="rewards.html" data-i18n="nav.rewards">برامج المكافآت</a></div></div></li>
+        <li class="has-mega">
+          <a href="about.html"><span data-i18n="nav.about">عن MEX</span> <span class="caret">▾</span></a>
+          <div class="mega">
+            <div class="mega__col">
+              <h5 data-i18n="nav.company">الشركة</h5>
+              <a href="about.html" data-i18n="nav.about_us">من نحن</a>
+              <a href="about.html#timeline" data-i18n="nav.journey">رحلتنا</a>
+              <a href="about.html#leadership" data-i18n="nav.leadership">القيادة التنفيذية</a>
+              <a href="about.html#values" data-i18n="nav.values">قيمنا ومبادئنا</a>
+            </div>
+            <div class="mega__col">
+              <h5 data-i18n="nav.trust">الثقة والأمان</h5>
+              <a href="regulation.html" data-i18n="nav.licenses">التراخيص والتنظيم</a>
+              <a href="security.html" data-i18n="nav.fund_protection">حماية أموال العملاء</a>
+              <a href="security.html#cyber" data-i18n="nav.cyber">الأمان السيبراني</a>
+            </div>
+          </div>
+        </li>
+        <li><a href="education.html" data-i18n="nav.education">الأكاديمية</a></li>
+        <li><a href="index.html#partners" data-i18n="nav.partners">الشراكات</a></li>
+        <li><a href="support.html" data-i18n="nav.support">الدعم</a></li>
+      </ul>
+    </nav>
+    <div class="header-actions">
+      <a href="login.html" class="btn btn--ghost" data-i18n="nav.login">دخول</a>
+      <a href="register.html" class="btn btn--primary" data-i18n="nav.cta_open">افتح حساب حقيقي</a>
+      <button class="hamburger" id="hamburger" aria-label="القائمة" aria-expanded="false" data-i18n-aria="nav.menu_aria">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ============== HERO ============== -->
+<section class="subpage-hero">
+  <div class="container">
+    <div class="subpage-hero__inner">
+      <div class="subpage-hero__breadcrumb">
+        <a href="index.html" data-i18n="bc.home">الرئيسية</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <span data-i18n="nav.education">الأكاديمية</span>
+      </div>
+      <span class="subpage-hero__eyebrow">أكاديمية MEX</span>
+      <h1 class="subpage-hero__title" data-i18n="page.education.h1">من المبتدئ إلى المحترف، خطوة بخطوة</h1>
+      <p class="subpage-hero__subtitle">
+        أكبر أكاديمية تداول عربية متخصّصة في الأسواق المالية. أكثر من 240 ساعة من المحتوى
+        التعليمي، بثوث مباشرة أسبوعية، ومكتبة كتب إلكترونية بإشراف خبراء بخبرة لا تقلّ عن
+        15 عامًا في السوق. تعلَّم بمنطق المتداول، لا بمنطق المعلم النظري.
+      </p>
+      <div class="subpage-hero__stats">
+        <div class="subpage-hero__stat">
+          <span class="subpage-hero__stat-value">240+</span>
+          <span class="subpage-hero__stat-label">ساعة محتوى</span>
+        </div>
+        <div class="subpage-hero__stat">
+          <span class="subpage-hero__stat-value">85K</span>
+          <span class="subpage-hero__stat-label">طالب نشط</span>
+        </div>
+        <div class="subpage-hero__stat">
+          <span class="subpage-hero__stat-value">52</span>
+          <span class="subpage-hero__stat-label">دورة تدريبية</span>
+        </div>
+        <div class="subpage-hero__stat">
+          <span class="subpage-hero__stat-value">100%</span>
+          <span class="subpage-hero__stat-label">مجاني للعملاء</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== INTRO ============== -->
+<section class="subpage-section">
+  <div class="container">
+    <div class="two-col">
+      <div>
+        <span class="subpage-section__eyebrow">رسالة الأكاديمية</span>
+        <h2 class="two-col__title">90% من المتداولين يخسرون. <em>لأنهم لم يتعلّموا</em>.</h2>
+        <p class="two-col__text">
+          الإحصائية مفجعة، لكن الحقيقة أن معظم الخسائر سببها الجهل. لا تنقص المتداول الجديد
+          الفرص، بل ينقصه نظام تفكير سليم. أكاديمية MEX بُنيت لتقدّم لك هذا النظام، بترتيب
+          منهجي صارم بدأ من حسابات أمناء البنوك الاستثمارية.
+        </p>
+        <p class="two-col__text">
+          محاضرونا ليسوا أكاديميين نظريين. هم متداولون فعليون يعملون اليوم في غرف تداول حقيقية،
+          ينقلون إليك ما يحدث في الواقع، لا ما تقوله الكتب القديمة. كل دورة تشمل جلسات حالة
+          (Case Studies) من صفقات حقيقية تمّ تنفيذها في السوق.
+        </p>
+        <ul class="two-col__features">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            <span>محتوى متدرّج من المبتدئ إلى المحترف، بمسار واضح ومنطقي.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            <span>محاضرون يعملون في السوق الفعلي، وليسوا أكاديميين نظريين.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            <span>اختبارات نهاية كل دورة، وشهادات معتمدة عند الإتمام بنجاح.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            <span>محتوى مجاني بالكامل لعملاء MEX، مع وصول مدى الحياة.</span>
+          </li>
+        </ul>
+      </div>
+      <div class="two-col__media">
+        <svg viewBox="0 0 360 360" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:340px;">
+          <defs>
+            <linearGradient id="edu-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#d4a853"/>
+              <stop offset="100%" stop-color="#fde68a"/>
+            </linearGradient>
+          </defs>
+          <path d="M180 60 L290 110 L180 160 L70 110 Z" fill="rgba(212,168,83,.10)" stroke="url(#edu-grad)" stroke-width="2"/>
+          <path d="M70 120 L70 200 L180 250 L290 200 L290 120" fill="none" stroke="url(#edu-grad)" stroke-width="2"/>
+          <path d="M180 160 L180 250" stroke="url(#edu-grad)" stroke-width="2" stroke-dasharray="3 4" opacity=".6"/>
+          <circle cx="290" cy="120" r="8" fill="url(#edu-grad)"/>
+          <path d="M290 120 L290 220 L320 230 L320 130 Z" fill="rgba(212,168,83,.20)" stroke="url(#edu-grad)" stroke-width="1.5"/>
+          <text x="180" y="295" text-anchor="middle" fill="#fde68a" font-family="Cairo" font-weight="900" font-size="14" letter-spacing="3">ACADEMY</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== LEARNING PATH ============== -->
+<section class="subpage-section subpage-section--alt">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">المسار التعليمي</span>
+      <h2 class="subpage-section__title">5 مستويات تأخذك من الصفر للاحتراف</h2>
+      <p class="subpage-section__subtitle">
+        كل مستوى مبني على ما قبله. إكمالك للمستوى يفتح الذي يليه، ويمنحك شهادة معتمدة.
+      </p>
+    </div>
+    <div class="content-grid">
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><text x="12" y="17" text-anchor="middle" fill="currentColor" font-size="11" font-weight="900">L1</text></svg>
+        </div>
+        <h4 class="content-card__title">المستوى الأول — الأساسيات</h4>
+        <p class="content-card__text">
+          ما هي السوق؟ كيف يعمل العرض والطلب؟ ما الفرق بين Forex، الأسهم، السلع، والمؤشرات؟
+          مفاهيم الرافعة، الهامش، البيب، اللوت، السبريد. كل ما تحتاج معرفته قبل أن تفتح أول
+          صفقة في حياتك.
+        </p>
+        <ul class="content-card__list">
+          <li>12 محاضرة فيديو · 18 ساعة</li>
+          <li>تمارين تطبيقية على حساب تجريبي</li>
+          <li>اختبار نهاية المستوى</li>
+          <li>شهادة "أساسيات التداول"</li>
+        </ul>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><text x="12" y="17" text-anchor="middle" fill="currentColor" font-size="11" font-weight="900">L2</text></svg>
+        </div>
+        <h4 class="content-card__title">المستوى الثاني — التحليل الفني</h4>
+        <p class="content-card__text">
+          فهم الشموع اليابانية، خطوط الدعم والمقاومة، النماذج السعرية الكلاسيكية، المؤشرات
+          الفنية الرئيسية (RSI, MACD, MA, Bollinger). كيف تقرأ الشارت كأنك تقرأ كتابًا مفتوحًا.
+        </p>
+        <ul class="content-card__list">
+          <li>16 محاضرة فيديو · 24 ساعة</li>
+          <li>أكثر من 50 مثالًا تطبيقيًا</li>
+          <li>ورشة عمل مباشرة أسبوعيًا</li>
+          <li>شهادة "محلّل فني معتمد"</li>
+        </ul>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><text x="12" y="17" text-anchor="middle" fill="currentColor" font-size="11" font-weight="900">L3</text></svg>
+        </div>
+        <h4 class="content-card__title">المستوى الثالث — التحليل الأساسي</h4>
+        <p class="content-card__text">
+          قراءة البيانات الاقتصادية، فهم قرارات البنوك المركزية، أثر الأخبار على الأسواق،
+          ربط الإحصاءات الكلية بحركة الأسعار. تعلَّم كيف تتداول قبل وبعد إعلان NFP، CPI، FOMC.
+        </p>
+        <ul class="content-card__list">
+          <li>14 محاضرة فيديو · 22 ساعة</li>
+          <li>تحليل أسبوعي للأخبار الاقتصادية</li>
+          <li>محاكاة تداول الأخبار</li>
+          <li>شهادة "محلّل أساسي معتمد"</li>
+        </ul>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><text x="12" y="17" text-anchor="middle" fill="currentColor" font-size="11" font-weight="900">L4</text></svg>
+        </div>
+        <h4 class="content-card__title">المستوى الرابع — إدارة المخاطر</h4>
+        <p class="content-card__text">
+          بناء خطة تداول، تحديد حجم الصفقة، نسبة المخاطرة إلى المكافأة، Stop Loss و Take
+          Profit الذكي، إدارة الانفعالات النفسية. هذا المستوى يفصل المضارب من المحترف.
+        </p>
+        <ul class="content-card__list">
+          <li>10 محاضرات فيديو · 15 ساعة</li>
+          <li>قوالب جاهزة لخطة التداول</li>
+          <li>جلسات إرشاد فردية اختيارية</li>
+          <li>شهادة "مدير مخاطر معتمد"</li>
+        </ul>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><text x="12" y="17" text-anchor="middle" fill="currentColor" font-size="11" font-weight="900">L5</text></svg>
+        </div>
+        <h4 class="content-card__title">المستوى الخامس — استراتيجيات متقدّمة</h4>
+        <p class="content-card__text">
+          ICT, Smart Money Concepts, Order Flow, Volume Profile, تداول مناطق العرض والطلب،
+          استراتيجيات Algorithmic Trading. هذا ما يستخدمه المتداولون المحترفون في غرف
+          البنوك العالمية.
+        </p>
+        <ul class="content-card__list">
+          <li>20 محاضرة فيديو · 35 ساعة</li>
+          <li>دراسات حالة من السوق الفعلي</li>
+          <li>جلسات مع متداولين مؤسسيين</li>
+          <li>شهادة "متداول محترف معتمد"</li>
+        </ul>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+        </div>
+        <h4 class="content-card__title">برنامج النخبة (مخصّص)</h4>
+        <p class="content-card__text">
+          برنامج فردي مخصّص لكبار العملاء، يشمل جلسات أسبوعية مع كبار المتداولين في MEX،
+          تحليلًا شخصيًا لمحفظتك، وخطة استثمار طويلة المدى. حصري لعملاء البلاتيني وكبار العملاء.
+        </p>
+        <ul class="content-card__list">
+          <li>جلسات فردية أسبوعية</li>
+          <li>محفظة استثمارية مخصّصة</li>
+          <li>تحليل أداء شهري</li>
+          <li>وصول مدى الحياة</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== COURSES SAMPLE ============== -->
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">دورات مميَّزة</span>
+      <h2 class="subpage-section__title">من الأكثر مشاهدة هذا الشهر</h2>
+    </div>
+    <div class="courses-grid">
+      <div class="course-card">
+        <div class="course-card__cover">
+          <span class="course-card__level">مبتدئ</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        <div class="course-card__body">
+          <h4 class="course-card__title">أوّل صفقة في حياتك</h4>
+          <p class="course-card__desc">
+            دليل عملي خطوة بخطوة لتنفيذ أول صفقة على منصة MEX. مع شرح كل خانة، كل زر، وكل
+            إعداد. مدّة الدورة 90 دقيقة وستجعلك جاهزًا.
+          </p>
+          <div class="course-card__meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 90 دقيقة</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg> أحمد كنعان</span>
+          </div>
+        </div>
+      </div>
+      <div class="course-card">
+        <div class="course-card__cover">
+          <span class="course-card__level">متوسط</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+        </div>
+        <div class="course-card__body">
+          <h4 class="course-card__title">إتقان الشموع اليابانية</h4>
+          <p class="course-card__desc">
+            تعلّم قراءة 30+ نموذج شموع بطريقة عملية. كيف تتعرّف على نقاط الانعكاس والاستمرار
+            دون الحاجة لمؤشرات إضافية. دورة بكثافة من 6 ساعات.
+          </p>
+          <div class="course-card__meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 6 ساعات</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg> سارة المحمود</span>
+          </div>
+        </div>
+      </div>
+      <div class="course-card">
+        <div class="course-card__cover">
+          <span class="course-card__level">متقدّم</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/></svg>
+        </div>
+        <div class="course-card__body">
+          <h4 class="course-card__title">تداول الذهب الاحترافي</h4>
+          <p class="course-card__desc">
+            استراتيجيات حصرية لتداول XAUUSD. ربط الذهب بالدولار، تأثير قرارات الفيدرالي،
+            مناطق المضاربة الذكية. الدورة الأكثر طلبًا في الأكاديمية.
+          </p>
+          <div class="course-card__meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 8 ساعات</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg> د. زياد الحاج</span>
+          </div>
+        </div>
+      </div>
+      <div class="course-card">
+        <div class="course-card__cover">
+          <span class="course-card__level">متوسط</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><path d="M3 3l3 3M21 3l-3 3"/></svg>
+        </div>
+        <div class="course-card__body">
+          <h4 class="course-card__title">أسرار تداول السكالبينغ</h4>
+          <p class="course-card__desc">
+            كيف تجمع 50 نقطة في اليوم من صفقات صغيرة. اختيار اللحظة، إدارة سرعة التنفيذ،
+            ضبط النفس عند التداول السريع. مع نتائج فعلية موثَّقة.
+          </p>
+          <div class="course-card__meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 5 ساعات</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg> ريم حنّاوي</span>
+          </div>
+        </div>
+      </div>
+      <div class="course-card">
+        <div class="course-card__cover">
+          <span class="course-card__level">متقدّم</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+        </div>
+        <div class="course-card__body">
+          <h4 class="course-card__title">Smart Money Concepts</h4>
+          <p class="course-card__desc">
+            ما الذي يفعله المؤسّسون الكبار في السوق؟ تتبّع حركة الأموال الذكية، فهم Order
+            Blocks و Liquidity Pools و Fair Value Gaps. أسلوب التداول الجديد للجيل القادم.
+          </p>
+          <div class="course-card__meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 12 ساعة</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg> نسيم العزّاوي</span>
+          </div>
+        </div>
+      </div>
+      <div class="course-card">
+        <div class="course-card__cover">
+          <span class="course-card__level">مبتدئ</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/></svg>
+        </div>
+        <div class="course-card__body">
+          <h4 class="course-card__title">السيكولوجيا والتداول</h4>
+          <p class="course-card__desc">
+            كيف يدمّر الخوف والطمع حسابك؟ كيف تتداول دون انفعال؟ تقنيات نفسية يعتمدها
+            المتداولون الناجحون عالميًا للتحكم في قرارات التداول.
+          </p>
+          <div class="course-card__meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 4 ساعات</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg> فاطمة النعيمي</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== FORMATS ============== -->
+<section class="subpage-section subpage-section--alt">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">طرق التعلّم</span>
+      <h2 class="subpage-section__title">تعلّم بالطريقة التي تناسبك</h2>
+      <p class="subpage-section__subtitle">
+        كل شخص يتعلّم بطريقة مختلفة. لذلك نقدّم محتوى الأكاديمية بـ 6 صيغ متكاملة.
+      </p>
+    </div>
+    <div class="content-grid">
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        <h4 class="content-card__title">دورات فيديو</h4>
+        <p class="content-card__text">
+          محاضرات مسجَّلة بجودة 4K، مع شرائح تفاعلية وتمارين عملية. شاهدها في أي وقت ومن أي
+          جهاز. ميزة "Resume" تتذكّر آخر نقطة وقفت عندها.
+        </p>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h6l3 9 6-18 3 9h2"/></svg>
+        </div>
+        <h4 class="content-card__title">بث مباشر أسبوعي</h4>
+        <p class="content-card__text">
+          كل أربعاء، بث مباشر مع كبار المحلّلين، تحليل للسوق، والإجابة على أسئلة المشاركين
+          مباشرةً. سجّل الجلسات إن لم تستطع الحضور.
+        </p>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h20l-2 14H4L2 3z"/><path d="M16 21a2 2 0 1 1-4 0"/><path d="M10 21a2 2 0 1 1-4 0"/></svg>
+        </div>
+        <h4 class="content-card__title">مكتبة الكتب الإلكترونية</h4>
+        <p class="content-card__text">
+          أكثر من 80 كتابًا إلكترونيًا تأليف فريق MEX، بصيغ PDF و EPUB. تشمل أدلة عملية،
+          مراجع نظرية، وكتب مترجمة من أعمال خبراء عالميين.
+        </p>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+        </div>
+        <h4 class="content-card__title">جلسات أسئلة وأجوبة</h4>
+        <p class="content-card__text">
+          جلسة شهرية مفتوحة لجميع الطلاب، تُجاب فيها كل الأسئلة العملية الخاصة بصفقاتك.
+          تُسجَّل الجلسات وتُتاح للمشاهدة لاحقًا.
+        </p>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="17" cy="11" r="2"/><path d="M21 21v-1a3 3 0 0 0-2-2.8"/></svg>
+        </div>
+        <h4 class="content-card__title">جلسات إرشاد فردية</h4>
+        <p class="content-card__text">
+          لعملاء المستوى الذهبي وما فوق، 4 جلسات شهرية وجهًا لوجه (Zoom) مع مدير حساب خبير،
+          لمراجعة صفقاتك وتطوير خطّتك الشخصية.
+        </p>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M9 17h6"/></svg>
+        </div>
+        <h4 class="content-card__title">شهادات معتمدة</h4>
+        <p class="content-card__text">
+          عند إكمال أي مستوى تحصل على شهادة موقَّعة من كبير الاقتصاديين في MEX. الشهادات
+          معتمدة من جهات تنظيمية في عدّة دول، ويمكن إضافتها لـ LinkedIn.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== WEBINARS ============== -->
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">جدول البث المباشر</span>
+      <h2 class="subpage-section__title">قادمنا هذا الأسبوع</h2>
+    </div>
+    <div class="content-grid">
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h4 class="content-card__title">الإثنين 19:00 (دبي)</h4>
+        <p class="content-card__text">
+          تحليل أسبوعي شامل: ما الذي يحرّك الأسواق؟ مع نسيم العزّاوي. مدّة الجلسة 60 دقيقة،
+          تحليل لـ EUR/USD، GBP/USD، الذهب، النفط، والمؤشرات الرئيسية.
+        </p>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h4 class="content-card__title">الأربعاء 21:00 (دبي)</h4>
+        <p class="content-card__text">
+          ساعة الذهب: استراتيجيات تداول XAUUSD مع د. زياد الحاج. أسرار قراءة حركة المعدن
+          النفيس وربطه بالقرارات النقدية الأمريكية.
+        </p>
+      </div>
+      <div class="content-card">
+        <div class="content-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h4 class="content-card__title">الجمعة 17:00 (دبي)</h4>
+        <p class="content-card__text">
+          أسئلة وأجوبة مفتوحة: أرسل صفقاتك ودعنا نراجعها معًا. جلسة بثوث مباشرة لمساعدتك
+          في تحسين قرارات التداول الفعلية.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== CTA ============== -->
+<section class="subpage-section subpage-section--alt">
+  <div class="container">
+    <div class="subpage-cta">
+      <h3>ابدأ تعلّمك اليوم. مجانًا.</h3>
+      <p>
+        كل عميل MEX يحصل على وصول كامل للأكاديمية مجانًا. افتح حسابًا اليوم وابدأ المستوى
+        الأول خلال دقائق.
+      </p>
+      <div class="subpage-cta__actions">
+        <a href="register.html" class="btn btn--primary">افتح حسابًا وابدأ</a>
+        <a href="support.html" class="btn btn--ghost">تحدّث مع مستشار</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== FOOTER ============== -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <a href="index.html" class="logo" aria-label="MEX Global Markets">
+          <img class="logo__img" src="assets/logo-mex.png" alt="MEX Global Markets" width="1280" height="561">
+        </a>
+        <p>MEX Global Markets شركة فرعية مملوكة بالكامل لمجموعة MultiBank Group، أحد أكبر مزوّدي المشتقات المالية عالمياً.</p>
+      </div>
+      <div class="footer__col">
+        <h5>الشركة</h5>
+        <a href="about.html">من نحن</a>
+        <a href="about.html#timeline">رحلتنا</a>
+        <a href="about.html#leadership">القيادة</a>
+      </div>
+      <div class="footer__col">
+        <h5>المنتجات</h5>
+        <a href="forex.html">العملات الأجنبية</a>
+        <a href="metals.html">المعادن</a>
+        <a href="stocks.html">الأسهم</a>
+        <a href="indices.html">المؤشرات</a>
+        <a href="crypto.html">الأصول الرقمية</a>
+      </div>
+      <div class="footer__col">
+        <h5>الأمان والامتثال</h5>
+        <a href="regulation.html">التراخيص</a>
+        <a href="security.html">حماية الأموال</a>
+        <a href="security.html#cyber">الأمن السيبراني</a>
+      </div>
+    </div>
+
+    <div class="footer__bottom">
+      <p>© 2026 MEX Global Markets. جميع الحقوق محفوظة.</p>
+      <div class="footer__bottom-links">
+        <span>المقر: دبي</span>
+        <span class="dot-sep">•</span>
+        <span>مرخّصة من MAS</span>
+      </div>
+    </div>
+  <div class="footer__legal-bar">
+      <div class="footer__legal-row">
+        <div class="footer-payments">
+          <span class="footer-payments__label">نقبل:</span>
+          <div class="footer-payments__logos">
+            <span class="fpay fpay--neteller">NETELLER<sup>®</sup></span>
+            <span class="fpay fpay--skrill">Skrill</span>
+            <span class="fpay fpay--swift"><span class="fpay-globe">🌐</span> SWIFT</span>
+            <span class="fpay fpay--visa">VISA</span>
+            <span class="fpay fpay--mc"><span class="fpay-mc__c1"></span><span class="fpay-mc__c2"></span></span>
+          </div>
+        </div>
+        <ul class="footer-legal-links">
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_PrivacyPolicy_14062023.pdf" target="_blank" rel="noopener">سياسة الخصوصية</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_CookiePolicy_14062023_flat.pdf" target="_blank" rel="noopener">سياسة ملفات الارتباط</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/AGR_MEXATL_AE_ClientAgreement_v11_15062023.pdf" target="_blank" rel="noopener">الشروط والأحكام</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_Disclaimer_14062023_flat.pdf" target="_blank" rel="noopener">إخلاء المسؤولية عن الموقع</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_RiskWarning_14062023.pdf" target="_blank" rel="noopener">تحذير من المخاطر</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEX_Atlantic_Swap_Free_Trading_Account_Agreement.pdf" target="_blank" rel="noopener">أحكام حسابات التداول الخالية من فوائد التبيت</a></li>
+        </ul>
+      </div>
+      <p class="footer__final-disclaimer">
+        حقوق النشر &copy; 2026 MEX Global Markets. جميع الحقوق محفوظة. MEX Global علامة تجارية تعمل من خلال مجموعة من الكيانات المرخّصة دولياً، تشمل: MEX Global Markets PTE. LTD (سنغافورة، مرخّصة من سُلطة النقد MAS برقم CMS101174)، MEX Global Financial Services LLC (الإمارات، مرخّصة من ECMA رقم 20200000031)، MEX Australia Pty Ltd (أستراليا، مرخّصة من ASIC برقم AFSL 416279)، MEX Europe LTD (قبرص، مرخّصة من CySEC رقم 430/23)، إلى جانب كيانات أخرى مرخّصة في ألمانيا (BaFin) والنمسا (FMA) والمملكة المتحدة (FMC) والهند. ينطوي تداول العملات الأجنبية وعقود الفروقات (CFDs) باستخدام الرافعة المالية على درجة عالية من المخاطر، وقد لا يكون مناسباً لجميع المستثمرين، إذ قد تتجاوز الخسائر رأس المال المودَع. لا تستثمر أموالاً لا يمكنك تحمّل خسارتها. يُرجى الاطّلاع على وثائق المخاطر الخاصة بكل كيان عند فتح الحساب، والاستعانة بمستشار مالي مستقل عند الحاجة.
+      </p>
+    </div>
+  </div>
+  </footer>
+
+<button class="back-to-top" id="backToTop" aria-label="العودة للأعلى">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M18 15l-6-6-6 6"/>
+  </svg>
+</button>
+
+<script src="js/translations.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/main.js"></script>
+
+<!--Start of Conferbot Script-->
+<script type="text/javascript">
+(function (d, s, id) {
+  var js, el = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s);
+  js.async = true;
+  js.src = 'https://cdn.conferbot.com/dist/v1/widget.min.js';
+  js.id = id;
+  js.charset = 'UTF-8';
+  el.parentNode.insertBefore(js, el);
+  js.onload = function () {
+    var w = window.ConferbotWidget("6a395b09afa317d6bb00edbf", "live_chat");
+  };
+})(document, 'script', 'conferbot-js');
+</script>
+<script src="js/chat-fix.js"></script>
+<!--End of Conferbot Script-->
+
+</body>
+</html>

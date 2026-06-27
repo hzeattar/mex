@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="تداول المعادن النفيسة (الذهب، الفضة، البلاتين، البلاديوم) مع MEX Global Markets — سبريد منخفض، رافعة 1:200، تنفيذ ECN، أسعار حية على مدار 23/5." />
+<title>تداول المعادن النفيسة (الذهب والفضة) — MEX Global Markets</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/subpages.css" />
+<link rel="stylesheet" href="css/i18n.css" />
+<link rel="stylesheet" href="css/products.css" />
+</head>
+<body>
+
+<!-- ============== TOP BAR ============== -->
+<div class="top-bar">
+  <div class="container top-bar__inner">
+    <div class="top-bar__left">
+      <span class="badge-live"><span class="dot"></span> <span data-i18n="top.markets_open">الأسواق مفتوحة</span></span>
+      <span class="top-bar__sep">|</span>
+      <span>الذهب: ملاذ آمن — نمو القيمة منذ 2000 يتجاوز <b>+650%</b></span>
+    </div>
+    <div class="top-bar__right">
+      <a href="#" class="lang-switch">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+        AR / EN
+      </a>
+      <a href="support.html" class="top-bar__link" data-i18n="top.support">دعم 24/5</a>
+      <a href="#" class="top-bar__link" data-i18n="top.partners">شركاء IB</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============== HEADER ============== -->
+<header class="site-header" id="siteHeader">
+  <div class="container site-header__inner">
+    <a href="index.html" class="logo" aria-label="MEX Global Markets">
+      <img class="logo__img" src="assets/logo-mex.png" alt="MEX Global Markets" width="1280" height="561">
+    </a>
+
+    <nav class="main-nav">
+      <ul>
+        <li class="has-mega">
+          <a href="#products"><span data-i18n="nav.products">المنتجات</span> <span class="caret">▾</span></a>
+          <div class="mega">
+            <div class="mega__col">
+              <h5 data-i18n="nav.markets">الأسواق</h5>
+              <a href="forex.html" data-i18n="nav.forex">العملات الأجنبية (Forex)</a>
+              <a href="metals.html" data-i18n="nav.metals">المعادن النفيسة</a>
+              <a href="indices.html" data-i18n="nav.indices">المؤشرات العالمية</a>
+              <a href="stocks.html" data-i18n="nav.stocks">الأسهم</a>
+              <a href="commodities.html" data-i18n="nav.commodities">السلع</a>
+              <a href="crypto.html" data-i18n="nav.crypto">الأصول الرقمية</a>
+            </div>
+            <div class="mega__col">
+              <h5 data-i18n="nav.specialties">تخصصات</h5>
+              <a href="cfds.html" data-i18n="nav.cfds">عقود الفروقات CFDs</a>
+              <a href="ecn.html" data-i18n="nav.ecn">ECN مباشر</a>
+              <a href="metals.html" data-i18n="nav.gold_silver">تداول الذهب والفضة</a>
+              <a href="commodities.html" data-i18n="nav.oil_energy">النفط والطاقة</a>
+            </div>
+          </div>
+        </li>
+        <li class="has-mega"><a href="index.html#accounts"><span data-i18n="nav.accounts">الحسابات</span> <span class="caret">▾</span></a><div class="mega"><div class="mega__col"><h5 data-i18n="nav.tier_levels">مستويات الحساب</h5><a href="account-beginner.html" data-i18n="register.tier.beginner">المبتدئ</a><a href="account-silver.html" data-i18n="register.tier.silver">فضي</a><a href="account-gold.html" data-i18n="register.tier.gold">ذهبي</a><a href="account-platinum.html" data-i18n="register.tier.platinum">بلاتيني</a><a href="account-vip.html" data-i18n="nav.tier_vip">كبار العملاء</a></div><div class="mega__col"><h5 data-i18n="nav.acc_mgmt">إدارة الحساب</h5><a href="deposits.html" data-i18n="nav.deposits">طرق الإيداع</a><a href="withdrawals.html" data-i18n="nav.withdrawals">طرق السحب</a><a href="rewards.html" data-i18n="nav.rewards">برامج المكافآت</a></div></div></li>
+        <li class="has-mega">
+          <a href="about.html"><span data-i18n="nav.about">عن MEX</span> <span class="caret">▾</span></a>
+          <div class="mega">
+            <div class="mega__col">
+              <h5 data-i18n="nav.company">الشركة</h5>
+              <a href="about.html" data-i18n="nav.about_us">من نحن</a>
+              <a href="about.html#timeline" data-i18n="nav.journey">رحلتنا</a>
+              <a href="about.html#leadership" data-i18n="nav.leadership">القيادة التنفيذية</a>
+              <a href="about.html#values" data-i18n="nav.values">قيمنا ومبادئنا</a>
+            </div>
+            <div class="mega__col">
+              <h5 data-i18n="nav.trust">الثقة والأمان</h5>
+              <a href="regulation.html" data-i18n="nav.licenses">التراخيص والتنظيم</a>
+              <a href="security.html" data-i18n="nav.fund_protection">حماية أموال العملاء</a>
+              <a href="security.html#cyber" data-i18n="nav.cyber">الأمان السيبراني</a>
+            </div>
+          </div>
+        </li>
+        <li><a href="education.html" data-i18n="nav.education">الأكاديمية</a></li>
+        <li><a href="index.html#partners" data-i18n="nav.partners">الشراكات</a></li>
+        <li><a href="support.html" data-i18n="nav.support">الدعم</a></li>
+      </ul>
+    </nav>
+
+    <div class="header-actions">
+      <a href="login.html" class="btn btn--ghost" data-i18n="nav.login">دخول</a>
+      <a href="register.html" class="btn btn--primary" data-i18n="nav.cta_open">افتح حساب حقيقي</a>
+      <button class="hamburger" id="hamburger" aria-label="القائمة" aria-expanded="false" data-i18n-aria="nav.menu_aria">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ============== PRODUCT HERO ============== -->
+<section class="product-hero">
+  <div class="product-hero__chart-bg">
+    <svg viewBox="0 0 1200 360" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="chartGrad" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#d4a853" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#d4a853" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="chartGrid" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stop-color="rgba(255,255,255,0)"/>
+          <stop offset="50%" stop-color="rgba(255,255,255,0.04)"/>
+          <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+        </linearGradient>
+      </defs>
+      <line x1="0" y1="80"  x2="1200" y2="80"  stroke="url(#chartGrid)" stroke-width="1"/>
+      <line x1="0" y1="180" x2="1200" y2="180" stroke="url(#chartGrid)" stroke-width="1"/>
+      <line x1="0" y1="280" x2="1200" y2="280" stroke="url(#chartGrid)" stroke-width="1"/>
+      <polygon class="product-hero__chart-area" points="0,360 0,260 80,240 160,250 240,210 320,220 400,170 480,190 560,140 640,160 720,110 800,130 880,80 960,100 1040,60 1120,80 1200,40 1200,360"/>
+      <polyline class="product-hero__chart-line" points="0,260 80,240 160,250 240,210 320,220 400,170 480,190 560,140 640,160 720,110 800,130 880,80 960,100 1040,60 1120,80 1200,40"/>
+    </svg>
+  </div>
+
+  <div class="container">
+    <div class="product-hero__inner">
+      <div class="product-hero__text">
+      <div class="subpage-hero__breadcrumb">
+        <a href="index.html" data-i18n="bc.home">الرئيسية</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <a href="index.html#products" data-i18n="bc.products">المنتجات</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <span data-i18n="nav.metals">المعادن النفيسة</span>
+      </div>
+      <span class="subpage-hero__eyebrow">PRECIOUS METALS</span>
+      <h1 class="subpage-hero__title" data-i18n="page.metals.h1">المعادن النفيسة — الملاذ الذي لا يخذل</h1>
+      <p class="subpage-hero__subtitle">
+        تداول الذهب والفضة والبلاتين والبلاديوم على شكل عقود فروقات بسبريد ينافس بنوك لندن.
+        <b>23 ساعة يومياً، 5 أيام أسبوعياً</b>، رافعة حتى <b>1:200</b>،
+        وأسعار مباشرة من LBMA Tier-1 وCME Group.
+      </p>
+      <div class="subpage-hero__cta">
+        <a href="register.html" class="btn btn--primary btn--lg" data-i18n="hero.btn_open_real">افتح حسابًا حقيقيًا</a>
+        <a href="register.html?type=demo" class="btn btn--ghost btn--lg" data-i18n="hero.btn_demo">جرّب على الديمو</a>
+      </div>
+
+      <div class="asset-cats">
+        <button class="asset-cat is-active">جميع المعادن</button>
+        <button class="asset-cat">الذهب (Gold)</button>
+        <button class="asset-cat">الفضة (Silver)</button>
+        <button class="asset-cat">البلاتين</button>
+        <button class="asset-cat">البلاديوم</button>
+      </div>
+
+      <div class="product-hero__metrics">
+        <div class="product-hero__metric">
+          <span class="product-hero__metric-val">+12</span>
+          <span class="product-hero__metric-lbl">رمز معدن نشط</span>
+        </div>
+        <div class="product-hero__metric">
+          <span class="product-hero__metric-val">0.18</span>
+          <span class="product-hero__metric-lbl">سبريد الذهب من ($)</span>
+        </div>
+        <div class="product-hero__metric">
+          <span class="product-hero__metric-val">1:200</span>
+          <span class="product-hero__metric-lbl">رافعة قصوى</span>
+        </div>
+        <div class="product-hero__metric">
+          <span class="product-hero__metric-val">23/5</span>
+          <span class="product-hero__metric-lbl">ساعات التداول</span>
+        </div>
+      </div>
+      </div>
+
+      <!-- Visual: Stacked Gold Bars -->
+      <div class="product-hero__visual">
+        <div class="phv-glow"></div>
+        <div class="phv-orbit phv-orbit--outer phv-orbit--rotate"></div>
+        <div class="phv-metals">
+          <span class="phv-spark"></span>
+          <span class="phv-spark"></span>
+          <span class="phv-spark"></span>
+          <span class="phv-spark"></span>
+          <span class="phv-spark"></span>
+          <div class="phv-bar phv-bar--3"></div>
+          <div class="phv-bar phv-bar--2"></div>
+          <div class="phv-bar phv-bar--1"></div>
+        </div>
+        <div class="phv-chip phv-chip--float" style="top: 8%; right: 0;"><span>XAU/USD</span><span class="phv-chip__val">2,043.80</span><span class="phv-chip__up">▲</span></div>
+        <div class="phv-chip phv-chip--float-2" style="top: 50%; left: -4%;"><span>XAG/USD</span><span class="phv-chip__val">23.45</span><span class="phv-chip__up">▲</span></div>
+        <div class="phv-chip phv-chip--float-3" style="bottom: -2%; right: 8%;"><span>XPT/USD</span><span class="phv-chip__val">912.30</span><span class="phv-chip__down">▼</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== LIVE PRICES ============== -->
+<section class="subpage-section subpage-section--alt" id="prices">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">LIVE STREAMING</span>
+      <h2 class="subpage-section__title">جدول أسعار المعادن الحية</h2>
+      <p class="subpage-section__subtitle">
+        أسعار لحظية للذهب والفضة والبلاتين والبلاديوم بمختلف العملات (USD، EUR، GBP، JPY، CHF، AUD).
+        تدفق مباشر من LBMA وCOMEX، يتحدّث كل ثانية ونصف.
+      </p>
+    </div>
+
+    <div class="price-table" data-market="metals">
+      <div class="price-table__bar">
+        <div class="price-table__bar-title">
+          <span class="price-table__live-dot"></span>
+          المعادن النفيسة — أسعار حية
+        </div>
+        <div class="price-table__filters">
+          <button class="price-filter is-active" data-cat="all">الكل</button>
+          <button class="price-filter" data-cat="gold">ذهب</button>
+          <button class="price-filter" data-cat="silver">فضة</button>
+          <button class="price-filter" data-cat="platinum">بلاتين</button>
+          <button class="price-filter" data-cat="palladium">بلاديوم</button>
+        </div>
+      </div>
+
+      <div class="price-table__head">
+        <div>الرمز</div>
+        <div>عرض البيع</div>
+        <div>عرض الشراء</div>
+        <div>التغيّر %</div>
+        <div>أعلى</div>
+        <div>أدنى</div>
+        <div>السبريد</div>
+        <div>الحركة</div>
+        <div></div>
+      </div>
+
+      <div class="price-table__body" id="priceTable"></div>
+    </div>
+
+    <p style="text-align:center;color:rgba(255,255,255,.55);font-size:13px;margin-top:18px;">
+      الأسعار توضيحية فقط. الأسعار التنفيذية تظهر بعد تسجيل الدخول.
+    </p>
+  </div>
+</section>
+
+<!-- ============== WHY MEX ============== -->
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">لماذا MEX للمعادن</span>
+      <h2 class="subpage-section__title">شروط بمستوى مكاتب لندن وزيوريخ</h2>
+      <p class="subpage-section__subtitle">سيولة عميقة من 8 مزوّدين، أسعار غير مُعدَّلة، تنفيذ بدون مكتب صفقات.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        </div>
+        <h3>أسعار LBMA Tier-1</h3>
+        <p>رابط مباشر بأسعار جلستَي تثبيت الذهب اللندنيتين (LBMA Gold Price AM/PM) وأسعار COMEX. لا تأخير، لا تسعير من جدول داخلي.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+        </div>
+        <h3>سبريد من 0.18$</h3>
+        <p>على XAU/USD في حساب ECN، سبريد متوسط 18 سنتاً للأونصة في أوقات السيولة العالية. الفضة من 1.8 سنت للأونصة.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l4-9 4 18 4-9 4 9 2-9"/></svg>
+        </div>
+        <h3>أعلى تذبذب يومي</h3>
+        <p>الذهب يتحرّك في المتوسط 18-25$ يومياً. الفضة 0.40-0.80$. فرص ربح متعدّدة لمن يجيدون قراءة الزخم وأخبار البنوك المركزية.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+        </div>
+        <h3>تحوّط من التضخّم</h3>
+        <p>الذهب احتفظ بقوّته الشرائية منذ 5,000 سنة. تخصيص 5-15% من المحفظة للمعادن يقلّل المخاطر النظامية ويتحوّط من تآكل العملات.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v12m-4-8h8M8 14h8"/></svg>
+        </div>
+        <h3>تداول جزئي بمرونة</h3>
+        <p>الحدّ الأدنى للوت 0.01 (1 أونصة من الذهب). يمكنك بناء مركز بقيمة تبدأ من 23$ هامش (برافعة 1:100).</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3>حساب إسلامي خالٍ من الفائدة</h3>
+        <p>تداول الذهب والفضة بطريقة متوافقة مع الشريعة، دون أي عمولة Swap على المراكز المعلّقة لليلة. متاح لكل معادن MEX.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== SPECS TABLE ============== -->
+<section class="subpage-section subpage-section--alt">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">CONTRACT SPECS</span>
+      <h2 class="subpage-section__title">مواصفات عقود المعادن</h2>
+      <p class="subpage-section__subtitle">عقد قياسي = 100 أونصة للذهب، 5,000 أونصة للفضة. كل المواصفات بدون رسوم خفية.</p>
+    </div>
+    <div class="specs-table-wrap">
+      <table class="specs-table">
+        <thead>
+          <tr>
+            <th>الرمز</th>
+            <th>الاسم</th>
+            <th>حجم العقد</th>
+            <th>الحدّ الأدنى للوت</th>
+            <th>الرافعة</th>
+            <th>سبريد متوسط</th>
+            <th>قيمة النقطة</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="specs-table__sym">XAUUSD</td><td>الذهب / دولار</td><td>100 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:200</span></td><td><span class="specs-table__pos">0.18$</span></td><td>1$</td></tr>
+          <tr><td class="specs-table__sym">XAGUSD</td><td>الفضة / دولار</td><td>5,000 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:200</span></td><td><span class="specs-table__pos">1.8 سنت</span></td><td>5$</td></tr>
+          <tr><td class="specs-table__sym">XPTUSD</td><td>البلاتين / دولار</td><td>100 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:100</span></td><td>0.32$</td><td>1$</td></tr>
+          <tr><td class="specs-table__sym">XPDUSD</td><td>البلاديوم / دولار</td><td>100 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:100</span></td><td>0.28$</td><td>1$</td></tr>
+          <tr><td class="specs-table__sym">XAUEUR</td><td>الذهب / يورو</td><td>100 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:200</span></td><td>0.22€</td><td>1€</td></tr>
+          <tr><td class="specs-table__sym">XAUGBP</td><td>الذهب / إسترليني</td><td>100 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:200</span></td><td>0.24£</td><td>1£</td></tr>
+          <tr><td class="specs-table__sym">XAUJPY</td><td>الذهب / ين</td><td>100 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:200</span></td><td>120¥</td><td>1¥</td></tr>
+          <tr><td class="specs-table__sym">XAUAUD</td><td>الذهب / أسترالي</td><td>100 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:200</span></td><td>0.34$</td><td>1$</td></tr>
+          <tr><td class="specs-table__sym">XAGEUR</td><td>الفضة / يورو</td><td>5,000 أونصة</td><td>0.01</td><td><span class="specs-table__val">1:200</span></td><td>2.2 سنت</td><td>5€</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============== TRADING HOURS ============== -->
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">SESSIONS</span>
+      <h2 class="subpage-section__title">جلسات سوق المعادن</h2>
+      <p class="subpage-section__subtitle">الذهب والفضة يتداولان 23 ساعة يومياً 5 أيام، مع استراحة قصيرة بين الجلسات.</p>
+    </div>
+    <div class="hours-grid">
+      <div class="hours-card">
+        <div class="hours-card__head">
+          <span class="hours-card__name">جلسة آسيا (طوكيو)</span>
+          <span class="hours-card__status is-open"><span class="dot"></span> مفتوحة</span>
+        </div>
+        <div class="hours-card__row"><span>الافتتاح (GMT)</span><span>00:00</span></div>
+        <div class="hours-card__row"><span>الإغلاق (GMT)</span><span>09:00</span></div>
+        <div class="hours-card__row"><span>السيولة</span><span>متوسطة</span></div>
+        <div class="hours-card__row"><span>الأكثر نشاطاً</span><span>XAUUSD، XAUJPY</span></div>
+      </div>
+      <div class="hours-card">
+        <div class="hours-card__head">
+          <span class="hours-card__name">تثبيت الذهب اللندني — صباحاً</span>
+          <span class="hours-card__status is-open"><span class="dot"></span> ساعة الذروة</span>
+        </div>
+        <div class="hours-card__row"><span>التوقيت (GMT)</span><span>10:30</span></div>
+        <div class="hours-card__row"><span>الأهمية</span><span>سعر مرجعي عالمي</span></div>
+        <div class="hours-card__row"><span>السيولة</span><span>قصوى</span></div>
+        <div class="hours-card__row"><span>توقع التذبذب</span><span>عالٍ جداً</span></div>
+      </div>
+      <div class="hours-card">
+        <div class="hours-card__head">
+          <span class="hours-card__name">تثبيت الذهب اللندني — مساءً</span>
+          <span class="hours-card__status is-closed"><span class="dot"></span> ستفتح بعد 3 ساعات</span>
+        </div>
+        <div class="hours-card__row"><span>التوقيت (GMT)</span><span>15:00</span></div>
+        <div class="hours-card__row"><span>الأهمية</span><span>سعر تسوية يومي</span></div>
+        <div class="hours-card__row"><span>السيولة</span><span>قصوى — لندن + نيويورك</span></div>
+        <div class="hours-card__row"><span>توقع التذبذب</span><span>عالٍ جداً</span></div>
+      </div>
+      <div class="hours-card">
+        <div class="hours-card__head">
+          <span class="hours-card__name">جلسة COMEX (نيويورك)</span>
+          <span class="hours-card__status is-closed"><span class="dot"></span> ستفتح بعد ساعتين</span>
+        </div>
+        <div class="hours-card__row"><span>الافتتاح (GMT)</span><span>13:00</span></div>
+        <div class="hours-card__row"><span>الإغلاق (GMT)</span><span>22:00</span></div>
+        <div class="hours-card__row"><span>السيولة</span><span>أعلى — تتداخل مع لندن</span></div>
+        <div class="hours-card__row"><span>الأهم</span><span>تقارير COT الأسبوعية</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== HOW IT WORKS ============== -->
+<section class="subpage-section subpage-section--alt">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">HOW IT WORKS</span>
+      <h2 class="subpage-section__title">ما الذي يحرّك أسعار المعادن؟</h2>
+      <p class="subpage-section__subtitle">4 محرّكات رئيسية يدركها المتداول الجاد قبل الدخول.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+        </div>
+        <h3 class="step-card__title">سياسات البنوك المركزية</h3>
+        <p class="step-card__text">قرارات الفائدة (FOMC، ECB، BOJ) المحرّك رقم 1 للذهب. ارتفاع الفائدة ⇐ ضغط على الذهب (لأنه لا يدفع عوائد). خفض الفائدة أو التيسير الكمّي ⇐ دعم قوي لأسعار المعادن.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3 class="step-card__title">قوة الدولار الأمريكي</h3>
+        <p class="step-card__text">الذهب مُسعَّر بالدولار، فعلاقته بمؤشر DXY عكسية في معظم الأحيان. ضعف الدولار ⇐ صعود الذهب (وثيق الارتباط: -0.78 في آخر 5 سنوات).</p>
+      </div>
+      <div class="step-card">
+        <div class="step-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
+        </div>
+        <h3 class="step-card__title">الطلب الصناعي</h3>
+        <p class="step-card__text">الفضة 50% من طلبها صناعي (الإلكترونيات، الألواح الشمسية، السيارات الكهربائية). البلاتين والبلاديوم يعتمدان كلياً على صناعة السيارات (محوّلات الانبعاثات).</p>
+      </div>
+      <div class="step-card">
+        <div class="step-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2z"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3 class="step-card__title">المخاطر الجيوسياسية</h3>
+        <p class="step-card__text">الحروب، التوترات السياسية، الأزمات المصرفية ⇐ هروب نحو الذهب. تاريخياً، كل أزمة كبرى (2008، COVID، أزمات البنوك) رفعت الذهب 20-40% خلال أشهر.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== STRATEGY TIPS ============== -->
+<section class="subpage-section">
+  <div class="container">
+    <div class="subpage-section__head">
+      <span class="subpage-section__eyebrow">PROFESSIONAL EDGE</span>
+      <h2 class="subpage-section__title">نصائح من غرفة تداول المعادن</h2>
+      <p class="subpage-section__subtitle">خلاصة مكتب الذهب في MEX منذ 2009.</p>
+    </div>
+    <div class="tips-grid">
+      <div class="tip-card">
+        <div class="tip-card__head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <h4 class="tip-card__title">راقب العائد الحقيقي</h4>
+        </div>
+        <p class="tip-card__text">الذهب يكسر مستويات قياسية كلما تحوّل العائد الحقيقي على سندات الـ10 سنوات إلى السلبي. هذا أهم مؤشر للدخول طويل الأمد.</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-card__head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2v20"/></svg>
+          <h4 class="tip-card__title">تذبذب الفضة ضِعف الذهب</h4>
+        </div>
+        <p class="tip-card__text">نسبة الذهب/الفضة (Gold-Silver Ratio) فوق 80 ⇐ الفضة مقومة بأقل من قيمتها. تحت 50 ⇐ الذهب أفضل. النسبة التاريخية المتوسطة 65.</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-card__head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M3 21l9-9 4 4 7-7"/></svg>
+          <h4 class="tip-card__title">قمم وقيعان نفسية</h4>
+        </div>
+        <p class="tip-card__text">الذهب يتفاعل بقوة مع المستويات المئوية المستديرة (1800، 2000، 2500). توقّع رفض أو اختراق حاد عندها — ضع أوامر معلّقة قبل الوصول بعشرة دولارات.</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-card__head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+          <h4 class="tip-card__title">تجنّب وقت تثبيت لندن</h4>
+        </div>
+        <p class="tip-card__text">قبل وأثناء جلسات تثبيت الذهب اللندنية (10:30 و15:00 GMT) السبريد قد يتسع لثوانٍ. أخّر دخولك 5 دقائق بعد التثبيت لظروف تنفيذ مثالية.</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-card__head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>
+          <h4 class="tip-card__title">تقرير CFTC الأسبوعي</h4>
+        </div>
+        <p class="tip-card__text">كل جمعة تنشر CFTC تقرير COT (Commitments of Traders). راقب صافي مراكز المضاربين الكبار في الذهب — تطرّفها يسبق انعكاسات السعر تاريخياً.</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-card__head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
+          <h4 class="tip-card__title">الموسمية مهمة</h4>
+        </div>
+        <p class="tip-card__text">الذهب يميل للقوة في يناير، أغسطس، سبتمبر (مواسم الزفاف الهندي، الديوالي). يضعف عادةً في مارس ونوفمبر. 22 سنة من البيانات تدعم هذا النمط.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== CTA ============== -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-section__inner">
+      <h2 class="cta-section__title">ابدأ تداول الذهب والفضة بشروط مكاتب لندن</h2>
+      <p class="cta-section__text">سبريد من 0.18$ — رافعة 1:200 — تنفيذ مباشر — حساب إسلامي متاح.</p>
+      <div class="cta-section__actions">
+        <a href="register.html" class="btn btn--primary btn--lg">افتح حساب حقيقي</a>
+        <a href="support.html" class="btn btn--ghost btn--lg">تواصل مع مكتب المعادن</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== FOOTER ============== -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <a href="index.html" class="logo" aria-label="MEX Global Markets">
+          <img class="logo__img" src="assets/logo-mex.png" alt="MEX Global Markets" width="1280" height="561">
+        </a>
+        <p>MEX Global Markets شركة فرعية مملوكة بالكامل لمجموعة MultiBank Group، أحد أكبر مزوّدي المشتقات المالية عالمياً.</p>
+      </div>
+      <div class="footer__col"><h5>الشركة</h5><a href="about.html">من نحن</a><a href="about.html#timeline">رحلتنا</a><a href="about.html#leadership">القيادة</a><a href="#">الوظائف</a><a href="#">الأخبار</a></div>
+      <div class="footer__col"><h5>المنتجات</h5><a href="forex.html">العملات الأجنبية</a><a href="metals.html">المعادن</a><a href="stocks.html">الأسهم</a><a href="indices.html">المؤشرات</a><a href="crypto.html">الأصول الرقمية</a></div>
+      <div class="footer__col"><h5>الأمان والامتثال</h5><a href="regulation.html">التراخيص</a><a href="security.html">حماية الأموال</a><a href="security.html#cyber">الأمن السيبراني</a><a href="#">سياسة AML</a></div>
+    </div>
+
+    <div class="footer__bottom">
+      <p>© 2026 MEX Global Markets. جميع الحقوق محفوظة. شركة تابعة لمجموعة MultiBank Group.</p>
+      <div class="footer__bottom-links"><span>المقر: دبي</span><span class="dot-sep">•</span><span>مرخّصة من MAS</span></div>
+    </div>
+  <div class="footer__legal-bar">
+      <div class="footer__legal-row">
+        <div class="footer-payments">
+          <span class="footer-payments__label">نقبل:</span>
+          <div class="footer-payments__logos">
+            <span class="fpay fpay--neteller">NETELLER<sup>®</sup></span>
+            <span class="fpay fpay--skrill">Skrill</span>
+            <span class="fpay fpay--swift"><span class="fpay-globe">🌐</span> SWIFT</span>
+            <span class="fpay fpay--visa">VISA</span>
+            <span class="fpay fpay--mc"><span class="fpay-mc__c1"></span><span class="fpay-mc__c2"></span></span>
+          </div>
+        </div>
+        <ul class="footer-legal-links">
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_PrivacyPolicy_14062023.pdf" target="_blank" rel="noopener">سياسة الخصوصية</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_CookiePolicy_14062023_flat.pdf" target="_blank" rel="noopener">سياسة ملفات الارتباط</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/AGR_MEXATL_AE_ClientAgreement_v11_15062023.pdf" target="_blank" rel="noopener">الشروط والأحكام</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_Disclaimer_14062023_flat.pdf" target="_blank" rel="noopener">إخلاء المسؤولية عن الموقع</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEXAtlantic_RiskWarning_14062023.pdf" target="_blank" rel="noopener">تحذير من المخاطر</a></li>
+          <li><a href="https://tradfi.multibankgroup.com/files/pdf/MEX_Atlantic_Swap_Free_Trading_Account_Agreement.pdf" target="_blank" rel="noopener">أحكام حسابات التداول الخالية من فوائد التبيت</a></li>
+        </ul>
+      </div>
+      <p class="footer__final-disclaimer">
+        حقوق النشر &copy; 2026 MEX Global Markets. جميع الحقوق محفوظة. MEX Global علامة تجارية تعمل من خلال مجموعة من الكيانات المرخّصة دولياً، تشمل: MEX Global Markets PTE. LTD (سنغافورة، مرخّصة من سُلطة النقد MAS برقم CMS101174)، MEX Global Financial Services LLC (الإمارات، مرخّصة من ECMA رقم 20200000031)، MEX Australia Pty Ltd (أستراليا، مرخّصة من ASIC برقم AFSL 416279)، MEX Europe LTD (قبرص، مرخّصة من CySEC رقم 430/23)، إلى جانب كيانات أخرى مرخّصة في ألمانيا (BaFin) والنمسا (FMA) والمملكة المتحدة (FMC) والهند. ينطوي تداول العملات الأجنبية وعقود الفروقات (CFDs) باستخدام الرافعة المالية على درجة عالية من المخاطر، وقد لا يكون مناسباً لجميع المستثمرين، إذ قد تتجاوز الخسائر رأس المال المودَع. لا تستثمر أموالاً لا يمكنك تحمّل خسارتها. يُرجى الاطّلاع على وثائق المخاطر الخاصة بكل كيان عند فتح الحساب، والاستعانة بمستشار مالي مستقل عند الحاجة.
+      </p>
+    </div>
+  </div>
+  </footer>
+<button class="back-to-top" id="backToTop" aria-label="العودة للأعلى"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg></button>
+
+<script src="js/translations.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/main.js"></script>
+<script src="js/products.js"></script>
+
+<!--Start of Conferbot Script-->
+<script type="text/javascript">
+(function (d, s, id) {
+  var js, el = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s);
+  js.async = true;
+  js.src = 'https://cdn.conferbot.com/dist/v1/widget.min.js';
+  js.id = id;
+  js.charset = 'UTF-8';
+  el.parentNode.insertBefore(js, el);
+  js.onload = function () {
+    var w = window.ConferbotWidget("6a395b09afa317d6bb00edbf", "live_chat");
+  };
+})(document, 'script', 'conferbot-js');
+</script>
+<script src="js/chat-fix.js"></script>
+<!--End of Conferbot Script-->
+
+</body>
+</html>
