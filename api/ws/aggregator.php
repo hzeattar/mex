@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+@ini_set('output_buffering', '0');
+@ini_set('implicit_flush', '1');
+while (ob_get_level() > 0) @ob_end_flush();
+
 /**
  * WS Aggregator — Server-side WebSocket daemon for real-time price feeds.
  *
@@ -659,13 +663,22 @@ function runFinnhubWs(): int {
 
 // ── Main Loop ───────────────────────────────────────────────────────────────
 
-echo "=== WS Aggregator Starting ===\n";
-echo "Collecting symbols from market definitions...\n";
+echo "=== WS Aggregator Starting ===\n"; flush();
+aggregator_status_write('process', ['status' => 'starting', 'feeds' => $ENABLED_FEEDS, 'messages' => 0]);
+echo "Collecting symbols from market definitions...\n"; flush();
 collectSymbols();
-echo "Binance symbols: " . count($BINANCE_SYMBOLS) . "\n";
-echo "Twelve Data symbols: " . count($TWELVE_SYMBOLS) . "\n";
-echo "Finnhub symbols: " . count($FINNHUB_SYMBOLS) . "\n";
-echo "Enabled feeds: " . implode(',', $ENABLED_FEEDS) . "\n";
+aggregator_status_write('process', [
+  'status' => 'symbols_collected',
+  'feeds' => $ENABLED_FEEDS,
+  'binance_symbols' => count($BINANCE_SYMBOLS),
+  'twelvedata_symbols' => count($TWELVE_SYMBOLS),
+  'finnhub_symbols' => count($FINNHUB_SYMBOLS),
+  'messages' => 0,
+]);
+echo "Binance symbols: " . count($BINANCE_SYMBOLS) . "\n"; flush();
+echo "Twelve Data symbols: " . count($TWELVE_SYMBOLS) . "\n"; flush();
+echo "Finnhub symbols: " . count($FINNHUB_SYMBOLS) . "\n"; flush();
+echo "Enabled feeds: " . implode(',', $ENABLED_FEEDS) . "\n"; flush();
 
 $startTime = time();
 
