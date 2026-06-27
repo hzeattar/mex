@@ -7,7 +7,7 @@
 
 if (!function_exists('currencyfreaks_enabled')) {
   function currencyfreaks_enabled(): bool {
-    return (bool)(getenv('CURRENCYFREAKS_ENABLED') ?: '0');
+    return (int)(getenv('CURRENCYFREAKS_ENABLED') ?: '0') === 1;
   }
 }
 

@@ -1244,11 +1244,10 @@ try {
   if (!($price > 0)) {
     candles_json_response(['ok'=>true,'source'=>'empty_fallback'], [], $limit, $end);
   }
-  // Honest charts: do not fabricate synthetic price action by default.
-  // Exception: spot metals (XAUUSD/XAGUSD), where real free spot candles are
-  // unavailable. Generate a deterministic synthetic series anchored to the live
-  // spot price, so the chart matches the price board instead of futures data.
-  if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1 && !vp_is_spot_metal_symbol($symbol, $type)) {
+  // Honest charts: do not fabricate synthetic price action by default. If a
+  // real upstream has no usable candles, return no_data instead of distorted
+  // wicks.
+  if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
     candles_json_response(['ok'=>true,'source'=>'no_data','synthetic'=>false], [], $limit, $end);
   }
   $alignedNow = (int)(floor($now / $step) * $step);
@@ -1316,9 +1315,7 @@ try {
       candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'empty_error_fallback'], [], $limit, $end);
     }
     // Honest charts: do not fabricate synthetic price action by default.
-    // Exception: spot metals, which only have live spot quotes available.
-    $isMetal = in_array(strtoupper($symbol), ['XAUUSD','XAGUSD','XPTUSD','XPDUSD'], true) || vp_is_spot_metal_symbol($symbol, $type);
-    if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1 && !$isMetal) {
+    if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
       candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'no_data','synthetic'=>false], [], $limit, $end);
     }
     $price = $last;

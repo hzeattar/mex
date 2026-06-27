@@ -13,6 +13,7 @@ $bannedSources = [
   'eodhd',
   'eodhd_rest',
   'eodhd_intraday',
+  'currencyfreaks',
   'massive',
   'polygon',
   'synthetic',

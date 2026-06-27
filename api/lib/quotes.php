@@ -33,6 +33,9 @@ function quote_source_disabled_by_config(?string $source): bool {
   if (in_array($src, ['massive', 'polygon'], true)) {
     return (int)env('ENABLE_MASSIVE_FALLBACK', '0') !== 1 && strtolower((string)env('PRICE_PROVIDER', 'twelvedata')) !== 'massive';
   }
+  if ($src === 'currencyfreaks') {
+    return (int)env('CURRENCYFREAKS_ENABLED', '0') !== 1;
+  }
   return false;
 }
 

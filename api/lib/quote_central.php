@@ -19,6 +19,37 @@ declare(strict_types=1);
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/redis.php';
 
+function quote_central_source_disabled(string $source): bool {
+  $src = strtolower(trim($source));
+  if ($src === '') return false;
+  if (in_array($src, ['seed','seed_price','seed_fallback','seed_default','chart_seed','seed_candle','synthetic','synthetic_seed_fast','synthetic_error_fallback','aggs','cache','stale_cache','unavailable'], true)) {
+    return true;
+  }
+  if (in_array($src, ['yahoo','yahoo_rest','yahoo_chart','yahoo_chart_live','yahoo_crypto_chart'], true)) {
+    return (int)env('YAHOO_ENABLED', '0') !== 1
+      && (int)env('ALLOW_YAHOO_PROVIDER', '0') !== 1
+      && (int)env('YAHOO_FALLBACK_ENABLED', '0') !== 1;
+  }
+  if (in_array($src, ['eodhd','eodhd_rest','eodhd_intraday','eodhd_cache'], true)) {
+    return (int)env('EODHD_ENABLED', '0') !== 1;
+  }
+  if (in_array($src, ['polygon','massive','polygon_ticker','massive_ticker'], true)) {
+    return (int)env('ENABLE_MASSIVE_FALLBACK', '0') !== 1
+      && (int)env('POLYGON_ENABLED', '0') !== 1
+      && strtolower(trim((string)env('PRICE_PROVIDER', 'twelvedata'))) !== 'massive';
+  }
+  if ($src === 'currencyfreaks') {
+    return (int)env('CURRENCYFREAKS_ENABLED', '0') !== 1;
+  }
+  return false;
+}
+
+function quote_central_row_usable($data): bool {
+  if (!is_array($data)) return false;
+  if (!((float)($data['price'] ?? 0) > 0)) return false;
+  return !quote_central_source_disabled((string)($data['source'] ?? ''));
+}
+
 // ── DB-backed central cache (shared across containers) ──────────────────────
 
 function quote_central_ensure_table(): void {
@@ -111,7 +142,7 @@ function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?arr
     $raw = @file_get_contents($file);
     if ($raw !== false && $raw !== '') {
       $data = json_decode($raw, true);
-      if (is_array($data) && (float)($data['price'] ?? 0) > 0) {
+      if (quote_central_row_usable($data)) {
         if ($maxAge <= 0) return $data;
         $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
         if ($ts <= 0 || (time() - $ts) <= $maxAge) return $data;
@@ -130,7 +161,7 @@ function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?arr
     $payload = $row['payload'] ?? null;
     if (!$payload) return null;
     $data = json_decode($payload, true);
-    if (!is_array($data) || !(float)($data['price'] ?? 0) > 0) return null;
+    if (!quote_central_row_usable($data)) return null;
     if ($maxAge > 0) {
       $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
       if ($ts > 0 && (time() - $ts) > $maxAge) return null;
@@ -157,7 +188,7 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
       $raw = @file_get_contents($file);
       if ($raw !== false && $raw !== '') {
         $data = json_decode($raw, true);
-        if (is_array($data) && (float)($data['price'] ?? 0) > 0) {
+        if (quote_central_row_usable($data)) {
           if ($maxAge <= 0) { $out[$sym] = $data; continue; }
           $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
           if ($ts <= 0 || (time() - $ts) <= $maxAge) { $out[$sym] = $data; continue; }
@@ -181,7 +212,7 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
         $payload = $row['payload'] ?? null;
         if (!$sym || !$payload) continue;
         $data = json_decode($payload, true);
-        if (!is_array($data) || !(float)($data['price'] ?? 0) > 0) continue;
+        if (!quote_central_row_usable($data)) continue;
         if ($maxAge > 0) {
           $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
           if ($ts > 0 && (time() - $ts) > $maxAge) continue;
@@ -224,7 +255,7 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
       $payload = $row['payload'] ?? null;
       if (!$sym || !$payload) continue;
       $data = json_decode($payload, true);
-      if (!is_array($data) || !(float)($data['price'] ?? 0) > 0) continue;
+      if (!quote_central_row_usable($data)) continue;
       if ($maxAge > 0) {
         $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
         if ($ts > 0 && (time() - $ts) > $maxAge) continue;
@@ -244,6 +275,7 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
 // ── Write functions (write to both file AND DB) ─────────────────────────────
 
 function quote_central_write_file(string $symbol, string $type, array $data): void {
+  if (!quote_central_row_usable($data)) return;
   $file = quote_central_file($symbol, $type);
   $data['symbol'] = strtoupper(trim($symbol));
   $data['type'] = vp_normalize_asset_type($type);
@@ -258,6 +290,7 @@ function quote_central_write(string $symbol, string $type, array $data): void {
   $data['symbol'] = $symbol;
   $data['type'] = $type;
   if (empty($data['central_ts'])) $data['central_ts'] = time();
+  if (!quote_central_row_usable($data)) return;
 
   // Write to file cache
   quote_central_write_file($symbol, $type, $data);
@@ -291,6 +324,11 @@ function quote_central_write(string $symbol, string $type, array $data): void {
 
 function quote_central_bundle_write(string $type, array $bySymbol): void {
   $type = vp_normalize_asset_type($type);
+  $filtered = [];
+  foreach ($bySymbol as $symbol => $row) {
+    if (quote_central_row_usable($row)) $filtered[$symbol] = $row;
+  }
+  $bySymbol = $filtered;
   // Write bundle file
   $file = quote_central_bundle_file($type);
   $json = json_encode($bySymbol, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -392,7 +430,7 @@ function quote_central_items(array $symbols, string $type, int $maxAge = 30): ar
   foreach ($symbols as $sym) {
     $sym = strtoupper(trim((string)$sym));
     $row = $central[$sym] ?? null;
-    if ($row && (float)($row['price'] ?? 0) > 0) {
+    if (quote_central_row_usable($row)) {
       $src = strtolower(trim((string)($row['source'] ?? '')));
       $delayed = in_array($type, ['stocks', 'arab'], true) || ($type !== 'crypto' && str_starts_with($src, 'yahoo'));
       $items[] = [
