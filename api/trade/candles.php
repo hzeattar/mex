@@ -794,8 +794,9 @@ function candles_cached_seed_price(string $symbol, string $assetType): float {
   // Spot metals: never use DB seed/futures price; always fetch live spot quote.
   static $debug = [];
   $key = $symbol . '|' . $assetType;
+  $isMetal = in_array(strtoupper($symbol), ['XAUUSD','XAGUSD','XPTUSD','XPDUSD'], true) || vp_is_spot_metal_symbol($symbol, $assetType);
   try {
-    if (vp_is_spot_metal_symbol($symbol, $assetType)) {
+    if ($isMetal) {
       require_once __DIR__ . '/../lib/quote_coingecko.php';
       $q = coingecko_spot_metal_quote($symbol);
       $p = is_array($q) ? (float)($q['price'] ?? 0) : 0.0;
@@ -1310,7 +1311,9 @@ try {
     }
     // Honest charts: do not fabricate synthetic price action by default.
     // Exception: spot metals, which only have live spot quotes available.
-    if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1 && !vp_is_spot_metal_symbol($symbol, $type)) {
+    $isMetal = in_array(strtoupper($symbol), ['XAUUSD','XAGUSD','XPTUSD','XPDUSD'], true) || vp_is_spot_metal_symbol($symbol, $type);
+    $debugOut['is_spot_metal_check'] = $isMetal;
+    if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1 && !$isMetal) {
       candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'no_data','synthetic'=>false], [], $limit, $end);
     }
     $price = $last;
