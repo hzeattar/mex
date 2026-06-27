@@ -1011,7 +1011,9 @@ try {
   }
 
   // ── Yahoo chart for non-crypto intraday (kept separate from live-quote Yahoo). ──
-  if (candles_yahoo_enabled() && !$preferAggsForSymbol && in_array($providerType, ['stocks','arab','futures','commodities','forex'], true) && !vp_is_spot_metal_symbol($symbol, $type)) {
+  // Permitted for stocks / indices / FX only; never for spot metals, where Yahoo
+  // serves futures-mapped tickers that deviate from the spot price.
+  if (candles_yahoo_enabled() && !$preferAggsForSymbol && !vp_is_spot_metal_symbol($symbol, $type) && in_array($providerType, ['stocks','arab','futures','commodities','forex','indices'], true)) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
       if ($ySymbol) {
@@ -1139,8 +1141,10 @@ try {
     candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
   }
 
-  // Secondary Yahoo chart fallback for FX and spot metals when primary aggs snapshots are unavailable.
-  if (candles_yahoo_enabled() && !$triedYahooChart && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
+  // Secondary Yahoo chart fallback for FX, stocks and indices when primary
+  // TwelveData aggs snapshots are unavailable. Never use it for spot metals
+  // (XAUUSD/XAGUSD) because Yahoo maps these to futures symbols, not spot.
+  if (candles_yahoo_enabled() && !$triedYahooChart && (($providerType === 'forex') || in_array($providerType, ['stocks','indices'], true)) && !vp_is_spot_metal_symbol($symbol, $type)) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
       if ($ySymbol) {
@@ -1208,8 +1212,10 @@ try {
     candles_json_response(['ok'=>true,'source'=>'empty_fallback'], [], $limit, $end);
   }
   // Honest charts: do not fabricate synthetic price action by default.
-  // Return "no data" so the UI shows a loading/empty state instead of fake candles.
-  if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
+  // Exception: spot metals (XAUUSD/XAGUSD), where real free spot candles are
+  // unavailable. Generate a deterministic synthetic series anchored to the live
+  // spot price, so the chart matches the price board instead of futures data.
+  if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1 && !vp_is_spot_metal_symbol($symbol, $type)) {
     candles_json_response(['ok'=>true,'source'=>'no_data','synthetic'=>false], [], $limit, $end);
   }
   $alignedNow = (int)(floor($now / $step) * $step);
@@ -1264,7 +1270,8 @@ try {
       candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'empty_error_fallback'], [], $limit, $end);
     }
     // Honest charts: do not fabricate synthetic price action by default.
-    if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1) {
+    // Exception: spot metals, which only have live spot quotes available.
+    if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1 && !vp_is_spot_metal_symbol($symbol, $type)) {
       candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'no_data','synthetic'=>false], [], $limit, $end);
     }
     $price = $last;
