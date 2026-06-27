@@ -83,14 +83,16 @@ class WsClient {
     $headers = [
       "GET {$this->path} HTTP/1.1",
       "Host: {$this->host}:{$this->port}",
+      "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "Accept-Language: en-US,en;q=0.9",
       "Upgrade: websocket",
       "Connection: Upgrade",
-      "Pragma: no-cache",
-      "Cache-Control: no-cache",
+      "Origin: {$this->origin}",
       "Sec-WebSocket-Key: {$key}",
       "Sec-WebSocket-Version: 13",
-      "Origin: {$this->origin}",
-      "User-Agent: MEX-Aggregator/1.0",
+      "Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits",
+      "Cache-Control: no-cache",
+      "Pragma: no-cache",
       "",
       "",
     ];
@@ -428,6 +430,7 @@ function writePrice(string $symbol, string $type, float $price, float $changePct
       'source' => $source,
       'as_of' => $now,
       'ingested_at' => $now,
+      'prev_close' => $prevClose,
     ]);
   } catch (Throwable $e) {
     // DB write failure is non-fatal
