@@ -360,13 +360,23 @@ function db_connect_backoff(int $attempt): void {
 
 function db(): PDO {
   static $pdo = null;
-  $railway = railway_runtime();
+  static $requestId = null;
 
-  // On Railway, do NOT reuse the static PDO handle across requests because
-  // PHP-FPM workers stay alive and the public TCP proxy may close idle
-  // connections, leading to persistent "MySQL server has gone away" errors.
-  // We only reuse within a single CLI request; every web request gets a fresh connection.
-  if ($pdo instanceof PDO && PHP_SAPI === 'cli') {
+  $railway = railway_runtime();
+  $cli = PHP_SAPI === 'cli';
+  $currentRequestId = $cli ? 'cli' : (string)(uniqid('', true));
+
+  // On Railway web requests, static variables survive across requests inside the
+  // same PHP-FPM worker. The public TCP proxy may close idle connections,
+  // causing stale PDO handles to fail with "MySQL server has gone away".
+  // We tie the cached handle to a single web request id; every new request
+  // invalidates the cached handle and creates a fresh connection.
+  if ($railway && !$cli) {
+    if ($requestId !== $currentRequestId) {
+      $pdo = null;
+      $requestId = $currentRequestId;
+    }
+  } else if ($pdo instanceof PDO) {
     try {
       $pdo->query('SELECT 1');
       return $pdo;
