@@ -260,8 +260,18 @@ class WsClient {
 function collectSymbols(): void {
   global $BINANCE_SYMBOLS, $TWELVE_SYMBOLS, $FINNHUB_SYMBOLS;
 
-  if (!function_exists('vp_supported_market_defs')) return;
-  $defs = vp_supported_market_defs();
+  $defs = [];
+  if (function_exists('vp_supported_market_defs')) {
+    $defs = vp_supported_market_defs();
+  }
+  if (!$defs) {
+    try {
+      $st = db()->query("SELECT symbol, type, meta FROM markets WHERE status='active' ORDER BY type, sort_order, id");
+      $defs = $st ? ($st->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+    } catch (Throwable $e) {
+      $defs = [];
+    }
+  }
   $binanceSet = [];
   $twelveSet  = [];
   $finnhubSet = [];
