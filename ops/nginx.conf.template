@@ -222,10 +222,11 @@ ${EXTRA_LISTEN}
       fastcgi_pass 127.0.0.1:9070;
     }
 
-    # Serve the new marketing site at root, falling back to PHP only for
-    # application paths that have no static file.
+    # Serve the new marketing site at root permanently under /auth/, so all
+    # relative assets and links (login.html, register.html, css/styles.css, etc.)
+    # resolve correctly within the /auth/ directory.
     location = / {
-      try_files /auth/index.html =404;
+      return 302 /auth/index.html;
     }
 
     location / {
