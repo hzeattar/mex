@@ -27,6 +27,7 @@ runtime
 logs
 api/uploads
 uploads
+api/data/ratelimit_*.json
 
 _backups/
 _i18n_backup/
