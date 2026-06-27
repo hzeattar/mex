@@ -49,6 +49,7 @@ class WsClient {
   private bool $secure = false;
   private string $buffer = '';
   private bool $connected = false;
+  public string $lastError = '';
 
   public function connect(string $url): bool {
     $parsed = parse_url($url);
@@ -69,7 +70,9 @@ class WsClient {
     );
 
     if (!$this->fp) {
+      $this->lastError = "connect: {$errstr} ({$errno})";
       echo "  [WS] Connect failed: {$errstr} ({$errno})\n";
+      flush();
       return false;
     }
 
@@ -104,7 +107,9 @@ class WsClient {
     }
 
     if (strpos($response, '101') === false) {
+      $this->lastError = 'handshake: ' . trim(substr($response, 0, 200));
       echo "  [WS] Handshake failed: " . substr($response, 0, 200) . "\n";
+      flush();
       $this->disconnect();
       return false;
     }
@@ -517,7 +522,8 @@ function runTwelveDataWs(): int {
   $ws = new WsClient();
   if (!$ws->connect($url)) {
     echo "  [Twelve Data WS] Connection failed\n";
-    aggregator_status_write('twelvedata', ['status' => 'connect_failed', 'symbols' => count($batch), 'messages' => 0]);
+    flush();
+    aggregator_status_write('twelvedata', ['status' => 'connect_failed', 'symbols' => count($batch), 'messages' => 0, 'error' => $ws->lastError]);
     return 0;
   }
 
