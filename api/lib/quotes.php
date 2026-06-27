@@ -130,8 +130,8 @@ function quote_cols_flags(): array {
     'as_of'             => $has('as_of'),
     'ingested_at'       => $has('ingested_at'),
     'source_priority'   => $has('source_priority'),
+    'prev_close'        => $has('prev_close'),
   ];
-  return $flags;
 }
 
 
@@ -1434,6 +1434,31 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
   }
 
   $flags = quote_cols_flags();
+
+  // Ensure prev_close column exists (idempotent; tolerates older DBs)
+  if (!$flags['prev_close']) {
+    if (function_exists('db_driver')) {
+      $pdo = db();
+      $drv = db_driver();
+      if (function_exists('schema_add_column')) {
+        schema_add_column($pdo, 'market_quotes', 'prev_close DECIMAL(18,8) DEFAULT NULL', 'prev_close REAL', $drv);
+        $flags = quote_cols_flags();
+      }
+    }
+  }
+
+  $prevClose = isset($extras['prev_close']) && is_numeric($extras['prev_close']) ? (float)$extras['prev_close'] : 0.0;
+  // Recompute change_pct from prev_close if it looks more reliable than the provider's number.
+  // Yahoo sends regularMarketChangePercent that can be based on unadjusted closes or futures contracts.
+  if ($prevClose > 0 && $price > 0) {
+    $recomputed = (($price - $prevClose) / $prevClose) * 100.0;
+    $stored = is_numeric($changePct) ? (float)$changePct : 0.0;
+    // If stored pct is missing, zero, or wildly different, prefer the recomputed one.
+    if (abs($stored) < 0.000001 || abs($recomputed - $stored) > 15.0) {
+      $changePct = $recomputed;
+    }
+  }
+
   $mark = $extras['mark_price'] ?? null;
   $index = $extras['index_price'] ?? null;
   $fund = $extras['funding_rate'] ?? null;
@@ -1455,6 +1480,7 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
   if ($flags['funding_rate'])      { $cols[] = 'funding_rate';      $vals[] = $fund; }
   if ($flags['next_funding_time']) { $cols[] = 'next_funding_time'; $vals[] = $nft; }
   if ($flags['source'])            { $cols[] = 'source';            $vals[] = $source; }
+  if ($flags['prev_close'])        { $cols[] = 'prev_close';        $vals[] = $prevClose > 0 ? $prevClose : null; }
   if ($flags['provider'])          { $cols[] = 'provider';          $vals[] = $extras['provider'] ?? $source; }
   if ($flags['provider_ts'])       { $cols[] = 'provider_ts';       $vals[] = isset($extras['provider_ts']) && is_numeric($extras['provider_ts']) ? (int)$extras['provider_ts'] : $asOf; }
   if ($flags['received_at'])       { $cols[] = 'received_at';       $vals[] = isset($extras['received_at']) && is_numeric($extras['received_at']) ? (int)$extras['received_at'] : $ingestedAt; }

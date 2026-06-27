@@ -1270,18 +1270,22 @@ function yahoo_chart_meta_quote(string $symbol, string $tf = '1m'): ?array {
   if (!($price > 0)) return null;
 
   $prev = 0.0;
-  foreach (['previousClose', 'chartPreviousClose'] as $key) {
+  foreach (['chartPreviousClose', 'previousClose'] as $key) {
     if (isset($meta[$key]) && is_numeric($meta[$key]) && (float)$meta[$key] > 0) {
       $prev = (float)$meta[$key];
       break;
     }
   }
-  $changePct = ($prev > 0) ? (($price - $prev) / $prev) * 100.0 : 0.0;
-  if (abs($changePct) < 0.0000001) {
+  $changePct = 0.0;
+  if ($prev > 0) {
+    $changePct = (($price - $prev) / $prev) * 100.0;
+  } else {
+    // Fallback to the last recorded close if no previous close metadata at all
     $seriesChange = yahoo_change_pct_from_chart_result($result, $price);
     if ($seriesChange !== null) $changePct = $seriesChange;
   }
-  // Cap unrealistic change_pct from futures contracts (rollover causes huge gaps)
+  // Chart previous close is usually reliable; keep it. Only capping is applied
+  // for futures rollover, not for legitimate spot-metal/forex moves.
   if (abs($changePct) > 20.0) $changePct = 0.0;
   $updatedAt = isset($meta['regularMarketTime']) && is_numeric($meta['regularMarketTime'])
     ? (int)$meta['regularMarketTime']
