@@ -1185,7 +1185,11 @@ try {
 
   // Fallback synthetic is opt-in. By default we return cache/empty instead of
   // extending a stalled chart request with another live quote lookup.
-  $allowFallbackLiveLookup = (int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1;
+  // Spot metals (XAUUSD/XAGUSD) must always anchor to live spot quote so the
+  // chart matches the price board, since futures-based sources price them
+  // differently.
+  $isSpotMetal = vp_is_spot_metal_symbol($symbol, $type);
+  $allowFallbackLiveLookup = ((int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1) || $isSpotMetal;
   $last = ($allowFallbackLiveLookup && !candles_request_over_budget(1800)) ? candles_best_live_price($symbol, $market, $type, $meta) : 0.0;
   if ($allowFallbackLiveLookup && !($last > 0) && !candles_request_over_budget(1600) && function_exists('qa_quote_payload')) {
     try {
@@ -1241,7 +1245,7 @@ try {
       $out = candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
       candles_json_response(['ok'=>true,'cached'=>true,'soft_error'=>'provider_unavailable'], $out, $limit, $end);
     }
-    $allowFallbackLiveLookup = (int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1;
+    $allowFallbackLiveLookup = ((int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1) || vp_is_spot_metal_symbol($symbol, $type);
     $last = 0.0;
     if ($allowFallbackLiveLookup && !candles_request_over_budget(400)) {
       try { $last = (float)quote_price($symbol, $market, $type); } catch (Throwable $ignored) { $last = 0.0; }
