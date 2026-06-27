@@ -82,9 +82,11 @@ class WsClient {
     $key = base64_encode(random_bytes(16));
     $headers = [
       "GET {$this->path} HTTP/1.1",
-      "Host: {$this->host}",
+      "Host: {$this->host}:{$this->port}",
       "Upgrade: websocket",
-      "Connection: Upgrade",
+      "Connection: keep-alive, Upgrade",
+      "Pragma: no-cache",
+      "Cache-Control: no-cache",
       "Sec-WebSocket-Key: {$key}",
       "Sec-WebSocket-Version: 13",
       "Origin: {$this->origin}",
