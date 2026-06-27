@@ -791,6 +791,14 @@ function candles_quote_seed_items(float $price, int $now, int $step, int $limit)
 }
 
 function candles_cached_seed_price(string $symbol, string $assetType): float {
+  // Spot metals: never use DB seed/futures price; always fetch live spot quote.
+  try {
+    if (function_exists('coingecko_spot_metal_quote') && vp_is_spot_metal_symbol($symbol, $assetType)) {
+      $q = coingecko_spot_metal_quote($symbol);
+      $p = is_array($q) ? (float)($q['price'] ?? 0) : 0.0;
+      if ($p > 0) return $p;
+    }
+  } catch (Throwable $e) {}
   try {
     $q = quote_get($symbol, $assetType);
     $p = (float)($q['price'] ?? 0);
