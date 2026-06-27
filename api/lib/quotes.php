@@ -1913,6 +1913,23 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
           }
         }
 
+        // Free tokenized-metal proxy (PAXG → XAUUSD) when no primary provider returned a price.
+        if (!$used && vp_is_spot_metal_symbol($sym, $type)) {
+          try {
+            $cg = function_exists('coingecko_spot_metal_quote') ? coingecko_spot_metal_quote($sym) : null;
+            if (is_array($cg) && (float)($cg['price'] ?? 0) > 0) {
+              $price = (float)$cg['price'];
+              $chgPct = (float)($cg['change_pct'] ?? 0.0);
+              $used = true;
+              $external++;
+              $sourceName = 'coingecko_metal';
+              $sourceTs = $now;
+              $hadAuthoritativeUpdate = true;
+              if ($prev > 0) $chgPct = (($price / $prev) - 1.0) * 100.0;
+            }
+          } catch (Throwable $e) {}
+        }
+
         if (!$used) {
           $simulate = ((string)env('NONCRYPTO_SIMULATE', '0') === '1');
           if ($simulate) {
@@ -1936,7 +1953,7 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
       if ($sourceName !== '') $extras['source'] = $sourceName;
       if (!isset($extras['source_priority']) && $sourceName !== '') {
         $extras['source_priority'] = match(strtolower($sourceName)) {
-          'binance' => 100, 'binance_ws' => 98, 'twelvedata_ws' => 94, 'finnhub_ws' => 93, 'eodhd','eodhd_rest' => 88, 'massive','polygon' => 90, 'twelvedata' => 86, 'yahoo' => 1, 'provider_live' => 92, 'frankfurter','stooq' => 20, 'eodhd_intraday','yahoo_chart_live' => 1, default => 40,
+          'binance' => 100, 'binance_ws' => 98, 'twelvedata_ws' => 94, 'finnhub_ws' => 93, 'eodhd','eodhd_rest' => 88, 'massive','polygon' => 90, 'twelvedata' => 86, 'yahoo' => 1, 'provider_live' => 92, 'coingecko_metal' => 50, 'frankfurter','stooq' => 20, 'eodhd_intraday','yahoo_chart_live' => 1, default => 40,
         };
       }
       $persistTs = ($type === 'crypto') ? $now : ($sourceTs > 0 ? $sourceTs : $now);
