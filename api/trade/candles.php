@@ -1191,6 +1191,17 @@ try {
   $isSpotMetal = vp_is_spot_metal_symbol($symbol, $type);
   $allowFallbackLiveLookup = ((int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1) || $isSpotMetal;
   $last = ($allowFallbackLiveLookup && !candles_request_over_budget(1800)) ? candles_best_live_price($symbol, $market, $type, $meta) : 0.0;
+  if ($allowFallbackLiveLookup && !($last > 0) && !candles_request_over_budget(1600)) {
+    try {
+      if (function_exists('coingecko_spot_metal_quote') && vp_is_spot_metal_symbol($symbol, $type)) {
+        $cg = coingecko_spot_metal_quote($symbol);
+        if (is_array($cg) && (float)($cg['price'] ?? 0) > 0) {
+          $last = (float)$cg['price'];
+        }
+      }
+    } catch (Throwable $ignored) {}
+  }
+
   if ($allowFallbackLiveLookup && !($last > 0) && !candles_request_over_budget(1600) && function_exists('qa_quote_payload')) {
     try {
       $qa = qa_quote_payload($type, [$symbol], [
@@ -1249,20 +1260,13 @@ try {
     $last = 0.0;
     if ($allowFallbackLiveLookup && !candles_request_over_budget(400)) {
       try {
-        // For spot metals always fetch a fresh live spot quote; cached DB row may
-        // contain stale seed/futures price (e.g. XAUUSD 2050 vs actual 4070+).
-        if ($isSpotMetal && function_exists('qa_quote_payload')) {
-          $qa = qa_quote_payload($type, [$symbol], [
-            'allow_live' => true,
-            'allow_crypto_seed' => false,
-            'allow_noncrypto_seed' => false,
-            'direct_budget' => 1,
-            'direct_yahoo_budget' => 1,
-            'chart_budget' => 1,
-          ]);
-          $qaItem = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
-          $last = $qaItem ? (float)($qaItem['price'] ?? 0) : 0.0;
-        } else {
+        if (function_exists('coingecko_spot_metal_quote') && vp_is_spot_metal_symbol($symbol, $type)) {
+          $cg = coingecko_spot_metal_quote($symbol);
+          if (is_array($cg) && (float)($cg['price'] ?? 0) > 0) {
+            $last = (float)$cg['price'];
+          }
+        }
+        if (!($last > 0)) {
           $last = (float)quote_price($symbol, $market, $type);
         }
       } catch (Throwable $ignored) { $last = 0.0; }
