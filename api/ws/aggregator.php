@@ -84,7 +84,7 @@ class WsClient {
       "GET {$this->path} HTTP/1.1",
       "Host: {$this->host}:{$this->port}",
       "Upgrade: websocket",
-      "Connection: keep-alive, Upgrade",
+      "Connection: Upgrade",
       "Pragma: no-cache",
       "Cache-Control: no-cache",
       "Sec-WebSocket-Key: {$key}",
