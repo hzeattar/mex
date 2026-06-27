@@ -42,7 +42,7 @@ if [ "${WS_AGGREGATOR_ENABLED:-0}" = "1" ]; then
   : "${WS_AGGREGATOR_FEEDS:=twelvedata}"
   export WS_AGGREGATOR_FEEDS
   echo "[start] starting WS aggregator feeds=${WS_AGGREGATOR_FEEDS}"
-  php /app/api/ws/aggregator.php >> /app/api/data/logs/aggregator.log 2>&1 &
+  sh -c 'php /app/api/ws/aggregator.php 2>&1 | tee -a /app/api/data/logs/aggregator.log' &
   echo "[start] WS aggregator started (pid $!)"
 fi
 

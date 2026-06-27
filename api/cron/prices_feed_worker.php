@@ -113,11 +113,11 @@ echo "[feed-worker] isDaemon=" . ($isDaemon ? 'true' : 'false') . "\n"; flush();
 // ── Cycle intervals (seconds) ─────────────────────────────────────────────
 $intervals = [
   'crypto'      => max(1, min(5, (int)env('FEED_INTERVAL_CRYPTO', '2'))),
-  'forex'       => max(2, min(15, (int)env('FEED_INTERVAL_FOREX', '3'))),
-  'stocks'      => max(5, min(60, (int)env('FEED_INTERVAL_STOCKS', '10'))),
-  'arab'        => max(5, min(60, (int)env('FEED_INTERVAL_ARAB', '10'))),
-  'commodities' => max(2, min(15, (int)env('FEED_INTERVAL_COMMODITIES', '3'))),
-  'futures'     => max(2, min(15, (int)env('FEED_INTERVAL_FUTURES', '3'))),
+  'forex'       => max(5, min(120, (int)env('FEED_INTERVAL_FOREX', '30'))),
+  'stocks'      => max(15, min(180, (int)env('FEED_INTERVAL_STOCKS', '60'))),
+  'arab'        => max(30, min(300, (int)env('FEED_INTERVAL_ARAB', '120'))),
+  'commodities' => max(10, min(120, (int)env('FEED_INTERVAL_COMMODITIES', '30'))),
+  'futures'     => max(10, min(120, (int)env('FEED_INTERVAL_FUTURES', '30'))),
 ];
 
 $types = ['crypto', 'forex', 'commodities', 'futures', 'stocks', 'arab'];
