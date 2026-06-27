@@ -792,14 +792,19 @@ function candles_quote_seed_items(float $price, int $now, int $step, int $limit)
 
 function candles_cached_seed_price(string $symbol, string $assetType): float {
   // Spot metals: never use DB seed/futures price; always fetch live spot quote.
+  static $debug = [];
+  $key = $symbol . '|' . $assetType;
   try {
     if (vp_is_spot_metal_symbol($symbol, $assetType)) {
       require_once __DIR__ . '/../lib/quote_coingecko.php';
       $q = coingecko_spot_metal_quote($symbol);
       $p = is_array($q) ? (float)($q['price'] ?? 0) : 0.0;
+      $debug[$key] = ['source'=>'coingecko','price'=>$p,'q'=>$q];
       if ($p > 0) return $p;
     }
-  } catch (Throwable $e) {}
+  } catch (Throwable $e) {
+    $debug[$key] = ['source'=>'coingecko_error','msg'=>$e->getMessage()];
+  }
   try {
     $q = quote_get($symbol, $assetType);
     $p = (float)($q['price'] ?? 0);
@@ -1312,7 +1317,9 @@ try {
     $step = max(1, tf_seconds($tf));
     $items = candles_quote_seed_items($price, time(), $step, $limit);
     $out = candles_finalize_items($items, $symbol, $market, $type, $step, $end);
-    candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>'provider_unavailable'], $out, $limit, $end);
+    $debugOut['last_price'] = $last;
+    $debugOut['is_spot_metal'] = vp_is_spot_metal_symbol($symbol, $type);
+    candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>'provider_unavailable','debug'=>$debugOut], $out, $limit, $end);
   } catch (Throwable $ignored2) {
     candles_json_response(['ok'=>true,'source'=>'empty_error_fallback','soft_error'=>'provider_unavailable'], [], $limit, $end);
   }
