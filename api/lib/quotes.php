@@ -150,9 +150,9 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
     return in_array($src, ['eodhd','eodhd_rest','provider_live','stooq','twelvedata','twelvedata_ws','finnhub','finnhub_ws','tiingo'], true);
   }
   if (in_array($assetType, ['arab','commodities','futures'], true)) {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','twelvedata_ws','fcsapi','finnhub','finnhub_ws','tiingo'], true);
+    return in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','twelvedata_ws','fcsapi','finnhub','finnhub_ws','tiingo','coingecko','coingecko_metal'], true);
   }
-  if (in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','twelvedata_ws','fcsapi','finnhub','finnhub_ws','tiingo'], true)) return true;
+  if (in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','twelvedata_ws','fcsapi','finnhub','finnhub_ws','tiingo','coingecko','coingecko_metal'], true)) return true;
   return false;
 }
 
