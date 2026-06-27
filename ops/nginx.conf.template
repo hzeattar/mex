@@ -84,6 +84,24 @@ ${EXTRA_LISTEN}
       access_log off;
     }
 
+    location ^~ /auth/ {
+      alias /app/auth/;
+      index index.html;
+      try_files $uri $uri/ =404;
+
+      # Cache static assets inside /auth/ for 1 week
+      location ~* ^/auth/.+\.(?:css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|eot|otf)$ {
+        expires 1w;
+        add_header Cache-Control "public, max-age=604800";
+        access_log off;
+      }
+
+      # Never allow nginx to interpret .html as PHP
+      location ~* ^/auth/.+\.html$ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+      }
+    }
+
     location = /favicon.ico {
       access_log off;
       log_not_found off;
