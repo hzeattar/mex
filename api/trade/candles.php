@@ -219,7 +219,9 @@ function candles_cache_path(string $symbol, string $market, string $tf, string $
   $safe = preg_replace('/[^A-Z0-9_]/', '_', strtoupper($symbol));
   $safe = substr($safe, 0, 40);
   $safeType = preg_replace('/[^a-z0-9_]/', '_', strtolower($type ?: 'generic'));
-  return __DIR__ . '/../data/candles_' . strtolower($market) . '_' . $safeType . '_' . strtolower($safe) . '_' . strtolower($tf) . '.json';
+  // Version suffix invalidated all pre-2026-06-27 synthetic/stale candle caches so
+  // real provider history is fetched afresh after the pricing source switch.
+  return __DIR__ . '/../data/candles_v2_' . strtolower($market) . '_' . $safeType . '_' . strtolower($safe) . '_' . strtolower($tf) . '.json';
 }
 function candles_retention_days(string $type, string $tf): int {
   $kind = vp_normalize_asset_type($type ?: 'generic');

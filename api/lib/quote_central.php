@@ -292,6 +292,15 @@ function quote_central_write(string $symbol, string $type, array $data): void {
   if (empty($data['central_ts'])) $data['central_ts'] = time();
   if (!quote_central_row_usable($data)) return;
 
+  // Compute change_pct from prev_close if it wasn't provided by the upstream feed.
+  $price = (float)($data['price'] ?? 0);
+  $prevClose = (float)($data['prev_close'] ?? $data['previous_close'] ?? 0);
+  $changePct = (float)($data['change_pct'] ?? 0);
+  if ($price > 0 && $prevClose > 0 && abs($changePct) < 0.000001) {
+    $changePct = (($price - $prevClose) / $prevClose) * 100.0;
+    $data['change_pct'] = $changePct;
+  }
+
   // Write to file cache
   quote_central_write_file($symbol, $type, $data);
 

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/quotes.php';
+require_once __DIR__ . '/quote_central.php';
 require_once __DIR__ . '/market_resolver.php';
 require_once __DIR__ . '/quote_freshness.php';
 require_once __DIR__ . '/quote_cache_policy.php';
@@ -202,6 +203,23 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
 
   $storedByType = [];
   $cachedBySymbol = [];
+
+  // Prefer central cache (WebSocket feeds: TwelveData/Binance/Finnhub) whenever available.
+  $centralBySymbol = [];
+  if (function_exists('quote_central_get_many')) {
+    try {
+      foreach ($symbolsByType as $type => $symbolsForType) {
+        $centralRows = quote_central_get_many($symbolsForType, $type, 0);
+        foreach ($centralRows as $sym => $centralRow) {
+          $sym = strtoupper(trim((string)$sym));
+          if ($sym === '') continue;
+          $centralBySymbol[$type . ':' . $sym] = $centralRow;
+          $centralBySymbol[$sym] = $centralRow;
+        }
+      }
+    } catch (Throwable $e) {}
+  }
+
   foreach ($symbolsByType as $type => $symbolsForType) {
     $storedByType[$type] = qa_quote_rows_by_symbols($symbolsForType, $type);
   }
@@ -212,7 +230,20 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
     if ($sym === '' || $type === '') continue;
 
     $cached = qa_cached_quote_from_market_row($row, $type);
-    if ((float)($cached['price'] ?? 0) <= 0) {
+    $centralKey = $type . ':' . $sym;
+    $central = is_array($centralBySymbol[$centralKey] ?? null) ? $centralBySymbol[$centralKey] : (is_array($centralBySymbol[$sym] ?? null) ? $centralBySymbol[$sym] : null);
+    if (is_array($central) && (float)($central['price'] ?? 0) > 0) {
+      // Central cache from WebSocket always wins if it has a price.
+      $cached = [
+        'symbol' => $sym,
+        'type' => $type,
+        'price' => (float)($central['price'] ?? 0),
+        'change_pct' => (float)($central['change_pct'] ?? 0),
+        'updated_at' => (int)($central['updated_at'] ?? $central['central_ts'] ?? $central['received_at'] ?? 0),
+        'source' => (string)($central['source'] ?? 'central'),
+        'prev_close' => (float)($central['prev_close'] ?? $central['previous_close'] ?? 0),
+      ];
+    } elseif ((float)($cached['price'] ?? 0) <= 0) {
       $stored = is_array($storedByType[$type][$sym] ?? null) ? $storedByType[$type][$sym] : null;
       if (is_array($stored) && (float)($stored['price'] ?? 0) > 0) $cached = $stored;
     }
@@ -240,9 +271,17 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
     ]);
 
     if ($chosen) {
+      $price = (float)($chosen['price'] ?? 0);
+      $changePct = (float)($chosen['change_pct'] ?? 0);
+      $prevClose = (float)($chosen['prev_close'] ?? $chosen['previous_close'] ?? 0);
+      // WebSocket feeds (TwelveData/Binance) provide a live price but may omit
+      // change_pct. Recompute it from prev_close when it is available.
+      if ($price > 0 && abs($changePct) < 0.000001 && $prevClose > 0 && abs($price - $prevClose) > 0.00000001) {
+        $changePct = (($price - $prevClose) / $prevClose) * 100.0;
+      }
       $out[$sym] = [
-        'price' => (float)($chosen['price'] ?? 0),
-        'change_pct' => (float)($chosen['change_pct'] ?? 0),
+        'price' => $price,
+        'change_pct' => $changePct,
         'updated_at' => (int)($chosen['updated_at'] ?? 0),
         'source' => (string)($chosen['source'] ?? $chosen['provider'] ?? 'unavailable'),
         'is_stale' => false,

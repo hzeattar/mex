@@ -264,6 +264,60 @@ class WsClient {
   }
 }
 
+// Built-in TwelveData WebSocket symbol list. Loaded from flat file if present,
+// otherwise the aggregator falls back to mapping the supported market definitions.
+function loadTwelveSymbolsFromFile(string $path): array {
+  if (!is_file($path)) return [];
+  $raw = @file_get_contents($path);
+  if ($raw === false || trim($raw) === '') return [];
+  $symbols = [];
+  foreach (preg_split('/[\r\n]+/', $raw) as $line) {
+    foreach (explode(',', $line) as $s) {
+      $s = strtoupper(trim($s));
+      if ($s === '' || $s[0] === '#') continue;
+      $symbols[] = $s;
+    }
+  }
+  return array_values(array_unique($symbols));
+}
+
+function buildTwelveSymbols(array $fileSymbols): array {
+  // Reverse map: TwelveData WS futures format → market symbol (exact inverse of mapToTwelveData)
+  $futuresReverse = [
+    'GC1!' => 'GC_F', 'CL1!' => 'CL_F', 'SI1!' => 'SI_F', 'HG1!' => 'HG_F',
+    'NG1!' => 'NG_F', 'ZC1!' => 'ZC_F', 'ZW1!' => 'ZW_F', 'ZS1!' => 'ZS_F',
+    'ES1!' => 'ES_F', 'NQ1!' => 'NQ_F', 'YM1!' => 'YM_F', 'RTY1!' => 'RTY_F',
+    'DX1!' => 'DX_F', 'ZF1!' => 'ZF_F', 'ZN1!' => 'ZN_F', 'ZB1!' => 'ZB_F',
+    '6E1!' => '6E_F', '6J1!' => '6J_F', '6B1!' => '6B_F', '6A1!' => '6A_F',
+    '6C1!' => '6C_F', '6S1!' => '6S_F', 'CC1!' => 'CC_F', 'KC1!' => 'KC_F',
+    'SB1!' => 'SB_F', 'CT1!' => 'CT_F', 'LBS1!' => 'LBS_F', 'HE1!' => 'HE_F',
+    'LE1!' => 'LE_F', 'GF1!' => 'GF_F', 'PA1!' => 'PA_F', 'PL1!' => 'PL_F',
+    'BZ1!' => 'BZ_F', 'NKD1!' => 'NKD_F',
+  ];
+  $set = [];
+  foreach ($fileSymbols as $s) {
+    if (str_starts_with($s, 'EUR/') || str_starts_with($s, 'GBP/') || str_starts_with($s, 'USD/') ||
+        str_starts_with($s, 'AUD/') || str_starts_with($s, 'NZD/') || str_starts_with($s, 'CAD/') ||
+        str_starts_with($s, 'CHF/') || str_starts_with($s, 'JPY/') || str_starts_with($s, 'PLN/') ||
+        str_starts_with($s, 'HUF/') || str_starts_with($s, 'TRY/') || str_starts_with($s, 'SEK/') ||
+        str_starts_with($s, 'NOK/') || str_starts_with($s, 'DKK/') || str_starts_with($s, 'ZAR/') ||
+        str_starts_with($s, 'MXN/') || str_starts_with($s, 'SGD/') || str_starts_with($s, 'HKD/') ||
+        str_starts_with($s, 'BRL/') || str_starts_with($s, 'ILS/') || str_starts_with($s, 'INR/')) {
+      $set[$s] = ['original' => str_replace('/', '', $s), 'type' => 'forex'];
+    } elseif (isset($futuresReverse[$s])) {
+      $set[$s] = ['original' => $futuresReverse[$s], 'type' => 'futures'];
+    } elseif (str_ends_with($s, '=F')) {
+      $base = substr($s, 0, -2) . '_F';
+      $set[$s] = ['original' => $base, 'type' => 'futures'];
+    } elseif (preg_match('/^\d{4}\.SR$/', $s)) {
+      $set[$s] = ['original' => str_replace('.SR', '', $s), 'type' => 'arab'];
+    } else {
+      $set[$s] = ['original' => $s, 'type' => 'stocks'];
+    }
+  }
+  return $set;
+}
+
 // ── Symbol Collection ───────────────────────────────────────────────────────
 
 function collectSymbols(): void {
@@ -285,6 +339,7 @@ function collectSymbols(): void {
   $twelveSet  = [];
   $finnhubSet = [];
 
+  // Crypto comes from Binance only.
   foreach ($defs as $d) {
     $sym = strtoupper(trim((string)($d['symbol'] ?? '')));
     $type = strtolower(trim((string)($d['type'] ?? '')));
@@ -293,19 +348,39 @@ function collectSymbols(): void {
     if ($type === 'crypto') {
       $bsym = strtolower(preg_replace('/[^A-Z0-9]/i', '', $sym));
       if ($bsym) $binanceSet[$bsym] = $sym;
-    } else {
-      // Twelve Data takes precedence if key available
+    }
+  }
+
+  // Everything non-crypto goes through TwelveData WebSocket first.
+  $twelvePath = __DIR__ . '/twelve_symbols.txt';
+  $fileSymbols = loadTwelveSymbolsFromFile($twelvePath);
+  if ($fileSymbols) {
+    $twelveSet = buildTwelveSymbols($fileSymbols);
+  } else {
+    foreach ($defs as $d) {
+      $sym = strtoupper(trim((string)($d['symbol'] ?? '')));
+      $type = strtolower(trim((string)($d['type'] ?? '')));
+      if (!$sym || !$type || $type === 'crypto') continue;
       $meta = function_exists('market_meta') ? market_meta($d['meta'] ?? null) : [];
       $tdsym = function_exists('twelvedata_symbol_for_market')
         ? (twelvedata_symbol_for_market($sym, $type, $meta) ?: mapToTwelveData($sym, $type))
         : mapToTwelveData($sym, $type);
       if ($tdsym) $twelveSet[$tdsym] = ['original' => $sym, 'type' => $type];
+    }
+  }
 
-      // Finnhub covers forex/stocks via free WS (250 symbols free tier)
-      if ($type === 'forex' || $type === 'stocks') {
-        $fsym = mapToFinnhub($sym, $type);
-        if ($fsym) $finnhubSet[$fsym] = ['original' => $sym, 'type' => $type];
+  // Finnhub used only as a stock backup when no TwelveData price is streaming.
+  foreach ($defs as $d) {
+    $sym = strtoupper(trim((string)($d['symbol'] ?? '')));
+    $type = strtolower(trim((string)($d['type'] ?? '')));
+    if (!$sym || !$type) continue;
+    if ($type === 'stocks') {
+      $fsym = mapToFinnhub($sym, $type);
+      $alreadyInTwelve = false;
+      foreach ($twelveSet as $info) {
+        if (strtoupper($info['original'] ?? '') === $sym) { $alreadyInTwelve = true; break; }
       }
+      if ($fsym && !$alreadyInTwelve) $finnhubSet[$fsym] = ['original' => $sym, 'type' => $type];
     }
   }
 
