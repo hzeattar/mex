@@ -506,6 +506,11 @@ function candles_series_has_real_movement(array $items, int $sample = 24): bool 
   return $spread > 0.000001;
 }
 
+function candles_yahoo_enabled(): bool {
+  return (int)env('YAHOO_ENABLED', '0') === 1
+    && ((int)env('ALLOW_YAHOO_PROVIDER', '0') === 1 || (int)env('CANDLES_YAHOO_ENABLED', '0') === 1);
+}
+
 function candles_crypto_yahoo_symbol(string $symbol): string {
   $sym = strtoupper(preg_replace('/[^A-Z0-9]/', '', $symbol));
   if (str_ends_with($sym, 'USDT')) return substr($sym, 0, -4) . '-USD';
@@ -1005,8 +1010,8 @@ try {
     }
   }
 
-  // ── Yahoo FIRST for non-crypto intraday (faster and more reliable than EODHD) ──
-  if ((function_exists('quote_yahoo_enabled') && quote_yahoo_enabled()) && !$preferAggsForSymbol && in_array($providerType, ['stocks','arab','futures','commodities','forex'], true)) {
+  // ── Yahoo chart for non-crypto intraday (kept separate from live-quote Yahoo). ──
+  if (candles_yahoo_enabled() && !$preferAggsForSymbol && in_array($providerType, ['stocks','arab','futures','commodities','forex'], true) && !vp_is_spot_metal_symbol($symbol, $type)) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
       if ($ySymbol) {
@@ -1037,16 +1042,17 @@ try {
     candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'provider_timeout');
   }
 
-  // EODHD intraday fallback. This must remain available even when TwelveData is
-  // the preferred quote provider, because TwelveData credits can be exhausted
-  // while EODHD still has usable chart history.
+  // EODHD intraday fallback. Keep it for FX, but never use it for spot metals --
+  // the feed is stale/futures-mapped for XAUUSD/XAGUSD and distorts the chart.
   $eodhdCandlesAllowed = trim((string)env('EODHD_API_KEY', '')) !== ''
     && (
       strtolower((string)env('PRICE_PROVIDER', 'eodhd')) === 'eodhd'
       || (int)env('TWELVEDATA_EODHD_FALLBACK', '1') === 1
       || (int)env('EODHD_CANDLES_FALLBACK', '1') === 1
     );
-  if ($eodhdCandlesAllowed && ($type === 'arab' || in_array($providerType, ['stocks','forex'], true) || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
+  if ($eodhdCandlesAllowed
+      && !vp_is_spot_metal_symbol($symbol, $type)
+      && ($type === 'arab' || in_array($providerType, ['stocks','forex'], true))) {
     // Set a tight per-provider timeout for EODHD intraday so it doesn't consume the whole budget
     $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'];
     $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
@@ -1134,7 +1140,7 @@ try {
   }
 
   // Secondary Yahoo chart fallback for FX and spot metals when primary aggs snapshots are unavailable.
-  if ((function_exists('quote_yahoo_enabled') && quote_yahoo_enabled()) && !$triedYahooChart && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
+  if (candles_yahoo_enabled() && !$triedYahooChart && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $type)))) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
       if ($ySymbol) {

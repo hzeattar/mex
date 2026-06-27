@@ -134,16 +134,29 @@
 
   const COUNTRY_BY_CODE = {};
   const COUNTRY_BY_NAME = {};
-  COUNTRIES.forEach(function(c){
-    if (c.c) COUNTRY_BY_CODE[c.c] = c;
-    if (c.n) COUNTRY_BY_NAME[c.n] = c;
-    if (c.en) COUNTRY_BY_NAME[c.en] = c;
-  });
+  const COUNTRIES_READY = typeof COUNTRIES !== 'undefined' && Array.isArray(COUNTRIES) && COUNTRIES.length > 0;
+  if (COUNTRIES_READY) {
+    COUNTRIES.forEach(function(c){
+      if (c.c) COUNTRY_BY_CODE[c.c] = c;
+      if (c.n) COUNTRY_BY_NAME[c.n] = c;
+      if (c.en) COUNTRY_BY_NAME[c.en] = c;
+    });
+  }
   function resolveCountryCode(value){
+    ensureCountryMaps();
     if (!value) return '';
     if (COUNTRY_BY_CODE[value]) return value;
     const named = COUNTRY_BY_NAME[value] || COUNTRIES.find(function(c){ return c.d === value || c.en === value; });
     return named ? (named.c || '') : '';
+  }
+  function ensureCountryMaps(){
+    if (COUNTRIES_READY && Object.keys(COUNTRY_BY_CODE).length === 0) {
+      COUNTRIES.forEach(function(c){
+        if (c.c) COUNTRY_BY_CODE[c.c] = c;
+        if (c.n) COUNTRY_BY_NAME[c.n] = c;
+        if (c.en) COUNTRY_BY_NAME[c.en] = c;
+      });
+    }
   }
 
   /* ---------- 4. Form submit (live API) ---------- */
