@@ -65,6 +65,8 @@ if (!$cliLocal && ($token === '' || !hash_equals((string)env('CRON_KEY', ''), $t
   exit;
 }
 
+require_once __DIR__ . '/../lib/quote_central.php';
+
 $refreshCrypto = (int)($_GET['crypto'] ?? 1) === 1;
 
 try {

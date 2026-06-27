@@ -5,6 +5,7 @@ require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/marketdata.php';
 require_once __DIR__ . '/market_resolver.php';
 require_once __DIR__ . '/quote_sources.php';
+require_once __DIR__ . '/quote_central.php';
 require_once __DIR__ . '/quote_fcsapi.php';
 require_once __DIR__ . '/quote_currencyfreaks.php';
 require_once __DIR__ . '/quote_polygon.php';
@@ -1896,6 +1897,24 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
       if ($sourceTs > 0) { $extras['as_of'] = $sourceTs; $extras['ingested_at'] = $now; }
       quote_upsert($sym, $type, $price, $chgPct, $persistTs, $extras);
       $updated++;
+
+      // Keep central cache warm even when the dedicated feed-worker service is
+      // not running, so quote_focus / markets.php / SSE serve live prices.
+      if (!empty($hadAuthoritativeUpdate) && function_exists('quote_central_write')) {
+        try {
+          quote_central_write($sym, $type, [
+            'symbol' => $sym,
+            'type' => $type,
+            'price' => $price,
+            'change_pct' => $chgPct,
+            'updated_at' => $persistTs,
+            'source' => $sourceName,
+            'central_ts' => $now,
+            'received_at' => $sourceTs > 0 ? $sourceTs : $now,
+            'ingested_at' => $now,
+          ]);
+        } catch (Throwable $e) {}
+      }
     } catch (Throwable $e) {
       $errors++;
     }
