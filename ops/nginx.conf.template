@@ -222,11 +222,10 @@ ${EXTRA_LISTEN}
       fastcgi_pass 127.0.0.1:9070;
     }
 
-    # Serve the new marketing site at root permanently under /auth/, so all
-    # relative assets and links (login.html, register.html, css/styles.css, etc.)
-    # resolve correctly within the /auth/ directory.
+    # Serve the new marketing site at root permanently under /auth/.  Force
+    # https so the browser never follows an internal port upgrade.
     location = / {
-      return 302 /auth/index.html;
+      return 302 https://$host/auth/index.html;
     }
 
     location / {
