@@ -661,6 +661,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'type' => $assetType,
           'price' => $p,
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'open' => (float)($row['open'] ?? 0),
+          'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
           'updated_at' => $now,
           'source' => 'twelvedata',
         ];

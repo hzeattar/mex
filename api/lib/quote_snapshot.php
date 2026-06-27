@@ -249,6 +249,17 @@ function qs_snapshot_from_row(string $symbol, string $type, string $market, ?arr
     else $blockReason = 'timing_not_executable';
   }
 
+  $changePct = (float)($row['change_pct'] ?? 0);
+  $prevClose = (float)($row['prev_close'] ?? $row['previous_close'] ?? 0);
+  if ($mid > 0 && $prevClose > 0) {
+    $recomputed = (($mid - $prevClose) / $prevClose) * 100.0;
+    // Prefer the stored pct if it is sane and close to the recomputed one;
+    // otherwise use the recomputed pct so stale/wrong provider percentages don't mislead users.
+    if (abs($changePct) < 0.000001 || abs($recomputed - $changePct) > 15.0) {
+      $changePct = $recomputed;
+    }
+  }
+
   return [
     'symbol' => $symbol,
     'type' => $type,
@@ -261,9 +272,9 @@ function qs_snapshot_from_row(string $symbol, string $type, string $market, ?arr
     'price' => $mid,
     'spread' => $spread,
     'spread_bps' => $spreadBps,
-    'change_pct' => (float)($row['change_pct'] ?? 0) ?: (($mid > 0 && (float)($row['prev_close'] ?? $row['previous_close'] ?? 0) > 0) ? (($mid - (float)($row['prev_close'] ?? $row['previous_close'] ?? 0)) / (float)($row['prev_close'] ?? $row['previous_close'] ?? 0)) * 100.0 : 0.0),
+    'change_pct' => $changePct,
     'open' => (float)($row['open'] ?? 0),
-    'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
+    'prev_close' => $prevClose,
     'source' => $source !== '' ? $source : 'cache',
     'provider_ts' => $providerTs,
     'received_at' => $receivedAt,
