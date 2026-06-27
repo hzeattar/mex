@@ -7,6 +7,7 @@ declare(strict_types=1);
 // so all concurrent users share a single PHP execution per second.
 require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/market_resolver.php';
+require_once __DIR__ . '/lib/quote_store.php';
 require_once __DIR__ . '/lib/quote_central.php';
 require_once __DIR__ . '/lib/quote_snapshot.php';
 
@@ -14,14 +15,24 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: public, max-age=1');
 
 $symbolsRaw = (string)($_GET['symbols'] ?? ($_GET['symbol'] ?? ''));
-$type = vp_normalize_asset_type((string)($_GET['type'] ?? ''));
-if ($type === '') $type = 'crypto';
+$typeParam = strtolower(trim((string)($_GET['type'] ?? '')));
+$type = vp_normalize_asset_type($typeParam);
 
 $list = [];
+$defsBySym = qa_static_supported_defs_by_symbol();
 foreach (explode(',', $symbolsRaw) as $sym) {
   $sym = strtoupper(trim($sym));
-  if ($sym !== '' && preg_match('/^[A-Z0-9:._^=\/\-]{1,32}$/', $sym)) $list[] = $sym;
+  if ($sym !== '' && preg_match('/^[A-Z0-9:._^=\/\-]{1,32}$/', $sym)) {
+    $list[] = $sym;
+    // When type is omitted, use the known static type for each symbol instead
+    // of assuming crypto. This fixes XAUUSD/AAPL etc. when called plainly.
+    if ($typeParam === '') {
+      $fallbackType = vp_normalize_asset_type((string)($defsBySym[$sym]['type'] ?? ''));
+      if ($fallbackType !== '') $type = $fallbackType;
+    }
+  }
 }
+
 $list = array_slice(array_values(array_unique($list)), 0, 40);
 if (!$list) {
   json_response(['ok' => false, 'error' => 'symbols required'], 400);
