@@ -360,7 +360,14 @@ function db_connect_backoff(int $attempt): void {
 
 function db(): PDO {
   static $pdo = null;
-  if ($pdo instanceof PDO) return $pdo;
+  if ($pdo instanceof PDO) {
+    try {
+      $pdo->query('SELECT 1');
+      return $pdo;
+    } catch (Throwable $e) {
+      $pdo = null;
+    }
+  }
 
   // Schema version marker used by both MySQL and SQLite bootstrapping.
   $schemaVer = defined('SCHEMA_VERSION') ? (string)SCHEMA_VERSION : '1';
