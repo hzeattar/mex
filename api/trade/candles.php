@@ -1271,11 +1271,12 @@ try {
       $out = candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
       candles_json_response(['ok'=>true,'cached'=>true,'soft_error'=>'provider_unavailable'], $out, $limit, $end);
     }
-    $allowFallbackLiveLookup = ((int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1) || vp_is_spot_metal_symbol($symbol, $type);
+    $isMetal = in_array(strtoupper($symbol), ['XAUUSD','XAGUSD','XPTUSD','XPDUSD'], true) || vp_is_spot_metal_symbol($symbol, $type);
+    $allowFallbackLiveLookup = ((int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1) || $isMetal;
     $last = 0.0;
     if ($allowFallbackLiveLookup && !candles_request_over_budget(400)) {
       try {
-        if (function_exists('coingecko_spot_metal_quote') && vp_is_spot_metal_symbol($symbol, $type)) {
+        if (function_exists('coingecko_spot_metal_quote') && $isMetal) {
           $cg = coingecko_spot_metal_quote($symbol);
           if (is_array($cg) && (float)($cg['price'] ?? 0) > 0) {
             $last = (float)$cg['price'];
@@ -1289,7 +1290,7 @@ try {
     if ($allowFallbackLiveLookup && !($last > 0) && !candles_request_over_budget(300) && function_exists('qa_quote_payload')) {
       try {
         $qa = qa_quote_payload($type, [$symbol], [
-          'allow_live' => ($type === 'crypto' || vp_is_spot_metal_symbol($symbol, $type)),
+          'allow_live' => ($type === 'crypto' || $isMetal),
           'allow_crypto_seed' => true,
           'allow_noncrypto_seed' => false,
           'direct_budget' => 1,
@@ -1312,7 +1313,6 @@ try {
     // Honest charts: do not fabricate synthetic price action by default.
     // Exception: spot metals, which only have live spot quotes available.
     $isMetal = in_array(strtoupper($symbol), ['XAUUSD','XAGUSD','XPTUSD','XPDUSD'], true) || vp_is_spot_metal_symbol($symbol, $type);
-    $debugOut['is_spot_metal_check'] = $isMetal;
     if ((int)env('CANDLES_SYNTHETIC_FALLBACK', '0') !== 1 && !$isMetal) {
       candles_json_response(['ok'=>true,'soft_error'=>'provider_unavailable','source'=>'no_data','synthetic'=>false], [], $limit, $end);
     }
@@ -1320,9 +1320,7 @@ try {
     $step = max(1, tf_seconds($tf));
     $items = candles_quote_seed_items($price, time(), $step, $limit);
     $out = candles_finalize_items($items, $symbol, $market, $type, $step, $end);
-    $debugOut['last_price'] = $last;
-    $debugOut['is_spot_metal'] = vp_is_spot_metal_symbol($symbol, $type);
-    candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>'provider_unavailable','debug'=>$debugOut], $out, $limit, $end);
+    candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic_error_fallback','soft_error'=>'provider_unavailable'], $out, $limit, $end);
   } catch (Throwable $ignored2) {
     candles_json_response(['ok'=>true,'source'=>'empty_error_fallback','soft_error'=>'provider_unavailable'], [], $limit, $end);
   }
