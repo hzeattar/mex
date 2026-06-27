@@ -591,15 +591,29 @@ function candles_fill_time_gaps(array $items, int $step, string $assetType = '')
         'low' => $anchor,
         'close' => $anchor,
         'volume' => 0.0,
+        'quality' => 'synthetic_gap',
       ];
     }
   }
   return candles_normalize_series($out);
 }
 
+function candles_remove_synthetic_gaps(array $items): array {
+  $out = [];
+  foreach ($items as $c) {
+    if (!((float)($c['volume'] ?? 0) === 0.0 && (string)($c['quality'] ?? '') === 'synthetic_gap')) {
+      $out[] = $c;
+    }
+  }
+  return $out;
+}
+
 function candles_finalize_items(array $items, string $symbol, string $market, string $assetType, int $step, int $end = 0): array {
   $items = candles_normalize_series($items);
+  // Remove synthetic gap fill candles before finalizing so charts don't show
+  // flat/dummy bars that look distorted (zero-volume flat lines).
   $items = candles_fill_time_gaps($items, $step, $assetType);
+  $items = candles_remove_synthetic_gaps($items);
   return candles_sync_live_tail($items, $symbol, $market, $assetType, $step, $end);
 }
 
@@ -609,16 +623,25 @@ function candles_sync_live_tail(array $items, string $symbol, string $market, st
   if (vp_normalize_asset_type($assetType) !== 'crypto' && (int)env('CANDLES_SYNC_LIVE_TAIL_NONCRYPTO', '0') !== 1) return $items;
   if (candles_request_over_budget((int)env('CANDLES_LIVE_TAIL_RESERVE_MS', '1000'))) return $items;
   try {
-    // Read from central cache first (no upstream hit), fallback to quote_price
+    // Read from central cache first (no upstream hit)
     $live = 0.0;
+    $liveSource = '';
     if (function_exists('quote_central_get')) {
       $centralRow = quote_central_get($symbol, $assetType, 30);
       if ($centralRow && (float)($centralRow['price'] ?? 0) > 0) {
         $live = (float)$centralRow['price'];
+        $liveSource = strtolower((string)($centralRow['source'] ?? ''));
       }
+    }
+    // Reject seed/synthetic sources to avoid distorted wicks for the current bar
+    if (in_array($liveSource, ['seed', 'seed_price', 'seed_fallback', 'synthetic', 'chart_seed', 'unavailable', ''], true)) {
+      return $items;
     }
     if (!($live > 0)) {
       $live = (float)quote_price($symbol, $market, $assetType);
+      // quote_price does not expose source; restrict live tail to crypto where feeds are active.
+      // For non-crypto, avoid appending live tick unless central source is trusted.
+      if (vp_normalize_asset_type($assetType) !== 'crypto') return $items;
     }
     if (!($live > 0)) return $items;
 

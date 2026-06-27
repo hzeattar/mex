@@ -604,19 +604,19 @@ const QuoteCache = (() => {
   function preferredQuotePollMs(type='crypto', market='spot', hidden=false){
     const norm = normalizeLiveAssetType(type || 'crypto');
     if(hidden){
-      if(norm === 'crypto') return 3000;
-      if(norm === 'commodities') return 3500;
-      if(norm === 'futures') return 4200;
-      if(norm === 'forex') return 3000;
-      if(norm === 'stocks' || norm === 'arab') return 26000;
-      return 18000;
+      if(norm === 'crypto') return 5000;
+      if(norm === 'commodities') return 6000;
+      if(norm === 'futures') return 8000;
+      if(norm === 'forex') return 5000;
+      if(norm === 'stocks' || norm === 'arab') return 30000;
+      return 25000;
     }
-    if(norm === 'crypto') return 650;
-    if(norm === 'commodities') return 900;
-    if(norm === 'futures') return 1400;
-    if(norm === 'forex') return 750;
-    if(norm === 'stocks' || norm === 'arab') return 2500;
-    return 10000;
+    if(norm === 'crypto') return 1000;
+    if(norm === 'commodities') return 1400;
+    if(norm === 'futures') return 2200;
+    if(norm === 'forex') return 1300;
+    if(norm === 'stocks' || norm === 'arab') return 3500;
+    return 15000;
   }
 
   function vpLiveQuoteThresholds(type='crypto', refPrice=0){
@@ -3416,11 +3416,11 @@ function vpFocusQuoteFreshnessSec(type='crypto'){
 
 function vpFocusQuoteRefreshGapMs(type='crypto'){
   const norm = normalizeLiveAssetType(type || 'crypto');
-  if(vpIsDelayedQuoteType(norm)) return 30000;
-  if(norm === 'forex') return 1800;
-  if(norm === 'commodities') return 2200;
-  if(norm === 'futures') return 2600;
-  return 8000;
+  if(vpIsDelayedQuoteType(norm)) return 60000;
+  if(norm === 'forex') return 3000;
+  if(norm === 'commodities') return 3500;
+  if(norm === 'futures') return 4500;
+  return 15000;
 }
 
 function vpFocusQuoteReadTimeoutMs(type='crypto'){
