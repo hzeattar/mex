@@ -48,7 +48,10 @@ $items = is_array($items) ? array_merge($items, $centralItems) : $centralItems;
 
 $stale = [];
 foreach ($items as $i => $it) {
-  if (!((float)($it['price'] ?? 0) > 0)) $stale[(string)($it['symbol'] ?? '')] = $i;
+  $age = isset($it['age_sec']) && is_numeric($it['age_sec']) ? (int)$it['age_sec'] : null;
+  if (!((float)($it['price'] ?? 0) > 0) || ($age !== null && $age > $freshAge)) {
+    $stale[(string)($it['symbol'] ?? '')] = $i;
+  }
 }
 if ($stale) {
   $maxAge = max($freshAge, (int)env('QUOTE_FOCUS_MAX_AGE', '900'));

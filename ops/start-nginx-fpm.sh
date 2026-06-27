@@ -38,6 +38,14 @@ fi
 
 echo "[start] PHP-FPM started, nginx listening on ${PORT} with internal PHP-FPM upstream 127.0.0.1:9070"
 
+if [ "${WS_AGGREGATOR_ENABLED:-0}" = "1" ]; then
+  : "${WS_AGGREGATOR_FEEDS:=twelvedata}"
+  export WS_AGGREGATOR_FEEDS
+  echo "[start] starting WS aggregator feeds=${WS_AGGREGATOR_FEEDS}"
+  php /app/api/ws/aggregator.php >> /app/api/data/logs/aggregator.log 2>&1 &
+  echo "[start] WS aggregator started (pid $!)"
+fi
+
 # --- In-container market-quote cache warmer --------------------------------
 # Railway runs a single web container with no separate scheduler. Without a
 # warmer, every watchlist request fell through to a slow synchronous provider
@@ -111,6 +119,13 @@ if [ "${IN_CONTAINER_CRON:-1}" != "0" ]; then
     done
   ) &
   echo "[start] in-container quote-cache warmer started (pid $!), low-priority staggered"
+fi
+
+# Start Yahoo REST fallback worker (free, no key needed — last resort)
+if [ "${YAHOO_FALLBACK_ENABLED:-0}" = "1" ]; then
+  echo "[start] starting Yahoo fallback worker (interval=${YAHOO_FALLBACK_INTERVAL:-10}s)"
+  php /app/api/ws/yahoo_fallback.php >> /app/api/data/logs/yahoo_fallback.log 2>&1 &
+  echo "[start] Yahoo fallback started (pid $!)"
 fi
 
 exec nginx -c /tmp/nginx.conf -g 'daemon off;'

@@ -17,6 +17,7 @@ function clampf($v, $min, $max): float {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  admin_verify_csrf();
   try {
     $spotMaker = clampf($_POST['SPOT_MAKER_FEE'] ?? '0.0002', 0, 0.01);
     $spotTaker = clampf($_POST['SPOT_TAKER_FEE'] ?? '0.0004', 0, 0.01);

@@ -110,6 +110,7 @@ function quotes_focus_cache_payload_usable(array $payload, string $assetType, in
 
 function quotes_daily_change_rescue(string $symbol, string $assetType, array $meta = []): ?float {
   if ($assetType === 'crypto') return null;
+  if (!function_exists('quote_yahoo_enabled') || !quote_yahoo_enabled()) return null;
   if (!function_exists('yahoo_ticker_for_market') || !function_exists('yahoo_chart_candles')) return null;
   $ticker = yahoo_ticker_for_market($symbol, $assetType, $meta);
   if (!$ticker) return null;

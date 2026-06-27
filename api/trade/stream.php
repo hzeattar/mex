@@ -468,28 +468,27 @@ if ($quoteSymbols) {
 
       $ySyms = [];
       $yKeyBySym = [];
-      foreach ($mrows as $mr) {
-        $sym = strtoupper((string)($mr['symbol'] ?? ''));
-        $tt  = strtolower((string)($mr['type'] ?? ''));
-        if ($sym === '') continue;
-        $ctxType = vp_provider_asset_type($tt);
-        if (!in_array($ctxType, ['stocks','commodities','futures'], true) && $tt !== 'arab') continue;
+      if (function_exists('quote_yahoo_enabled') && quote_yahoo_enabled()) {
+        foreach ($mrows as $mr) {
+          $sym = strtoupper((string)($mr['symbol'] ?? ''));
+          $tt  = strtolower((string)($mr['type'] ?? ''));
+          if ($sym === '') continue;
+          $ctxType = vp_provider_asset_type($tt);
+          if (!in_array($ctxType, ['stocks','commodities','futures'], true) && $tt !== 'arab') continue;
 
-        $metaArr = market_meta($mr['meta'] ?? null);
-        if ($tt === 'commodities' && vp_is_spot_metal_symbol($sym, $tt)) {
-          // Keep spot metals on the same XAUUSD/XAGUSD-style feed used by candles.
-          // Do not remap them to Yahoo futures like GC=F/SI=F here, otherwise the
-          // trade header/buttons will oscillate between two different markets.
-          continue;
-        }
-        if (!quote_provider_prefers_yahoo($tt, $metaArr, $sym) && !in_array($tt, ['futures'], true)) {
-          continue;
-        }
+          $metaArr = market_meta($mr['meta'] ?? null);
+          if ($tt === 'commodities' && vp_is_spot_metal_symbol($sym, $tt)) {
+            continue;
+          }
+          if (!quote_provider_prefers_yahoo($tt, $metaArr, $sym) && !in_array($tt, ['futures'], true)) {
+            continue;
+          }
 
-        $y = yahoo_ticker_for_market($sym, $tt, $metaArr) ?: '';
-        if ($y !== '' && preg_match('/^[A-Z0-9.=\-]{1,20}$/', $y)) {
-          $yKeyBySym[$sym] = $y;
-          $ySyms[] = $y;
+          $y = yahoo_ticker_for_market($sym, $tt, $metaArr) ?: '';
+          if ($y !== '' && preg_match('/^[A-Z0-9.=\-]{1,20}$/', $y)) {
+            $yKeyBySym[$sym] = $y;
+            $ySyms[] = $y;
+          }
         }
       }
 

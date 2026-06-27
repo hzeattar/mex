@@ -226,7 +226,7 @@ $directRow = static function(string $sym, string $type, array $meta, ?array $war
     } catch (Throwable $e) {}
   }
 
-  if ($type !== 'crypto') {
+  if ($type !== 'crypto' && function_exists('quote_yahoo_enabled') && quote_yahoo_enabled()) {
     try {
       $ySym = yahoo_ticker_for_market($sym, $type, $meta) ?: $sym;
       if ($ySym) {

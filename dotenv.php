@@ -10,7 +10,7 @@ function load_dotenv(?string $path = null): void {
   if ($loaded) return;
   $loaded = true;
 
-  $root = dirname(__DIR__, 2); // project root
+  $root = __DIR__; // project root (this file is at repo root for shared hosting compat)
   $file = $path ?: ($root . '/.env');
   if (!is_file($file) || !is_readable($file)) return;
 

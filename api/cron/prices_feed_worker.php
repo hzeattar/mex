@@ -193,7 +193,7 @@ function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbo
       'massive_ttl' => 1,
       'persist' => true,
       'direct_budget' => $count,
-      'direct_yahoo_budget' => $count,
+      'direct_yahoo_budget' => 0,
       'chart_budget' => $isCrypto ? 8 : min($count, 16),
       'allow_direct_batch' => true,
     ]);

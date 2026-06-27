@@ -1,0 +1,130 @@
+هتقوله كده بالظبط:
+
+---
+
+## 1. الملفات الجديدة والمعدلة
+
+### ملفات جديدة:
+- `api/ws/aggregator.php` — server-side WebSocket daemon
+- `api/ws/yahoo_fallback.php` — Yahoo REST fallback worker
+- `api/trade/candles_twelvedata.php` — شموع Twelve Data
+- `api/health.php` — health monitoring endpoint
+- `api/lib/redis.php` — Redis pub/sub layer
+
+### ملفات معدلة:
+- `api/lib/quote_central.php` — أضيف Redis publish على كل write
+- `sse.php` — أضيف Redis pub/sub mode للـ SSE
+- `frontend/src/views/trade.js` — اتشالت Finnhub/Tiingo/TwelveData client WS
+- `start-nginx-fpm.sh` — تشغيل aggregator + yahoo fallback كـ background workers
+
+---
+
+## 2. متغيرات البيئة المطلوبة في Railway
+
+```env
+# Aggregator
+WS_AGGREGATOR_ENABLED=1
+
+# Yahoo REST fallback (مجاني، لا يحتاج key)
+YAHOO_FALLBACK_ENABLED=1
+YAHOO_FALLBACK_INTERVAL=10
+
+# Redis (اختياري بس يحسن الأداء جداً)
+REDIS_URL=redis://default:PASSWORD@HOST:PORT
+
+# API keys (اختياري)
+FINNHUB_KEY=YOUR_FINNHUB_KEY
+QUOTES_TWELVEDATA_KEY=YOUR_TWELVEDATA_KEY
+```
+
+---
+
+## 3. آلية التشغيل
+
+### WebSocket Sources:
+- **Binance WS** — كريبتو، مجاني، لا key
+- **Finnhub WS** — أسهم/فوركس، محتاج key
+- **Twelve Data WS** — كل الأسواق، محتاج key + credits
+
+### REST Fallback:
+- **Yahoo Finance** — أسهم، سلع، فيوتشرز، فوركس proxies، مجاني تمامًا
+
+### Priority:
+1. WebSocket sources (أسرع)
+2. Yahoo REST fallback
+3. Central cache read
+
+---
+
+## 4. نقاط مهمة للمبرمج
+
+### aggregator.php:
+- شغال كـ daemon background
+- يستخدم pure PHP RFC 6455 WebSocket client (مفيش مكتبات خارجية)
+- بيكتب في central cache (file + DB)
+- لو Redis موجود بينشر updates على `quotes:{type}` و `quotes:all`
+
+### yahoo_fallback.php:
+- شغال كـ daemon منفصل
+- يعمل poll كل 10 ثواني للرموز اللي مفيش WebSocket مجاني ليها
+- يستخدم `yahoo_quote_many_cached()` من `marketdata.php`
+
+### sse.php:
+- لو `REDIS_URL` موجود: يدخل Redis pub/sub mode ويبعت أسعار فورية
+- لو مفيش Redis: يعمل cache polling كل 1-2 ثانية
+
+### health.php:
+- بيفحص حالة cache freshness, aggregator, DB, API keys
+- HTTP 503 لو في مشكلة
+
+---
+
+## 5. أمور لازم يخلي باله منها
+
+1. **Yahoo Finance data متأخرة 15 دقيقة للأسهم** — مش real-time حقيقي. البديل الوحيد الحقيقي والمجاني للأسهم هو Finnhub WS لو عندك key.
+
+2. **السلع في Yahoo** — بتستخدم futures symbols زي `GC=F` للذهب. مشكلتها إنها futures contracts فبتتحول بين الشهور.
+
+3. **الفوركس في Yahoo** — بيستخدم `EURUSD=X` format. مشكلته إن البيانات محدودة والـ update مش لحظي.
+
+4. **Redis pub/sub** — محتاج Redis instance منفصل (Railway Redis plugin ~$5/شهر). بدونه SSE يبقى polling.
+
+---
+
+## 6. فحص سريع بعد التشغيل
+
+افتح في المتصفح:
+```
+https://YOUR_DOMAIN/api/health.php
+```
+
+لازم يرجع:
+```json
+{
+  "status": "ok",
+  "checks": {
+    "cache": { "freshness_pct": 90+ },
+    "aggregator": { "likely_running": true },
+    "database": { "connected": true }
+  }
+}
+```
+
+---
+
+## 7. المشكلة الأساسية اللي المستخدم بيشتكي منها
+
+"السعر بطيء أو واقف" — السبب الأرجح:
+- `WS_AGGREGATOR_ENABLED=1` مش مضبوط في Railway
+- أو `YAHOO_FALLBACK_ENABLED=1` مش مضبوط
+- أو الـ API key خلص (Twelve Data credits)
+- أو aggregator بيعمل crash
+
+الحل: شغّل الـ workers + افحص `/api/health.php` + شوف aggregator logs:
+```
+api/data/logs/aggregator.log
+api/data/logs/yahoo_fallback.log
+```
+
+---
+

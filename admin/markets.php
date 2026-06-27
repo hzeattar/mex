@@ -14,6 +14,7 @@ $types = [
 ];
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+  admin_verify_csrf();
   $action = (string)($_POST['action'] ?? '');
   $now = time();
 

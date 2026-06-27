@@ -109,12 +109,21 @@ if (!function_exists('vp_pricecore_row_usable')) {
     $updatedAt = (int)($row['updated_at'] ?? 0);
     if ($updatedAt <= 0) return false;
     $age = max(0, time() - $updatedAt);
-    $warmMax = 8;
-    $staleMax = 16;
-    if ($assetType === 'forex') { $warmMax = 4; $staleMax = 8; }
-    elseif ($assetType === 'commodities') { $warmMax = 3; $staleMax = 7; }
-    elseif ($assetType === 'futures') { $warmMax = 4; $staleMax = 9; }
-    elseif (in_array($assetType, ['stocks','arab'], true)) { $warmMax = 10; $staleMax = 20; }
+    $warmMax = max(10, min(120, (int)env('MARKET_LIST_MARKET_HOURS_STALE_SECONDS', '30')));
+    $staleMax = max($warmMax * 2, min(300, (int)env('QUOTE_FOCUS_MAX_AGE', '180')));
+    if ($assetType === 'forex') {
+      $warmMax = max(15, min(120, (int)env('MARKET_LIST_FOREX_STALE_SECONDS', '60')));
+      $staleMax = max($warmMax * 2, min(300, (int)env('QA_MAXAGE_FOREX_STRICT', '180')));
+    } elseif ($assetType === 'commodities') {
+      $warmMax = max(15, min(120, (int)env('MARKET_LIST_MARKET_HOURS_STALE_SECONDS', '60')));
+      $staleMax = max($warmMax * 2, min(300, (int)env('COMMODITIES_LIVE_PROVIDER_MAX_AGE', '180')));
+    } elseif ($assetType === 'futures') {
+      $warmMax = max(15, min(120, (int)env('MARKET_LIST_MARKET_HOURS_STALE_SECONDS', '60')));
+      $staleMax = max($warmMax * 2, min(300, (int)env('FUTURES_LIVE_PROVIDER_MAX_AGE', '180')));
+    } elseif (in_array($assetType, ['stocks','arab'], true)) {
+      $warmMax = max(30, min(180, (int)env('MARKET_LIST_DELAYED_STALE_SECONDS', '60')));
+      $staleMax = max($warmMax * 2, min(600, (int)env($assetType === 'arab' ? 'QA_MAXAGE_ARAB_STRICT' : 'QA_MAXAGE_STOCKS_STRICT', '300')));
+    }
     $maxAge = ($mode === 'stale') ? $staleMax : $warmMax;
     return $age <= $maxAge;
   }
@@ -195,7 +204,7 @@ if (!function_exists('vp_pricecore_prefetch_group')) {
         // OPTIMIZED: Increased EODHD TTL from 1s to 3s to reduce API calls
         'eodhd_ttl' => 3,
         'direct_budget' => $directBudget,
-        'direct_yahoo_budget' => $directBudget,
+        'direct_yahoo_budget' => 0,
         'chart_budget' => $chartBudget,
         'allow_direct_batch' => ($count <= 4 && ($visible || $preferLive)),
         'eodhd_batch_budget' => ($count <= 2 ? 2 : 1),

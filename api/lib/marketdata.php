@@ -1080,7 +1080,7 @@ function yahoo_quote_many(array $symbols): array {
       }
       if ($chg === null || (float)$chg == 0.0) {
         $prev = null;
-        foreach (['regularMarketPreviousClose', 'previousClose', 'regularMarketOpen'] as $prevKey) {
+        foreach (['regularMarketPreviousClose', 'previousClose'] as $prevKey) {
           if (isset($r[$prevKey]) && is_numeric($r[$prevKey]) && (float)$r[$prevKey] > 0) {
             $prev = (float)$r[$prevKey];
             break;
@@ -1964,7 +1964,12 @@ function eodhd_intraday_candles(string $ticker, string $tf = '1m', int $limit = 
   $limit = max(10, min(1000, (int)$limit));
   $step = tf_seconds($tf);
   $to = time();
-  $from = max(0, $to - (($limit + 12) * max(60, $step)));
+  $lookback = ($limit + 12) * max(60, $step);
+  // Markets are often closed when users open the platform. A narrow 1m window
+  // returns no candles on weekends/after-hours, which used to trigger fake UI
+  // candles. Keep a small real-history window and slice to the requested limit.
+  $minLookback = max(3600, min(604800, (int)env('EODHD_INTRADAY_MIN_LOOKBACK_SECONDS', '259200')));
+  $from = max(0, $to - max($lookback, $minLookback));
   $url = eodhd_base() . '/intraday/' . rawurlencode($ticker)
     . '?api_token=' . urlencode($apiKey)
     . '&fmt=json&interval=' . rawurlencode($interval)

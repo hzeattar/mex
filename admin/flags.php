@@ -6,6 +6,7 @@ $pdo = db();
 $msg = '';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+  admin_verify_csrf();
   $key = trim((string)($_POST['key'] ?? ''));
   $enabled = isset($_POST['enabled']) ? 1 : 0;
   if ($key !== '') {

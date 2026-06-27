@@ -30,6 +30,8 @@ $FINNHUB_SYMBOLS = []; // forex + stocks via Finnhub WS (free tier)
 $TICK_INTERVAL   = 5;
 $MAX_RUNTIME     = (int)getenv('WS_AGGREGATOR_MAX_RUNTIME') ?: 3600;
 $RECONNECT_DELAY = 3;
+$FEEDS_RAW       = strtolower(trim((string)(getenv('WS_AGGREGATOR_FEEDS') ?: ($TWELVE_KEY !== '' ? 'twelvedata' : 'binance'))));
+$ENABLED_FEEDS   = array_values(array_filter(array_map('trim', explode(',', $FEEDS_RAW))));
 
 // ── Pure PHP WebSocket Client (RFC 6455) ────────────────────────────────────
 
@@ -441,7 +443,7 @@ function runTwelveDataWs(): int {
 
   // Subscribe in batches of 50 symbols (Twelve Data limit)
   $batch = array_slice(array_keys($TWELVE_SYMBOLS), 0, 50);
-  $url = "wss://ws.twelvedata.com/v1/quotes/price?token={$TWELVE_KEY}";
+  $url = "wss://ws.twelvedata.com/v1/quotes/price?apikey={$TWELVE_KEY}";
 
   echo "[" . date('H:i:s') . "] Twelve Data WS: connecting to " . count($batch) . " symbols...\n";
 
@@ -596,6 +598,7 @@ collectSymbols();
 echo "Binance symbols: " . count($BINANCE_SYMBOLS) . "\n";
 echo "Twelve Data symbols: " . count($TWELVE_SYMBOLS) . "\n";
 echo "Finnhub symbols: " . count($FINNHUB_SYMBOLS) . "\n";
+echo "Enabled feeds: " . implode(',', $ENABLED_FEEDS) . "\n";
 
 $startTime = time();
 
@@ -606,25 +609,19 @@ while (true) {
     break;
   }
 
-  // Run Binance WS
-  try {
-    runBinanceWs();
-  } catch (Throwable $e) {
-    echo "  [Binance WS] Error: " . $e->getMessage() . "\n";
-  }
-
-  // Run Finnhub WS (free forex/stocks)
-  try {
-    runFinnhubWs();
-  } catch (Throwable $e) {
-    echo "  [Finnhub WS] Error: " . $e->getMessage() . "\n";
-  }
-
-  // Run Twelve Data WS (if credits available)
-  try {
-    runTwelveDataWs();
-  } catch (Throwable $e) {
-    echo "  [Twelve Data WS] Error: " . $e->getMessage() . "\n";
+  foreach ($ENABLED_FEEDS as $feed) {
+    if ((time() - $startTime) >= $MAX_RUNTIME) break 2;
+    try {
+      if ($feed === 'twelvedata' || $feed === 'twelve') {
+        runTwelveDataWs();
+      } elseif ($feed === 'binance') {
+        runBinanceWs();
+      } elseif ($feed === 'finnhub') {
+        runFinnhubWs();
+      }
+    } catch (Throwable $e) {
+      echo "  [{$feed} WS] Error: " . $e->getMessage() . "\n";
+    }
   }
 
   // Reconnect delay

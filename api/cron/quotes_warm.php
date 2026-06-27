@@ -217,7 +217,7 @@ foreach ($types as $type) {
     'yahoo_ttl' => 1,
     'massive_ttl' => 1,
     'direct_budget' => count($symbols),
-    'direct_yahoo_budget' => count($symbols),
+    'direct_yahoo_budget' => 0,
     'allow_direct_batch' => $chartCap > 0,
     'chart_budget' => $chartCap,
     'chart_budget_cap' => $chartCap,

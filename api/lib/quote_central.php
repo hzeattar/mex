@@ -26,19 +26,36 @@ function quote_central_ensure_table(): void {
   if ($ensured) return;
   $ensured = true;
   $pdo = db();
-  $pdo->exec("CREATE TABLE IF NOT EXISTS central_quotes (
-    symbol VARCHAR(30) NOT NULL,
-    type VARCHAR(20) NOT NULL,
-    price DOUBLE NOT NULL DEFAULT 0,
-    change_pct DOUBLE NOT NULL DEFAULT 0,
-    source VARCHAR(60) NOT NULL DEFAULT '',
-    central_ts INT UNSIGNED NOT NULL DEFAULT 0,
-    updated_at INT UNSIGNED NOT NULL DEFAULT 0,
-    payload JSON DEFAULT NULL,
-    PRIMARY KEY (symbol, type),
-    INDEX idx_central_ts (central_ts),
-    INDEX idx_type (type)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  $driver = db_driver();
+  if ($driver === 'mysql') {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS central_quotes (
+      symbol VARCHAR(30) NOT NULL,
+      type VARCHAR(20) NOT NULL,
+      price DOUBLE NOT NULL DEFAULT 0,
+      change_pct DOUBLE NOT NULL DEFAULT 0,
+      source VARCHAR(60) NOT NULL DEFAULT '',
+      central_ts INT UNSIGNED NOT NULL DEFAULT 0,
+      updated_at INT UNSIGNED NOT NULL DEFAULT 0,
+      payload JSON DEFAULT NULL,
+      PRIMARY KEY (symbol, type),
+      INDEX idx_central_ts (central_ts),
+      INDEX idx_type (type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  } else {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS central_quotes (
+      symbol TEXT NOT NULL,
+      type TEXT NOT NULL,
+      price REAL NOT NULL DEFAULT 0,
+      change_pct REAL NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT '',
+      central_ts INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0,
+      payload TEXT DEFAULT NULL,
+      PRIMARY KEY (symbol, type)
+    )");
+    try { $pdo->exec("CREATE INDEX IF NOT EXISTS idx_central_ts ON central_quotes(central_ts)"); } catch (Throwable $e) {}
+    try { $pdo->exec("CREATE INDEX IF NOT EXISTS idx_type ON central_quotes(type)"); } catch (Throwable $e) {}
+  }
 }
 
 function quote_central_ensure_manifest_table(): void {
@@ -46,12 +63,22 @@ function quote_central_ensure_manifest_table(): void {
   if ($ensured) return;
   $ensured = true;
   $pdo = db();
-  $pdo->exec("CREATE TABLE IF NOT EXISTS central_manifest (
-    id INT UNSIGNED NOT NULL DEFAULT 1,
-    payload JSON DEFAULT NULL,
-    updated_at INT UNSIGNED NOT NULL DEFAULT 0,
-    PRIMARY KEY (id)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  $driver = db_driver();
+  if ($driver === 'mysql') {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS central_manifest (
+      id INT UNSIGNED NOT NULL DEFAULT 1,
+      payload JSON DEFAULT NULL,
+      updated_at INT UNSIGNED NOT NULL DEFAULT 0,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  } else {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS central_manifest (
+      id INTEGER NOT NULL DEFAULT 1,
+      payload TEXT DEFAULT NULL,
+      updated_at INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (id)
+    )");
+  }
 }
 
 // ── File-based cache (local per-container) ──────────────────────────────────

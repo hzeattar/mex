@@ -21,6 +21,10 @@ function redis_connect(): ?Redis {
   static $redis = null;
   if ($redis !== null) return $redis;
 
+  if (!class_exists('Redis')) {
+    return null;
+  }
+
   $url = redis_url();
   if (!$url) return null;
 

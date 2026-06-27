@@ -24,6 +24,7 @@ if ($userId > 0) {
 
 // Handle POST (adjust)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  admin_verify_csrf();
   try {
     if ($userId <= 0) throw new Exception('Select a user first');
 

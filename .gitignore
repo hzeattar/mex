@@ -5,6 +5,8 @@ vendor
 .env
 .env.*
 !.env.example
+env
+env.local
 
 *.zip
 *.tar

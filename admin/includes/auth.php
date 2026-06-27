@@ -346,7 +346,13 @@ function admin_base64url_decode(string $raw): string {
 }
 
 function admin_auth_secret(): string {
-  $secret = (string)(env('ADMIN_SESSION_SECRET', '') ?: env('APP_KEY', '') ?: env('JWT_SECRET', '') ?: env('ADMIN_PASSWORD', '') ?: 'mex-admin-session');
+  $secret = (string)(env('ADMIN_SESSION_SECRET', '') ?: env('APP_KEY', '') ?: env('JWT_SECRET', ''));
+  if ($secret === '') {
+    error_log('[admin] WARNING: ADMIN_SESSION_SECRET not set — using random per-process key. Sessions will NOT survive restarts.');
+    static $fallback = null;
+    if ($fallback === null) $fallback = bin2hex(random_bytes(32));
+    $secret = $fallback;
+  }
   return hash('sha256', $secret);
 }
 

@@ -109,6 +109,16 @@ function sig_fetch_market_candles(string $symbol, string $type, array $meta, str
     } catch (Throwable $e) {}
   }
   try {
+    if (function_exists('twelvedata_enabled') && twelvedata_enabled()) {
+      $td = twelvedata_symbol_for_market($symbol, $type, $meta) ?: twelvedata_symbol_for_market($symbol, vp_provider_asset_type($type), $meta);
+      if ($td) {
+        $rows = twelvedata_time_series_candles_cached($td, $tf, $limit, 0, max(30, min(3600, (int)env('TWELVEDATA_CANDLES_TTL', '60'))));
+        if ($rows) return $rows;
+      }
+    }
+  } catch (Throwable $e) {}
+  if (!function_exists('quote_yahoo_enabled') || !quote_yahoo_enabled()) return [];
+  try {
     $y = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, vp_provider_asset_type($type), $meta);
     if ($y) {
       $rows = yahoo_chart_candles($y, $tf, $limit);

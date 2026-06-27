@@ -10,17 +10,20 @@ if (!function_exists('vp_quote_source_rank')) {
         $src = strtolower(trim((string)$source));
         return match ($src) {
             'binance' => 100,
-            'trade_stream', 'stream' => 96,
-            'provider_live' => 92,
-            'finnhub' => 89,
-            'tiingo' => 87,
-            'twelvedata' => 86,
-            'massive', 'polygon' => 90,
-            'eodhd', 'eodhd_rest', 'eodhd_intraday' => 88,
-            'fcsapi' => 82,
-            'provider_fallback' => 84,
-            'yahoo', 'yahoo_chart_live' => 72,
-            'fx_fallback', 'frankfurter', 'stooq' => 66,
+            'binance_ws' => 98,
+            'twelvedata_ws' => 97,
+            'twelvedata' => 96,
+            'trade_stream', 'stream' => 90,
+            'finnhub_ws' => 86,
+            'provider_live' => 85,
+            'finnhub' => 84,
+            'eodhd', 'eodhd_rest', 'eodhd_intraday' => 82,
+            'tiingo' => 80,
+            'massive', 'polygon' => 78,
+            'fcsapi' => 76,
+            'provider_fallback' => 70,
+            'yahoo', 'yahoo_chart_live' => 1,
+            'fx_fallback', 'frankfurter', 'stooq' => 60,
             'cache', 'stale_cache' => 12,
             'seed', 'seed_fallback', 'seed_price', 'chart_seed', 'seed_candle', 'synthetic', 'aggs' => 4,
             default => ($src === '' ? 0 : 40),
@@ -68,8 +71,8 @@ if (!function_exists('vp_quote_candidate_score')) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// TwelveData provider — free tier: 8 credits/min, 800/day
-// Covers: forex, stocks, commodities, crypto, ETFs, indices
+// TwelveData provider — Pro Plan: 610 credits/min, 500 WS credits/min
+// Covers: forex, stocks, commodities, crypto, futures, arab, ETFs, indices
 // Env: QUOTES_TWELVEDATA_KEY (required)
 // ──────────────────────────────────────────────────────────────
 
@@ -122,11 +125,16 @@ if (!function_exists('twelvedata_symbol_for_market')) {
             return null;
         }
 
-        // Stocks, arab, futures — use as-is
+        // Stocks, arab, futures, indices — use as-is
         if (in_array($providerType, ['stocks', 'arab', 'futures', 'indices'], true)) {
             if (preg_match('/^[A-Z0-9._\-]{1,20}$/', $symbol)) {
                 return $symbol;
             }
+        }
+
+        if ($providerType === 'futures') {
+            // Twelve Data Pro supports futures like ES, NQ, YM, CL, GC, ZN, ZB
+            return $symbol;
         }
 
         return null;
@@ -509,12 +517,28 @@ if (!function_exists('finnhub_symbol_for_market')) {
         $fh = trim((string)($meta['finnhub_ticker'] ?? ''));
         if ($fh !== '') return $fh;
 
-        // Finnhub free tier only supports US stocks — forex/commodities/arab return 403
-        if ($providerType !== 'stocks') return null;
+        // Finnhub free tier supports US stocks, forex, and crypto
+        if ($providerType === 'forex') {
+            // Finnhub forex uses OANDA format: EURUSD → OANDA:EUR_USD
+            if (preg_match('/^([A-Z]{3})([A-Z]{3})$/', $symbol, $m)) {
+                return 'OANDA:' . $m[1] . '_' . $m[2];
+            }
+            return null;
+        }
+
+        if ($providerType === 'crypto') {
+            // Finnhub crypto: BINANCE:BTCUSDT
+            if (preg_match('/^([A-Z0-9]{2,10})(USDT?)$/', $symbol, $m)) {
+                return 'BINANCE:' . $m[1] . $m[2];
+            }
+            return null;
+        }
 
         // US stocks — use raw ticker
-        if (preg_match('/^[A-Z0-9._\-]{1,30}$/', $symbol)) {
-            return $symbol;
+        if ($providerType === 'stocks') {
+            if (preg_match('/^[A-Z0-9._\-]{1,30}$/', $symbol)) {
+                return $symbol;
+            }
         }
 
         return null;

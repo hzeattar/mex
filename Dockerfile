@@ -10,6 +10,7 @@ RUN set -eux; \
       ca-certificates \
       gettext-base \
       nginx \
+      curl \
       libfreetype6-dev \
       libcurl4-openssl-dev \
       libjpeg62-turbo-dev \
@@ -19,6 +20,7 @@ RUN set -eux; \
     update-ca-certificates; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-install -j"$(nproc)" curl gd mbstring mysqli pdo_mysql zip; \
+    if pecl list 2>/dev/null | grep -q redis; then docker-php-ext-enable redis; else pecl install redis && docker-php-ext-enable redis; fi; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* \
       /etc/nginx/sites-enabled/default \

@@ -38,6 +38,7 @@ $msg = null; $err = null;
 
 // ---- Actions ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  admin_verify_csrf();
   $action = (string)($_POST['action'] ?? '');
 
   // Adjust OPEN (REAL only) by PNL or ROE (changes ENTRY only)

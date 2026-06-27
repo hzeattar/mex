@@ -8,18 +8,37 @@ if (admin_is_logged_in()) {
 
 $error = '';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-  $email = trim((string)($_POST['email'] ?? ''));
-  $pass = (string)($_POST['password'] ?? '');
-  if (admin_credentials_ok($email, $pass)) {
-    admin_login_success($email);
-    $next = (string)($_POST['next'] ?? $_GET['next'] ?? '/admin/dashboard.php');
-    if (!str_starts_with($next, '/admin/') || str_contains($next, "\n") || str_contains($next, "\r")) {
-      $next = '/admin/dashboard.php';
-    }
-    header('Location: ' . $next);
-    exit;
+  // Rate limiting: max 5 attempts per IP per minute
+  $clientIp = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+  $clientIp = substr(trim(explode(',', (string)$clientIp)[0] ?? ''), 0, 45);
+  $rateLimitFile = __DIR__ . '/../api/data/locks/admin_login_ratelimit_' . md5($clientIp) . '.json';
+  $rateLimit = ['count' => 0, 'window_start' => 0];
+  if (is_file($rateLimitFile)) {
+    $raw = @file_get_contents($rateLimitFile);
+    $decoded = $raw ? json_decode($raw, true) : null;
+    if (is_array($decoded)) $rateLimit = $decoded;
   }
-  $error = 'Invalid credentials';
+  if ((time() - $rateLimit['window_start']) > 60) {
+    $rateLimit = ['count' => 0, 'window_start' => time()];
+  }
+  if ($rateLimit['count'] >= 5) {
+    $error = 'Too many attempts. Please wait a moment.';
+  } else {
+    $email = trim((string)($_POST['email'] ?? ''));
+    $pass = (string)($_POST['password'] ?? '');
+    if (admin_credentials_ok($email, $pass)) {
+      admin_login_success($email);
+      $next = (string)($_POST['next'] ?? $_GET['next'] ?? '/admin/dashboard.php');
+      if (!str_starts_with($next, '/admin/') || str_contains($next, "\n") || str_contains($next, "\r")) {
+        $next = '/admin/dashboard.php';
+      }
+      header('Location: ' . $next);
+      exit;
+    }
+    $rateLimit['count']++;
+    @file_put_contents($rateLimitFile, json_encode($rateLimit), LOCK_EX);
+    $error = 'Invalid credentials';
+  }
 }
 
 $errHtml = $error ? "<div class='admin-login-error'><span class='pill bad'>" . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . "</span></div>" : '';

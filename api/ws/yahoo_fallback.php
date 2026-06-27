@@ -33,7 +33,17 @@ function yahooSymbolMap(string $symbol, string $type, array $def): ?string {
   ];
 
   if ($type === 'commodities') return $commodityMap[$symbol] ?? null;
-  if ($type === 'futures') return $symbol;
+
+  $futuresMap = [
+    'ES_F' => 'ES=F', 'NQ_F' => 'NQ=F', 'YM_F' => 'YM=F', 'RTY_F' => 'RTY=F',
+    'CL_F' => 'CL=F', 'GC_F' => 'GC=F', 'ZN_F' => 'ZN=F', 'ZB_F' => 'ZB=F',
+    'NG_F' => 'NG=F', 'ZC_F' => 'ZC=F', 'ZS_F' => 'ZS=F', 'ZW_F' => 'ZW=F',
+    'HE_F' => 'HE=F', 'CT_F' => 'CT=F', 'KC_F' => 'KC=F', 'SB_F' => 'SB=F',
+    'CC_F' => 'CC=F', 'PL_F' => 'PL=F', 'PA_F' => 'PA=F', 'SI_F' => 'SI=F',
+    'HG_F' => 'HG=F',
+  ];
+  if ($type === 'futures') return $futuresMap[$symbol] ?? $symbol;
+
   if ($type === 'forex') {
     $s = str_replace('USDT', 'USD', $symbol);
     if (strlen($s) >= 6) return substr($s, 0, 3) . substr($s, 3, 3) . '=X';

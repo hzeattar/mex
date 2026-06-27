@@ -7,6 +7,7 @@ $msg = '';
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+  admin_verify_csrf();
   $action = (string)($_POST['action'] ?? '');
   $now = time();
 

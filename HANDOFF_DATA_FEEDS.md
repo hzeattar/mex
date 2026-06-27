@@ -93,7 +93,7 @@ QUOTES_TWELVEDATA_KEY=YOUR_TWELVEDATA_KEY
 - Interval controlled by `YAHOO_FALLBACK_INTERVAL` (default 10s).
 - Logs to `api/data/logs/yahoo_fallback.log`.
 
-### `start-nginx-fpm.sh`
+### `start-nginx-fpm.sh` (ops/)
 
 Starts the workers in the background when enabled:
 

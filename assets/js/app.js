@@ -403,8 +403,10 @@ function apiLiveQuotes(path, type, timeoutMs=4500){
   let isDirect = false;
   let isVisible = false;
   let symbolCount = 0;
+  let isFocus = false;
   try{
     const raw = String(canonical || '');
+    isFocus = raw.indexOf('/quote_focus.php') !== -1;
     const [, query=''] = raw.split('?');
     const params = new URLSearchParams(query);
     isDirect = String(params.get('direct') || '0') === '1';
@@ -416,7 +418,9 @@ function apiLiveQuotes(path, type, timeoutMs=4500){
   }catch(e){}
   const effectiveTimeout = Number(timeoutMs || 0) > 0 ? Number(timeoutMs) : (norm === 'forex' ? 12000 : (['futures','stocks','arab'].includes(norm) ? 14000 : (norm === 'commodities' ? 7000 : 6500)));
   let staleTtl = Math.max(norm === 'forex' ? 1800 : 1200, Math.min(norm === 'forex' ? 7200 : 5400, Math.round(effectiveTimeout * 0.56)));
-  if(vpIsDelayedQuoteType(norm)){
+  if(isFocus){
+    staleTtl = norm === 'forex' ? 650 : (norm === 'commodities' ? 850 : (norm === 'futures' ? 1100 : 1500));
+  }else if(vpIsDelayedQuoteType(norm)){
     staleTtl = isDirect ? 8000 : (isVisible ? 10000 : 12000);
   }else if(isDirect && symbolCount <= 2){
     staleTtl = norm === 'commodities' ? 220 : (norm === 'forex' ? 280 : 420);
@@ -600,18 +604,18 @@ const QuoteCache = (() => {
   function preferredQuotePollMs(type='crypto', market='spot', hidden=false){
     const norm = normalizeLiveAssetType(type || 'crypto');
     if(hidden){
-      if(norm === 'crypto') return 4200;
-      if(norm === 'commodities') return 5200;
-      if(norm === 'futures') return 6400;
-      if(norm === 'forex') return 4800;
+      if(norm === 'crypto') return 3000;
+      if(norm === 'commodities') return 3500;
+      if(norm === 'futures') return 4200;
+      if(norm === 'forex') return 3000;
       if(norm === 'stocks' || norm === 'arab') return 26000;
       return 18000;
     }
-    if(norm === 'crypto') return 850;
-    if(norm === 'commodities') return 1900;
-    if(norm === 'futures') return 3200;
-    if(norm === 'forex') return 1500;
-    if(norm === 'stocks' || norm === 'arab') return 12000;
+    if(norm === 'crypto') return 650;
+    if(norm === 'commodities') return 900;
+    if(norm === 'futures') return 1400;
+    if(norm === 'forex') return 750;
+    if(norm === 'stocks' || norm === 'arab') return 2500;
     return 10000;
   }
 
@@ -3404,18 +3408,18 @@ function vpExtractQuoteItem(resp, symbol=''){
 function vpFocusQuoteFreshnessSec(type='crypto'){
   const norm = normalizeLiveAssetType(type || 'crypto');
   if(vpIsDelayedQuoteType(norm)) return 1800;
-  if(norm === 'forex') return 6;
-  if(norm === 'commodities') return 5;
-  if(norm === 'futures') return 7;
+  if(norm === 'forex') return 10;
+  if(norm === 'commodities') return 10;
+  if(norm === 'futures') return 12;
   return 12;
 }
 
 function vpFocusQuoteRefreshGapMs(type='crypto'){
   const norm = normalizeLiveAssetType(type || 'crypto');
   if(vpIsDelayedQuoteType(norm)) return 30000;
-  if(norm === 'forex') return 4200;
-  if(norm === 'commodities') return 5200;
-  if(norm === 'futures') return 6200;
+  if(norm === 'forex') return 1800;
+  if(norm === 'commodities') return 2200;
+  if(norm === 'futures') return 2600;
   return 8000;
 }
 
@@ -3442,7 +3446,7 @@ async function vpFetchNonCryptoFocusQuote(symbol, type, market='spot', opts={}){
   if(liveType === 'crypto') return null;
   const safeSymbol = String(symbol || '').toUpperCase().trim();
   const safeMarket = resolveLiveMarketForSymbol(safeSymbol, liveType, market || 'spot');
-  const cachedQuotePath = `/quotes.php?symbol=${encodeURIComponent(safeSymbol)}&type=${encodeURIComponent(liveType)}`;
+  const cachedQuotePath = `/quote_focus.php?symbols=${encodeURIComponent(safeSymbol)}&type=${encodeURIComponent(liveType)}`;
   const directQuotePath = vpIsDelayedQuoteType(liveType)
     ? cachedQuotePath
     : `/quotes.php?direct=1&strict_live=1&symbol=${encodeURIComponent(safeSymbol)}&type=${encodeURIComponent(liveType)}`;
@@ -8136,7 +8140,7 @@ function createTradeWatchlistPanel(symbol, assetType, onSelect, opts={}){
               }
             });
           }else{
-            const qr = await api(`/quotes.php?type=${encodeURIComponent(normalizeLiveAssetType(assetType||'crypto'))}&symbols=${encodeURIComponent(missing.join(','))}`, { timeoutMs: 4200 });
+            const qr = await apiLiveQuotes(`/quote_focus.php?type=${encodeURIComponent(normalizeLiveAssetType(assetType||'crypto'))}&symbols=${encodeURIComponent(missing.join(','))}`, normalizeLiveAssetType(assetType||'crypto'), 2400);
             (Array.isArray(qr?.items) ? qr.items : []).forEach(item=>{
               const sym = String(item?.symbol || '').toUpperCase();
               if(sym && missing.includes(sym)){
@@ -8175,7 +8179,9 @@ function createTradeWatchlistPanel(symbol, assetType, onSelect, opts={}){
   search.addEventListener('input', ()=>{ renderRows(); refreshVisibleRows().catch(()=>{}); });
   renderRows();
   refreshVisibleRows().catch(()=>{});
-  const rowsEvery = normalizeLiveAssetType(assetType||'crypto') === 'crypto' ? 2200 : 4800;
+  const rowsEvery = normalizeLiveAssetType(assetType||'crypto') === 'crypto'
+    ? 1200
+    : (normalizeLiveAssetType(assetType||'crypto') === 'forex' ? 1400 : 2200);
   const rowsTick = ()=>{
     try{
       if(!panel.isConnected) return;
@@ -9350,7 +9356,7 @@ function tradePage(){
     }catch(e){}
   });
 
-  const tradeCandlesCacheKey = (mk='')=>`trade_candles_v3:${String(symbol || '').toUpperCase()}:${String(assetType || 'crypto').toLowerCase()}:${String(mk || marketTypeRef.value || 'spot').toLowerCase()}:${String(tf || '1m').toLowerCase()}`;
+  const tradeCandlesCacheKey = (mk='')=>`trade_candles_v5:${String(symbol || '').toUpperCase()}:${String(assetType || 'crypto').toLowerCase()}:${String(mk || marketTypeRef.value || 'spot').toLowerCase()}:${String(tf || '1m').toLowerCase()}`;
   let tradeSeedAppliedSig = '';
   const tradeSeedLocalSeedItems = (price, tfValue, count=72)=>{
     const px = safeNum(price, 0);
@@ -9421,7 +9427,16 @@ function tradePage(){
     }catch(_e){}
     return safeNum(lastPriceRef.value, 0);
   };
+  const tradeAllowLocalSeedFallback = ()=>{
+    try{
+      if(window.MEX_ALLOW_SYNTHETIC_CHARTS === true) return true;
+      return String(localStorage.getItem('mexAllowSyntheticCharts') || '') === '1';
+    }catch(_e){
+      return false;
+    }
+  };
   const tradeApplyLocalSeedFallback = (seedPrice, mk='')=>{
+    if(!tradeAllowLocalSeedFallback()) return false;
     const px = safeNum(seedPrice, 0);
     if(!(px > 0)) return false;
     try{
@@ -9658,17 +9673,8 @@ function tradePage(){
             chart._drawBatched?.();
           }
         } else if(last && lastTime < bucket){
-          if(shouldAnchorFlat && isCryptoChart){
+          if(shouldAnchorFlat){
             chart.setLastPrice(chartSyncPrice);
-          } else if(shouldAnchorFlat){
-            chart.upsertCandle({
-              time: bucket,
-              open: chartSyncPrice,
-              high: chartSyncPrice,
-              low: chartSyncPrice,
-              close: chartSyncPrice,
-              volume: 0
-            });
           } else {
             const prevClose = safeNum(last.close, chartSyncPrice);
             chart.upsertCandle({
@@ -9790,6 +9796,8 @@ function startPolling(){
     const sec = tfSec(tf);
     const now = Math.floor(Date.now()/1000);
     const bucket = Math.floor(now/sec)*sec;
+    const typeNorm = normalizeLiveAssetType(assetType || 'crypto');
+    const isCryptoChart = typeNorm === 'crypto';
 
     // If no candles loaded yet, just set last price line
     if(!chart.candles || !chart.candles.length){
@@ -9806,14 +9814,30 @@ function startPolling(){
     const refClose = safeNum(last.close, price);
     const drift = refClose > 0 ? Math.abs(price - refClose) / refClose : 0;
     const nowMs = Date.now();
+    const lastTime = safeNum(last.time, bucket);
+    const gapBuckets = sec > 0 ? Math.max(0, Math.round((bucket - lastTime) / sec)) : 0;
+
+    if(!isCryptoChart){
+      const maxBridgeBuckets = typeNorm === 'forex' ? 1 : 0;
+      const maxLiveDrift = typeNorm === 'forex' ? 0.0012 : (typeNorm === 'commodities' ? 0.004 : 0.006);
+      const quoteAgeSec = lastLiveQuoteTs > 0 ? Math.max(0, Math.floor(Date.now()/1000) - lastLiveQuoteTs) : 999999;
+      const quoteFreshEnough = quoteAgeSec <= vpFocusQuoteFreshnessSec(typeNorm);
+      if(gapBuckets > maxBridgeBuckets || !quoteFreshEnough || drift > maxLiveDrift){
+        chart.setLastPrice(price);
+        const allowReseed = !computeTradeMobile() && !(typeof document !== 'undefined' && document.hidden);
+        if(allowReseed && gapBuckets > 2 && (Date.now() - lastReseedAt) > 45000){
+          lastReseedAt = Date.now();
+          try{ seedCandles({ force:true }); }catch(e){}
+        }
+        return;
+      }
+    }
+
     if(lastLiveQuotePrice > 0 && Math.abs(lastLiveQuotePrice - price) <= Math.max(1e-8, Math.abs(price) * 1e-8) && (nowMs - lastChartSeedTs) < 450){
       chart.setLastPrice(price);
       return;
     }
     if(drift > 0.08){
-      const lastTime = safeNum(last.time, bucket);
-      const gapBuckets = sec > 0 ? Math.max(0, Math.round((bucket - lastTime) / sec)) : 0;
-      const isCryptoChart = normalizeLiveAssetType(assetType || 'crypto') === 'crypto';
       if(!isCryptoChart && gapBuckets > 0){
         chart.upsertCandle({
           time: bucket,

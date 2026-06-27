@@ -427,28 +427,28 @@ function vp_supported_rescue_limits(string $scope, string $type): array {
     'forex' => [
       'batch' => $isHome ? 2 : 3,
       'direct_budget' => $isHome ? 2 : 3,
-      'direct_yahoo_budget' => $isHome ? 2 : 3,
+      'direct_yahoo_budget' => 0,
       'chart_budget' => 1,
       'ttl' => 2,
     ],
     'stocks' => [
       'batch' => $isHome ? 3 : 4,
       'direct_budget' => $isHome ? 3 : 4,
-      'direct_yahoo_budget' => $isHome ? 3 : 4,
+      'direct_yahoo_budget' => 0,
       'chart_budget' => 0,
       'ttl' => 2,
     ],
     'commodities', 'futures', 'arab' => [
       'batch' => $isHome ? 2 : 3,
       'direct_budget' => $isHome ? 2 : 3,
-      'direct_yahoo_budget' => $isHome ? 2 : 3,
+      'direct_yahoo_budget' => 0,
       'chart_budget' => 0,
       'ttl' => 2,
     ],
     default => [
       'batch' => 2,
       'direct_budget' => 2,
-      'direct_yahoo_budget' => 1,
+      'direct_yahoo_budget' => 0,
       'chart_budget' => 1,
       'ttl' => 2,
     ],
@@ -459,7 +459,7 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   if (!$items || !in_array($scope, ['home', 'trade'], true)) return $items;
   $started = microtime(true);
   $budgetMs = max(300, min(5000, (int)env('MARKETS_RESCUE_BUDGET_MS', $scope === 'home' ? '3000' : '1500')));
-  $defaultNonCryptoRescue = in_array($scope, ['home', 'trade'], true) ? '1' : '0';
+  $defaultNonCryptoRescue = '0';
   $allowNonCryptoRescue = ((int)($_GET['rescue_noncrypto'] ?? env('MARKETS_RESCUE_NONCRYPTO', $defaultNonCryptoRescue)) === 1);
 
   $defsByKey = [];
