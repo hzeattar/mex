@@ -222,6 +222,12 @@ ${EXTRA_LISTEN}
       fastcgi_pass 127.0.0.1:9070;
     }
 
+    # Serve the new marketing site at root, falling back to PHP only for
+    # application paths that have no static file.
+    location = / {
+      try_files /auth/index.html =404;
+    }
+
     location / {
       try_files $uri $uri/ /index.php?$query_string;
     }
