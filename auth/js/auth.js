@@ -335,7 +335,7 @@
   });
 
   /* ---------- 6. Country code picker ---------- */
-  const COUNTRIES = [
+  var COUNTRIES = [
     { f:'🇦🇪', n:'الإمارات', en:'United Arab Emirates UAE', d:'+971' },
     { f:'🇸🇦', n:'السعودية', en:'Saudi Arabia KSA', d:'+966' },
     { f:'🇰🇼', n:'الكويت', en:'Kuwait', d:'+965' },
