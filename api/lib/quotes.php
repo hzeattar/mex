@@ -194,6 +194,11 @@ function quote_source_blocked_for_symbol(string $symbol, string $assetType, ?str
   if ($assetType === 'commodities' && $symbol === 'LEAD' && !quote_source_is_untrusted($src)) {
     return true;
   }
+  // Spot metals should never use Yahoo futures (GC=F/SI=F) or EODHD futures because
+  // futures prices include contango and distort the spot chart.
+  if (vp_is_spot_metal_symbol($symbol, $assetType) && in_array($src, ['yahoo','yahoo_chart_live','eodhd','eodhd_rest','eodhd_intraday'], true)) {
+    return true;
+  }
   return false;
 }
 
