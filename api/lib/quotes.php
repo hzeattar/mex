@@ -573,9 +573,16 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       $td = twelvedata_symbol_for_market($sym, $assetType, $meta);
       if ($td) $twelvedataBySym[$sym] = $td;
     }
-    if ($preferEodhd) {
+    $metalsPreferCoingecko = ((int)env('METALS_PREFER_COINGECKO', '1') === 1) && $spotMetal;
+    if ($preferEodhd && !$metalsPreferCoingecko) {
       $e = eodhd_symbol_for_market($sym, $assetType, $meta);
       if ($e) $eodhdBySym[$sym] = $e;
+    }
+    if ($preferEodhd && $metalsPreferCoingecko) {
+      // Still add EODHD as a fallback for non-trading hours, but lower priority
+      // than the CoinGecko spot-metal proxy.
+      $e = eodhd_symbol_for_market($sym, $assetType, $meta);
+      if ($e) $eodhdFallbackBySym[$sym] = $e;
     }
     // Spot metals always get a CoinGecko tokenized-metal fallback.
     if (vp_is_spot_metal_symbol($sym, $assetType)) {
@@ -633,27 +640,6 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
           'updated_at' => $now,
           'source' => 'twelvedata',
-        ];
-      }
-    } catch (Throwable $e) {}
-  }
-
-  // CoinGecko tokenized-metal fallback (PAXG for XAUUSD). Fetched early so it
-  // can backfill spot metals if EODHD/TwelveData are stale/out of quota.
-  if ($coingeckoMetalSymbols) {
-    try {
-      $cgBulk = coingecko_spot_metal_quote_many($coingeckoMetalSymbols);
-      foreach ($coingeckoMetalSymbols as $sym) {
-        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
-        $row = $cgBulk[$sym] ?? null;
-        if (!is_array($row) || (float)($row['price'] ?? 0) <= 0) continue;
-        $out[$sym] = [
-          'symbol' => $sym,
-          'type' => $assetType,
-          'price' => (float)$row['price'],
-          'change_pct' => (float)($row['change_pct'] ?? 0.0),
-          'updated_at' => $now,
-          'source' => 'coingecko_metal',
         ];
       }
     } catch (Throwable $e) {}
@@ -732,6 +718,33 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
         }
         $out[$sym] = $liveRow;
+      }
+    } catch (Throwable $e) {}
+  }
+
+  // CoinGecko tokenized-metal fallback (PAXG for XAUUSD). Runs after EODHD so
+  // it can override stale/previous-close-only EODHD quotes for spot metals.
+  if ($coingeckoMetalSymbols) {
+    try {
+      $cgBulk = coingecko_spot_metal_quote_many($coingeckoMetalSymbols);
+      foreach ($coingeckoMetalSymbols as $sym) {
+        $existing = $out[$sym] ?? null;
+        // If EODHD only returned a stale previous close, or no price at all,
+        // prefer the live CoinGecko tokenized-metal proxy.
+        $existingHasLivePrice = is_array($existing)
+          && (float)($existing['price'] ?? 0) > 0
+          && !(quote_primary_row_is_stale($existing, $assetType, $now) && strtolower((string)($existing['source'] ?? '')) === 'eodhd');
+        if ($existingHasLivePrice) continue;
+        $row = $cgBulk[$sym] ?? null;
+        if (!is_array($row) || (float)($row['price'] ?? 0) <= 0) continue;
+        $out[$sym] = [
+          'symbol' => $sym,
+          'type' => $assetType,
+          'price' => (float)$row['price'],
+          'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'updated_at' => $now,
+          'source' => 'coingecko_metal',
+        ];
       }
     } catch (Throwable $e) {}
   }

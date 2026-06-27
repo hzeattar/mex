@@ -28,6 +28,16 @@ logs
 api/uploads
 uploads
 api/data/ratelimit_*.json
+api/data/cache/**/*.json
+api/data/cache/**/*.lock
+api/data/central/**/*.json
+api/data/central/**/*.lock
+api/data/status/*.json
+api/data/logs/*.log
+api/data/logs/*.log.*
+api/data/php_errors.log
+api/data/*.sqlite
+api/data/*.sqlite3
 
 _backups/
 _i18n_backup/

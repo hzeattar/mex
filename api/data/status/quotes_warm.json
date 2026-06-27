@@ -1,1 +1,0 @@
-{"name":"quotes_warm","ts":1781418126,"iso":"2026-06-14T06:22:06+00:00","env":"local","ok":true,"warmed_at":1781418119,"types":["stocks"],"deep":true,"per_type":8,"total_upserts":8,"central_writes":8,"results":{"stocks":{"count":8,"upserts":8,"central_writes":8}},"hint":"Run every 30-60 seconds via cron using token=CRON_KEY when the feed worker daemon is unavailable"}

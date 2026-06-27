@@ -1,1 +1,0 @@
-{"name":"feed_worker","ts":1781418176,"iso":"2026-06-14T06:22:56+00:00","env":"local","ok":true,"cycle_at":1781418175,"total_written":8,"total_upserted":8,"results":{"crypto":{"count":8,"written":8,"upserted":8}}}
