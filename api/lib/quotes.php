@@ -6,6 +6,7 @@ require_once __DIR__ . '/marketdata.php';
 require_once __DIR__ . '/market_resolver.php';
 require_once __DIR__ . '/quote_sources.php';
 require_once __DIR__ . '/quote_central.php';
+require_once __DIR__ . '/quote_coingecko.php';
 require_once __DIR__ . '/quote_fcsapi.php';
 require_once __DIR__ . '/quote_currencyfreaks.php';
 require_once __DIR__ . '/quote_polygon.php';
@@ -305,10 +306,29 @@ function quote_try_spot_metal_proxy_rescue_row(string $symbol, string $assetType
   if ((int)env('QUOTES_SPOT_METAL_PROXY_RESCUE', '1') !== 1) return null;
   if (!vp_is_spot_metal_symbol($symbol, $assetType)) return null;
   $source = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
-  if (!in_array($source, ['eodhd', 'eodhd_rest', 'provider_live'], true)) return null;
+  if (!in_array($source, ['eodhd', 'eodhd_rest', 'provider_live', 'coingecko_metal'], true)) return null;
   $primary = (float)($row['price'] ?? 0);
   if (!($primary > 0)) return null;
 
+  // First: try CoinGecko tokenized metal proxy (PAXG for XAUUSD). This is free
+  // and available even when major data providers are out of quota.
+  try {
+    if (function_exists('coingecko_spot_metal_quote')) {
+      $cg = coingecko_spot_metal_quote($symbol);
+      if (is_array($cg) && (float)($cg['price'] ?? 0) > 0) {
+        return [
+          'symbol' => strtoupper($symbol),
+          'type' => $assetType,
+          'price' => (float)$cg['price'],
+          'change_pct' => (float)($cg['change_pct'] ?? 0.0),
+          'updated_at' => $now > 0 ? $now : time(),
+          'source' => 'coingecko_metal',
+        ];
+      }
+    }
+  } catch (Throwable $e) {}
+
+  // Fallback: Yahoo rescue (GC=F or XAUUSD=X, XAGUSD=X)
   $rescue = quote_try_yahoo_rescue_row($symbol, $assetType, $meta, $now > 0 ? $now : time());
   $proxy = is_array($rescue) ? (float)($rescue['price'] ?? 0) : 0.0;
   if (!($proxy > 0)) return null;
@@ -528,6 +548,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   $yahooBySym = [];
   $massiveBySym = [];
   $eodhdBySym = [];
+  $coingeckoMetalSymbols = [];
   $finnhubBySym = [];
   $tiingoBySym = [];
   $twelvedataBySym = [];
@@ -555,6 +576,10 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
     if ($preferEodhd) {
       $e = eodhd_symbol_for_market($sym, $assetType, $meta);
       if ($e) $eodhdBySym[$sym] = $e;
+    }
+    // Spot metals always get a CoinGecko tokenized-metal fallback.
+    if (vp_is_spot_metal_symbol($sym, $assetType)) {
+      $coingeckoMetalSymbols[] = $sym;
     }
     if (!$preferEodhd && $preferTwelvedata && (int)env('TWELVEDATA_EODHD_FALLBACK', '1') === 1) {
       $e = eodhd_symbol_for_market($sym, $assetType, $meta);
@@ -608,6 +633,27 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
           'updated_at' => $now,
           'source' => 'twelvedata',
+        ];
+      }
+    } catch (Throwable $e) {}
+  }
+
+  // CoinGecko tokenized-metal fallback (PAXG for XAUUSD). Fetched early so it
+  // can backfill spot metals if EODHD/TwelveData are stale/out of quota.
+  if ($coingeckoMetalSymbols) {
+    try {
+      $cgBulk = coingecko_spot_metal_quote_many($coingeckoMetalSymbols);
+      foreach ($coingeckoMetalSymbols as $sym) {
+        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
+        $row = $cgBulk[$sym] ?? null;
+        if (!is_array($row) || (float)($row['price'] ?? 0) <= 0) continue;
+        $out[$sym] = [
+          'symbol' => $sym,
+          'type' => $assetType,
+          'price' => (float)$row['price'],
+          'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'updated_at' => $now,
+          'source' => 'coingecko_metal',
         ];
       }
     } catch (Throwable $e) {}

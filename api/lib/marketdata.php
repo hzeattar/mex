@@ -1688,8 +1688,10 @@ function eodhd_symbol_for_market(string $symbol, string $type, array $meta = [])
   return null;
 }
 
-function eodhd_quote_normalize(array $row, string $ticker = ''): ?array {
+function eodhd_quote_normalize(array $row, string $ticker = '', string $providerTypeHint = ''): ?array {
   $ticker = strtoupper(trim((string)($row['code'] ?? $row['symbol'] ?? $row['ticker'] ?? $ticker)));
+  $providerTypeHint = vp_normalize_asset_type($providerTypeHint);
+  $isStalePreviousClose = false;
   $priceCandidates = [
     $row['close'] ?? null,
     $row['price'] ?? null,
@@ -1703,7 +1705,25 @@ function eodhd_quote_normalize(array $row, string $ticker = ''): ?array {
   foreach ($priceCandidates as $cand) {
     if (is_numeric($cand) && (float)$cand > 0) { $price = (float)$cand; break; }
   }
+  if ($price <= 0) {
+    $priceCandidates = [
+      $row['previousClose'] ?? null,
+      $row['previous_close'] ?? null,
+      $row['prev_close'] ?? null,
+    ];
+    foreach ($priceCandidates as $cand) {
+      if (is_numeric($cand) && (float)$cand > 0) { $price = (float)$cand; $isStalePreviousClose = true; break; }
+    }
+  }
   if (!($price > 0)) return null;
+
+  // If EODHD only returned a previous close ("NA" current fields), do not treat
+  // it as a live authoritative quote for spot metals/commodities because it
+  // freezes the price board and distorts charts.
+  $isStalePreviousClose = $isStalePreviousClose ?? false;
+  if ($isStalePreviousClose && vp_is_spot_metal_symbol($ticker, $providerTypeHint)) {
+    return null;
+  }
 
   $chgPct = 0.0;
   foreach (['change_p','change_percent','change_percentage'] as $k) {
@@ -1753,7 +1773,7 @@ function eodhd_quote_realtime(string $ticker): array {
   $url = eodhd_base() . '/real-time/' . rawurlencode($ticker) . '?api_token=' . urlencode($apiKey) . '&fmt=json';
   try {
     $d = http_get_json($url, ['Accept: application/json']);
-    $n = eodhd_quote_normalize($d, $ticker);
+    $n = eodhd_quote_normalize($d, $ticker, vp_normalize_asset_type($providerType));
     if ($n) {
       $n['source'] = 'eodhd';
       return $n;
