@@ -1620,6 +1620,7 @@ function eodhd_api_key(): string {
 }
 
 function eodhd_enabled(): bool {
+  if (strtolower((string)env('EODHD_ENABLED', '1')) === '0') return false;
   return eodhd_api_key() !== '';
 }
 

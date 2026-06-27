@@ -9,14 +9,22 @@ function qa_source_rank(?string $source): int {
   $src = strtolower(trim((string)$source));
   return match($src) {
     'binance' => 100,
-    'trade_stream', 'stream' => 96,
-    'provider_live' => 92,
-    'eodhd', 'eodhd_rest' => 91,
-    'finnhub' => 89,
-    'tiingo' => 87,
-    'yahoo', 'yahoo_chart_live' => 72,
-    'massive', 'polygon', 'provider_fallback', 'fx_fallback', 'frankfurter', 'stooq' => 20,
+    'binance_ws' => 98,
+    'twelvedata_ws' => 97,
+    'twelvedata' => 96,
+    'trade_stream', 'stream' => 90,
+    'provider_live' => 88,
+    'finnhub_ws' => 86,
+    'finnhub' => 84,
+    'eodhd', 'eodhd_rest' => 82,
+    'tiingo' => 80,
+    'massive', 'polygon' => 78,
+    'fcsapi' => 76,
+    'currencyfreaks' => 74,
+    'coingecko', 'coingecko_metal' => 72,
+    'provider_fallback', 'fx_fallback', 'frankfurter', 'stooq' => 20,
     'eodhd_intraday' => 12,
+    'yahoo', 'yahoo_chart_live' => 1,
     'cache', 'stale_cache' => 12,
     'seed', 'seed_fallback', 'seed_price', 'seed_default', 'chart_seed', 'seed_candle', 'synthetic', 'aggs', 'unavailable' => 4,
     default => ($src === '' ? 0 : 40),
@@ -67,7 +75,7 @@ function qa_market_is_open(string $assetType): bool {
 function qa_quote_row_ts($row): int {
   if (!is_array($row)) return 0;
   $source = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
-  if (in_array($source, ['yahoo_chart_live','provider_live'], true)) {
+  if (in_array($source, ['provider_live'], true)) {
     foreach (['updated_at','received_at','ingested_at','as_of','provider_ts','provider_updated_at'] as $k) {
       if (isset($row[$k]) && is_numeric($row[$k])) {
         $ts = (int)$row[$k];
@@ -115,8 +123,9 @@ function qa_quote_timing_class($row, string $assetType): string {
   if (quote_source_is_untrusted($source)) return 'seed';
   if ($source === 'eodhd_intraday' || $source === 'yahoo_chart_live') return 'candle_fallback';
   if ($assetType !== 'crypto' && !quote_source_is_liveish($source, $assetType)) return 'stale';
-  // Finnhub and Tiingo provide real-time quotes — treat as live even for stocks/arab
-  $isRealtimeProvider = in_array($source, ['finnhub','tiingo','binance','trade_stream','stream'], true);
+  // Real-time providers can be marked live even for stocks/arab when the quote
+  // age check passes.
+  $isRealtimeProvider = in_array($source, ['twelvedata_ws','twelvedata','finnhub_ws','finnhub','tiingo','binance_ws','binance','trade_stream','stream'], true);
   if (!$isRealtimeProvider && (($assetType !== 'crypto' && $source === 'yahoo') || in_array($assetType, ['stocks','arab'], true) || !empty($row['delayed']))) {
     if (!qa_quote_is_usable($row, $assetType, false)) return 'stale';
     return qa_market_is_open($assetType) ? 'delayed' : 'market_closed';

@@ -21,6 +21,21 @@ function market_meta($meta): array {
   return [];
 }
 
+function quote_source_disabled_by_config(?string $source): bool {
+  $src = strtolower(trim((string)$source));
+  if ($src === '') return false;
+  if (in_array($src, ['yahoo', 'yahoo_chart', 'yahoo_chart_live', 'yahoo_crypto_chart', 'yahoo_rest'], true)) {
+    return !quote_yahoo_enabled();
+  }
+  if (in_array($src, ['eodhd', 'eodhd_rest', 'eodhd_intraday'], true)) {
+    return (function_exists('eodhd_enabled') && !eodhd_enabled()) || strtolower((string)env('EODHD_ENABLED', '1')) === '0';
+  }
+  if (in_array($src, ['massive', 'polygon'], true)) {
+    return (int)env('ENABLE_MASSIVE_FALLBACK', '0') !== 1 && strtolower((string)env('PRICE_PROVIDER', 'twelvedata')) !== 'massive';
+  }
+  return false;
+}
+
 
 function quote_singleflight(string $key, int $ttlSec = 2): bool {
   $ttlSec = max(1, min(60, $ttlSec));
@@ -138,6 +153,7 @@ function quote_cols_flags(): array {
 function quote_source_is_liveish(?string $source, string $assetType = ''): bool {
   $src = strtolower(trim((string)$source));
   if ($src === '') return false;
+  if (quote_source_disabled_by_config($src)) return false;
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
   if ($providerType === 'crypto') {
@@ -159,6 +175,7 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
 function quote_source_is_untrusted(?string $source): bool {
   $src = strtolower(trim((string)$source));
   if ($src === '') return true;
+  if (quote_source_disabled_by_config($src)) return true;
   return in_array($src, [
     'seed','seed_fallback','seed_price','seed_default','fallback_static','chart_seed',
     'seed_candle','yahoo','yahoo_chart_live','yahoo_chart','aggs','stale_cache','cache','synthetic',
@@ -430,22 +447,25 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
   if (!empty($flags['source'])) {
     $rankExpr = "CASE LOWER(source)
       WHEN 'binance' THEN 100
-      WHEN 'trade_stream' THEN 96
-      WHEN 'stream' THEN 96
       WHEN 'binance_ws' THEN 98
-      WHEN 'provider_live' THEN 92
-      WHEN 'twelvedata_ws' THEN 94
-      WHEN 'eodhd' THEN 91
-      WHEN 'eodhd_rest' THEN 91
-      WHEN 'finnhub' THEN 89
-      WHEN 'finnhub_ws' THEN 93
-      WHEN 'tiingo' THEN 87
-      WHEN 'fcsapi' THEN 85
-      WHEN 'polygon' THEN 84
-      WHEN 'currencyfreaks' THEN 82
+      WHEN 'twelvedata_ws' THEN 97
+      WHEN 'twelvedata' THEN 96
+      WHEN 'trade_stream' THEN 90
+      WHEN 'stream' THEN 90
+      WHEN 'provider_live' THEN 88
+      WHEN 'finnhub_ws' THEN 86
+      WHEN 'finnhub' THEN 84
+      WHEN 'eodhd' THEN 82
+      WHEN 'eodhd_rest' THEN 82
+      WHEN 'tiingo' THEN 80
+      WHEN 'fcsapi' THEN 76
+      WHEN 'polygon' THEN 78
+      WHEN 'massive' THEN 78
+      WHEN 'currencyfreaks' THEN 74
+      WHEN 'coingecko' THEN 72
+      WHEN 'coingecko_metal' THEN 72
       WHEN 'yahoo' THEN 1
       WHEN 'yahoo_chart_live' THEN 1
-      WHEN 'massive' THEN 20
       WHEN 'provider_fallback' THEN 20
       WHEN 'fx_fallback' THEN 20
       WHEN 'frankfurter' THEN 20
@@ -1396,14 +1416,20 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
     return match($src) {
       'binance' => 100,
       'binance_ws' => 98,
-      'trade_stream', 'stream' => 96,
-      'twelvedata_ws' => 94,
-      'finnhub_ws' => 93,
-      'provider_live' => 92,
-      'eodhd', 'eodhd_rest' => 91,
-      'twelvedata' => 86,
+      'twelvedata_ws' => 97,
+      'twelvedata' => 96,
+      'trade_stream', 'stream' => 90,
+      'provider_live' => 88,
+      'finnhub_ws' => 86,
+      'finnhub' => 84,
+      'eodhd', 'eodhd_rest' => 82,
+      'tiingo' => 80,
+      'massive', 'polygon' => 78,
+      'fcsapi' => 76,
+      'currencyfreaks' => 74,
+      'coingecko', 'coingecko_metal' => 72,
       'yahoo_chart_live', 'yahoo' => 1,
-      'massive', 'polygon', 'provider_fallback', 'fx_fallback', 'frankfurter', 'stooq' => 20,
+      'provider_fallback', 'fx_fallback', 'frankfurter', 'stooq' => 20,
       'eodhd_intraday' => 12,
       'cache', 'stale_cache' => 12,
       'seed', 'seed_fallback', 'seed_price', 'chart_seed', 'seed_candle', 'synthetic', 'aggs' => 4,
@@ -1414,6 +1440,7 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
   $existing = null;
   try { $existing = quote_get($symbol, $type, $market); } catch (Throwable $ignoredExisting) { $existing = null; }
   $source = array_key_exists('source', $extras) ? (string)($extras['source'] ?? '') : null;
+  if ($source !== null && quote_source_disabled_by_config($source)) return;
   if ($source !== null && quote_source_blocked_for_symbol($symbol, $type, $source)) return;
   if (is_array($existing) && (float)($existing['price'] ?? 0) > 0) {
     $prevTs = (int)($existing['updated_at'] ?? 0);
@@ -1992,7 +2019,23 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
       if ($sourceName !== '') $extras['source'] = $sourceName;
       if (!isset($extras['source_priority']) && $sourceName !== '') {
         $extras['source_priority'] = match(strtolower($sourceName)) {
-          'binance' => 100, 'binance_ws' => 98, 'twelvedata_ws' => 94, 'finnhub_ws' => 93, 'eodhd','eodhd_rest' => 88, 'massive','polygon' => 90, 'twelvedata' => 86, 'yahoo' => 1, 'provider_live' => 92, 'coingecko_metal' => 50, 'frankfurter','stooq' => 20, 'eodhd_intraday','yahoo_chart_live' => 1, default => 40,
+          'binance' => 100,
+          'binance_ws' => 98,
+          'twelvedata_ws' => 97,
+          'twelvedata' => 96,
+          'trade_stream', 'stream' => 90,
+          'provider_live' => 88,
+          'finnhub_ws' => 86,
+          'finnhub' => 84,
+          'tiingo' => 80,
+          'fcsapi' => 76,
+          'currencyfreaks' => 74,
+          'coingecko', 'coingecko_metal' => 72,
+          'massive', 'polygon' => 40,
+          'provider_fallback', 'fx_fallback', 'frankfurter', 'stooq' => 20,
+          'eodhd', 'eodhd_rest', 'eodhd_intraday' => 12,
+          'yahoo', 'yahoo_chart_live' => 1,
+          default => 40,
         };
       }
       $persistTs = ($type === 'crypto') ? $now : ($sourceTs > 0 ? $sourceTs : $now);

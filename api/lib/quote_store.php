@@ -171,18 +171,24 @@ function qa_quote_rows_by_symbols(array $symbols, ?string $typeAlias = null): ar
     if (!empty($flags['source'])) {
       $rankExpr = "CASE LOWER(source)
         WHEN 'binance' THEN 100
+        WHEN 'binance_ws' THEN 98
+        WHEN 'twelvedata_ws' THEN 97
+        WHEN 'twelvedata' THEN 96
         WHEN 'trade_stream' THEN 96
         WHEN 'stream' THEN 96
-        WHEN 'provider_live' THEN 92
-        WHEN 'eodhd' THEN 91
-        WHEN 'eodhd_rest' THEN 91
-        WHEN 'finnhub' THEN 89
-        WHEN 'tiingo' THEN 87
+        WHEN 'provider_live' THEN 88
+        WHEN 'finnhub_ws' THEN 86
+        WHEN 'finnhub' THEN 84
+        WHEN 'eodhd' THEN 82
+        WHEN 'eodhd_rest' THEN 82
+        WHEN 'tiingo' THEN 80
         WHEN 'fcsapi' THEN 85
-        WHEN 'polygon' THEN 84
-        WHEN 'currencyfreaks' THEN 82
-        WHEN 'yahoo' THEN 72
-        WHEN 'yahoo_chart_live' THEN 72
+        WHEN 'polygon' THEN 78
+        WHEN 'currencyfreaks' THEN 74
+        WHEN 'coingecko' THEN 72
+        WHEN 'coingecko_metal' THEN 72
+        WHEN 'yahoo' THEN 1
+        WHEN 'yahoo_chart_live' THEN 1
         WHEN 'massive' THEN 20
         WHEN 'provider_fallback' THEN 20
         WHEN 'fx_fallback' THEN 20

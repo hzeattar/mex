@@ -12,6 +12,15 @@ require_once __DIR__ . '/lib/quote_snapshot.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: public, max-age=1');
 
+function quote_focus_item_usable(array $item): bool {
+  if (!((float)($item['price'] ?? 0) > 0)) return false;
+  $source = strtolower(trim((string)($item['source'] ?? $item['provider'] ?? '')));
+  if ($source === '' || $source === 'unavailable') return false;
+  if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($source)) return false;
+  if (function_exists('quote_source_is_untrusted') && quote_source_is_untrusted($source)) return false;
+  return true;
+}
+
 $symbolsRaw = (string)($_GET['symbols'] ?? ($_GET['symbol'] ?? ''));
 $typeParam = strtolower(trim((string)($_GET['type'] ?? '')));
 $type = vp_normalize_asset_type($typeParam);
@@ -69,7 +78,7 @@ foreach ($byType as $groupType => $syms) {
   $stale = [];
   foreach ($centralItems as $i => $it) {
     $age = isset($it['age_sec']) && is_numeric($it['age_sec']) ? (int)$it['age_sec'] : null;
-    if (!((float)($it['price'] ?? 0) > 0) || ($age !== null && $age > $freshAge)) {
+    if (!quote_focus_item_usable($it) || ($age !== null && $age > $freshAge)) {
       $stale[(string)($it['symbol'] ?? '')] = $i;
     } else {
       $items[(string)($it['symbol'] ?? '')] = $it;
@@ -82,7 +91,9 @@ foreach ($byType as $groupType => $syms) {
     foreach ($lastKnown as $lk) {
       $sym = (string)($lk['symbol'] ?? '');
       if ($sym !== '' && isset($stale[$sym]) && (float)($lk['price'] ?? 0) > 0) {
-        $items[$sym] = qs_public_item(qs_snapshot_from_row($sym, $groupType, 'spot', $lk, ['mode' => 'display']));
+        $candidate = qs_public_item(qs_snapshot_from_row($sym, $groupType, 'spot', $lk, ['mode' => 'display']));
+        if (!quote_focus_item_usable($candidate)) continue;
+        $items[$sym] = $candidate;
         unset($stale[$sym]);
       }
     }
@@ -110,7 +121,9 @@ foreach ($byType as $groupType => $syms) {
         $q = null;
       }
       if (is_array($q) && (float)($q['price'] ?? 0) > 0) {
-        $items[$sym] = qs_public_item(qs_snapshot_from_row($sym, $groupType, 'spot', $q, ['mode' => 'display']));
+        $candidate = qs_public_item(qs_snapshot_from_row($sym, $groupType, 'spot', $q, ['mode' => 'display']));
+        if (!quote_focus_item_usable($candidate)) continue;
+        $items[$sym] = $candidate;
       }
     }
   }

@@ -32,6 +32,7 @@ $MAX_RUNTIME     = (int)getenv('WS_AGGREGATOR_MAX_RUNTIME') ?: 3600;
 $RECONNECT_DELAY = 3;
 $FEEDS_RAW       = strtolower(trim((string)(getenv('WS_AGGREGATOR_FEEDS') ?: ($TWELVE_KEY !== '' ? 'twelvedata' : 'binance'))));
 $ENABLED_FEEDS   = array_values(array_filter(array_map('trim', explode(',', $FEEDS_RAW))));
+$TWELVE_WS_LIMIT = max(1, min(500, (int)(getenv('TWELVEDATA_WS_SYMBOL_LIMIT') ?: 500)));
 
 // ── Pure PHP WebSocket Client (RFC 6455) ────────────────────────────────────
 
@@ -271,7 +272,10 @@ function collectSymbols(): void {
       if ($bsym) $binanceSet[$bsym] = $sym;
     } else {
       // Twelve Data takes precedence if key available
-      $tdsym = mapToTwelveData($sym, $type);
+      $meta = function_exists('market_meta') ? market_meta($d['meta'] ?? null) : [];
+      $tdsym = function_exists('twelvedata_symbol_for_market')
+        ? (twelvedata_symbol_for_market($sym, $type, $meta) ?: mapToTwelveData($sym, $type))
+        : mapToTwelveData($sym, $type);
       if ($tdsym) $twelveSet[$tdsym] = ['original' => $sym, 'type' => $type];
 
       // Finnhub covers forex/stocks via free WS (250 symbols free tier)
@@ -285,6 +289,57 @@ function collectSymbols(): void {
   $BINANCE_SYMBOLS = $binanceSet;
   $TWELVE_SYMBOLS  = $twelveSet;
   $FINNHUB_SYMBOLS = $finnhubSet;
+}
+
+function aggregator_status_write(string $feed, array $data): void {
+  $dir = __DIR__ . '/../data/status';
+  if (!is_dir($dir)) @mkdir($dir, 0777, true);
+  $file = $dir . '/ws_aggregator.json';
+  $existing = [];
+  if (is_file($file)) {
+    $raw = @file_get_contents($file);
+    $decoded = $raw ? json_decode($raw, true) : null;
+    if (is_array($decoded)) $existing = $decoded;
+  }
+  $existing[$feed] = $data + [
+    'feed' => $feed,
+    'updated_at' => time(),
+  ];
+  @file_put_contents($file, json_encode($existing, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX);
+}
+
+function twelveDataPriority(string $tdsym, array $info): int {
+  $original = strtoupper((string)($info['original'] ?? $tdsym));
+  $type = strtolower((string)($info['type'] ?? ''));
+  $typeScore = match ($type) {
+    'forex' => 5000,
+    'commodities' => 4000,
+    'futures' => 3000,
+    'stocks' => 2000,
+    'arab' => 1000,
+    default => 0,
+  };
+  $hot = [
+    'EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','USDCAD','NZDUSD','EURGBP','EURJPY','GBPJPY',
+    'XAUUSD','XAGUSD','XPTUSD','XPDUSD','USOIL','UKOIL','NGAS','COPPER',
+    'AAPL','MSFT','NVDA','TSLA','AMZN','GOOGL','META','NFLX','AMD','INTC',
+    'ES_F','NQ_F','YM_F','GC_F','CL_F','SI_F','NG_F',
+  ];
+  $hotScore = array_search($original, $hot, true);
+  return $typeScore + ($hotScore === false ? 0 : (1000 - $hotScore));
+}
+
+function twelveDataOrderedSymbols(): array {
+  global $TWELVE_SYMBOLS;
+  $symbols = array_keys($TWELVE_SYMBOLS);
+  usort($symbols, static function(string $a, string $b): int {
+    global $TWELVE_SYMBOLS;
+    $pa = twelveDataPriority($a, (array)($TWELVE_SYMBOLS[$a] ?? []));
+    $pb = twelveDataPriority($b, (array)($TWELVE_SYMBOLS[$b] ?? []));
+    if ($pa === $pb) return strcmp($a, $b);
+    return $pb <=> $pa;
+  });
+  return $symbols;
 }
 
 function mapToFinnhub(string $symbol, string $type): string {
@@ -331,7 +386,6 @@ function writePrice(string $symbol, string $type, float $price, float $changePct
   if ($price <= 0) return;
   $now = time();
 
-  // Write to file cache
   $entry = [
     'symbol' => strtoupper($symbol),
     'type' => strtolower($type),
@@ -345,7 +399,7 @@ function writePrice(string $symbol, string $type, float $price, float $changePct
     'received_at' => $now,
     'ingested_at' => $now,
   ];
-  quote_central_write_file(strtoupper($symbol), $type, $entry);
+  quote_central_write(strtoupper($symbol), $type, $entry);
 
   // Write to DB
   try {
@@ -434,15 +488,14 @@ function runBinanceWs(): int {
 // ── Twelve Data WebSocket ───────────────────────────────────────────────────
 
 function runTwelveDataWs(): int {
-  global $TWELVE_SYMBOLS, $TWELVE_KEY;
+  global $TWELVE_SYMBOLS, $TWELVE_KEY, $TWELVE_WS_LIMIT;
   if (!$TWELVE_KEY) {
     echo "  [Twelve Data WS] No API key, skipping\n";
     return 0;
   }
   if (empty($TWELVE_SYMBOLS)) return 0;
 
-  // Subscribe in batches of 50 symbols (Twelve Data limit)
-  $batch = array_slice(array_keys($TWELVE_SYMBOLS), 0, 50);
+  $batch = array_slice(twelveDataOrderedSymbols(), 0, $TWELVE_WS_LIMIT);
   $url = "wss://ws.twelvedata.com/v1/quotes/price?apikey={$TWELVE_KEY}";
 
   echo "[" . date('H:i:s') . "] Twelve Data WS: connecting to " . count($batch) . " symbols...\n";
@@ -450,6 +503,7 @@ function runTwelveDataWs(): int {
   $ws = new WsClient();
   if (!$ws->connect($url)) {
     echo "  [Twelve Data WS] Connection failed\n";
+    aggregator_status_write('twelvedata', ['status' => 'connect_failed', 'symbols' => count($batch), 'messages' => 0]);
     return 0;
   }
 
@@ -458,6 +512,7 @@ function runTwelveDataWs(): int {
   // Send subscribe message
   $symbolsStr = implode(',', $batch);
   $ws->send(json_encode(['action' => 'subscribe', 'params' => ['symbols' => $symbolsStr]]));
+  aggregator_status_write('twelvedata', ['status' => 'connected', 'symbols' => count($batch), 'messages' => 0]);
 
   $msgCount = 0;
   $lastTick = time();
@@ -474,6 +529,7 @@ function runTwelveDataWs(): int {
       if (($msg['event'] ?? '') === 'subscribe') {
         $subscribed = true;
         echo "  [Twelve Data WS] Subscribed to " . count($batch) . " symbols\n";
+        aggregator_status_write('twelvedata', ['status' => 'subscribed', 'symbols' => count($batch), 'messages' => $msgCount]);
         continue;
       }
 
@@ -496,11 +552,21 @@ function runTwelveDataWs(): int {
 
         writePrice($original, $type, $price, $changePct, $open, $prevClose, 'twelvedata_ws');
         $msgCount++;
+        if (($msgCount % 25) === 0) {
+          aggregator_status_write('twelvedata', [
+            'status' => 'streaming',
+            'symbols' => count($batch),
+            'messages' => $msgCount,
+            'last_symbol' => $original,
+            'last_price_at' => time(),
+          ]);
+        }
       }
 
       // Handle error
       if (($msg['event'] ?? '') === 'error') {
         echo "  [Twelve Data WS] Error: " . ($msg['message'] ?? 'unknown') . "\n";
+        aggregator_status_write('twelvedata', ['status' => 'error', 'symbols' => count($batch), 'messages' => $msgCount, 'error' => (string)($msg['message'] ?? 'unknown')]);
       }
     }
 
@@ -515,6 +581,7 @@ function runTwelveDataWs(): int {
 
   $ws->disconnect();
   echo "  [Twelve Data WS] Disconnected after {$msgCount} messages\n";
+  aggregator_status_write('twelvedata', ['status' => 'disconnected', 'symbols' => count($batch), 'messages' => $msgCount]);
   return $msgCount;
 }
 

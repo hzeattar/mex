@@ -201,12 +201,15 @@ function candles_cached_or_empty_response(string $symbol, string $market, string
   $cached = candles_cache_load($symbol, $market, $tf, $type);
   if ($cached) {
     $items = candles_from_cache($cached, $end, $limit);
-    candles_json_response([
-      'ok' => true,
-      'cached' => true,
-      'source' => 'cache_' . $source,
-      'soft_error' => $softError,
-    ], candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end), $limit, $end);
+    $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+    if (candles_has_display_history($out, $limit, vp_provider_asset_type($type))) {
+      candles_json_response([
+        'ok' => true,
+        'cached' => true,
+        'source' => 'cache_' . $source,
+        'soft_error' => $softError,
+      ], $out, $limit, $end);
+    }
   }
   candles_json_response(['ok' => true, 'source' => 'empty_' . $source, 'soft_error' => $softError], [], $limit, $end);
 }
@@ -1061,7 +1064,7 @@ try {
 
   // EODHD intraday fallback. Keep it for FX, but never use it for spot metals --
   // the feed is stale/futures-mapped for XAUUSD/XAGUSD and distorts the chart.
-  $eodhdCandlesAllowed = trim((string)env('EODHD_API_KEY', '')) !== ''
+  $eodhdCandlesAllowed = function_exists('eodhd_enabled') && eodhd_enabled()
     && (
       strtolower((string)env('PRICE_PROVIDER', 'eodhd')) === 'eodhd'
       || (int)env('TWELVEDATA_EODHD_FALLBACK', '1') === 1
@@ -1193,7 +1196,7 @@ try {
   // Before synthetic fallback, preserve any real cached history we already have.
   if (!empty($cachedAll)) {
     $cachedOut = candles_finalize_items(candles_from_cache($cachedAll, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
-    if (count($cachedOut) >= max(24, (int)ceil($limit * 0.25))) {
+    if (count($cachedOut) >= max(24, (int)ceil($limit * 0.25)) && candles_has_display_history($cachedOut, $limit, $providerType)) {
       candles_json_response(['ok'=>true,'cached'=>true,'source'=>'cache_preserve'], $cachedOut, $limit, $end);
     }
   }
@@ -1269,7 +1272,9 @@ try {
     $fallbackCached = candles_cache_load($symbol,$market,$tf,$type);
     if ($fallbackCached) {
       $out = candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end);
-      candles_json_response(['ok'=>true,'cached'=>true,'soft_error'=>'provider_unavailable'], $out, $limit, $end);
+      if (candles_has_display_history($out, $limit, vp_provider_asset_type($type))) {
+        candles_json_response(['ok'=>true,'cached'=>true,'soft_error'=>'provider_unavailable'], $out, $limit, $end);
+      }
     }
     $isMetal = in_array(strtoupper($symbol), ['XAUUSD','XAGUSD','XPTUSD','XPDUSD'], true) || vp_is_spot_metal_symbol($symbol, $type);
     $allowFallbackLiveLookup = ((int)env('CANDLES_ALLOW_FALLBACK_LIVE_LOOKUP', '0') === 1) || $isMetal;

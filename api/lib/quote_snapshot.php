@@ -26,16 +26,23 @@ function qs_normalize_market(string $type, string $market = ''): string {
 
 function qs_source_rank(?string $source): int {
   if (function_exists('qa_source_rank')) return qa_source_rank($source);
+  if (function_exists('vp_quote_source_rank')) return vp_quote_source_rank($source);
   $src = strtolower(trim((string)$source));
   return match ($src) {
     'binance' => 100,
-    'trade_stream', 'stream' => 96,
-    'provider_live' => 92,
-    'eodhd', 'eodhd_rest' => 91,
-    'finnhub' => 89,
+    'binance_ws' => 98,
+    'twelvedata_ws' => 97,
+    'twelvedata' => 96,
+    'trade_stream', 'stream' => 90,
+    'provider_live' => 88,
+    'finnhub_ws' => 86,
+    'finnhub' => 84,
+    'eodhd', 'eodhd_rest' => 82,
     'tiingo' => 87,
-    'yahoo', 'yahoo_chart_live' => 72,
-    'twelvedata', 'fcsapi' => 68,
+    'fcsapi' => 76,
+    'currencyfreaks' => 74,
+    'coingecko', 'coingecko_metal' => 72,
+    'yahoo', 'yahoo_chart_live' => 1,
     'stooq', 'massive', 'polygon', 'provider_fallback' => 40,
     'cache', 'stale_cache', 'eodhd_intraday' => 12,
     'seed', 'seed_price', 'synthetic', 'unavailable' => 4,
@@ -193,6 +200,9 @@ function qs_snapshot_from_row(string $symbol, string $type, string $market, ?arr
   $effectiveTs = max($providerTs, $receivedAt);
   $age = $effectiveTs > 0 ? max(0, time() - $effectiveTs) : null;
   $source = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? 'cache')));
+  if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($source)) {
+    return $snap;
+  }
   $rank = qs_source_rank($source);
   $timing = qs_timing_class($row + ['market' => $market], $type);
   $untrusted = function_exists('quote_source_is_untrusted') ? quote_source_is_untrusted($source) : in_array($source, ['seed', 'synthetic', 'cache', 'stale_cache', 'unavailable'], true);
@@ -269,6 +279,8 @@ function qs_snapshot_from_row(string $symbol, string $type, string $market, ?arr
 }
 
 function qs_choose_row(?array $central, ?array $stored, string $type): ?array {
+  if ($central && function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($central['source'] ?? $central['provider'] ?? '')) $central = null;
+  if ($stored && function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($stored['source'] ?? $stored['provider'] ?? '')) $stored = null;
   if (!$central && !$stored) return null;
   if ($central && !$stored) return $central;
   if ($stored && !$central) return $stored;
