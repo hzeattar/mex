@@ -36,6 +36,15 @@ function quote_source_disabled_by_config(?string $source): bool {
   if ($src === 'currencyfreaks') {
     return (int)env('CURRENCYFREAKS_ENABLED', '0') !== 1;
   }
+  if ($src === 'fcsapi') {
+    return !fcsapi_enabled();
+  }
+  if ($src === 'tiingo') {
+    // Tiingo is no longer a configured primary source for this project. Its
+    // cached rows become stale quickly because the free/economy feed is daily.
+    return strtolower((string)env('PRICE_PROVIDER', 'twelvedata')) === 'twelvedata'
+      || strtolower((string)env('PAID_QUOTES_PROVIDER', 'twelvedata')) === 'twelvedata';
+  }
   return false;
 }
 
