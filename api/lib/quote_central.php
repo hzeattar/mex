@@ -144,8 +144,10 @@ function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?arr
       $data = json_decode($raw, true);
       if (quote_central_row_usable($data)) {
         if ($maxAge <= 0) return $data;
-        $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
-        if ($ts <= 0 || (time() - $ts) <= $maxAge) return $data;
+        $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
+        $centralTs = (int)($data['central_ts'] ?? $providerTs);
+        $effectiveTs = max($providerTs, $centralTs);
+        if ($effectiveTs > 0 && (time() - $effectiveTs) <= $maxAge) return $data;
       }
     }
   }
@@ -190,8 +192,10 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
         $data = json_decode($raw, true);
         if (quote_central_row_usable($data)) {
           if ($maxAge <= 0) { $out[$sym] = $data; continue; }
-          $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
-          if ($ts <= 0 || (time() - $ts) <= $maxAge) { $out[$sym] = $data; continue; }
+          $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
+          $centralTs = (int)($data['central_ts'] ?? $providerTs);
+          $effectiveTs = max($providerTs, $centralTs);
+          if ($effectiveTs > 0 && (time() - $effectiveTs) <= $maxAge) { $out[$sym] = $data; continue; }
         }
       }
     }
@@ -214,9 +218,13 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
         $data = json_decode($payload, true);
         if (!quote_central_row_usable($data)) continue;
         if ($maxAge > 0) {
-          $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
-          if ($ts > 0 && (time() - $ts) > $maxAge) continue;
+          $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
+          $centralTs = (int)($data['central_ts'] ?? $providerTs);
+          $effectiveTs = max($providerTs, $centralTs);
+          if ($effectiveTs > 0 && (time() - $effectiveTs) > $maxAge) continue;
         }
+        // Do not return rows whose source has been disabled by configuration.
+        if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($data['source'] ?? $data['provider'] ?? '')) continue;
         $out[$sym] = $data;
         // Warm file cache
         quote_central_write_file($sym, $type, $data);
@@ -257,9 +265,13 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
       $data = json_decode($payload, true);
       if (!quote_central_row_usable($data)) continue;
       if ($maxAge > 0) {
-        $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
-        if ($ts > 0 && (time() - $ts) > $maxAge) continue;
+        $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
+        $centralTs = (int)($data['central_ts'] ?? $providerTs);
+        $effectiveTs = max($providerTs, $centralTs);
+        if ($effectiveTs > 0 && (time() - $effectiveTs) > $maxAge) continue;
       }
+      // Drop disabled-source rows from bundles
+      if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($data['source'] ?? $data['provider'] ?? '')) continue;
       $out[$sym] = $data;
     }
     // Write to file cache for subsequent reads
