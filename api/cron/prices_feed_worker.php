@@ -242,15 +242,6 @@ function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbo
         ]);
         $upserted++;
       } catch (Throwable $e) {}
-    } else {
-      // If no live price, try to carry forward the last known central price
-      $lastCentral = quote_central_get($sym, $type, 300);
-      if ($lastCentral && (float)($lastCentral['price'] ?? 0) > 0) {
-        $lastCentral['central_ts'] = $now;
-        $lastCentral['source'] = (string)($lastCentral['source'] ?? 'central_carry');
-        quote_central_write($sym, $type, $lastCentral);
-        $bySymbol[$sym] = $lastCentral;
-      }
     }
   }
 
@@ -311,6 +302,7 @@ if ($isDaemon) {
   $cycleCount = 0;
   $maxCycles = (int)env('FEED_WORKER_MAX_CYCLES', '0'); // 0 = unlimited
   $lastCycleByType = [];
+  $lastHotCycle = 0;
   $cycleErrBackoff = 2; // start at 2s, doubles on each error, capped at 32s
 
   while (true) {
@@ -333,6 +325,18 @@ if ($isDaemon) {
     [$symbolsByType, $metaByTypeSymbol] = feed_worker_collect_symbols();
     echo "[feed-worker] Collected symbols: " . json_encode(array_map('count', $symbolsByType)) . "\n"; flush();
     $typesToFetch = [];
+
+    $hotInterval = max(0, min(60, (int)env('FEED_HOT_INTERVAL', '10')));
+    $hotPerType = max(1, min(10, (int)env('FEED_HOT_PER_TYPE', '2')));
+    if ($hotInterval > 0 && ($now - $lastHotCycle) >= $hotInterval) {
+      $lastHotCycle = $now;
+      foreach (['forex', 'stocks', 'commodities', 'futures', 'arab'] as $hotType) {
+        $hotSymbols = array_slice($symbolsByType[$hotType] ?? [], 0, $hotPerType);
+        if (!$hotSymbols) continue;
+        $r = feed_worker_fetch_type($hotType, $hotSymbols, $metaByTypeSymbol[$hotType] ?? []);
+        echo "[feed-worker] hot $hotType: {$r['written']}/{$r['count']} written\n"; flush();
+      }
+    }
 
     foreach ($types as $type) {
       $lastCycle = $lastCycleByType[$type] ?? 0;

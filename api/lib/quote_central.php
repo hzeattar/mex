@@ -41,6 +41,18 @@ function quote_central_source_disabled(string $source): bool {
   if ($src === 'currencyfreaks') {
     return (int)env('CURRENCYFREAKS_ENABLED', '0') !== 1;
   }
+  if (in_array($src, ['finnhub','finnhub_ws'], true)) {
+    return strtolower(trim((string)env('PRICE_PROVIDER', 'twelvedata'))) === 'twelvedata'
+      && strtolower(trim((string)env('PAID_QUOTES_PROVIDER', 'twelvedata'))) === 'twelvedata'
+      && (int)env('FINNHUB_FALLBACK_ENABLED', '0') !== 1;
+  }
+  if ($src === 'tiingo') {
+    return strtolower(trim((string)env('PRICE_PROVIDER', 'twelvedata'))) === 'twelvedata'
+      || strtolower(trim((string)env('PAID_QUOTES_PROVIDER', 'twelvedata'))) === 'twelvedata';
+  }
+  if ($src === 'fcsapi') {
+    return (int)env('FCSAPI_ENABLED', '0') !== 1;
+  }
   return false;
 }
 
@@ -48,6 +60,16 @@ function quote_central_row_usable($data): bool {
   if (!is_array($data)) return false;
   if (!((float)($data['price'] ?? 0) > 0)) return false;
   return !quote_central_source_disabled((string)($data['source'] ?? ''));
+}
+
+function quote_central_fresh_ts(array $data, string $type = ''): int {
+  $type = vp_normalize_asset_type($type ?: (string)($data['type'] ?? ''));
+  $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
+  $centralTs = (int)($data['central_ts'] ?? $providerTs);
+  if ($type !== '' && $type !== 'crypto') {
+    return $providerTs > 0 ? $providerTs : $centralTs;
+  }
+  return max($providerTs, $centralTs);
 }
 
 // ── DB-backed central cache (shared across containers) ──────────────────────
@@ -144,9 +166,7 @@ function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?arr
       $data = json_decode($raw, true);
       if (quote_central_row_usable($data)) {
         if ($maxAge <= 0) return $data;
-        $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
-        $centralTs = (int)($data['central_ts'] ?? $providerTs);
-        $effectiveTs = max($providerTs, $centralTs);
+        $effectiveTs = quote_central_fresh_ts($data, $type);
         if ($effectiveTs > 0 && (time() - $effectiveTs) <= $maxAge) return $data;
       }
     }
@@ -165,7 +185,7 @@ function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?arr
     $data = json_decode($payload, true);
     if (!quote_central_row_usable($data)) return null;
     if ($maxAge > 0) {
-      $ts = (int)($data['central_ts'] ?? $data['updated_at'] ?? 0);
+      $ts = quote_central_fresh_ts($data, $type);
       if ($ts > 0 && (time() - $ts) > $maxAge) return null;
     }
     // Warm the local file cache from DB
@@ -192,9 +212,7 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
         $data = json_decode($raw, true);
         if (quote_central_row_usable($data)) {
           if ($maxAge <= 0) { $out[$sym] = $data; continue; }
-          $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
-          $centralTs = (int)($data['central_ts'] ?? $providerTs);
-          $effectiveTs = max($providerTs, $centralTs);
+          $effectiveTs = quote_central_fresh_ts($data, $type);
           if ($effectiveTs > 0 && (time() - $effectiveTs) <= $maxAge) { $out[$sym] = $data; continue; }
         }
       }
@@ -218,9 +236,7 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
         $data = json_decode($payload, true);
         if (!quote_central_row_usable($data)) continue;
         if ($maxAge > 0) {
-          $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
-          $centralTs = (int)($data['central_ts'] ?? $providerTs);
-          $effectiveTs = max($providerTs, $centralTs);
+          $effectiveTs = quote_central_fresh_ts($data, $type);
           if ($effectiveTs > 0 && (time() - $effectiveTs) > $maxAge) continue;
         }
         // Do not return rows whose source has been disabled by configuration.
@@ -253,9 +269,7 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
           foreach ($cached as $sym => $data) {
             if (!quote_central_row_usable($data)) continue;
             if ($maxAge > 0) {
-              $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
-              $centralTs = (int)($data['central_ts'] ?? $providerTs);
-              $effectiveTs = max($providerTs, $centralTs);
+              $effectiveTs = quote_central_fresh_ts($data, $type);
               if ($effectiveTs > 0 && (time() - $effectiveTs) > $maxAge) continue;
             }
             if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($data['source'] ?? $data['provider'] ?? '')) continue;
@@ -281,9 +295,7 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
       $data = json_decode($payload, true);
       if (!quote_central_row_usable($data)) continue;
       if ($maxAge > 0) {
-        $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
-        $centralTs = (int)($data['central_ts'] ?? $providerTs);
-        $effectiveTs = max($providerTs, $centralTs);
+        $effectiveTs = quote_central_fresh_ts($data, $type);
         if ($effectiveTs > 0 && (time() - $effectiveTs) > $maxAge) continue;
       }
       // Drop disabled-source rows from bundles
@@ -477,7 +489,7 @@ function quote_central_items(array $symbols, string $type, int $maxAge = 30): ar
         'change_pct' => (float)($row['change_pct'] ?? 0),
         'open' => (float)($row['open'] ?? 0),
         'prev_close' => (float)($row['prev_close'] ?? 0),
-        'updated_at' => (int)($row['central_ts'] ?? $row['updated_at'] ?? 0),
+        'updated_at' => (int)(quote_central_fresh_ts($row, $type) ?: ($row['central_ts'] ?? $row['updated_at'] ?? 0)),
         'provider_updated_at' => (int)($row['updated_at'] ?? 0),
         'received_at' => (int)($row['received_at'] ?? 0),
         'ingested_at' => (int)($row['ingested_at'] ?? 0),
@@ -485,7 +497,7 @@ function quote_central_items(array $symbols, string $type, int $maxAge = 30): ar
         'source' => (string)($row['source'] ?? 'central'),
         'delayed' => $delayed,
         'timing_class' => $delayed ? 'delayed' : 'live',
-        'age_sec' => max(0, time() - (int)($row['central_ts'] ?? $row['updated_at'] ?? 0)),
+        'age_sec' => max(0, time() - (int)(quote_central_fresh_ts($row, $type) ?: ($row['central_ts'] ?? $row['updated_at'] ?? 0))),
       ];
     } else {
       $items[] = [

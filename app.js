@@ -9444,7 +9444,7 @@ function tradePage(){
     }catch(e){}
   });
 
-  const tradeCandlesCacheKey = (mk='')=>`trade_candles_v3:${String(symbol || '').toUpperCase()}:${String(assetType || 'crypto').toLowerCase()}:${String(mk || marketTypeRef.value || 'spot').toLowerCase()}:${String(tf || '1m').toLowerCase()}`;
+  const tradeCandlesCacheKey = (mk='')=>`trade_candles_v4:${String(symbol || '').toUpperCase()}:${String(assetType || 'crypto').toLowerCase()}:${String(mk || marketTypeRef.value || 'spot').toLowerCase()}:${String(tf || '1m').toLowerCase()}`;
   let tradeSeedAppliedSig = '';
   const tradeSeedLocalSeedItems = (price, tfValue, count=72)=>{
     const px = safeNum(price, 0);
@@ -9516,6 +9516,7 @@ function tradePage(){
     return safeNum(lastPriceRef.value, 0);
   };
   const tradeApplyLocalSeedFallback = (seedPrice, mk='')=>{
+    if(normalizeLiveAssetType(assetType || 'crypto') !== 'crypto') return false;
     const px = safeNum(seedPrice, 0);
     if(!(px > 0)) return false;
     try{
@@ -9539,12 +9540,13 @@ function tradePage(){
   };
   const readTradeCandlesCache = (mk='')=>{
     try{
+      const typeNorm = normalizeLiveAssetType(assetType || 'crypto');
+      if(typeNorm !== 'crypto') return null;
       const raw = localStorage.getItem(tradeCandlesCacheKey(mk));
       if(!raw) return null;
       const parsed = JSON.parse(raw);
       const items = Array.isArray(parsed?.items) ? parsed.items : [];
       if(!items.length) return null;
-      const typeNorm = normalizeLiveAssetType(assetType || 'crypto');
       const maxAgeMs = typeNorm === 'crypto' ? 120000 : 300000;
       const ts = Number(parsed?.ts || 0) || 0;
       if(ts > 0 && (Date.now() - ts) > maxAgeMs) return null;
@@ -9559,6 +9561,7 @@ function tradePage(){
   };
   const writeTradeCandlesCache = (items, mk='')=>{
     try{
+      if(normalizeLiveAssetType(assetType || 'crypto') !== 'crypto') return;
       if(!Array.isArray(items) || !items.length) return;
       const key = tradeCandlesCacheKey(mk);
       if(normalizeLiveAssetType(assetType || 'crypto') === 'crypto' && !tradeCandlesHaveMovement(items)){
@@ -9881,6 +9884,10 @@ function startPolling(){
   let lastReseedAt = 0;
   const upsertLiveCandle = (price)=>{
     if(!(price>0)) return;
+    if(normalizeLiveAssetType(assetType || 'crypto') !== 'crypto'){
+      chart.setLastPrice(price);
+      return;
+    }
     const sec = tfSec(tf);
     const now = Math.floor(Date.now()/1000);
     const bucket = Math.floor(now/sec)*sec;
@@ -9990,6 +9997,7 @@ function startPolling(){
         const tailResp = await apiGetCachedStale(tailPath, 2800, { timeoutMs: Math.min(7500, tradeCandleTimeoutMs(assetType, marketTypeRef.value || 'spot')) });
         const tailItems = Array.isArray(tailResp?.items) ? tailResp.items.filter(Boolean) : [];
         if(!tailItems.length) return;
+        if(normalizeLiveAssetType(assetType || 'crypto') !== 'crypto' && String(tailResp?.source || '') !== 'twelvedata_time_series') return;
         tailItems.slice(-2).forEach(item=>{
           try{ chart.upsertCandle(item); }catch(_e){}
         });

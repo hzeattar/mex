@@ -23,6 +23,7 @@ while (ob_get_level() > 0) @ob_end_flush();
 require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quote_central.php';
 require_once __DIR__ . '/../lib/quotes.php';
+while (ob_get_level() > 0) @ob_end_flush();
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ $TWELVE_SYMBOLS  = [];
 $FINNHUB_SYMBOLS = []; // forex + stocks via Finnhub WS (free tier)
 $TICK_INTERVAL   = 5;
 $MAX_RUNTIME     = (int)getenv('WS_AGGREGATOR_MAX_RUNTIME') ?: 3600;
-$RECONNECT_DELAY = 3;
+$RECONNECT_DELAY = max(3, min(60, (int)(getenv('WS_RECONNECT_DELAY') ?: 3)));
 $FEEDS_RAW       = strtolower(trim((string)(getenv('WS_AGGREGATOR_FEEDS') ?: ($TWELVE_KEY !== '' ? 'twelvedata' : 'binance'))));
 $ENABLED_FEEDS   = array_values(array_filter(array_map('trim', explode(',', $FEEDS_RAW))));
 // TwelveData WS: use a very conservative batch size. Free/subscription plans may
@@ -64,7 +65,13 @@ class WsClient {
 
     $socketHost = ($this->secure ? 'ssl://' : '') . $this->host;
     $ctx = stream_context_create([
-      'ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true],
+      'ssl' => [
+        'verify_peer' => true,
+        'verify_peer_name' => true,
+        'allow_self_signed' => false,
+        'SNI_enabled' => true,
+        'peer_name' => $this->host,
+      ],
     ]);
 
     $this->fp = @stream_socket_client(
@@ -85,7 +92,7 @@ class WsClient {
     $key = base64_encode(random_bytes(16));
     $headers = [
       "GET {$this->path} HTTP/1.1",
-      "Host: {$this->host}:{$this->port}",
+      "Host: " . (($this->secure && $this->port === 443) || (!$this->secure && $this->port === 80) ? $this->host : "{$this->host}:{$this->port}"),
       "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
       "Accept-Language: en-US,en;q=0.9",
       "Upgrade: websocket",
@@ -93,7 +100,6 @@ class WsClient {
       "Origin: {$this->origin}",
       "Sec-WebSocket-Key: {$key}",
       "Sec-WebSocket-Version: 13",
-      "Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits",
       "Cache-Control: no-cache",
       "Pragma: no-cache",
       "",
@@ -113,9 +119,10 @@ class WsClient {
       if (strpos($response, "\r\n\r\n") !== false) break;
     }
 
-    if (strpos($response, '101') === false) {
-      $this->lastError = 'handshake: ' . trim(substr($response, 0, 200));
-      echo "  [WS] Handshake failed: " . substr($response, 0, 200) . "\n";
+    if (!preg_match('/^HTTP\/\d+(?:\.\d+)?\s+101\b/i', $response)) {
+      $safeResponse = preg_replace('/(apikey=)[^&\s]+/i', '$1***', $response);
+      $this->lastError = 'handshake: ' . trim(substr((string)$safeResponse, 0, 700));
+      echo "  [WS] Handshake failed: " . substr((string)$safeResponse, 0, 700) . "\n";
       flush();
       $this->disconnect();
       return false;
@@ -157,6 +164,9 @@ class WsClient {
       $this->buffer = substr($this->buffer, $frameLen);
 
       if ($opcode === 0x8) { // close
+        $code = strlen($payload) >= 2 ? unpack('n', substr($payload, 0, 2))[1] : 0;
+        $reason = strlen($payload) > 2 ? substr($payload, 2) : '';
+        $this->lastError = 'close_frame' . ($code ? ':' . $code : '') . ($reason !== '' ? ':' . $reason : '');
         $this->connected = false;
         break;
       }
@@ -610,6 +620,8 @@ function runTwelveDataWs(): int {
   if (empty($TWELVE_SYMBOLS)) return 0;
 
   $batch = array_slice(twelveDataOrderedSymbols(), 0, $TWELVE_WS_LIMIT);
+  $symbolsStr = implode(',', $batch);
+  if ($symbolsStr === '') return 0;
   $url = "wss://ws.twelvedata.com/v1/quotes/price?apikey={$TWELVE_KEY}";
 
   echo "[" . date('H:i:s') . "] Twelve Data WS: connecting to " . count($batch) . " symbols...\n";
@@ -630,6 +642,7 @@ function runTwelveDataWs(): int {
   aggregator_status_write('twelvedata', ['status' => 'connected', 'symbols' => count($batch), 'messages' => 0, 'payload_sample' => $symbolsStr]);
 
   $msgCount = 0;
+  $rawSeen = 0;
   $lastTick = time();
   $subscribed = false;
   $lastStatusAt = time();
@@ -638,11 +651,17 @@ function runTwelveDataWs(): int {
     $messages = $ws->receiveMessages();
 
     foreach ($messages as $raw) {
+      if ((int)getenv('TWELVEDATA_WS_DEBUG_LOG') === 1 && $rawSeen < 8) {
+        $rawSeen++;
+        echo "  [Twelve Data WS] raw{$rawSeen}: " . substr((string)$raw, 0, 700) . "\n";
+      }
       $msg = json_decode($raw, true);
       if (!$msg) continue;
+      $lastStatusAt = time();
 
       // Handle subscribe confirmation
-      if (($msg['event'] ?? '') === 'subscribe') {
+      $event = (string)($msg['event'] ?? $msg['type'] ?? '');
+      if ($event === 'subscribe' || $event === 'subscribe-status') {
         $subscribed = true;
         echo "  [Twelve Data WS] Subscribed to " . count($batch) . " symbols\n";
         aggregator_status_write('twelvedata', ['status' => 'subscribed', 'symbols' => count($batch), 'messages' => $msgCount]);
@@ -650,13 +669,13 @@ function runTwelveDataWs(): int {
       }
 
       // Handle heartbeat/ping from server
-      if (($msg['event'] ?? '') === 'heartbeat') {
+      if ($event === 'heartbeat') {
         $lastStatusAt = time();
         continue;
       }
 
       // Handle price update
-      if (($msg['event'] ?? '') === 'price' && isset($msg['price'])) {
+      if ($event === 'price' && isset($msg['price'])) {
         $tdsym = $msg['symbol'] ?? '';
         $price = (float)($msg['price'] ?? 0);
         $changePct = (float)($msg['change_percent'] ?? $msg['change_pct'] ?? 0);
@@ -683,7 +702,7 @@ function runTwelveDataWs(): int {
       }
 
       // Handle error
-      if (($msg['event'] ?? '') === 'error') {
+      if ($event === 'error') {
         echo "  [Twelve Data WS] Error: " . ($msg['message'] ?? 'unknown') . "\n";
         aggregator_status_write('twelvedata', ['status' => 'error', 'symbols' => count($batch), 'messages' => $msgCount, 'error' => (string)($msg['message'] ?? 'unknown')]);
       }

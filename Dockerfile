@@ -47,4 +47,4 @@ EXPOSE 9000
 
 # If WORKER_MODE=feed, run the price feed worker daemon instead of nginx.
 # Otherwise, run the standard nginx + php-fpm web server.
-CMD ["sh", "-c", "if [ \"$WORKER_MODE\" = 'feed' ]; then echo '[feed-worker] Starting prices_feed_worker daemon...'; exec php -d error_reporting=E_ALL -d display_errors=1 /app/api/cron/prices_feed_worker.php --daemon; else exec sh /app/ops/start-nginx-fpm.sh; fi"]
+CMD ["sh", "-c", "if [ \"$WORKER_MODE\" = 'feed' ]; then if [ \"${WS_AGGREGATOR_ENABLED:-1}\" != '0' ]; then echo '[feed-worker] Starting ws_aggregator daemon...'; WS_AGGREGATOR_FEEDS=${WS_AGGREGATOR_FEEDS:-twelvedata} php -d error_reporting=E_ALL -d display_errors=1 /app/api/ws/aggregator.php & fi; echo '[feed-worker] Starting prices_feed_worker daemon...'; exec php -d error_reporting=E_ALL -d display_errors=1 /app/api/cron/prices_feed_worker.php --daemon; else exec sh /app/ops/start-nginx-fpm.sh; fi"]

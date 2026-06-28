@@ -219,9 +219,9 @@ function candles_cache_path(string $symbol, string $market, string $tf, string $
   $safe = preg_replace('/[^A-Z0-9_]/', '_', strtoupper($symbol));
   $safe = substr($safe, 0, 40);
   $safeType = preg_replace('/[^a-z0-9_]/', '_', strtolower($type ?: 'generic'));
-  // Version suffix invalidated all pre-2026-06-27 synthetic/stale candle caches so
-  // real provider history is fetched afresh after the pricing source switch.
-  return __DIR__ . '/../data/candles_v2_' . strtolower($market) . '_' . $safeType . '_' . strtolower($safe) . '_' . strtolower($tf) . '.json';
+  // Version suffix invalidates older synthetic/stale candle caches after the
+  // TwelveData-only non-crypto switch.
+  return __DIR__ . '/../data/candles_v3_' . strtolower($market) . '_' . $safeType . '_' . strtolower($safe) . '_' . strtolower($tf) . '.json';
 }
 function candles_retention_days(string $type, string $tf): int {
   $kind = vp_normalize_asset_type($type ?: 'generic');
@@ -261,6 +261,10 @@ function candles_db_load(string $symbol, string $market, string $tf, string $typ
     $rows = array_reverse($st->fetchAll(PDO::FETCH_ASSOC) ?: []);
     $out = [];
     foreach ($rows as $r) {
+      $src = strtolower(trim((string)($r['source'] ?? '')));
+      if ($type !== 'crypto' && (int)env('CANDLES_REQUIRE_TWELVEDATA_NONCRYPTO', '1') === 1) {
+        if (!in_array($src, ['twelvedata_time_series','twelvedata','twelvedata_ws'], true)) continue;
+      }
       $out[] = [
         'time' => (int)($r['time'] ?? 0),
         'open' => (float)($r['open'] ?? 0),
@@ -338,13 +342,16 @@ function candles_cache_save(string $symbol, string $market, string $tf, array $c
       'low' => (float)($c['low'] ?? 0),
       'close' => (float)($c['close'] ?? 0),
       'volume' => (float)($c['volume'] ?? 0),
+      'source' => (string)($c['source'] ?? ''),
+      'provider_ts' => (int)($c['provider_ts'] ?? $t),
+      'quality' => (string)($c['quality'] ?? 'real'),
     ];
   }
   ksort($by);
   $p = candles_cache_path($symbol,$market,$tf,$type);
   $items = array_values($by);
   @file_put_contents($p, json_encode($items, JSON_UNESCAPED_SLASHES));
-  candles_db_save($symbol, $market, $tf, $type, $items, 'cache');
+  candles_db_save($symbol, $market, $tf, $type, $items, (string)($items[0]['source'] ?? 'cache'));
 }
 function candles_from_cache(array $candles, int $end, int $limit): array {
   if (!$candles) return [];

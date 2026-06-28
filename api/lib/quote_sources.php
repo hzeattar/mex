@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/market_resolver.php';
-require_once __DIR__ . '/quotes.php';
+require_once __DIR__ . '/marketdata.php';
 
 if (!function_exists('vp_quote_source_rank')) {
     function vp_quote_source_rank(?string $source): int
@@ -34,14 +34,24 @@ if (!function_exists('vp_quote_source_rank')) {
 if (!function_exists('vp_quote_source_is_trusted')) {
     function vp_quote_source_is_trusted(?string $source, string $assetType = ''): bool
     {
-        return quote_source_is_liveish($source, $assetType);
+        if (function_exists('quote_source_is_liveish')) {
+            return quote_source_is_liveish($source, $assetType);
+        }
+        return vp_quote_source_rank($source) >= 70;
     }
 }
 
 if (!function_exists('vp_quote_source_is_untrusted')) {
     function vp_quote_source_is_untrusted(?string $source): bool
     {
-        return quote_source_is_untrusted($source);
+        if (function_exists('quote_source_is_untrusted')) {
+            return quote_source_is_untrusted($source);
+        }
+        $src = strtolower(trim((string)$source));
+        return $src === '' || in_array($src, [
+            'seed','seed_fallback','seed_price','chart_seed','seed_candle',
+            'synthetic','aggs','cache','stale_cache','unavailable','yahoo','yahoo_chart_live'
+        ], true);
     }
 }
 
@@ -161,8 +171,10 @@ if (!function_exists('twelvedata_quote_many')) {
         $chunks = array_chunk($tickers, 30);
         foreach ($chunks as $chunk) {
             try {
-                $symList = implode(',', array_map('rawurlencode', $chunk));
-                $url = "https://api.twelvedata.com/quote?symbol={$symList}&apikey=" . rawurlencode($key);
+                $url = 'https://api.twelvedata.com/quote?' . http_build_query([
+                    'symbol' => implode(',', $chunk),
+                    'apikey' => $key,
+                ]);
 
                 $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
                 $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
@@ -179,7 +191,18 @@ if (!function_exists('twelvedata_quote_many')) {
                     unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
                 }
 
-                if (!is_array($j)) continue;
+                if (!is_array($j)) {
+                    if (PHP_SAPI === 'cli' && (int)env('TWELVEDATA_DEBUG_LOG', '0') === 1) {
+                        error_log('[twelvedata] quote returned no JSON for ' . implode(',', $chunk));
+                    }
+                    continue;
+                }
+                if (strtolower((string)($j['status'] ?? '')) === 'error') {
+                    if (PHP_SAPI === 'cli' && (int)env('TWELVEDATA_DEBUG_LOG', '0') === 1) {
+                        error_log('[twelvedata] quote error for ' . implode(',', $chunk) . ': ' . (string)($j['message'] ?? $j['code'] ?? 'unknown'));
+                    }
+                    continue;
+                }
 
                 // Batch response: { "EUR/USD": {...}, "XAU/USD": {...} } or single: {...}
                 // Single symbol response has "symbol" key
@@ -344,6 +367,9 @@ if (!function_exists('twelvedata_time_series_candles')) {
                 'low' => $low,
                 'close' => $close,
                 'volume' => (float)($row['volume'] ?? 0),
+                'source' => 'twelvedata_time_series',
+                'provider_ts' => (int)$ts,
+                'quality' => 'real',
             ];
         }
 

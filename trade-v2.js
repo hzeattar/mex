@@ -650,6 +650,7 @@
 
   function updateLiveCandle(price){
     if(!(price > 0) || !candleSeries) return;
+    if(state.type !== 'crypto') return;
     const step = tfSeconds(state.tf);
     const bucket = Math.floor(Math.floor(Date.now()/1000) / step) * step;
     const prev = lastCandle || { time:bucket, open:price, high:price, low:price, close:price, volume:0 };

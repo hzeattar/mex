@@ -39,6 +39,11 @@ function quote_source_disabled_by_config(?string $source): bool {
   if ($src === 'fcsapi') {
     return !fcsapi_enabled();
   }
+  if ($src === 'finnhub' || $src === 'finnhub_ws') {
+    return strtolower((string)env('PRICE_PROVIDER', 'twelvedata')) === 'twelvedata'
+      && strtolower((string)env('PAID_QUOTES_PROVIDER', 'twelvedata')) === 'twelvedata'
+      && (int)env('FINNHUB_FALLBACK_ENABLED', '0') !== 1;
+  }
   if ($src === 'tiingo') {
     // Tiingo is no longer a configured primary source for this project. Its
     // cached rows become stale quickly because the free/economy feed is daily.
