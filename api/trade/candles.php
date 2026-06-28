@@ -1023,6 +1023,7 @@ try {
         }
       }
     } catch (Throwable $e) {
+      error_log('[candles twelvedata] ' . $symbol . ' (' . ($tdSymbol ?? 'n/a') . ') error: ' . $e->getMessage());
       // fall through to Yahoo / EODHD / aggs
     }
   }
