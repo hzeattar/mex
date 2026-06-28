@@ -246,7 +246,23 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
       $raw = @file_get_contents($bundleCacheFile);
       if ($raw !== false) {
         $cached = json_decode($raw, true);
-        if (is_array($cached) && count($cached) > 0) return $cached;
+        if (is_array($cached) && count($cached) > 0) {
+          // Filter stale or disabled-source rows out of the file cache, otherwise
+          // file can shadow fresh DB writes indefinitely.
+          $filtered = [];
+          foreach ($cached as $sym => $data) {
+            if (!quote_central_row_usable($data)) continue;
+            if ($maxAge > 0) {
+              $providerTs = (int)($data['updated_at'] ?? $data['provider_ts'] ?? 0);
+              $centralTs = (int)($data['central_ts'] ?? $providerTs);
+              $effectiveTs = max($providerTs, $centralTs);
+              if ($effectiveTs > 0 && (time() - $effectiveTs) > $maxAge) continue;
+            }
+            if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($data['source'] ?? $data['provider'] ?? '')) continue;
+            $filtered[$sym] = $data;
+          }
+          if (count($filtered) > 0) return $filtered;
+        }
       }
     }
   }
