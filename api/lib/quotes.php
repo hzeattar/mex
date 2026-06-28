@@ -11,6 +11,18 @@ require_once __DIR__ . '/quote_fcsapi.php';
 require_once __DIR__ . '/quote_currencyfreaks.php';
 require_once __DIR__ . '/quote_polygon.php';
 
+if (!function_exists('quote_change_pct_recompute_threshold')) {
+  function quote_change_pct_recompute_threshold(string $type): float {
+    $type = vp_normalize_asset_type($type);
+    return match ($type) {
+      'forex' => 2.0,
+      'commodities', 'futures' => 5.0,
+      'stocks', 'arab' => 10.0,
+      default => 15.0,
+    };
+  }
+}
+
 function market_meta($meta): array {
   if (is_array($meta)) return $meta;
   if ($meta === null) return [];
@@ -25,7 +37,7 @@ function quote_source_disabled_by_config(?string $source): bool {
   $src = strtolower(trim((string)$source));
   if ($src === '') return false;
   if (in_array($src, ['yahoo', 'yahoo_chart', 'yahoo_chart_live', 'yahoo_crypto_chart', 'yahoo_rest'], true)) {
-    return !quote_yahoo_enabled();
+    return true;
   }
   if (in_array($src, ['eodhd', 'eodhd_rest', 'eodhd_intraday'], true)) {
     return (function_exists('eodhd_enabled') && !eodhd_enabled()) || strtolower((string)env('EODHD_ENABLED', '1')) === '0';
@@ -174,19 +186,9 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
   if ($providerType === 'crypto') {
-    return in_array($src, ['binance','binance_ws','trade_stream','stream','provider_live','twelvedata','twelvedata_ws','finnhub','finnhub_ws','tiingo'], true);
+    return in_array($src, ['binance','binance_ws'], true);
   }
-  if ($assetType === 'forex') {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','twelvedata_ws','fcsapi','finnhub','finnhub_ws','tiingo'], true);
-  }
-  if ($assetType === 'stocks') {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','stooq','twelvedata','twelvedata_ws','finnhub','finnhub_ws','tiingo'], true);
-  }
-  if (in_array($assetType, ['arab','commodities','futures'], true)) {
-    return in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','twelvedata_ws','fcsapi','finnhub','finnhub_ws','tiingo','coingecko','coingecko_metal'], true);
-  }
-  if (in_array($src, ['eodhd','eodhd_rest','provider_live','twelvedata','twelvedata_ws','fcsapi','finnhub','finnhub_ws','tiingo','coingecko','coingecko_metal'], true)) return true;
-  return false;
+  return in_array($src, ['twelvedata','twelvedata_ws'], true);
 }
 
 function quote_source_is_untrusted(?string $source): bool {
@@ -201,8 +203,7 @@ function quote_source_is_untrusted(?string $source): bool {
 }
 
 function quote_yahoo_enabled(): bool {
-  return ((int)env('YAHOO_ENABLED', '0') === 1 || (int)env('YAHOO_FALLBACK_ENABLED', '0') === 1)
-    && (int)env('ALLOW_YAHOO_PROVIDER', '0') === 1;
+  return false;
 }
 
 function quote_provider_prefers_twelvedata(string $assetType, array $meta = [], string $symbol = ''): bool {
@@ -540,6 +541,9 @@ function quote_mark_price(string $symbol, string $assetType = 'crypto'): float {
 function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol = [], array $opts = []): array {
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
+  if ($providerType !== 'crypto' && !array_key_exists('only_twelvedata_for_noncrypto', $opts)) {
+    $opts['only_twelvedata_for_noncrypto'] = ((int)env('NONCRYPTO_TWELVEDATA_ONLY', '1') === 1);
+  }
   $persistQuotes = array_key_exists('persist', $opts) ? (bool)$opts['persist'] : true;
   $symbols = array_values(array_unique(array_filter(array_map(static function($s){
     $s = strtoupper(trim((string)$s));
@@ -641,9 +645,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       $massiveBySym = [];
       $finnhubBySym = [];
       $tiingoBySym = [];
-      if (!vp_is_spot_metal_symbol($sym, $assetType)) {
-        $coingeckoMetalSymbols = array_values(array_filter($coingeckoMetalSymbols, static fn($s) => $s !== $sym));
-      }
+      $coingeckoMetalSymbols = array_values(array_filter($coingeckoMetalSymbols, static fn($s) => $s !== $sym));
       continue;
     }
     if (!$preferEodhd && $preferTwelvedata && (int)env('TWELVEDATA_EODHD_FALLBACK', '1') === 1) {
@@ -1521,7 +1523,7 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
     $recomputed = (($price - $prevClose) / $prevClose) * 100.0;
     $stored = is_numeric($changePct) ? (float)$changePct : 0.0;
     // If stored pct is missing, zero, or wildly different, prefer the recomputed one.
-    if (abs($stored) < 0.000001 || abs($recomputed - $stored) > 15.0) {
+    if (abs($stored) < 0.000001 || abs($recomputed - $stored) > quote_change_pct_recompute_threshold($type)) {
       $changePct = $recomputed;
     }
   }

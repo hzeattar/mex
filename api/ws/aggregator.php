@@ -40,7 +40,7 @@ $ENABLED_FEEDS   = array_values(array_filter(array_map('trim', explode(',', $FEE
 // TwelveData WS: use a very conservative batch size. Free/subscription plans may
 // disconnect large subscribe payloads or throttle them. 50 symbols keeps the
 // connection stable while the REST feed worker covers everything else.
-$TWELVE_WS_LIMIT = max(1, min(500, (int)(getenv('TWELVEDATA_WS_SYMBOL_LIMIT') ?: 50)));
+$TWELVE_WS_LIMIT = max(1, min(50, (int)(getenv('TWELVEDATA_WS_SYMBOL_LIMIT') ?: 24)));
 
 // ── Pure PHP WebSocket Client (RFC 6455) ────────────────────────────────────
 
@@ -489,6 +489,9 @@ function mapToTwelveData(string $symbol, string $type): string {
   }
   if ($type === 'futures') {
     $map = [
+      'ES_F' => 'ES', 'NQ_F' => 'NQ', 'YM_F' => 'YM', 'RTY_F' => 'RTY',
+      'NKD_F' => 'NKD', 'CL_F' => 'CL', 'BZ_F' => 'BZ', 'GC_F' => 'GC',
+      'SI_F' => 'SI', 'NG_F' => 'NG', 'ZN_F' => 'ZN', 'ZB_F' => 'ZB',
       'GC=F' => 'GC1!', 'CL=F' => 'CL1!', 'SI=F' => 'SI1!', 'HG=F' => 'HG1!',
       'NG=F' => 'NG1!', 'ZC=F' => 'ZC1!', 'ZW=F' => 'ZW1!', 'ZS=F' => 'ZS1!',
       'ES=F' => 'ES1!', 'NQ=F' => 'NQ1!', 'YM=F' => 'YM1!', 'RTY=F' => 'RTY1!',

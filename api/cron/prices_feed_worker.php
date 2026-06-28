@@ -160,6 +160,21 @@ function feed_worker_collect_symbols(): array {
     ];
   }
 
+  if (empty($symbolsByType['arab'])) {
+    $fallbackArab = [
+      '2222','1120','2010','7010','1211','1150','1180','2280','1010','1020',
+      '1030','1050','2050','2080','7020','7030','2040','2060','2090','2100',
+      '4001','4002','4190','4200','4210','4240','4260','4280','4300','4321',
+      '2150','2160','2170','2180',
+    ];
+    $symbolsByType['arab'] = [];
+    $metaByTypeSymbol['arab'] = [];
+    foreach ($fallbackArab as $sym) {
+      $symbolsByType['arab'][] = $sym;
+      $metaByTypeSymbol['arab'][$sym] = ['meta' => [], 'seed_price' => 0.0];
+    }
+  }
+
   $result = [$symbolsByType, $metaByTypeSymbol];
   $cache = $result;
   $cacheTime = time();

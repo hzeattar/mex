@@ -891,7 +891,6 @@ function updatePrice(container, q, runId = tradeRunId) {
   $$('[data-spread-val]', container).forEach(el => { el.textContent = p > 0 ? `${t('trade.spread','Spread')}: ${price(p * 0.0001, assetType)}` : `${t('trade.spread','Spread')}: --`; });
   scheduleOrderInfoUpdate(container);
   updateLiveCandle(p, runId, Number(q.provider_updated_at || q.updated_at || q.cache_updated_at || 0), normalizeType(q.type || assetType));
-  if (get('mode') !== 'real') bootstrapSyntheticChart(container, p, runId);
   updateLivePnL(container, String(q.symbol || get('symbol')).toUpperCase(), p);
 }
 
@@ -1597,6 +1596,7 @@ function normalizeCandleRows(candles) {
 }
 
 function syntheticCandlesFromPrice(symbol, type, tf, priceValue, rows = 120) {
+  return [];
   const base = Number(priceValue || 0);
   if (!(base > 0)) return [];
   const step = tfSeconds(tf);
@@ -1636,6 +1636,7 @@ function chartFallbackPrice(container, symbol = get('symbol')) {
 }
 
 function scheduleSyntheticChartFallback(container, symbol, type, runId) {
+  return;
   if (get('mode') === 'real') return;
   [900, 1800, 3200].forEach((delay) => {
     setTimeout(() => {
@@ -1647,6 +1648,7 @@ function scheduleSyntheticChartFallback(container, symbol, type, runId) {
 }
 
 function bootstrapSyntheticChart(container, priceValue, runId = tradeRunId) {
+  return;
   if (get('mode') === 'real') return;
   if (chart || candleSeries || container.__syntheticChartBooting || !(Number(priceValue) > 0)) return;
   const box = $('#chart-box', container);
@@ -2405,16 +2407,7 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       chartPainted = true;
     } else {
       if (options.silent || options.refresh) return;
-      const fallbackPrice = chartFallbackPrice(container, symbol);
-      const fallbackCandles = get('mode') === 'real' ? [] : syntheticCandlesFromPrice(symbol, type, tf, fallbackPrice);
-      if (fallbackCandles.length) {
-        if (chart && candleSeries) {
-          applyChartData(fallbackCandles, { fit: !options.silent && !options.refresh, key: reqKey, preserveRange: !!options.silent });
-          hideChartOverlay(container);
-        } else {
-          await initChart(container, fallbackCandles, runId);
-        }
-      } else if (!hasChart && !options.silent) {
+      if (!hasChart && !options.silent) {
         renderChartFallback(container, 'Chart data is still loading from the market provider.');
       } else if (hasChart && !options.silent) {
         hideChartOverlay(container);

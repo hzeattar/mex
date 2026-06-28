@@ -26,32 +26,15 @@ function quote_central_source_disabled(string $source): bool {
     return true;
   }
   if (in_array($src, ['yahoo','yahoo_rest','yahoo_chart','yahoo_chart_live','yahoo_crypto_chart'], true)) {
-    return (int)env('YAHOO_ENABLED', '0') !== 1
-      && (int)env('ALLOW_YAHOO_PROVIDER', '0') !== 1
-      && (int)env('YAHOO_FALLBACK_ENABLED', '0') !== 1;
+    return true;
   }
-  if (in_array($src, ['eodhd','eodhd_rest','eodhd_intraday','eodhd_cache'], true)) {
-    return (int)env('EODHD_ENABLED', '0') !== 1;
-  }
-  if (in_array($src, ['polygon','massive','polygon_ticker','massive_ticker'], true)) {
-    return (int)env('ENABLE_MASSIVE_FALLBACK', '0') !== 1
-      && (int)env('POLYGON_ENABLED', '0') !== 1
-      && strtolower(trim((string)env('PRICE_PROVIDER', 'twelvedata'))) !== 'massive';
-  }
-  if ($src === 'currencyfreaks') {
-    return (int)env('CURRENCYFREAKS_ENABLED', '0') !== 1;
-  }
-  if (in_array($src, ['finnhub','finnhub_ws'], true)) {
-    return strtolower(trim((string)env('PRICE_PROVIDER', 'twelvedata'))) === 'twelvedata'
-      && strtolower(trim((string)env('PAID_QUOTES_PROVIDER', 'twelvedata'))) === 'twelvedata'
-      && (int)env('FINNHUB_FALLBACK_ENABLED', '0') !== 1;
-  }
-  if ($src === 'tiingo') {
-    return strtolower(trim((string)env('PRICE_PROVIDER', 'twelvedata'))) === 'twelvedata'
-      || strtolower(trim((string)env('PAID_QUOTES_PROVIDER', 'twelvedata'))) === 'twelvedata';
-  }
-  if ($src === 'fcsapi') {
-    return (int)env('FCSAPI_ENABLED', '0') !== 1;
+  if (in_array($src, [
+    'eodhd','eodhd_rest','eodhd_intraday','eodhd_cache',
+    'polygon','massive','polygon_ticker','massive_ticker',
+    'currencyfreaks','finnhub','finnhub_ws','tiingo','fcsapi',
+    'coingecko','coingecko_metal','stooq','provider_live','trade_stream','stream'
+  ], true)) {
+    return true;
   }
   return false;
 }

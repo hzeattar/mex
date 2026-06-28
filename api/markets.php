@@ -623,7 +623,7 @@ function vp_filter_priced_supported_items(array $items, string $scope, bool $wit
     if (function_exists('quote_source_is_untrusted') && quote_source_is_untrusted($source)) return false;
     return true;
   }));
-  return $pricedItems ?: $items;
+  return $pricedItems;
 }
 
 
@@ -643,7 +643,7 @@ function vp_markets_quote_is_usable(string $assetType, float $price, int $update
 function vp_reference_quote_from_market_row(array $row, string $assetType): ?array {
   $assetType = vp_normalize_asset_type($assetType);
   if ($assetType === 'crypto') return null;
-  if ((int)env('MARKETS_REFERENCE_SEED_FALLBACK', '1') !== 1) return null;
+  if ((int)env('MARKETS_REFERENCE_SEED_FALLBACK', '0') !== 1) return null;
   $seed = (float)($row['seed_price'] ?? 0);
   if (!($seed > 0)) return null;
   return [
@@ -787,8 +787,9 @@ function vp_market_items_from_rows(array $rows, string $typeAlias, string $scope
     'allow_noncrypto_seed' => false,
     'allow_stale_display' => true,
     'direct_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
-    'direct_yahoo_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
-    'chart_budget' => in_array($typeAlias, ['arab','futures'], true) ? 12 : 6,
+    'direct_yahoo_budget' => 0,
+    'chart_budget' => $typeAlias === 'crypto' ? 0 : 0,
+    'only_twelvedata_for_noncrypto' => $typeAlias !== 'crypto',
   ];
 
   $authoritativeQuotes = [];
@@ -1247,8 +1248,9 @@ try {
     'allow_noncrypto_seed' => false,
     'allow_stale_display' => true,
     'direct_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
-    'direct_yahoo_budget' => $typeAlias === 'crypto' ? 24 : (in_array($typeAlias, ['arab','futures'], true) ? 18 : 8),
-    'chart_budget' => in_array($typeAlias, ['arab','futures'], true) ? 12 : 6,
+    'direct_yahoo_budget' => 0,
+    'chart_budget' => 0,
+    'only_twelvedata_for_noncrypto' => $typeAlias !== 'crypto',
   ];
 
   $cryptoRows = [];

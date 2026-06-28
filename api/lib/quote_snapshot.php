@@ -255,7 +255,10 @@ function qs_snapshot_from_row(string $symbol, string $type, string $market, ?arr
     $recomputed = (($mid - $prevClose) / $prevClose) * 100.0;
     // Prefer the stored pct if it is sane and close to the recomputed one;
     // otherwise use the recomputed pct so stale/wrong provider percentages don't mislead users.
-    if (abs($changePct) < 0.000001 || abs($recomputed - $changePct) > 15.0) {
+    $threshold = function_exists('quote_change_pct_recompute_threshold')
+      ? quote_change_pct_recompute_threshold($type)
+      : 15.0;
+    if (abs($changePct) < 0.000001 || abs($recomputed - $changePct) > $threshold) {
       $changePct = $recomputed;
     }
   }

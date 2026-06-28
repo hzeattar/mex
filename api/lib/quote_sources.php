@@ -136,15 +136,21 @@ if (!function_exists('twelvedata_symbol_for_market')) {
         }
 
         // Stocks, arab, futures, indices — use as-is
-        if (in_array($providerType, ['stocks', 'arab', 'futures', 'indices'], true)) {
+        if ($providerType === 'futures') {
+            $map = [
+                'ES_F' => 'ES', 'NQ_F' => 'NQ', 'YM_F' => 'YM', 'RTY_F' => 'RTY',
+                'NKD_F' => 'NKD', 'CL_F' => 'CL', 'BZ_F' => 'BZ', 'GC_F' => 'GC',
+                'SI_F' => 'SI', 'NG_F' => 'NG', 'ZN_F' => 'ZN', 'ZB_F' => 'ZB',
+            ];
+            if (isset($map[$symbol])) return $map[$symbol];
+            if (preg_match('/^([A-Z0-9]+)_F$/', $symbol, $m)) return $m[1];
+            return preg_match('/^[A-Z0-9._\-]{1,20}$/', $symbol) ? $symbol : null;
+        }
+
+        if (in_array($providerType, ['stocks', 'arab', 'indices'], true)) {
             if (preg_match('/^[A-Z0-9._\-]{1,20}$/', $symbol)) {
                 return $symbol;
             }
-        }
-
-        if ($providerType === 'futures') {
-            // Twelve Data Pro supports futures like ES, NQ, YM, CL, GC, ZN, ZB
-            return $symbol;
         }
 
         return null;
@@ -288,7 +294,6 @@ if (!function_exists('twelvedata_interval_for_tf')) {
     function twelvedata_interval_for_tf(string $tf): ?string {
         return match (strtolower(trim($tf))) {
             '1m' => '1min',
-            '3m' => '3min',
             '5m' => '5min',
             '15m' => '15min',
             '30m' => '30min',
@@ -300,6 +305,48 @@ if (!function_exists('twelvedata_interval_for_tf')) {
             '1w' => '1week',
             default => null,
         };
+    }
+}
+
+if (!function_exists('twelvedata_rollup_candles')) {
+    function twelvedata_rollup_candles(array $items, int $bucketSeconds, int $limit, int $end = 0): array {
+        if ($bucketSeconds <= 0 || !$items) return [];
+        $buckets = [];
+        foreach ($items as $row) {
+            if (!is_array($row)) continue;
+            $time = (int)($row['time'] ?? 0);
+            if ($time <= 0 || ($end > 0 && $time > $end)) continue;
+            $open = (float)($row['open'] ?? 0);
+            $high = (float)($row['high'] ?? 0);
+            $low = (float)($row['low'] ?? 0);
+            $close = (float)($row['close'] ?? 0);
+            if (!($open > 0 && $high > 0 && $low > 0 && $close > 0)) continue;
+
+            $bucket = (int)(floor($time / $bucketSeconds) * $bucketSeconds);
+            if (!isset($buckets[$bucket])) {
+                $buckets[$bucket] = [
+                    'time' => $bucket,
+                    'open' => $open,
+                    'high' => $high,
+                    'low' => $low,
+                    'close' => $close,
+                    'volume' => (float)($row['volume'] ?? 0),
+                    'source' => 'twelvedata_time_series',
+                    'provider_ts' => (int)($row['provider_ts'] ?? $time),
+                    'quality' => 'real_rollup',
+                ];
+            } else {
+                $buckets[$bucket]['high'] = max((float)$buckets[$bucket]['high'], $high);
+                $buckets[$bucket]['low'] = min((float)$buckets[$bucket]['low'], $low);
+                $buckets[$bucket]['close'] = $close;
+                $buckets[$bucket]['volume'] += (float)($row['volume'] ?? 0);
+                $buckets[$bucket]['provider_ts'] = max((int)$buckets[$bucket]['provider_ts'], (int)($row['provider_ts'] ?? $time));
+            }
+        }
+        ksort($buckets);
+        $out = array_values($buckets);
+        if ($limit > 0 && count($out) > $limit) $out = array_slice($out, -$limit);
+        return $out;
     }
 }
 
@@ -401,6 +448,12 @@ if (!function_exists('twelvedata_time_series_candles_cached')) {
         }
 
         $result = twelvedata_time_series_candles($ticker, $tf, $limit, $end);
+        if (!$result && strtolower(trim($tf)) === '3m') {
+            $sourceLimit = max($limit * 3 + 12, 60);
+            $sourceLimit = min(max(10, $sourceLimit), max(10, min(5000, (int)env('TWELVEDATA_CANDLES_MAX_OUTPUTSIZE', '5000'))));
+            $source = twelvedata_time_series_candles($ticker, '1m', $sourceLimit, $end);
+            $result = twelvedata_rollup_candles($source, 180, $limit, $end);
+        }
         if ($result && count($result) > 0) {
             @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
         }
