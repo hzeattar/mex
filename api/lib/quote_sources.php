@@ -367,12 +367,15 @@ if (!function_exists('twelvedata_time_series_candles_cached')) {
             if ($age >= 0 && $age < $ttl) {
                 $raw = @file_get_contents($cacheFile);
                 $d = $raw ? json_decode($raw, true) : null;
-                if (is_array($d)) return $d;
+                // Do not reuse an empty cached result: it may have been written
+                // during an upstream outage or quota exhaustion and would shadow
+                // fresh real candles until the TTL expires.
+                if (is_array($d) && count($d) > 0) return $d;
             }
         }
 
         $result = twelvedata_time_series_candles($ticker, $tf, $limit, $end);
-        if ($result) {
+        if ($result && count($result) > 0) {
             @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_SLASHES), LOCK_EX);
         }
         return $result;
