@@ -201,7 +201,7 @@ function candles_cached_or_empty_response(string $symbol, string $market, string
   $cached = candles_cache_load($symbol, $market, $tf, $type);
   if ($cached) {
     $items = candles_from_cache($cached, $end, $limit);
-    $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+    $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end, $tf);
     if (candles_has_display_history($out, $limit, vp_provider_asset_type($type))) {
       candles_json_response([
         'ok' => true,
@@ -544,7 +544,7 @@ function candles_crypto_respond_from_provider(array $newItems, string $source, s
   $merged = array_values($by);
   candles_cache_save($symbol, $market, $tf, $merged, $type);
   $items = candles_from_cache($merged, $end, $limit);
-  $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+  $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end, $tf);
   candles_json_response(['ok'=>true,'source'=>$source,'provider_count'=>count($newItems)], $out, $limit, $end);
 }
 
@@ -563,10 +563,65 @@ function candles_normalize_series(array $items): array {
       'low' => (float)($c['low'] ?? 0),
       'close' => (float)($c['close'] ?? 0),
       'volume' => (float)($c['volume'] ?? 0),
+      'quality' => (string)($c['quality'] ?? ''),
     ];
   }
   ksort($by);
   return array_values($by);
+}
+
+// Clip obviously bogus outlier wicks for non-crypto small timeframes.
+// TwelveData CFD/spot bars sometimes contain one-tick spikes that exceed
+// the surrounding market range by a large factor. We clip the wick to a
+// multiple of the local ATR while preserving the real open/close.
+function candles_clip_wick_outliers(array $items, string $assetType, string $tf): array {
+  $kind = vp_normalize_asset_type($assetType);
+  if ($kind === 'crypto') return $items; // crypto volatility is real
+  $shortTf = in_array($tf, ['1m', '3m', '5m', '15m'], true);
+  if (!$shortTf) return $items;
+  $n = count($items);
+  if ($n < 5) return $items;
+  $mult = in_array($tf, ['1m', '3m'], true) ? 4.0 : 6.0;
+  $out = $items;
+  for ($i = 0; $i < $n; $i++) {
+    $c = &$out[$i];
+    $o = (float)($c['open'] ?? 0);
+    $h = (float)($c['high'] ?? 0);
+    $l = (float)($c['low'] ?? 0);
+    $cl = (float)($c['close'] ?? 0);
+    if ($o <= 0 || $h <= 0 || $l <= 0 || $cl <= 0) continue;
+    $trList = [];
+    $start = max(0, $i - 5);
+    $end = min($n - 1, $i + 5);
+    for ($j = $start; $j <= $end; $j++) {
+      if ($j === $i) continue;
+      $x = $out[$j];
+      $xo = (float)($x['open'] ?? 0);
+      $xh = (float)($x['high'] ?? 0);
+      $xl = (float)($x['low'] ?? 0);
+      $xc = (float)($x['close'] ?? 0);
+      if ($xc <= 0) continue;
+      $prevClose = $j > 0 ? (float)($out[$j - 1]['close'] ?? $xc) : $xc;
+      $trList[] = max(abs($xh - $xl), abs($xh - $prevClose), abs($xl - $prevClose));
+    }
+    if (count($trList) < 3) continue;
+    sort($trList);
+    $atr = $trList[(int)floor(count($trList) / 2)]; // median TR
+    if ($atr <= 0) continue;
+    // Clip high wick if it is far above body range and outside neighbour ATR
+    $bodyTop = max($o, $cl);
+    $bodyBottom = min($o, $cl);
+    if ($h > $bodyTop + $mult * $atr) {
+      $c['high'] = round($bodyTop + $mult * $atr, 6);
+      $c['quality'] = ($c['quality'] ?? '') . '_clip_high';
+    }
+    if ($l < max(0, $bodyBottom - $mult * $atr)) {
+      $c['low'] = round(max(0, $bodyBottom - $mult * $atr), 6);
+      $c['quality'] = ($c['quality'] ?? '') . '_clip_low';
+    }
+    unset($c);
+  }
+  return $out;
 }
 
 function candles_fill_time_gaps(array $items, int $step, string $assetType = ''): array {
@@ -622,12 +677,13 @@ function candles_remove_synthetic_gaps(array $items): array {
   return $out;
 }
 
-function candles_finalize_items(array $items, string $symbol, string $market, string $assetType, int $step, int $end = 0): array {
+function candles_finalize_items(array $items, string $symbol, string $market, string $assetType, int $step, int $end = 0, string $tf = ''): array {
   $items = candles_normalize_series($items);
   // Remove synthetic gap fill candles before finalizing so charts don't show
   // flat/dummy bars that look distorted (zero-volume flat lines).
   $items = candles_fill_time_gaps($items, $step, $assetType);
   $items = candles_remove_synthetic_gaps($items);
+  $items = candles_clip_wick_outliers($items, $assetType, $tf);
   return candles_sync_live_tail($items, $symbol, $market, $assetType, $step, $end);
 }
 
@@ -973,7 +1029,7 @@ try {
     $cached = candles_cache_load($symbol,$market,$tf,$type);
     if ($cached && candles_series_has_real_movement($cached, 24)) {
       $items = candles_from_cache($cached, $end, $limit);
-      $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+      $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end, $tf);
       candles_json_response(['ok'=>true,'cached'=>true,'source'=>'cache_preserve','provider_errors'=>$providerErrors], $out, $limit, $end);
     }
 
@@ -1271,7 +1327,7 @@ try {
     $items[] = ['time'=>$t,'open'=>$o,'high'=>$h,'low'=>$l,'close'=>$c,'volume'=>$vol*1000];
     $price = $c;
   }
-  $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end);
+  $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end, $tf);
   candles_json_response(['ok'=>true,'synthetic'=>true,'source'=>'synthetic'], $out, $limit, $end);
 } catch (Throwable $e) {
   try {
