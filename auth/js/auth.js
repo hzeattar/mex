@@ -146,8 +146,16 @@
     ensureCountryMaps();
     if (!value) return '';
     if (COUNTRY_BY_CODE[value]) return value;
-    const named = COUNTRY_BY_NAME[value] || COUNTRIES.find(function(c){ return c.d === value || c.en === value; });
-    return named ? (named.c || '') : '';
+    const named = COUNTRY_BY_NAME[value] || COUNTRIES.find(function(c){ return c.d === value || c.en === value || c.n === value || c.c === value; });
+    return named ? (named.c || flagToCountryCode(named.f) || '') : '';
+  }
+  function flagToCountryCode(flag){
+    if (!flag || flag.length < 4) return '';
+    const cp1 = flag.codePointAt(0);
+    const cp2 = flag.codePointAt(2);
+    if (!cp1 || !cp2) return '';
+    if (cp1 < 0x1F1E6 || cp1 > 0x1F1FF || cp2 < 0x1F1E6 || cp2 > 0x1F1FF) return '';
+    return String.fromCharCode(cp1 - 0x1F1E6 + 65) + String.fromCharCode(cp2 - 0x1F1E6 + 65);
   }
   function ensureCountryMaps(){
     if (COUNTRIES_READY && Object.keys(COUNTRY_BY_CODE).length === 0) {
@@ -248,6 +256,8 @@
         // country of residence
         const countryCodeResolved = resolveCountryCode(payload.country || '');
         payload.country_code = countryCodeResolved || resolveCountryCode(payload.countryCode || '');
+        // Ensure country_code is present; otherwise copy the dial code as a last resort.
+        if (!payload.country_code) payload.country_code = (payload.countryCode || '').replace(/[^A-Za-z0-9+.-]/g, '');
         // birth date: input type=date, name=dob, format already yyyy-mm-dd
         payload.birth_date = (payload.dob || '');
         payload.lang = document.documentElement.lang || 'ar';
@@ -705,7 +715,8 @@
         const li = document.createElement('li');
         li.className = 'auth-cc-opt auth-cc-opt--with-live';
         li.setAttribute('role','option');
-        li.dataset.value = c.n;
+        li.dataset.code  = flagToCountryCode(c.f) || c.n;
+        li.dataset.value = flagToCountryCode(c.f) || c.n;
         li.dataset.flag  = c.f;
         li.dataset.name  = c.n;
         li.innerHTML =
@@ -715,7 +726,7 @@
             '<span class="auth-cc-opt__live-dot"></span>' +
             '<span class="auth-cc-opt__count" data-cc-live-idx="' + idx + '">' + _formatNum(LIVE_COUNTS[idx]) + '</span>' +
           '</span>';
-        if (c.n === valInp.value) li.classList.add('is-selected');
+        if (c.n === valInp.dataset.name) li.classList.add('is-selected');
         frag.appendChild(li);
         count++;
       });
@@ -750,6 +761,8 @@
       nameEl.textContent = li.dataset.name;
       nameEl.classList.remove('auth-cc-trigger__name--placeholder');
       valInp.value = li.dataset.value;
+      valInp.dataset.name = li.dataset.name;
+      valInp.dataset.code  = li.dataset.code;
       closePanel();
     });
 
