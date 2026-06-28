@@ -3013,9 +3013,12 @@ function syncOrderField(container, field, value) {
 
 function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetType = get('type')) {
   if (!isCurrentRun(runId) || !candleSeries || !lastCandle || !(priceValue > 0)) return;
-  // Never paint a quote onto another symbol/timeframe's candles (prevents the
-  // spike/distortion seen for a few seconds while switching assets).
   if (!chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
+  const type = normalizeType(assetType);
+  const tf = get('tf') || '1m';
+  // Non-crypto live tail is only useful on larger timeframes; on 1m/3m/5m the
+  // per-second price polling creates long wicks that make the chart look jagged.
+  if (type !== 'crypto' && ['1m','3m','5m'].includes(tf)) return;
   const bucket = currentBucketTime(sourceTime, assetType);
   const base = pendingLiveCandle?.candle || lastCandle;
   let next;
