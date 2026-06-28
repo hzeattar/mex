@@ -823,6 +823,8 @@ function quoteQuality(q) {
 }
 
 function deriveChangePct(q) {
+  const chg = Number(q?.change_pct || q?.q_change || 0);
+  if (Math.abs(chg) > 0.000001) return chg;
   const p = Number(q?.price || 0);
   const open = Number(q?.open || q?.prev_close || q?.previous_close || q?.q_open || 0);
   if (p > 0 && open > 0 && p !== open) return ((p - open) / open) * 100;
