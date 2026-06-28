@@ -36,7 +36,10 @@ $MAX_RUNTIME     = (int)getenv('WS_AGGREGATOR_MAX_RUNTIME') ?: 3600;
 $RECONNECT_DELAY = 3;
 $FEEDS_RAW       = strtolower(trim((string)(getenv('WS_AGGREGATOR_FEEDS') ?: ($TWELVE_KEY !== '' ? 'twelvedata' : 'binance'))));
 $ENABLED_FEEDS   = array_values(array_filter(array_map('trim', explode(',', $FEEDS_RAW))));
-$TWELVE_WS_LIMIT = max(1, min(500, (int)(getenv('TWELVEDATA_WS_SYMBOL_LIMIT') ?: 500)));
+// TwelveData WS: use a very conservative batch size. Free/subscription plans may
+// disconnect large subscribe payloads or throttle them. 50 symbols keeps the
+// connection stable while the REST feed worker covers everything else.
+$TWELVE_WS_LIMIT = max(1, min(500, (int)(getenv('TWELVEDATA_WS_SYMBOL_LIMIT') ?: 50)));
 
 // ── Pure PHP WebSocket Client (RFC 6455) ────────────────────────────────────
 
@@ -173,7 +176,19 @@ class WsClient {
   }
 
   public function isConnected(): bool {
-    return $this->connected && $this->fp && !feof($this->fp);
+    if (!$this->connected || !$this->fp) return false;
+    if (feof($this->fp)) {
+      $this->connected = false;
+      return false;
+    }
+    return true;
+  }
+
+  public function lastError(): string {
+    if (!$this->fp) return $this->lastError;
+    $meta = stream_get_meta_data($this->fp);
+    if (!empty($meta['timed_out'])) return 'socket_timed_out';
+    return $this->lastError;
   }
 
   public function disconnect(): void {
@@ -609,14 +624,15 @@ function runTwelveDataWs(): int {
 
   echo "  [Twelve Data WS] Connected! Sending subscribe...\n";
 
-  // Send subscribe message
-  $symbolsStr = implode(',', $batch);
-  $ws->send(json_encode(['action' => 'subscribe', 'params' => ['symbols' => $symbolsStr]]));
-  aggregator_status_write('twelvedata', ['status' => 'connected', 'symbols' => count($batch), 'messages' => 0]);
+  // Send subscribe message with explicit JSON type (some gateways require this).
+  $subscribePayload = json_encode(['action' => 'subscribe', 'params' => ['symbols' => $symbolsStr]]);
+  $ws->send($subscribePayload);
+  aggregator_status_write('twelvedata', ['status' => 'connected', 'symbols' => count($batch), 'messages' => 0, 'payload_sample' => $symbolsStr]);
 
   $msgCount = 0;
   $lastTick = time();
   $subscribed = false;
+  $lastStatusAt = time();
 
   while ($ws->isConnected()) {
     $messages = $ws->receiveMessages();
@@ -633,8 +649,11 @@ function runTwelveDataWs(): int {
         continue;
       }
 
-      // Handle heartbeat/ping
-      if (($msg['event'] ?? '') === 'heartbeat') continue;
+      // Handle heartbeat/ping from server
+      if (($msg['event'] ?? '') === 'heartbeat') {
+        $lastStatusAt = time();
+        continue;
+      }
 
       // Handle price update
       if (($msg['event'] ?? '') === 'price' && isset($msg['price'])) {
@@ -672,16 +691,26 @@ function runTwelveDataWs(): int {
 
     usleep(10000); // 10ms
 
-    // Heartbeat tick
+    // Heartbeat / keepalive to prevent idle timeout on some plans (30s)
     if (time() - $lastTick >= $TICK_INTERVAL) {
       $lastTick = time();
-      $ws->send(json_encode(['action' => 'heartbeat']));
+      if ($subscribed) {
+        $ws->send(json_encode(['action' => 'heartbeat']));
+      }
+    }
+
+    // If we haven't seen any message for 90s, treat connection as stale and bail to reconnect.
+    if ((time() - $lastStatusAt) > 90) {
+      echo "  [Twelve Data WS] Idle timeout, reconnecting...\n";
+      aggregator_status_write('twelvedata', ['status' => 'idle_reconnect', 'symbols' => count($batch), 'messages' => $msgCount, 'error' => 'no_message_90s']);
+      break;
     }
   }
 
+  $err = $ws->lastError();
   $ws->disconnect();
-  echo "  [Twelve Data WS] Disconnected after {$msgCount} messages\n";
-  aggregator_status_write('twelvedata', ['status' => 'disconnected', 'symbols' => count($batch), 'messages' => $msgCount]);
+  echo "  [Twelve Data WS] Disconnected after {$msgCount} messages (error: {$err})\n";
+  aggregator_status_write('twelvedata', ['status' => 'disconnected', 'symbols' => count($batch), 'messages' => $msgCount, 'error' => $err]);
   return $msgCount;
 }
 
@@ -797,7 +826,13 @@ while (true) {
       }
     } catch (Throwable $e) {
       echo "  [{$feed} WS] Error: " . $e->getMessage() . "\n";
+      try {
+        aggregator_status_write($feed, ['status' => 'exception', 'error' => $e->getMessage(), 'messages' => 0]);
+      } catch (Throwable $e2) {}
     }
+
+    // Small stagger between feed reconnects so they don't all stampede.
+    sleep(1);
   }
 
   // Reconnect delay

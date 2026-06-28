@@ -186,16 +186,20 @@ function feed_worker_fetch_type(string $type, array $symbols, array $metaBySymbo
   try {
     $isCrypto = ($type === 'crypto');
     $count = count($symbols);
+    // Ensure non-crypto feeds do not hit Yahoo/EODHD when they are disabled.
+    // TwelveData handles forex/stocks/commodities; Binance handles crypto.
+    $allowYahoo = quote_yahoo_enabled();
     $live = quote_bulk_live($symbols, $type, $metaForProvider, [
       'ttl' => 1,
-      'yahoo_ttl' => 1,
-      'eodhd_ttl' => 1,
-      'massive_ttl' => 1,
+      'yahoo_ttl' => $allowYahoo ? 1 : 0,
+      'eodhd_ttl' => 0,
+      'massive_ttl' => 0,
       'persist' => true,
       'direct_budget' => $count,
       'direct_yahoo_budget' => 0,
       'chart_budget' => $isCrypto ? 8 : min($count, 16),
       'allow_direct_batch' => true,
+      'only_twelvedata_for_noncrypto' => !$isCrypto,
     ]);
   } catch (Throwable $e) {
     $live = [];

@@ -187,7 +187,8 @@ function quote_source_is_untrusted(?string $source): bool {
 }
 
 function quote_yahoo_enabled(): bool {
-  return (int)env('YAHOO_ENABLED', '0') === 1 && (int)env('ALLOW_YAHOO_PROVIDER', '0') === 1;
+  return ((int)env('YAHOO_ENABLED', '0') === 1 || (int)env('YAHOO_FALLBACK_ENABLED', '0') === 1)
+    && (int)env('ALLOW_YAHOO_PROVIDER', '0') === 1;
 }
 
 function quote_provider_prefers_twelvedata(string $assetType, array $meta = [], string $symbol = ''): bool {
@@ -610,6 +611,22 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
     // Spot metals always get a CoinGecko tokenized-metal fallback.
     if (vp_is_spot_metal_symbol($sym, $assetType)) {
       $coingeckoMetalSymbols[] = $sym;
+    }
+
+    // Non-crypto feed worker pass can opt-in to strict TwelveData-only sourcing
+    // so disabled providers like Yahoo/EODHD/FCS never silently run.
+    if (!$isCrypto && !empty($opts['only_twelvedata_for_noncrypto'])) {
+      $yahooBySym = [];
+      $eodhdBySym = [];
+      $eodhdFallbackBySym = [];
+      $fcsapiBySym = [];
+      $massiveBySym = [];
+      $finnhubBySym = [];
+      $tiingoBySym = [];
+      if (!vp_is_spot_metal_symbol($sym, $assetType)) {
+        $coingeckoMetalSymbols = array_values(array_filter($coingeckoMetalSymbols, static fn($s) => $s !== $sym));
+      }
+      continue;
     }
     if (!$preferEodhd && $preferTwelvedata && (int)env('TWELVEDATA_EODHD_FALLBACK', '1') === 1) {
       $e = eodhd_symbol_for_market($sym, $assetType, $meta);

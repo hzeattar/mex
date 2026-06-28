@@ -381,7 +381,7 @@ if (!function_exists('twelvedata_time_series_candles_cached')) {
 
 if (!function_exists('fcsapi_enabled')) {
     function fcsapi_enabled(): bool {
-        return strtolower((string)env('FCSAPI_ENABLED', '1')) !== '0';
+        return strtolower((string)env('FCSAPI_ENABLED', '0')) === '1';
     }
 }
 

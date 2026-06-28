@@ -1,5 +1,11 @@
 <?php
 declare(strict_types=1);
+// Route root traffic to the new landing pages under /auth/.
+// Preserves any deep-link functionality by redirecting the bare domain only.
+if (PHP_SAPI !== 'cli' && ($_SERVER['REQUEST_URI'] ?? '') === '/') {
+  header('Location: /auth/index.html', true, 302);
+  exit;
+}
 require_once __DIR__ . '/site_bootstrap.php';
 $lang = 'en'; $rtl = false;
 try {

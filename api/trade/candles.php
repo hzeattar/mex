@@ -493,7 +493,6 @@ function candles_series_has_real_movement(array $items, int $sample = 24): bool 
   $slice = array_slice($items, -max(3, $sample));
   $min = null;
   $max = null;
-  $volume = 0.0;
   foreach ($slice as $c) {
     foreach (['open','high','low','close'] as $key) {
       $v = (float)($c[$key] ?? 0);
@@ -501,19 +500,17 @@ function candles_series_has_real_movement(array $items, int $sample = 24): bool 
       $min = $min === null ? $v : min($min, $v);
       $max = $max === null ? $v : max($max, $v);
     }
-    $volume += max(0.0, (float)($c['volume'] ?? 0));
   }
   if ($min === null || $max === null) return false;
   $spread = abs($max - $min) / max(1.0, abs((float)$max));
-  // Volume by itself does not prove the chart is useful. A cached sequence of
-  // identical OHLC values with one non-zero volume bar was being treated as
-  // real history, which made the trading chart look frozen.
-  return $spread > 0.000001;
+  // Volume is not required for instruments like forex CFDs or spot metals
+  // where providers often do not report tick volume.
+  return $spread > 0.0000005;
 }
 
 function candles_yahoo_enabled(): bool {
-  return (int)env('YAHOO_ENABLED', '0') === 1
-    && ((int)env('ALLOW_YAHOO_PROVIDER', '0') === 1 || (int)env('CANDLES_YAHOO_ENABLED', '0') === 1);
+  return ((int)env('YAHOO_ENABLED', '0') === 1 || (int)env('ALLOW_YAHOO_PROVIDER', '0') === 1 || (int)env('CANDLES_YAHOO_ENABLED', '0') === 1)
+    && (int)env('YAHOO_FALLBACK_ENABLED', '0') === 1;
 }
 
 function candles_crypto_yahoo_symbol(string $symbol): string {
