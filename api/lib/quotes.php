@@ -519,6 +519,10 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
     $st->execute([$symbol]);
   }
   $r = $st->fetch(PDO::FETCH_ASSOC);
+  if ($r && function_exists('quote_source_disabled_by_config')) {
+    $src = strtolower(trim((string)($r['source'] ?? $r['provider'] ?? '')));
+    if (quote_source_disabled_by_config($src)) return null;
+  }
   return $r ?: null;
 }
 

@@ -217,6 +217,10 @@ function qa_quote_rows_by_symbols(array $symbols, ?string $typeAlias = null): ar
     foreach ($rows as $row) {
       $sym = strtoupper((string)($row['symbol'] ?? ''));
       if ($sym === '' || isset($out[$sym])) continue;
+      if (function_exists('quote_source_disabled_by_config')) {
+        $src = strtolower(trim((string)($row['source'] ?? $row['provider'] ?? '')));
+        if (quote_source_disabled_by_config($src)) continue;
+      }
       $out[$sym] = $row;
     }
     return $out;
