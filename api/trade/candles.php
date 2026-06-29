@@ -678,22 +678,29 @@ function candles_smooth_micro_noise(array $items, string $assetType, string $tf)
     }
     if (count($local) < 6) continue;
     sort($local);
-    $center = $local[(int)floor(count($local) / 2)];
-    $spread = $local[(int)floor(count($local) * 0.75)] - $local[(int)floor(count($local) * 0.25)];
+    $q1 = $local[(int)floor(count($local) * 0.25)];
+    $q3 = $local[(int)floor(count($local) * 0.75)];
+    $spread = $q3 - $q1;
+    $center = $local[(int)floor(count($local) * 0.5)];
     if ($spread <= 0 || $center <= 0) continue;
 
-    $envelopeTop = $center + $mult * max($spread, $medianBody);
-    $envelopeBottom = max(0, $center - $mult * max($spread, $medianBody));
+    // Stronger envelope for commodities/gold on tiny timeframes.
+    $baseMult = in_array($tf, ['1m', '3m'], true) ? 1.2 : 1.8;
+    if ($kind === 'commodities') $baseMult *= 1.3;
+    $envelopeTop = $center + $baseMult * max($spread, $medianBody);
+    $envelopeBottom = max(0, $center - $baseMult * max($spread, $medianBody));
 
     $bodyTop = max($o, $cl);
     $bodyBottom = min($o, $cl);
 
-    if ($h > $envelopeTop && $bodyTop <= $envelopeTop) {
-      $c['high'] = round(min($h, $bodyTop + max($spread * 0.5, $medianBody)), 6);
+    // Allow a useful wick up to 2× body height, then compress to ~1× body.
+    $maxWick = max($spread, $medianBody);
+    if ($h > $envelopeTop) {
+      $c['high'] = round(min($h, $bodyTop + $maxWick), 6);
       $c['quality'] = ($c['quality'] ?? '') . '_smooth_high';
     }
-    if ($l < $envelopeBottom && $bodyBottom >= $envelopeBottom) {
-      $c['low'] = round(max($l, $bodyBottom - max($spread * 0.5, $medianBody)), 6);
+    if ($l < $envelopeBottom) {
+      $c['low'] = round(max($l, $bodyBottom - $maxWick), 6);
       $c['quality'] = ($c['quality'] ?? '') . '_smooth_low';
     }
     unset($c);
