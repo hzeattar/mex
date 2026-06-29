@@ -62,22 +62,24 @@ if ($sl <= 0) $sl = 0.0;
 // (No merge by symbol/side; each position is independent.)
 $mergePositions = false;
 
-// Always fetch a price to validate. For demo use a display snapshot (cache)
-// to avoid the latency of a forced-fresh execution quote.
-$quoteMode = $isReal ? 'execution' : 'display';
-$quoteSnapshot = qs_snapshot($symbol, $assetType, $marketType, ['mode' => $quoteMode]);
-$mark = !empty($quoteSnapshot['execution_allowed']) ? qs_execution_price($quoteSnapshot, $side) : 0.0;
-$cachedPriceForSanity = (float)($quoteSnapshot['price'] ?? 0);
+// Demo fast path: trust the UI price directly to avoid slow/blocked quote lookups.
+$mark = 0.0;
+if (!$isReal && $clientPrice > 0) {
+  $mark = $clientPrice;
+}
+
+// For real mode (or demo fallback without client price) fetch a quote.
+if (!($mark > 0)) {
+  $quoteMode = $isReal ? 'execution' : 'display';
+  $quoteSnapshot = qs_snapshot($symbol, $assetType, $marketType, ['mode' => $quoteMode]);
+  $mark = !empty($quoteSnapshot['execution_allowed']) ? qs_execution_price($quoteSnapshot, $side) : 0.0;
+  $cachedPriceForSanity = (float)($quoteSnapshot['price'] ?? 0);
+}
 
 // Demo fast fill: even if the quote isn't marked executable, trust the client
 // price if it is within a sane drift of the cached price.
-if (!$isReal) {
-  $allowedDrift = in_array($assetType, ['forex','commodities'], true) ? 0.06 : 0.12;
-  if (($mark <= 0 || !empty($quoteSnapshot['timing_class']) && in_array($quoteSnapshot['timing_class'], ['stale','market_closed','delayed','unavailable'], true))) {
-    if ($clientPrice > 0 && $cachedPriceForSanity > 0 && abs($clientPrice - $cachedPriceForSanity) / max($cachedPriceForSanity, 0.00000001) <= $allowedDrift) {
-      $mark = $clientPrice;
-    }
-  }
+if (!$isReal && $clientPrice > 0) {
+  $mark = $clientPrice;
 }
 
 if ($isReal && (empty($quoteSnapshot['execution_allowed']) || !($mark > 0))) {
