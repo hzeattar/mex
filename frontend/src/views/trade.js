@@ -3296,7 +3296,7 @@ function quoteStateKey(q) {
   const staleWindow = freshWindow * 3;
   if (Number(q?.price || 0) <= 0) return 'unavailable';
   if (timing === 'seed' || source.includes('seed')) return 'reference';
-  if (timing === 'market_closed') return 'closed';
+  if (timing === 'market_closed') return 'cached'; // closed hours are executable for demo/order execution
   if (age === null || age <= freshWindow) return 'live';
   if (timing === 'stale' || q?.is_stale) return age <= staleWindow ? 'cached' : 'stale';
   if (timing === 'delayed' || source.includes('yahoo') || ['stocks', 'arab'].includes(type)) return 'cached';

@@ -17,8 +17,29 @@ $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
 ];
 
 $symbolsRaw = (string)($_GET['symbols'] ?? ($_GET['symbol'] ?? ''));
+
+// Support per-symbol types via CSV or arrays, matched 1:1 with symbols.
+$typesRaw = $_GET['types'] ?? ($_GET['type'] ?? '');
+$resolvedTypes = [];
+if (is_array($typesRaw)) {
+  foreach ($typesRaw as $i => $v) {
+    $resolvedTypes[$i] = vp_normalize_asset_type(trim((string)$v)) ?: 'crypto';
+  }
+} elseif (is_string($typesRaw) && trim($typesRaw) !== '') {
+  $resolvedTypes = preg_split('/\s*,\s*/', trim($typesRaw));
+  // Strip empty values and normalize
+  $resolvedTypes = array_values(array_filter(array_map(static fn($v) => vp_normalize_asset_type(trim($v)) ?: '', $resolvedTypes)));
+}
+
 $typeAlias = vp_normalize_asset_type((string)($_GET['type'] ?? ''));
 if ($typeAlias === '') $typeAlias = 'crypto';
+
+// If caller supplied multiple per-symbol types, route through the mixed-type path.
+if ($resolvedTypes && count(array_unique($resolvedTypes)) > 1) {
+  $typeAlias = 'all';
+} elseif ($resolvedTypes && count($resolvedTypes) === 1) {
+  $typeAlias = $resolvedTypes[0];
+}
 $fresh = ((int)($_GET['fresh'] ?? $_GET['force_fresh'] ?? 0) === 1);
 $direct = ((int)($_GET['direct'] ?? 0) === 1);
 $visible = ((int)($_GET['visible'] ?? 0) === 1);
@@ -136,7 +157,7 @@ function quotes_daily_change_rescue(string $symbol, string $assetType, array $me
   return null;
 }
 
-function quotes_group_symbols_by_resolved_type(array $list): array {
+function quotes_group_symbols_by_resolved_type(array $list, array $resolvedTypes = []): array {
   $symbols = array_values(array_unique(array_filter(array_map(static function($sym) {
     $sym = strtoupper(trim((string)$sym));
     return $sym !== '' ? $sym : '';
@@ -151,9 +172,13 @@ function quotes_group_symbols_by_resolved_type(array $list): array {
   }
 
   $groups = [];
-  foreach ($symbols as $sym) {
-    $assetType = vp_normalize_asset_type((string)($metaRows[$sym]['type'] ?? ''));
-    if ($assetType === '' || $assetType === 'all') $assetType = 'crypto';
+  foreach ($symbols as $idx => $sym) {
+    if ($resolvedTypes[$idx] ?? null) {
+      $assetType = $resolvedTypes[$idx];
+    } else {
+      $assetType = vp_normalize_asset_type((string)($metaRows[$sym]['type'] ?? ''));
+      if ($assetType === '' || $assetType === 'all') $assetType = 'crypto';
+    }
     $groups[$assetType][] = $sym;
   }
   return $groups;
@@ -163,7 +188,7 @@ function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive
   $typeAlias = vp_normalize_asset_type($typeAlias);
   if ($typeAlias === 'all') {
     $bySymbol = [];
-    foreach (quotes_group_symbols_by_resolved_type($list) as $assetType => $groupSymbols) {
+    foreach (quotes_group_symbols_by_resolved_type($list, $resolvedTypes) as $assetType => $groupSymbols) {
       $payload = quotes_degraded_payload($assetType, $groupSymbols, $allowLive);
       foreach ((array)($payload['items'] ?? []) as $row) {
         if (!is_array($row)) continue;

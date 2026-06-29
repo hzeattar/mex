@@ -638,6 +638,69 @@ function candles_clip_wick_outliers(array $items, string $assetType, string $tf)
   return $out;
 }
 
+// Smooth tiny high-frequency wicks on small timeframes for non-crypto assets.
+// When a single 1m/3m/5m bar reports high/low far outside the local market
+// noise envelope while open/close sit inside the envelope, compress the
+// wick so the chart renders clean candlestick bodies instead of a "grass" cluster.
+function candles_smooth_micro_noise(array $items, string $assetType, string $tf): array {
+  $kind = vp_normalize_asset_type($assetType);
+  if ($kind === 'crypto') return $items;
+  if (!in_array($tf, ['1m', '3m', '5m', '15m'], true)) return $items;
+  $n = count($items);
+  if ($n < 10) return $items;
+
+  // Compute local median body height as an envelope anchor.
+  $bodyHeights = [];
+  foreach ($items as $c) {
+    $bodyHeights[] = abs((float)($c['close'] ?? 0) - (float)($c['open'] ?? 0));
+  }
+  sort($bodyHeights);
+  $medianBody = $bodyHeights[(int)floor(count($bodyHeights) / 2)];
+  if (!($medianBody > 0)) return $items;
+
+  $mult = in_array($tf, ['1m', '3m'], true) ? 2.5 : 3.5;
+  $out = $items;
+  for ($i = 0; $i < $n; $i++) {
+    $c = &$out[$i];
+    $o = (float)($c['open'] ?? 0);
+    $h = (float)($c['high'] ?? 0);
+    $l = (float)($c['low'] ?? 0);
+    $cl = (float)($c['close'] ?? 0);
+    if ($o <= 0 || $h <= 0 || $l <= 0 || $cl <= 0) continue;
+
+    $local = [];
+    $start = max(0, $i - 7);
+    $end = min($n - 1, $i + 7);
+    for ($j = $start; $j <= $end; $j++) {
+      if ($j === $i) continue;
+      $local[] = max((float)$out[$j]['high'], (float)$out[$j]['close'], (float)$out[$j]['open']);
+      $local[] = min((float)$out[$j]['low'], (float)$out[$j]['close'], (float)$out[$j]['open']);
+    }
+    if (count($local) < 6) continue;
+    sort($local);
+    $center = $local[(int)floor(count($local) / 2)];
+    $spread = $local[(int)floor(count($local) * 0.75)] - $local[(int)floor(count($local) * 0.25)];
+    if ($spread <= 0 || $center <= 0) continue;
+
+    $envelopeTop = $center + $mult * max($spread, $medianBody);
+    $envelopeBottom = max(0, $center - $mult * max($spread, $medianBody));
+
+    $bodyTop = max($o, $cl);
+    $bodyBottom = min($o, $cl);
+
+    if ($h > $envelopeTop && $bodyTop <= $envelopeTop) {
+      $c['high'] = round(min($h, $bodyTop + max($spread * 0.5, $medianBody)), 6);
+      $c['quality'] = ($c['quality'] ?? '') . '_smooth_high';
+    }
+    if ($l < $envelopeBottom && $bodyBottom >= $envelopeBottom) {
+      $c['low'] = round(max($l, $bodyBottom - max($spread * 0.5, $medianBody)), 6);
+      $c['quality'] = ($c['quality'] ?? '') . '_smooth_low';
+    }
+    unset($c);
+  }
+  return $out;
+}
+
 function candles_fill_time_gaps(array $items, int $step, string $assetType = ''): array {
   $items = candles_normalize_series($items);
   if (!$items || $step <= 0) return $items;
@@ -698,6 +761,7 @@ function candles_finalize_items(array $items, string $symbol, string $market, st
   $items = candles_fill_time_gaps($items, $step, $assetType);
   $items = candles_remove_synthetic_gaps($items);
   $items = candles_clip_wick_outliers($items, $assetType, $tf);
+  $items = candles_smooth_micro_noise($items, $assetType, $tf);
   return candles_sync_live_tail($items, $symbol, $market, $assetType, $step, $end);
 }
 

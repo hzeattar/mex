@@ -66,6 +66,15 @@ $quoteSnapshot = qs_snapshot($symbol, $assetType, $marketType, ['mode' => 'execu
 $mark = !empty($quoteSnapshot['execution_allowed']) ? qs_execution_price($quoteSnapshot, $side) : 0.0;
 $cachedPriceForSanity = (float)($quoteSnapshot['price'] ?? 0);
 
+// Demo fast fill: if execution quote is stale/closed but client provided a sane
+// recent price, trust it immediately instead of waiting for a slow fresh quote.
+if (!$isReal && ($mark <= 0 || !empty($quoteSnapshot['timing_class']) && in_array($quoteSnapshot['timing_class'], ['stale','market_closed','delayed'], true))) {
+  $allowedDrift = in_array($assetType, ['forex','commodities'], true) ? 0.06 : 0.12;
+  if ($clientPrice > 0 && $cachedPriceForSanity > 0 && abs($clientPrice - $cachedPriceForSanity) / max($cachedPriceForSanity, 0.00000001) <= $allowedDrift) {
+    $mark = $clientPrice;
+  }
+}
+
 if ($isReal && (empty($quoteSnapshot['execution_allowed']) || !($mark > 0))) {
   json_response([
     'ok' => false,
@@ -81,23 +90,19 @@ if ($mark <= 0 && !$isReal && $clientPrice > 0) {
   if ($driftOk) $mark = $clientPrice;
 }
 
-try {
-  if ($mark <= 0 && !$isReal) {
-    $mark = quote_price($symbol, (string)$marketType ?: 'spot', (string)$assetType ?: 'crypto');
-    if ($mark > 0) {
-      $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
-        'symbol' => $symbol,
-        'type' => $assetType,
-        'market' => $marketType,
-        'price' => $mark,
-        'change_pct' => 0,
-        'updated_at' => time(),
-        'source' => 'demo_live_fallback',
-      ], ['mode' => 'display']);
-    }
+if (!($mark > 0) && !$isReal) {
+  $mark = quote_price($symbol, (string)$marketType ?: 'spot', (string)$assetType ?: 'crypto');
+  if ($mark > 0) {
+    $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
+      'symbol' => $symbol,
+      'type' => $assetType,
+      'market' => $marketType,
+      'price' => $mark,
+      'change_pct' => 0,
+      'updated_at' => time(),
+      'source' => 'demo_live_fallback',
+    ], ['mode' => 'display']);
   }
-} catch (Throwable $e) {
-  json_response(['ok'=>false,'error'=>'Price unavailable. Please wait for the live quote to refresh and try again.'], 503);
 }
 if (!($mark > 0)) {
   json_response(['ok'=>false,'error'=>'Price unavailable. Please wait for the live quote to refresh and try again.','code'=>'price_unavailable'], 503);
