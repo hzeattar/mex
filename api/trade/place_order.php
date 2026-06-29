@@ -64,8 +64,18 @@ $mergePositions = false;
 
 // Demo fast path: trust the UI price directly to avoid slow/blocked quote lookups.
 $mark = 0.0;
+$quoteSnapshot = null;
 if (!$isReal && $clientPrice > 0) {
   $mark = $clientPrice;
+  $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
+    'symbol' => $symbol,
+    'type' => $assetType,
+    'market' => $marketType,
+    'price' => $clientPrice,
+    'change_pct' => 0,
+    'updated_at' => time(),
+    'source' => 'demo_client_price',
+  ], ['mode' => 'display']);
 }
 
 // For real mode (or demo fallback without client price) fetch a quote.
@@ -80,6 +90,17 @@ if (!($mark > 0)) {
 // price if it is within a sane drift of the cached price.
 if (!$isReal && $clientPrice > 0) {
   $mark = $clientPrice;
+  if (!$quoteSnapshot) {
+    $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
+      'symbol' => $symbol,
+      'type' => $assetType,
+      'market' => $marketType,
+      'price' => $clientPrice,
+      'change_pct' => 0,
+      'updated_at' => time(),
+      'source' => 'demo_client_price',
+    ], ['mode' => 'display']);
+  }
 }
 
 if ($isReal && (empty($quoteSnapshot['execution_allowed']) || !($mark > 0))) {
