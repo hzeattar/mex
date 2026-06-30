@@ -1,3 +1,5 @@
+@import url("../dist/css/style-BV0doCar.css");
+
 /* Chart/market polish layer — safe UI-only override.
    Keeps one platform live price in the header and removes confusing synthetic
    bid/ask/spread markers from the order ticket. */
