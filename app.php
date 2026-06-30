@@ -36,6 +36,7 @@ if (is_file($manifestPath)) {
 $mainEntry = $manifest['src/main.js'] ?? null;
 $cssFile = $manifest['style.css']['file'] ?? null;
 $jsFile = $mainEntry['file'] ?? null;
+$assetVersion = is_file($manifestPath) ? (string)@filemtime($manifestPath) : (string)time();
 
 // Fallback: if v2 build is missing, redirect to legacy
 if (!$jsFile) {
@@ -80,7 +81,7 @@ try {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <?php if ($cssFile): ?>
-  <link rel="stylesheet" href="./assets/dist/<?php echo $cssFile; ?>" />
+  <link rel="stylesheet" href="./assets/dist/<?php echo $cssFile; ?>?v=<?php echo rawurlencode($assetVersion); ?>" />
   <?php endif; ?>
   <?php
     // Preload the likely-first route chunks so the router does not pay an
@@ -89,7 +90,7 @@ try {
     foreach ($preloadKeys as $pk) {
       $pf = $manifest[$pk]['file'] ?? null;
       if ($pf) {
-        echo '  <link rel="modulepreload" href="./assets/dist/' . htmlspecialchars($pf, ENT_QUOTES) . '" />' . "\n";
+        echo '  <link rel="modulepreload" href="./assets/dist/' . htmlspecialchars($pf, ENT_QUOTES) . '?v=' . rawurlencode($assetVersion) . '" />' . "\n";
       }
     }
   ?>
@@ -124,11 +125,13 @@ try {
     };
   </script>
   <?php if ($jsFile): ?>
-  <script type="module" src="./assets/dist/<?php echo $jsFile; ?>"></script>
+  <script type="module" src="./assets/dist/<?php echo $jsFile; ?>?v=<?php echo rawurlencode($assetVersion); ?>"></script>
   <?php endif; ?>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js?v=<?php echo rawurlencode($assetVersion); ?>', { updateViaCache: 'none' })
+        .then((registration) => registration.update().catch(() => {}))
+        .catch(() => {});
     }
   </script>
 </body>
