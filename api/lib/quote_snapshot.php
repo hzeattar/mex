@@ -386,7 +386,10 @@ function qs_snapshots(array $symbols, string $type, string $market = 'spot', arr
     );
     $snapshot = qs_snapshot_from_row($sym, $type, $market, $row, $opts + ['mode' => $mode]);
     $initial[$sym] = $snapshot;
-    if ($mode === 'execution' && $type !== 'crypto' && empty($snapshot['execution_allowed'])) {
+    $forceExecutionLive = $mode === 'execution'
+      && $type !== 'crypto'
+      && ((int)($opts['force_live'] ?? env('QS_EXEC_FORCE_DIRECT_NONCRYPTO', '1')) === 1);
+    if ($mode === 'execution' && $type !== 'crypto' && ($forceExecutionLive || empty($snapshot['execution_allowed']))) {
       $needsLive[] = $sym;
     }
   }
