@@ -376,15 +376,55 @@ function qs_snapshots(array $symbols, string $type, string $market = 'spot', arr
     $storedRows = [];
   }
 
-  $out = [];
+  $initial = [];
+  $needsLive = [];
   foreach ($symbols as $sym) {
     $row = qs_choose_row(
       is_array($centralRows[$sym] ?? null) ? $centralRows[$sym] : null,
       is_array($storedRows[$sym] ?? null) ? $storedRows[$sym] : null,
       $type
     );
-    $out[] = qs_snapshot_from_row($sym, $type, $market, $row, $opts + ['mode' => $mode]);
+    $snapshot = qs_snapshot_from_row($sym, $type, $market, $row, $opts + ['mode' => $mode]);
+    $initial[$sym] = $snapshot;
+    if ($mode === 'execution' && $type !== 'crypto' && empty($snapshot['execution_allowed'])) {
+      $needsLive[] = $sym;
+    }
   }
+
+  if ($needsLive && function_exists('quote_bulk_live')) {
+    $metaRows = [];
+    try {
+      if (function_exists('qa_market_meta_by_symbols')) $metaRows = qa_market_meta_by_symbols($needsLive);
+    } catch (Throwable $e) {
+      $metaRows = [];
+    }
+    $metaBySymbol = [];
+    foreach ($needsLive as $sym) {
+      $metaBySymbol[$sym] = is_array($metaRows[$sym]['meta'] ?? null) ? $metaRows[$sym]['meta'] : [];
+    }
+    try {
+      $liveRows = quote_bulk_live($needsLive, $type, $metaBySymbol, [
+        'ttl' => 1,
+        'yahoo_ttl' => 0,
+        'eodhd_ttl' => 0,
+        'massive_ttl' => 0,
+        'direct_budget' => count($needsLive),
+        'direct_yahoo_budget' => 0,
+        'chart_budget' => 0,
+        'allow_direct_batch' => true,
+        'only_twelvedata_for_noncrypto' => true,
+      ]);
+      foreach ($needsLive as $sym) {
+        $live = is_array($liveRows[$sym] ?? null) ? $liveRows[$sym] : null;
+        if (!$live) continue;
+        $snapshot = qs_snapshot_from_row($sym, $type, $market, $live, $opts + ['mode' => $mode]);
+        if (!empty($snapshot['execution_allowed'])) $initial[$sym] = $snapshot;
+      }
+    } catch (Throwable $e) {}
+  }
+
+  $out = [];
+  foreach ($symbols as $sym) $out[] = $initial[$sym] ?? qs_empty_snapshot($sym, $type, $market);
   return $out;
 }
 
