@@ -622,6 +622,7 @@ function quote_mark_price(string $symbol, string $assetType = 'crypto'): float {
 function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol = [], array $opts = []): array {
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
+  $isCrypto = ($providerType === 'crypto');
   if ($providerType !== 'crypto' && !array_key_exists('only_twelvedata_for_noncrypto', $opts)) {
     $opts['only_twelvedata_for_noncrypto'] = ((int)env('NONCRYPTO_TWELVEDATA_ONLY', '1') === 1);
   }
@@ -788,6 +789,28 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'updated_at' => $now,
           'source' => 'twelvedata',
         ];
+      }
+      foreach ($fetchMap as $sym => $ticker) {
+        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
+        try {
+          $singleRows = twelvedata_quote_many_cached([$ticker], $ttl);
+          $row = is_array($singleRows[$ticker] ?? null) ? $singleRows[$ticker] : null;
+          if (!$row) continue;
+          $p = (float)($row['price'] ?? 0);
+          if (!($p > 0)) continue;
+          $out[$sym] = [
+            'symbol' => $sym,
+            'type' => $assetType,
+            'price' => $p,
+            'change_pct' => (float)($row['change_pct'] ?? 0.0),
+            'open' => (float)($row['open'] ?? 0),
+            'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
+            'updated_at' => $now,
+            'source' => 'twelvedata',
+          ];
+        } catch (Throwable $singleError) {
+          continue;
+        }
       }
     } catch (Throwable $e) {}
   }

@@ -184,7 +184,7 @@ function quotes_group_symbols_by_resolved_type(array $list, array $resolvedTypes
   return $groups;
 }
 
-function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive = true): array {
+function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive = true, array $resolvedTypes = []): array {
   $typeAlias = vp_normalize_asset_type($typeAlias);
   if ($typeAlias === 'all') {
     $bySymbol = [];
@@ -233,11 +233,11 @@ function quotes_degraded_payload(string $typeAlias, array $list, bool $allowLive
       }
       $live = quote_bulk_live($list, $typeAlias, [], [
         'ttl' => $isCrypto ? 1 : 2,
-        'yahoo_ttl' => 2,
+        'yahoo_ttl' => 0,
         'massive_ttl' => 2,
         'persist' => $allowLive && ((int)env('READ_ENDPOINTS_PERSIST_QUOTES', '0') === 1),
         'direct_budget' => min($count, $isCrypto ? 12 : 0),
-        'direct_yahoo_budget' => (!$isCrypto && $count === 1) ? 1 : 0,
+        'direct_yahoo_budget' => 0,
         'chart_budget' => $chartBudget,
         'chart_budget_ms' => $chartBudgetMs,
         'allow_direct_batch' => !$isCrypto && $chartBudget > 0,
@@ -459,15 +459,16 @@ if ($isUiFastPath) {
     'commodities', 'futures' => max(8, min(20, (int)env('QUOTES_WATCHLIST_LIVE_MARKET_HOURS_LIMIT', '12'))),
     default => max(1, min(10, (int)env('QUOTES_WATCHLIST_LIVE_NONCRYPTO_LIMIT', '6'))),
   };
-  // OPTIMIZED: Skip live fetch for non-crypto watchlist to improve speed
-  // Use cached prices instead of waiting for slow EODHD/Yahoo responses
+  // Keep live watchlist warming limited to small batches. Forex/commodities/arab
+  // are TwelveData-backed, so missing visible rows can be filled without Yahoo.
   $nonCryptoMarketOpen = !function_exists('qa_market_is_open') || qa_market_is_open($typeAlias);
+  $watchlistLiveDefault = in_array($typeAlias, ['forex', 'commodities', 'arab'], true) ? '1' : '0';
   $watchlistLiveNonCrypto = !$cacheOnly
     && $isWatchlistRequest
     && $typeAlias !== 'crypto'
     && $nonCryptoMarketOpen
     && count($list) <= $watchlistNonCryptoLimit
-    && (int)env('QUOTES_WATCHLIST_LIVE_NONCRYPTO', '0') === 1; // Changed from '1' to '0' to disable by default
+    && (int)env('QUOTES_WATCHLIST_LIVE_NONCRYPTO', $watchlistLiveDefault) === 1;
   $fastAllowLive = ($focusLiveFast && !$cacheOnly && !$visible && $purpose === 'focus')
     || $watchlistLiveCrypto
     || $watchlistLiveNonCrypto;
@@ -516,7 +517,13 @@ if ($cacheOnly) {
 }
 if ($isNonCrypto) {
   $isLiveFocusRequest = ($purpose === 'focus') || $direct || $strictLive || ($fresh && count($list) <= 2);
-  $allowLive = !$cacheOnly && ($isLiveFocusRequest && count($list) <= 3 && !$visible);
+  $nonCryptoLiveLimit = match ($typeAlias) {
+    'forex', 'commodities' => max(3, min(12, (int)env('QUOTES_LIVE_BATCH_LIMIT_FOREX_COMMODITIES', '12'))),
+    'stocks', 'arab' => max(3, min(10, (int)env('QUOTES_LIVE_BATCH_LIMIT_EQUITIES', '8'))),
+    'futures' => 0,
+    default => max(3, min(8, (int)env('QUOTES_LIVE_BATCH_LIMIT_NONCRYPTO', '6'))),
+  };
+  $allowLive = !$cacheOnly && ($isLiveFocusRequest && count($list) <= $nonCryptoLiveLimit && !$visible);
 }
 $visibleNonCrypto = $visible && $isNonCrypto;
 $focusNonCrypto = $isNonCrypto && (($purpose === 'focus') || $direct || $strictLive);
@@ -529,11 +536,11 @@ try {
     'allow_noncrypto_seed' => false,
     'allow_stale_display' => $visible || $cacheOnly,
     'direct_budget' => $visibleNonCrypto ? 0 : (($focusNonCrypto && count($list) <= 1) ? 0 : (($direct || $fresh) ? max(1, min(count($list), 12)) : ($visible ? min(4, count($list)) : min(6, count($list))))),
-    'direct_yahoo_budget' => $visibleNonCrypto ? 0 : (($focusNonCrypto && count($list) <= 1) ? 0 : (($direct || $fresh) ? max(1, min(count($list), 3)) : min(2, count($list)))),
+    'direct_yahoo_budget' => 0,
     'chart_budget' => $typeAlias === 'crypto' ? min(8, count($list)) : ($visibleNonCrypto ? $visibleChartBudget : ($focusNonCrypto ? 0 : min(1, count($list)))),
     'chart_budget_ms' => $visibleNonCrypto ? max(300, min(2000, (int)env('QUOTES_VISIBLE_CHART_FALLBACK_MS_NONCRYPTO', '700'))) : ($focusNonCrypto ? 0 : 3000),
     'allow_direct_batch' => false,
-    'yahoo_ttl' => $visibleNonCrypto ? 6 : ($focusNonCrypto ? 1 : 4),
+    'yahoo_ttl' => 0,
   ]);
 } catch (Throwable $e) {
   $payload = quotes_degraded_payload($typeAlias, $list, $allowLive && !$cacheOnly);

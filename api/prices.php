@@ -27,7 +27,7 @@ $payload = qa_quote_payload($type, $symbols, [
   'allow_crypto_seed' => true,
   'allow_noncrypto_seed' => false,
   'direct_budget' => min(12, max(1, count($symbols))),
-  'direct_yahoo_budget' => min(8, max(1, count($symbols))),
+  'direct_yahoo_budget' => 0,
   'chart_budget' => min(6, max(1, count($symbols))),
 ]);
 

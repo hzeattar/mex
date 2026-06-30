@@ -176,6 +176,49 @@ if (!function_exists('twelvedata_symbol_for_market')) {
 }
 
 if (!function_exists('twelvedata_quote_many')) {
+    function twelvedata_quote_row_from_payload(array $data): ?array {
+        $price = (float)($data['close'] ?? $data['price'] ?? 0);
+        if ($price <= 0) return null;
+        $prevClose = (float)($data['previous_close'] ?? 0);
+        $chgPctRaw = (float)($data['percent_change'] ?? 0);
+        if ($prevClose > 0 && abs($chgPctRaw) < 0.0000001) {
+            $chg = (float)($data['change'] ?? 0);
+            $chgPctRaw = ($chg / $prevClose) * 100.0;
+        }
+        return [
+            'price' => $price,
+            'change_pct' => $chgPctRaw,
+            'prev_close' => $prevClose,
+            'source' => 'twelvedata',
+        ];
+    }
+
+    function twelvedata_quote_single_direct(string $ticker, string $key, int $timeoutSec): ?array {
+        $ticker = trim($ticker);
+        if ($ticker === '') return null;
+        $url = 'https://api.twelvedata.com/quote?' . http_build_query([
+            'symbol' => $ticker,
+            'apikey' => $key,
+        ]);
+        $prevTimeout = $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] ?? null;
+        $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = [
+            'connect_timeout' => max(1, min(3, $timeoutSec)),
+            'timeout' => max(2, min(6, $timeoutSec + 2)),
+            'retries' => 0,
+        ];
+        try {
+            $j = http_get_json($url);
+        } finally {
+            if ($prevTimeout !== null) {
+                $GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE'] = $prevTimeout;
+            } else {
+                unset($GLOBALS['HTTP_GET_JSON_TIMEOUT_OVERRIDE']);
+            }
+        }
+        if (!is_array($j) || strtolower((string)($j['status'] ?? '')) === 'error') return null;
+        return twelvedata_quote_row_from_payload($j);
+    }
+
     /**
      * Fetch real-time quotes from TwelveData API.
      * Supports up to 10 symbols per request (batch).
@@ -228,6 +271,16 @@ if (!function_exists('twelvedata_quote_many')) {
                     if (PHP_SAPI === 'cli' && (int)env('TWELVEDATA_DEBUG_LOG', '0') === 1) {
                         error_log('[twelvedata] quote error for ' . implode(',', $chunk) . ': ' . (string)($j['message'] ?? $j['code'] ?? 'unknown'));
                     }
+                    if (count($chunk) > 1) {
+                        foreach ($chunk as $singleTicker) {
+                            try {
+                                $single = twelvedata_quote_single_direct((string)$singleTicker, $key, $timeoutSec);
+                                if (is_array($single)) $out[(string)$singleTicker] = $single;
+                            } catch (Throwable $singleError) {
+                                continue;
+                            }
+                        }
+                    }
                     continue;
                 }
 
@@ -235,41 +288,28 @@ if (!function_exists('twelvedata_quote_many')) {
                 // Single symbol response has "symbol" key
                 if (isset($j['symbol']) && isset($j['close'])) {
                     $ticker = $chunk[0] ?? '';
-                    $price = (float)($j['close'] ?? 0);
-                    $prevClose = (float)($j['previous_close'] ?? 0);
-                    $chgPctRaw = (float)($j['percent_change'] ?? 0);
-                    if ($prevClose > 0 && abs($chgPctRaw) < 0.0000001) {
-                        $chg = (float)($j['change'] ?? 0);
-                        $chgPctRaw = ($chg / $prevClose) * 100.0;
-                    }
-                    if ($price > 0) {
-                        $out[$ticker] = [
-                            'price' => $price,
-                            'change_pct' => $chgPctRaw,
-                            'prev_close' => $prevClose,
-                            'source' => 'twelvedata',
-                        ];
-                    }
+                    $row = twelvedata_quote_row_from_payload($j);
+                    if (is_array($row)) $out[$ticker] = $row;
                     continue;
                 }
 
                 // Batch response
                 foreach ($j as $ticker => $data) {
                     if (!is_array($data)) continue;
-                    $price = (float)($data['close'] ?? 0);
-                    if ($price <= 0) continue;
-                    $prevClose = (float)($data['previous_close'] ?? 0);
-                    $chgPctRaw = (float)($data['percent_change'] ?? 0);
-                    if ($prevClose > 0 && abs($chgPctRaw) < 0.0000001) {
-                        $chg = (float)($data['change'] ?? 0);
-                        $chgPctRaw = ($chg / $prevClose) * 100.0;
+                    $row = twelvedata_quote_row_from_payload($data);
+                    if (is_array($row)) $out[$ticker] = $row;
+                }
+
+                if (count($chunk) > 1) {
+                    foreach ($chunk as $singleTicker) {
+                        if (isset($out[(string)$singleTicker])) continue;
+                        try {
+                            $single = twelvedata_quote_single_direct((string)$singleTicker, $key, $timeoutSec);
+                            if (is_array($single)) $out[(string)$singleTicker] = $single;
+                        } catch (Throwable $singleError) {
+                            continue;
+                        }
                     }
-                    $out[$ticker] = [
-                        'price' => $price,
-                        'change_pct' => $chgPctRaw,
-                        'prev_close' => $prevClose,
-                        'source' => 'twelvedata',
-                    ];
                 }
             } catch (Throwable $e) {
                 continue;

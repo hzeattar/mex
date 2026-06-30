@@ -884,7 +884,7 @@ function candles_best_live_price(string $symbol, string $market, string $assetTy
   try {
     $bulk = quote_bulk_live([$symbol], $assetType, [$symbol => $meta], [
       'direct_budget' => 1,
-      'direct_yahoo_budget' => vp_provider_asset_type($assetType) === 'futures' ? 0 : 1,
+      'direct_yahoo_budget' => 0,
       'chart_budget' => 1,
       'ttl' => ($assetType === 'crypto' ? 1 : 2),
     ]);
@@ -1399,7 +1399,7 @@ try {
         'allow_crypto_seed' => true,
         'allow_noncrypto_seed' => false,
         'direct_budget' => 1,
-        'direct_yahoo_budget' => $providerType === 'futures' ? 0 : 1,
+        'direct_yahoo_budget' => 0,
         'chart_budget' => 1,
       ]);
       $qaItem = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
@@ -1470,7 +1470,7 @@ try {
           'allow_crypto_seed' => true,
           'allow_noncrypto_seed' => false,
           'direct_budget' => 1,
-          'direct_yahoo_budget' => $providerType === 'futures' ? 0 : 1,
+          'direct_yahoo_budget' => 0,
           'chart_budget' => 1,
         ]);
         $qaItem = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;

@@ -58,7 +58,7 @@ let lastPriceFlashAt = 0;
 let tradeRunId = 0;
 const marketListCache = new Map();
 const chartCandleCache = new Map();
-let chartPriceLines = { last: null, bid: null, ask: null };
+let chartPriceLines = { live: null, series: null };
 const closingPositions = new Set();
 
 // Listeners bound to the persistent #view container must be disposed on cleanup,
@@ -118,7 +118,8 @@ const CHART_MAX_PAGE_LIMIT = 5000;
 const CHART_MONTH_PREFETCH_MAX_PAGES = 10;
 const CHART_MONTH_PREFETCH_DELAY = 750;
 const CHART_PROVIDER_FRESH_TFS = ['1m', '3m', '5m', '15m'];
-const CHART_NONCRYPTO_FRESH_LIMIT = 150;
+const CHART_NONCRYPTO_FRESH_LIMIT = 600;
+const CHART_NONCRYPTO_FAST_PAGE_LIMIT = 1200;
 const CHART_FAST_INITIAL_TFS = ['1m', '3m', '5m', '15m'];
 const CHART_CRYPTO_FAST_INITIAL_LIMIT = 300;
 const CHART_CANDLE_CACHE_MAX = 36;
@@ -133,6 +134,11 @@ function chartInitialLimit(tf) {
 
 function chartPageLimit(tf) {
   return Math.max(CHART_MIN_INITIAL_LIMIT, Math.min(CHART_MAX_PAGE_LIMIT, chartTargetBars(tf)));
+}
+
+function chartPageLimitFor(type, tf) {
+  if (usesFreshProviderWindow(type, tf)) return Math.min(CHART_NONCRYPTO_FAST_PAGE_LIMIT, chartPageLimit(tf));
+  return chartPageLimit(tf);
 }
 
 function usesFreshProviderWindow(type, tf) {
@@ -666,21 +672,40 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   const interval = quoteType === 'crypto' ? 3000 : 1000;
   const focusUrl = `/quote_focus.php?symbols=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}`;
   let pollCount = 0;
-  const staleFocusAge = quoteType === 'forex' ? 6 : (['commodities', 'futures'].includes(quoteType) ? 8 : 900);
+  const preferDirectLive = ['forex', 'commodities'].includes(quoteType);
+  const directCadence = preferDirectLive ? 1 : (['stocks', 'arab'].includes(quoteType) ? 6 : 4);
+  const staleFocusAge = quoteType === 'forex' ? 4 : (quoteType === 'commodities' ? 4 : (quoteType === 'futures' ? 8 : 900));
+  const fetchDirectQuote = () => {
+    const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus&direct=1&fresh=1&_=${Date.now()}`;
+    return api(fbUrl, {
+      timeout: preferDirectLive ? 3200 : (quoteType === 'crypto' ? 1800 : 3800),
+      retry: 0,
+      signal: activeQuoteController.signal,
+      cacheTtl: 0,
+      cache: 'no-store',
+    });
+  };
+  const hasUsablePrice = (item) => Number(item?.price || item?.q_price || 0) > 0;
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
     activeQuoteController = new AbortController();
     try {
       pollCount += 1;
-      let data = await api(focusUrl, { timeout: 2500, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
-      let item = data?.items?.[0];
+      let data = null;
+      let item = null;
+      if (preferDirectLive && pollCount % directCadence === 0) {
+        data = await fetchDirectQuote().catch(() => null);
+        item = data?.items?.[0];
+      }
+      if (!hasUsablePrice(item)) {
+        data = await api(focusUrl, { timeout: 1800, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
+        item = data?.items?.[0];
+      }
       const ageSec = Number(item?.age_sec ?? 999999);
       const needsFresh = quoteType !== 'crypto'
-        && (!(Number(item?.price || 0) > 0) || ageSec > staleFocusAge || pollCount % 4 === 0);
-      if (needsFresh || !(Number(item?.price || 0) > 0)) {
-        const direct = quoteType !== 'crypto' ? '&direct=1&fresh=1' : '';
-        const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus${direct}&_=${Date.now()}`;
-        data = await api(fbUrl, { timeout: quoteType === 'crypto' ? 1800 : 4200, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
+        && (!hasUsablePrice(item) || ageSec > staleFocusAge || pollCount % directCadence === 0);
+      if (!preferDirectLive && (needsFresh || !hasUsablePrice(item))) {
+        data = await fetchDirectQuote();
         item = data?.items?.[0];
       }
       if (!isCurrentRun(runId, symbol, type)) return;
@@ -1642,8 +1667,8 @@ function sideLabel(side) {
 }
 
 
-function normalizeCandleRows(candles) {
-  return (candles || [])
+function normalizeCandleRows(candles, options = {}) {
+  const data = (candles || [])
     .map(c => ({
       time: Number(c.time || c.t),
       open: Number(c.open || c.o),
@@ -1654,6 +1679,57 @@ function normalizeCandleRows(candles) {
     }))
     .filter(c => c.time > 0 && c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0)
     .sort((a, b) => a.time - b.time);
+  if (options.fillGaps) {
+    return fillVisualCandleGaps(data, options.type || get('type'), options.tf || get('tf'));
+  }
+  return data;
+}
+
+function visualGapFillLimit(type, tf) {
+  const value = normalizeType(type || 'crypto');
+  const frame = String(tf || '1m').toLowerCase();
+  if (['1d', '1w'].includes(frame)) return 0;
+  if (value === 'crypto') return 2;
+  if (['forex', 'commodities'].includes(value)) {
+    if (['1m', '3m'].includes(frame)) return 12;
+    if (['5m', '15m'].includes(frame)) return 8;
+    return 4;
+  }
+  if (['stocks', 'arab'].includes(value)) {
+    if (['1m', '3m', '5m'].includes(frame)) return 5;
+    return 3;
+  }
+  return 0;
+}
+
+function fillVisualCandleGaps(candles, type = get('type'), tf = get('tf')) {
+  if (!Array.isArray(candles) || candles.length < 2) return candles || [];
+  const step = tfSeconds(tf);
+  const maxFill = visualGapFillLimit(type, tf);
+  if (!(step > 0) || maxFill <= 0) return candles;
+  const out = [];
+  for (let i = 0; i < candles.length; i += 1) {
+    const cur = candles[i];
+    out.push(cur);
+    const next = candles[i + 1];
+    if (!next) continue;
+    const missing = Math.round((Number(next.time) - Number(cur.time)) / step) - 1;
+    if (missing <= 0 || missing > maxFill) continue;
+    const anchor = Number(cur.close || cur.open || 0);
+    if (!(anchor > 0)) continue;
+    for (let m = 1; m <= missing; m += 1) {
+      out.push({
+        time: Number(cur.time) + (m * step),
+        open: anchor,
+        high: anchor,
+        low: anchor,
+        close: anchor,
+        volume: 0,
+        visualGap: true,
+      });
+    }
+  }
+  return out;
 }
 
 function syntheticCandlesFromPrice(symbol, type, tf, priceValue, rows = 120) {
@@ -1850,7 +1926,7 @@ function scheduleChartPrefetch(container, items, runId = tradeRunId, listType = 
 
 function applyChartData(candles, { fit = false, key = currentChartKey(), preserveRange = false, skipUnchanged = false } = {}) {
   if (!candleSeries || !volumeSeries) return false;
-  const data = normalizeCandleRows(candles);
+  const data = normalizeCandleRows(candles, { fillGaps: true, type: get('type'), tf: get('tf') });
   if (!data.length) return false;
   if (skipUnchanged && chartSeriesKey === key && !hasCandleDelta(data)) return true;
   if (chartSeriesKey === key && allCandles.length) {
@@ -2049,9 +2125,9 @@ function chartPriceFormatFor(type = get('type'), symbol = get('symbol')) {
 
 function applyChartPriceOptions(type = get('type'), symbol = get('symbol')) {
   const priceFormat = chartPriceFormatFor(type, symbol);
-  try { candleSeries?.applyOptions({ priceFormat, lastValueVisible: true, priceLineVisible: true }); } catch (_e) {}
-  try { lineSeries?.applyOptions({ priceFormat, lastValueVisible: chartType === 'line' }); } catch (_e) {}
-  try { areaSeries?.applyOptions({ priceFormat, lastValueVisible: chartType === 'area' }); } catch (_e) {}
+  try { candleSeries?.applyOptions({ priceFormat, lastValueVisible: false, priceLineVisible: false }); } catch (_e) {}
+  try { lineSeries?.applyOptions({ priceFormat, lastValueVisible: false, priceLineVisible: false }); } catch (_e) {}
+  try { areaSeries?.applyOptions({ priceFormat, lastValueVisible: false, priceLineVisible: false }); } catch (_e) {}
   try {
     chart?.applyOptions({
       rightPriceScale: {
@@ -2066,37 +2142,24 @@ function applyChartPriceOptions(type = get('type'), symbol = get('symbol')) {
   } catch (_e) {}
 }
 
-function derivedBidAsk(q = {}, fallbackPrice = 0) {
-  const p = Number(q.price || q.q_price || fallbackPrice || 0);
-  if (!(p > 0)) return { bid: 0, ask: 0 };
-  const bid = Number(q.bid || q.bid_price || q.best_bid || 0);
-  const ask = Number(q.ask || q.ask_price || q.best_ask || 0);
-  if (bid > 0 && ask > 0 && ask >= bid) return { bid, ask };
-  const type = normalizeType(q.type || get('type'));
-  const sym = String(q.symbol || get('symbol') || '').toUpperCase();
-  let spread;
-  if (type === 'forex') spread = sym.includes('JPY') ? 0.005 : 0.00005;
-  else if (type === 'crypto') spread = Math.max(p * 0.0001, p >= 1 ? 0.0001 : 0.000001);
-  else spread = Math.max(p * 0.0001, 0.01);
-  return { bid: p - spread, ask: p + spread };
+function chartLivePriceSeries() {
+  if (chartType === 'line' && lineSeries) return lineSeries;
+  if (chartType === 'area' && areaSeries) return areaSeries;
+  return candleSeries;
 }
 
 function clearChartPriceLines() {
-  if (!candleSeries) {
-    chartPriceLines = { last: null, bid: null, ask: null };
-    return;
+  if (chartPriceLines.live && chartPriceLines.series) {
+    try { chartPriceLines.series.removePriceLine(chartPriceLines.live); } catch (_e) {}
   }
-  Object.values(chartPriceLines).forEach(line => {
-    if (!line) return;
-    try { candleSeries.removePriceLine(line); } catch (_e) {}
-  });
-  chartPriceLines = { last: null, bid: null, ask: null };
+  chartPriceLines = { live: null, series: null };
 }
 
 function addChartPriceLine(kind, priceValue, options) {
-  if (!candleSeries || !(Number(priceValue) > 0)) return null;
+  const series = chartLivePriceSeries();
+  if (!series || !(Number(priceValue) > 0)) return null;
   try {
-    return candleSeries.createPriceLine({
+    const line = series.createPriceLine({
       price: Number(priceValue),
       axisLabelVisible: true,
       lineVisible: true,
@@ -2104,13 +2167,16 @@ function addChartPriceLine(kind, priceValue, options) {
       lineStyle: 2,
       ...options,
     });
+    chartPriceLines.series = series;
+    return line;
   } catch (_e) {
     return null;
   }
 }
 
 function setChartPriceLine(kind, priceValue, options) {
-  if (!candleSeries || !(Number(priceValue) > 0)) return null;
+  const series = chartLivePriceSeries();
+  if (!series || !(Number(priceValue) > 0)) return null;
   const lineOptions = {
     price: Number(priceValue),
     axisLabelVisible: true,
@@ -2119,14 +2185,20 @@ function setChartPriceLine(kind, priceValue, options) {
     lineStyle: 2,
     ...options,
   };
-  const existing = chartPriceLines[kind];
-  if (existing && typeof existing.applyOptions === 'function') {
+  const existing = chartPriceLines.live;
+  if (existing && chartPriceLines.series !== series) {
+    try { chartPriceLines.series?.removePriceLine(existing); } catch (_e) {}
+    chartPriceLines.live = null;
+    chartPriceLines.series = null;
+  }
+  if (chartPriceLines.live && typeof chartPriceLines.live.applyOptions === 'function') {
     try {
-      existing.applyOptions(lineOptions);
-      return existing;
+      chartPriceLines.live.applyOptions(lineOptions);
+      return chartPriceLines.live;
     } catch (_e) {
-      try { candleSeries.removePriceLine(existing); } catch (__e) {}
-      chartPriceLines[kind] = null;
+      try { series.removePriceLine(chartPriceLines.live); } catch (__e) {}
+      chartPriceLines.live = null;
+      chartPriceLines.series = null;
     }
   }
   return addChartPriceLine(kind, priceValue, options);
@@ -2136,20 +2208,11 @@ function updateChartPriceLines(q = get('activeQuote') || {}) {
   if (!chart || !candleSeries || !chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
   const p = Number(q.price || q.q_price || lastCandle?.close || 0);
   if (!(p > 0)) return;
-  const { bid, ask } = derivedBidAsk(q, p);
-  chartPriceLines.last = setChartPriceLine('last', p, {
-    color: '#5d7cff',
-    title: 'LAST',
+  chartPriceLines.live = setChartPriceLine('live', p, {
+    color: '#00e5ff',
+    title: 'LIVE',
     lineStyle: 0,
     lineWidth: 2,
-  });
-  chartPriceLines.bid = setChartPriceLine('bid', bid, {
-    color: 'rgba(246,70,93,0.85)',
-    title: 'BID',
-  });
-  chartPriceLines.ask = setChartPriceLine('ask', ask, {
-    color: 'rgba(0,192,135,0.85)',
-    title: 'ASK',
   });
 }
 
@@ -2160,6 +2223,8 @@ function setChartType(type) {
   if (candleSeries) candleSeries.applyOptions({ visible: type === 'candles' });
   if (lineSeries) lineSeries.applyOptions({ visible: type === 'line' });
   if (areaSeries) areaSeries.applyOptions({ visible: type === 'area' });
+  clearChartPriceLines();
+  updateChartPriceLines();
   syncChartToolbar();
 }
 
@@ -2206,7 +2271,6 @@ function cancelMonthHistoryPrefetch(container) {
 }
 
 function scheduleMonthHistoryPrefetch(container, runId = tradeRunId) {
-  if (usesFreshProviderWindow(get('type'), get('tf'))) return;
   if (!container || hasMonthHistoryLoaded()) return;
   cancelMonthHistoryPrefetch(container);
   const key = currentChartKey();
@@ -2226,10 +2290,6 @@ function scheduleMonthHistoryPrefetch(container, runId = tradeRunId) {
 }
 
 async function loadOlderCandles(container, options = {}) {
-  if (usesFreshProviderWindow(get('type'), get('tf'))) {
-    chartHistory.done = true;
-    return;
-  }
   if (!chart || chartHistory.loading || chartHistory.done) return;
   if (!allCandles.length || allCandles.length < 50) return;
   const now = Date.now();
@@ -2242,7 +2302,7 @@ async function loadOlderCandles(container, options = {}) {
     const type = get('type');
     const tf = get('tf');
     const oldest = allCandles[0].time;
-    const pageLimit = chartPageLimit(tf);
+    const pageLimit = chartPageLimitFor(type, tf);
     const market = get('market') || defaultMarketForType(type);
     const data = await api(
       `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=${pageLimit}&end=${oldest - 1}`,
@@ -2330,22 +2390,22 @@ async function initChart(container, candles, runId = tradeRunId) {
     wickVisible: true,
     borderVisible: true,
     visible: chartType === 'candles',
-    lastValueVisible: true,
-    priceLineVisible: true,
+    lastValueVisible: false,
+    priceLineVisible: false,
     priceLineWidth: 1,
     priceLineStyle: 2,
     priceLineColor: '#5d7cff80',
     priceFormat: mainPriceFormat,
   });
   lineSeries = chart.addLineSeries({
-    color: '#5d7cff', lineWidth: 2, priceLineVisible: false,
+    color: '#5d7cff', lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
     crosshairMarkerVisible: true, visible: chartType === 'line',
     priceFormat: mainPriceFormat,
   });
   areaSeries = chart.addAreaSeries({
     lineColor: '#5d7cff', lineWidth: 2,
     topColor: 'rgba(93,124,255,0.30)', bottomColor: 'rgba(93,124,255,0.02)',
-    priceLineVisible: false, crosshairMarkerVisible: true, visible: chartType === 'area',
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, visible: chartType === 'area',
     priceFormat: mainPriceFormat,
   });
   volumeSeries = chart.addHistogramSeries({ 
@@ -2659,8 +2719,9 @@ function stopChartRefresh() {
 function startChartRefresh(container, symbol, type, tf, runId = tradeRunId, chartReady = loadChartLib()) {
   stopChartRefresh();
   const quoteType = normalizeType(type || 'crypto');
-  const interval = quoteType === 'crypto' ? 15000 : 20000;
+  const interval = quoteType === 'crypto' ? 90000 : 60000;
   chartRefreshTimer = setInterval(() => {
+    if (document.hidden) return;
     if (!isCurrentRun(runId, symbol, type)) return;
     loadChartData(container, symbol, type, tf, runId, chartReady, { silent: true, refresh: true }).catch(() => null);
   }, interval);
@@ -3671,7 +3732,10 @@ function marketListUrl(type) {
     futures: 20,
   };
   const limit = limitByType[actual] || 20;
-  return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1&no_rescue=1&limit=${limit}`;
+  const rescueParam = ['commodities', 'arab'].includes(actual)
+    ? 'rescue=1&rescue_noncrypto=1'
+    : 'no_rescue=1';
+  return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1&${rescueParam}&limit=${limit}`;
 }
 
 async function loadMarketItems(type, runId = tradeRunId, force = false) {
