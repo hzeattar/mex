@@ -372,10 +372,16 @@ function db(): PDO {
   // We tie the cached handle to a single web request id; every new request
   // invalidates the cached handle and creates a fresh connection.
   if ($railway && !$cli) {
-    if ($requestId !== $currentRequestId) {
-      $pdo = null;
-      $requestId = $currentRequestId;
+    if ($requestId === $currentRequestId && $pdo instanceof PDO) {
+      try {
+        $pdo->query('SELECT 1');
+        return $pdo;
+      } catch (Throwable $e) {
+        $pdo = null;
+      }
     }
+    $pdo = null;
+    $requestId = $currentRequestId;
   } else if ($pdo instanceof PDO) {
     try {
       $pdo->query('SELECT 1');
