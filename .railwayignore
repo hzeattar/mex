@@ -1,0 +1,9 @@
+app.sqlite*
+*.sqlite
+*.sqlite3
+api/data/*.sqlite
+api/data/*.sqlite3
+api/data/cache/
+api/data/candles_v*.json
+node_modules/
+frontend/node_modules/

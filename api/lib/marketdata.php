@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/asset_reference.php';
 
 class UpstreamHttpException extends RuntimeException {
   public int $status;
@@ -454,6 +455,7 @@ function binance_ticker_24hr_many_cached(array $symbols, int $ttl = 1): array {
       $map[$sym] = [
         'price' => isset($it['lastPrice']) ? (float)$it['lastPrice'] : 0.0,
         'change_pct' => isset($it['priceChangePercent']) ? (float)$it['priceChangePercent'] : 0.0,
+        'open' => isset($it['openPrice']) ? (float)$it['openPrice'] : 0.0,
       ];
     }
   }
@@ -607,6 +609,7 @@ function binance_ticker_24hr_map(array $symbols): array {
       $out[$sym] = [
         'price' => (float)($row['lastPrice'] ?? 0),
         'change_pct' => (float)($row['priceChangePercent'] ?? 0),
+        'open' => (float)($row['openPrice'] ?? 0),
       ];
     }
   }
@@ -1501,7 +1504,10 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
   $type = strtolower(trim($type));
   if ($symbol === '') return null;
 
-  // Spot metals: allow futures tickers (GC=F, SI=F) with conversion applied later in quote_bulk_live()
+  if ((int)env('ALLOW_YAHOO_PROVIDER', '0') !== 1 && strtolower((string)env('YAHOO_ENABLED', '0')) !== '1') {
+    return null;
+  }
+
   $y = strtoupper(trim((string)($meta['yahoo_ticker'] ?? '')));
   $stockAliases = [
     'SQ' => 'XYZ',
@@ -1563,14 +1569,7 @@ function yahoo_ticker_for_market(string $symbol, string $type, array $meta = [])
  * Returns a multiplier < 1.0 to convert futures → approximate spot, or 1.0 if N/A.
  */
 function futures_to_spot_factor(string $symbol): float {
-  $symbol = strtoupper(trim($symbol));
-  $map = [
-    'XAUUSD' => 0.988,  // GC=F ~1.2% above spot
-    'XAGUSD' => 0.985,  // SI=F ~1.5% above spot
-    'XPTUSD' => 0.990,
-    'XPDUSD' => 0.990,
-  ];
-  return $map[$symbol] ?? 1.0;
+  return 1.0;
 }
 
 function massive_snapshot_price_from_result(array $row): float {
@@ -1660,6 +1659,12 @@ function eodhd_symbol_for_market(string $symbol, string $type, array $meta = [])
 
   $explicit = vp_explicit_eodhd_symbol($meta, $symbol, $type);
   if ($explicit !== '') return $explicit;
+
+  if (function_exists('vp_asset_reference')) {
+    $ref = vp_asset_reference($symbol, $type, $meta);
+    $mapped = strtoupper(trim((string)($ref['eodhd_symbol'] ?? '')));
+    if ($mapped !== '') return $mapped;
+  }
 
   if (preg_match('/^[A-Z0-9._\-=]{2,32}\.[A-Z]{2,8}$/', $symbol)) return $symbol;
 
@@ -1778,7 +1783,7 @@ function eodhd_quote_realtime(string $ticker): array {
   $url = eodhd_base() . '/real-time/' . rawurlencode($ticker) . '?api_token=' . urlencode($apiKey) . '&fmt=json';
   try {
     $d = http_get_json($url, ['Accept: application/json']);
-    $n = eodhd_quote_normalize($d, $ticker, vp_normalize_asset_type($providerType));
+    $n = eodhd_quote_normalize($d, $ticker, '');
     if ($n) {
       $n['source'] = 'eodhd';
       return $n;

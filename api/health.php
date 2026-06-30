@@ -26,6 +26,16 @@ $errors = 0;
 
 try {
   $defs = function_exists('vp_supported_market_defs') ? vp_supported_market_defs() : [];
+  if (!$defs) {
+    $status['checks']['cache'] = [
+      'total_symbols' => 0,
+      'fresh' => 0,
+      'stale' => 0,
+      'freshness_pct' => null,
+      'by_type' => [],
+      'note' => 'Market definitions are not loaded in the health context; cache freshness check skipped.',
+    ];
+  } else {
   $byType = [];
   foreach ($defs as $d) {
     $type = strtolower($d['type'] ?? 'unknown');
@@ -75,6 +85,7 @@ try {
 
   if ($pct < 30) { $errors++; $status['status'] = 'error'; }
   elseif ($pct < 70) { $warnings++; if ($status['status'] === 'ok') $status['status'] = 'warning'; }
+  }
 
 } catch (Throwable $e) {
   $status['checks']['cache'] = ['error' => $e->getMessage()];
@@ -130,7 +141,9 @@ $keys = [
   'QUOTES_TWELVEDATA_KEY' => !empty(trim((string)getenv('QUOTES_TWELVEDATA_KEY'))),
   'FINNHUB_KEY' => !empty(trim((string)getenv('FINNHUB_KEY'))),
   'TIINGO_KEY' => !empty(trim((string)getenv('TIINGO_KEY'))),
-  'EODHD_KEY' => !empty(trim((string)getenv('EODHD_KEY'))),
+  'EODHD_API_KEY' => function_exists('eodhd_api_key')
+    ? eodhd_api_key() !== ''
+    : (!empty(trim((string)getenv('EODHD_API_KEY'))) || !empty(trim((string)getenv('EODHD_KEY')))),
 ];
 $status['checks']['api_keys'] = $keys;
 

@@ -18,6 +18,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/redis.php';
+require_once __DIR__ . '/quote_sources.php';
 
 function quote_central_source_disabled(string $source): bool {
   $src = strtolower(trim($source));
@@ -29,10 +30,9 @@ function quote_central_source_disabled(string $source): bool {
     return true;
   }
   if (in_array($src, [
-    'eodhd','eodhd_rest','eodhd_intraday','eodhd_cache',
+    'eodhd_intraday','eodhd_cache',
     'polygon','massive','polygon_ticker','massive_ticker',
-    'currencyfreaks','finnhub','finnhub_ws','tiingo','fcsapi',
-    'coingecko','coingecko_metal','stooq','provider_live','trade_stream','stream'
+    'currencyfreaks','coingecko','coingecko_metal','stooq'
   ], true)) {
     return true;
   }
@@ -148,6 +148,7 @@ function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?arr
     if ($raw !== false && $raw !== '') {
       $data = json_decode($raw, true);
       if (quote_central_row_usable($data)) {
+        $data = quote_enrich_change_from_reference($symbol, $type, $data);
         if ($maxAge <= 0) return $data;
         $effectiveTs = quote_central_fresh_ts($data, $type);
         if ($effectiveTs > 0 && (time() - $effectiveTs) <= $maxAge) return $data;
@@ -171,6 +172,7 @@ function quote_central_get(string $symbol, string $type, int $maxAge = 30): ?arr
       $ts = quote_central_fresh_ts($data, $type);
       if ($ts > 0 && (time() - $ts) > $maxAge) return null;
     }
+    $data = quote_enrich_change_from_reference($symbol, $type, $data);
     // Warm the local file cache from DB
     quote_central_write_file($symbol, $type, $data);
     return $data;
@@ -194,6 +196,7 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
       if ($raw !== false && $raw !== '') {
         $data = json_decode($raw, true);
         if (quote_central_row_usable($data)) {
+          $data = quote_enrich_change_from_reference($sym, $type, $data);
           if ($maxAge <= 0) { $out[$sym] = $data; continue; }
           $effectiveTs = quote_central_fresh_ts($data, $type);
           if ($effectiveTs > 0 && (time() - $effectiveTs) <= $maxAge) { $out[$sym] = $data; continue; }
@@ -224,6 +227,7 @@ function quote_central_get_many(array $symbols, string $type, int $maxAge = 30):
         }
         // Do not return rows whose source has been disabled by configuration.
         if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($data['source'] ?? $data['provider'] ?? '')) continue;
+        $data = quote_enrich_change_from_reference($sym, $type, $data);
         $out[$sym] = $data;
         // Warm file cache
         quote_central_write_file($sym, $type, $data);
@@ -256,7 +260,7 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
               if ($effectiveTs > 0 && (time() - $effectiveTs) > $maxAge) continue;
             }
             if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($data['source'] ?? $data['provider'] ?? '')) continue;
-            $filtered[$sym] = $data;
+            $filtered[$sym] = quote_enrich_change_from_reference((string)$sym, $type, $data);
           }
           if (count($filtered) > 0) return $filtered;
         }
@@ -283,7 +287,7 @@ function quote_central_bundle_read(string $type, int $maxAge = 30): array {
       }
       // Drop disabled-source rows from bundles
       if (function_exists('quote_source_disabled_by_config') && quote_source_disabled_by_config($data['source'] ?? $data['provider'] ?? '')) continue;
-      $out[$sym] = $data;
+      $out[$sym] = quote_enrich_change_from_reference($sym, $type, $data);
     }
     // Write to file cache for subsequent reads
     if (count($out) > 0) {
@@ -307,6 +311,67 @@ function quote_central_write_file(string $symbol, string $type, array $data): vo
   if ($json !== false) @file_put_contents($file, $json, LOCK_EX);
 }
 
+if (!function_exists('quote_enrich_change_from_reference')) {
+  function quote_enrich_change_from_reference(string $symbol, string $type, array $data): array {
+    $type = vp_normalize_asset_type($type);
+    $price = (float)($data['price'] ?? 0);
+    if (!($price > 0)) return $data;
+
+    $changePct = (float)($data['change_pct'] ?? 0);
+    $prevClose = (float)($data['prev_close'] ?? $data['previous_close'] ?? 0);
+    $open = (float)($data['open'] ?? $data['open_price'] ?? 0);
+
+    if ($prevClose > 0 && abs($changePct) < 0.000001) {
+      $data['change_pct'] = (($price - $prevClose) / $prevClose) * 100.0;
+      $data['change_basis'] = (string)($data['change_basis'] ?? 'prev_close');
+      return $data;
+    }
+
+    if ($type === 'crypto' && $open > 0 && abs($changePct) < 0.000001) {
+      $data['change_pct'] = (($price - $open) / $open) * 100.0;
+      $data['change_basis'] = (string)($data['change_basis'] ?? 'binance_open_24h');
+    }
+
+    return $data;
+  }
+}
+
+function quote_central_enrich_forex_change(string $symbol, string $type, array $data): array {
+  if (vp_normalize_asset_type($type) !== 'forex') return $data;
+  $price = (float)($data['price'] ?? 0);
+  if (!($price > 0)) return $data;
+  $changePct = (float)($data['change_pct'] ?? 0);
+  $prevClose = (float)($data['prev_close'] ?? $data['previous_close'] ?? 0);
+  if ($prevClose > 0) {
+    if (abs($changePct) < 0.000001) {
+      $data['change_pct'] = (($price - $prevClose) / $prevClose) * 100.0;
+      $data['change_basis'] = 'prev_close';
+    }
+    return $data;
+  }
+  if (abs($changePct) >= 0.000001) return $data;
+  if (!function_exists('twelvedata_enabled') || !twelvedata_enabled()) return $data;
+  if (!function_exists('twelvedata_symbol_for_market') || !function_exists('twelvedata_quote_many_cached')) return $data;
+  $ticker = twelvedata_symbol_for_market($symbol, 'forex', []);
+  if (!$ticker) return $data;
+  try {
+    $ttl = max(30, min(900, (int)env('FOREX_CHANGE_TWELVEDATA_TTL', '300')));
+    $rows = twelvedata_quote_many_cached([$ticker], $ttl);
+    $row = is_array($rows[$ticker] ?? null) ? $rows[$ticker] : null;
+    if (!$row) return $data;
+    $tdPrev = (float)($row['prev_close'] ?? $row['previous_close'] ?? 0);
+    $tdChange = (float)($row['change_pct'] ?? 0);
+    if ($tdPrev > 0) {
+      $data['prev_close'] = $tdPrev;
+      $data['change_pct'] = abs($tdChange) >= 0.000001 ? $tdChange : (($price - $tdPrev) / $tdPrev) * 100.0;
+      $data['change_basis'] = 'twelvedata_prev_close';
+    }
+  } catch (Throwable $e) {
+    // Keep the live WS price even when the daily-change reference is unavailable.
+  }
+  return $data;
+}
+
 function quote_central_write(string $symbol, string $type, array $data): void {
   $symbol = strtoupper(trim($symbol));
   $type = vp_normalize_asset_type($type);
@@ -314,15 +379,8 @@ function quote_central_write(string $symbol, string $type, array $data): void {
   $data['type'] = $type;
   if (empty($data['central_ts'])) $data['central_ts'] = time();
   if (!quote_central_row_usable($data)) return;
-
-  // Compute change_pct from prev_close if it wasn't provided by the upstream feed.
-  $price = (float)($data['price'] ?? 0);
-  $prevClose = (float)($data['prev_close'] ?? $data['previous_close'] ?? 0);
-  $changePct = (float)($data['change_pct'] ?? 0);
-  if ($price > 0 && $prevClose > 0 && abs($changePct) < 0.000001) {
-    $changePct = (($price - $prevClose) / $prevClose) * 100.0;
-    $data['change_pct'] = $changePct;
-  }
+  $data = quote_central_enrich_forex_change($symbol, $type, $data);
+  $data = quote_enrich_change_from_reference($symbol, $type, $data);
 
   // Write to file cache
   quote_central_write_file($symbol, $type, $data);
@@ -358,7 +416,8 @@ function quote_central_bundle_write(string $type, array $bySymbol): void {
   $type = vp_normalize_asset_type($type);
   $filtered = [];
   foreach ($bySymbol as $symbol => $row) {
-    if (quote_central_row_usable($row)) $filtered[$symbol] = $row;
+    $sym = strtoupper(trim((string)$symbol));
+    if (quote_central_row_usable($row)) $filtered[$sym] = quote_enrich_change_from_reference($sym, $type, $row);
   }
   $bySymbol = $filtered;
   // Write bundle file
@@ -463,13 +522,15 @@ function quote_central_items(array $symbols, string $type, int $maxAge = 30): ar
     $sym = strtoupper(trim((string)$sym));
     $row = $central[$sym] ?? null;
     if (quote_central_row_usable($row)) {
+      $row = quote_enrich_change_from_reference($sym, $type, $row);
       $src = strtolower(trim((string)($row['source'] ?? '')));
-      $delayed = in_array($type, ['stocks', 'arab'], true) || ($type !== 'crypto' && str_starts_with($src, 'yahoo'));
+      $delayed = in_array($type, ['stocks', 'arab'], true) || ($type !== 'crypto' && in_array($src, ['eodhd','eodhd_rest','finnhub','tiingo'], true));
       $items[] = [
         'symbol' => $sym,
         'type' => $type,
         'price' => (float)$row['price'],
         'change_pct' => (float)($row['change_pct'] ?? 0),
+        'change_basis' => (string)($row['change_basis'] ?? ''),
         'open' => (float)($row['open'] ?? 0),
         'prev_close' => (float)($row['prev_close'] ?? 0),
         'updated_at' => (int)(quote_central_fresh_ts($row, $type) ?: ($row['central_ts'] ?? $row['updated_at'] ?? 0)),

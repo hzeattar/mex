@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/marketdata.php';
 require_once __DIR__ . '/market_resolver.php';
+require_once __DIR__ . '/asset_reference.php';
 require_once __DIR__ . '/quote_sources.php';
 require_once __DIR__ . '/quote_central.php';
 require_once __DIR__ . '/quote_coingecko.php';
@@ -20,6 +21,62 @@ if (!function_exists('quote_change_pct_recompute_threshold')) {
       'stocks', 'arab' => 10.0,
       default => 15.0,
     };
+  }
+}
+
+if (!function_exists('quote_enrich_forex_change')) {
+  function quote_enrich_forex_change(string $symbol, string $type, float $price, float $changePct, array $extras): array {
+    if (vp_normalize_asset_type($type) !== 'forex' || !($price > 0)) {
+      return [$changePct, $extras];
+    }
+    $prevClose = isset($extras['prev_close']) && is_numeric($extras['prev_close']) ? (float)$extras['prev_close'] : 0.0;
+    if ($prevClose > 0) {
+      if (abs($changePct) < 0.000001) {
+        $changePct = (($price - $prevClose) / $prevClose) * 100.0;
+        $extras['change_basis'] = 'prev_close';
+      }
+      return [$changePct, $extras];
+    }
+    if (abs($changePct) >= 0.000001) return [$changePct, $extras];
+    if (!function_exists('twelvedata_enabled') || !twelvedata_enabled()) return [$changePct, $extras];
+    if (!function_exists('twelvedata_symbol_for_market') || !function_exists('twelvedata_quote_many_cached')) return [$changePct, $extras];
+    $ticker = twelvedata_symbol_for_market($symbol, 'forex', []);
+    if (!$ticker) return [$changePct, $extras];
+    try {
+      $ttl = max(30, min(900, (int)env('FOREX_CHANGE_TWELVEDATA_TTL', '300')));
+      $rows = twelvedata_quote_many_cached([$ticker], $ttl);
+      $row = is_array($rows[$ticker] ?? null) ? $rows[$ticker] : null;
+      if (!$row) return [$changePct, $extras];
+      $tdPrev = (float)($row['prev_close'] ?? $row['previous_close'] ?? 0);
+      $tdChange = (float)($row['change_pct'] ?? 0);
+      if ($tdPrev > 0) {
+        $extras['prev_close'] = $tdPrev;
+        $changePct = abs($tdChange) >= 0.000001 ? $tdChange : (($price - $tdPrev) / $tdPrev) * 100.0;
+        $extras['change_basis'] = 'twelvedata_prev_close';
+      }
+    } catch (Throwable $e) {
+      // Keep the live price; missing daily-change reference is a display-only gap.
+    }
+    return [$changePct, $extras];
+  }
+}
+
+if (!function_exists('quote_enrich_change_from_reference')) {
+  function quote_enrich_change_from_reference(string $symbol, string $type, array $data): array {
+    $type = vp_normalize_asset_type($type);
+    $price = (float)($data['price'] ?? 0);
+    if (!($price > 0)) return $data;
+    $changePct = (float)($data['change_pct'] ?? 0);
+    $prevClose = (float)($data['prev_close'] ?? $data['previous_close'] ?? 0);
+    $open = (float)($data['open'] ?? $data['open_price'] ?? 0);
+    if ($prevClose > 0 && abs($changePct) < 0.000001) {
+      $data['change_pct'] = (($price - $prevClose) / $prevClose) * 100.0;
+      $data['change_basis'] = (string)($data['change_basis'] ?? 'prev_close');
+    } elseif ($type === 'crypto' && $open > 0 && abs($changePct) < 0.000001) {
+      $data['change_pct'] = (($price - $open) / $open) * 100.0;
+      $data['change_basis'] = (string)($data['change_basis'] ?? 'binance_open_24h');
+    }
+    return $data;
   }
 }
 
@@ -188,7 +245,7 @@ function quote_source_is_liveish(?string $source, string $assetType = ''): bool 
   if ($providerType === 'crypto') {
     return in_array($src, ['binance','binance_ws'], true);
   }
-  return in_array($src, ['twelvedata','twelvedata_ws'], true);
+  return in_array($src, ['twelvedata','twelvedata_ws','eodhd','eodhd_rest','finnhub','finnhub_ws','tiingo','fcsapi'], true);
 }
 
 function quote_source_is_untrusted(?string $source): bool {
@@ -198,7 +255,7 @@ function quote_source_is_untrusted(?string $source): bool {
   return in_array($src, [
     'seed','seed_fallback','seed_price','seed_default','fallback_static','chart_seed',
     'seed_candle','yahoo','yahoo_chart_live','yahoo_chart','aggs','stale_cache','cache','synthetic',
-    'frankfurter','fx_fallback'
+    'frankfurter','fx_fallback','coingecko','coingecko_metal'
   ], true);
 }
 
@@ -210,6 +267,13 @@ function quote_provider_prefers_twelvedata(string $assetType, array $meta = [], 
   if (!function_exists('twelvedata_enabled') || !twelvedata_enabled()) return false;
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
+  if ($providerType === 'futures') return false;
+  if (function_exists('vp_asset_reference')) {
+    $ref = vp_asset_reference($symbol, $assetType, $meta);
+    if (empty($ref['trade_supported'])) return false;
+    $preferred = strtolower((string)($ref['price_provider'] ?? ''));
+    if ($preferred !== '' && $preferred !== 'twelvedata') return false;
+  }
   if (!in_array($providerType, ['forex','commodities','stocks','indices','futures'], true) && $assetType !== 'arab') return false;
   if (!function_exists('twelvedata_symbol_for_market') || !twelvedata_symbol_for_market($symbol, $assetType, $meta)) return false;
   $primary = strtolower(trim((string)env('PRICE_PROVIDER', 'twelvedata')));
@@ -229,6 +293,9 @@ function quote_source_blocked_for_symbol(string $symbol, string $assetType, ?str
   $assetType = vp_normalize_asset_type($assetType);
   $src = strtolower(trim((string)$source));
   if ($symbol === '' || $src === '') return false;
+  if ($assetType === 'futures' && in_array($src, ['yahoo','yahoo_rest','yahoo_chart','yahoo_chart_live','yahoo_crypto_chart','twelvedata','twelvedata_ws'], true)) {
+    return true;
+  }
   if ($assetType === 'commodities' && $symbol === 'LEAD' && !quote_source_is_untrusted($src)) {
     return true;
   }
@@ -301,6 +368,7 @@ function quote_primary_row_is_stale(array $row, string $assetType, int $now = 0)
 
 function quote_try_yahoo_rescue_row(string $symbol, string $assetType, array $meta = [], int $now = 0): ?array {
   if (!quote_yahoo_enabled()) return null;
+  if (vp_provider_asset_type($assetType) === 'futures') return null;
   $now = $now > 0 ? $now : time();
   $ySym = yahoo_ticker_for_market($symbol, $assetType, $meta) ?: $symbol;
   if (!preg_match('/^[A-Z0-9._=\/-]{1,24}$/', strtoupper((string)$ySym))) return null;
@@ -399,7 +467,16 @@ function quote_provider_prefers_eodhd(string $assetType, array $meta = [], strin
   $providerType = vp_provider_asset_type($assetType);
   $preferredProvider = strtolower((string)env('PRICE_PROVIDER', 'eodhd'));
   if (function_exists('eodhd_enabled') && !eodhd_enabled()) return false;
-  if ($providerType === 'crypto' || $providerType === 'futures') return false;
+  if ($providerType === 'crypto') return false;
+  if (vp_is_spot_metal_symbol($symbol, $assetType)) return false;
+
+  if (function_exists('vp_asset_reference')) {
+    $ref = vp_asset_reference($symbol, $assetType, $meta);
+    if (empty($ref['trade_supported'])) return false;
+    if (strtolower((string)($ref['price_provider'] ?? '')) === 'eodhd') {
+      return eodhd_symbol_for_market($symbol, $assetType, $meta) !== null;
+    }
+  }
 
   $resolved = eodhd_symbol_for_market($symbol, $assetType, $meta);
   if ($assetType === 'stocks') {
@@ -412,7 +489,6 @@ function quote_provider_prefers_eodhd(string $assetType, array $meta = [], strin
   }
   if ($preferredProvider !== 'eodhd') return false;
   if ($providerType === 'forex') return true;
-  if ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $assetType)) return true;
   return $resolved !== null;
 }
 
@@ -429,7 +505,7 @@ function quote_provider_prefers_yahoo(string $assetType, array $meta = [], strin
     return $arabPrimary !== 'eodhd' || eodhd_symbol_for_market($symbol, $assetType, $meta) === null;
   }
   if ($providerType === 'forex') return !quote_provider_prefers_eodhd($assetType, $meta, $symbol);
-  if (in_array($assetType, ['futures'], true)) return true;
+  if ($providerType === 'futures') return false;
   if ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $assetType)) return !quote_provider_prefers_eodhd($assetType, $meta, $symbol);
   if ($providerType === 'commodities' && !vp_is_spot_metal_symbol($symbol, $assetType)) return true;
   return false;
@@ -529,6 +605,11 @@ function quote_get(string $symbol, ?string $type = null, ?string $market = null)
     $src = strtolower(trim((string)($r['source'] ?? $r['provider'] ?? '')));
     if (quote_source_disabled_by_config($src)) return null;
   }
+  if ($r && function_exists('quote_source_blocked_for_symbol')) {
+    $src = strtolower(trim((string)($r['source'] ?? $r['provider'] ?? '')));
+    $rowType = vp_normalize_asset_type((string)($type ?? ''));
+    if ($rowType !== '' && quote_source_blocked_for_symbol($symbol, $rowType, $src)) return null;
+  }
   return $r ?: null;
 }
 
@@ -567,6 +648,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'type' => $assetType,
           'price' => $p,
           'change_pct' => (float)($row['change_pct'] ?? 0.0),
+          'open' => (float)($row['open'] ?? 0.0),
           'updated_at' => $now,
           'source' => 'binance',
         ];
@@ -582,6 +664,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
         try {
           quote_upsert($sym, $assetType, $p, $chg, $upd, [
             'source' => $src,
+            'open' => (float)($row['open'] ?? 0.0),
             'as_of' => $upd,
             'ingested_at' => $now,
           ]);
@@ -604,6 +687,10 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
   $massiveFallbackEnabled = ((int)env('ENABLE_MASSIVE_FALLBACK', '0') === 1) && $preferredProvider === 'massive';
   foreach ($symbols as $sym) {
     $meta = is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [];
+    if (function_exists('vp_asset_reference')) {
+      $ref = vp_asset_reference($sym, $assetType, $meta);
+      if (empty($ref['trade_supported'])) continue;
+    }
     if ($providerType === 'forex' && (int)env('ALLOW_REFERENCE_FX_FALLBACK', '0') === 1) {
       $frankfurterRow = quote_frankfurter_row($sym, $assetType, $now);
       if (is_array($frankfurterRow) && (float)($frankfurterRow['price'] ?? 0) > 0) {
@@ -635,12 +722,10 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       $coingeckoMetalSymbols[] = $sym;
     }
 
-    // Non-crypto feed worker pass can opt-in to strict TwelveData-only sourcing
-    // so disabled providers like Yahoo/EODHD/FCS never silently run.
+    // Non-crypto feed worker pass can opt in to a strict no-proxy mode:
+    // keep TwelveData/EODHD, but prevent Yahoo and approximation-style rescues.
     if (!$isCrypto && !empty($opts['only_twelvedata_for_noncrypto'])) {
       $yahooBySym = [];
-      $eodhdBySym = [];
-      $eodhdFallbackBySym = [];
       $fcsapiBySym = [];
       $massiveBySym = [];
       $finnhubBySym = [];
@@ -661,7 +746,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
       $m = massive_market_ticker($sym, $assetType, $meta);
       if ($m) $massiveBySym[$sym] = $m;
     }
-    if (!$preferTwelvedata && twelvedata_enabled() && in_array($providerType, ['forex','commodities','stocks','indices','futures'], true)) {
+    if (!$preferTwelvedata && twelvedata_enabled() && in_array($providerType, ['forex','commodities','stocks','indices'], true)) {
       $td = twelvedata_symbol_for_market($sym, $assetType, $meta);
       if ($td) $twelvedataBySym[$sym] = $td;
     }
@@ -729,7 +814,7 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'updated_at' => quote_row_provider_ts($row, $now),
           'source' => (string)($row['source'] ?? 'eodhd'),
         ];
-        if (quote_yahoo_enabled() && in_array($providerType, ['forex','commodities','futures'], true) && quote_primary_row_is_stale($liveRow, $assetType, $now)) {
+        if (quote_yahoo_enabled() && in_array($providerType, ['forex','commodities'], true) && quote_primary_row_is_stale($liveRow, $assetType, $now)) {
           $rescue = quote_try_yahoo_rescue_row($sym, $assetType, is_array($metaBySymbol[$sym] ?? null) ? $metaBySymbol[$sym] : [], $now);
           if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
         }
@@ -1080,7 +1165,8 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
     } catch (Throwable $e) {}
   }
 
-  $directBudget = max(0, min(12, (int)($opts['direct_budget'] ?? 6)));
+  $directBudgetCap = $assetType === 'arab' ? 30 : ($assetType === 'commodities' ? 30 : 12);
+  $directBudget = max(0, min($directBudgetCap, (int)($opts['direct_budget'] ?? 6)));
   foreach ($symbols as $sym) {
     if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
     if ($directBudget <= 0) break;
@@ -1276,7 +1362,7 @@ function quote_price_fresh(string $symbol, string $assetType): float {
             'updated_at' => quote_row_provider_ts($live, $now),
             'source' => (string)($live['source'] ?? 'eodhd'),
           ];
-          if (quote_yahoo_enabled() && in_array($providerType, ['forex','commodities','futures'], true) && quote_primary_row_is_stale($liveRow, $assetType, $now)) {
+          if (quote_yahoo_enabled() && in_array($providerType, ['forex','commodities'], true) && quote_primary_row_is_stale($liveRow, $assetType, $now)) {
             $rescue = quote_try_yahoo_rescue_row($symbol, $assetType, $meta, $now);
             if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
           }
@@ -1294,7 +1380,7 @@ function quote_price_fresh(string $symbol, string $assetType): float {
     } catch (Throwable $e) { /* ignore */ }
   }
 
-  if (in_array($providerType, ['forex', 'stocks', 'commodities', 'futures'], true)) {
+  if (in_array($providerType, ['forex', 'stocks', 'commodities'], true)) {
     $preferYahooFirst = quote_provider_prefers_yahoo($assetType, $meta, $symbol);
     if (quote_yahoo_enabled() && $preferYahooFirst) {
       $ySym = yahoo_ticker_for_market($symbol, $assetType, $meta);
@@ -1343,7 +1429,7 @@ function quote_price_fresh(string $symbol, string $assetType): float {
       } catch (Throwable $e) { /* ignore */ }
     }
 
-    if (quote_yahoo_enabled() && !$preferYahooFirst && in_array($providerType, ['forex','stocks','commodities','futures'], true)) {
+    if (quote_yahoo_enabled() && !$preferYahooFirst && in_array($providerType, ['forex','stocks','commodities'], true)) {
       $ySym = yahoo_ticker_for_market($symbol, $assetType, $meta);
       if ($ySym) {
         try {
@@ -1516,6 +1602,17 @@ function quote_upsert(string $symbol, string $type, float $price, float $changeP
     }
   }
 
+  [$changePct, $extras] = quote_enrich_forex_change($symbol, $type, (float)$price, (float)$changePct, $extras);
+  $changeData = quote_enrich_change_from_reference($symbol, $type, array_merge($extras, [
+    'symbol' => $symbol,
+    'type' => $type,
+    'price' => $price,
+    'change_pct' => $changePct,
+  ]));
+  $changePct = (float)($changeData['change_pct'] ?? $changePct);
+  if (!empty($changeData['change_basis']) && empty($extras['change_basis'])) {
+    $extras['change_basis'] = (string)$changeData['change_basis'];
+  }
   $prevClose = isset($extras['prev_close']) && is_numeric($extras['prev_close']) ? (float)$extras['prev_close'] : 0.0;
   // Recompute change_pct from prev_close if it looks more reliable than the provider's number.
   // Yahoo sends regularMarketChangePercent that can be based on unadjusted closes or futures contracts.
@@ -1771,7 +1868,7 @@ function quotes_tick(bool $refreshCrypto = true): array {
         $td = twelvedata_symbol_for_market($sym, $type, $metaArr) ?: '';
         if ($td !== '') $twelvedataKeyBySym[$sym] = $td;
       }
-      if (quote_yahoo_enabled() && in_array($type, ['stocks','commodities','futures','arab'], true)) {
+      if (quote_yahoo_enabled() && in_array($type, ['stocks','commodities','arab'], true)) {
         $y = yahoo_ticker_for_market($sym, $type, $metaArr) ?: '';
         if ($y !== '' && preg_match('/^[A-Z0-9.=\-]{1,20}$/', $y)) {
           $yahooKeyBySym[$sym] = $y;
@@ -1908,6 +2005,8 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
           $d = $cryptoData[$sym];
           $price = (float)($d['price'] ?? $price);
           $chgPct = (float)($d['change_pct'] ?? $chgPct);
+          $open = (float)($d['open'] ?? 0);
+          if ($open > 0) $extras['open'] = $open;
           $external++;
           $sourceName = 'binance';
           $hadAuthoritativeUpdate = true;
@@ -1920,7 +2019,7 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
           try {
             $perp = binance_futures_mark_price_cached($sym, $perpTtl);
             if (!empty($perp['mark_price'])) {
-              $extras = $perp;
+              $extras = array_merge($extras, $perp);
               $perpDone++;
               if ($sourceName === '') $sourceName = 'binance';
             }
@@ -2059,6 +2158,16 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
         continue;
       }
       if ($sourceName !== '') $extras['source'] = $sourceName;
+      $changeRow = quote_enrich_change_from_reference($sym, $type, array_merge($extras, [
+        'symbol' => $sym,
+        'type' => $type,
+        'price' => $price,
+        'change_pct' => $chgPct,
+      ]));
+      $chgPct = (float)($changeRow['change_pct'] ?? $chgPct);
+      if (!empty($changeRow['change_basis']) && empty($extras['change_basis'])) {
+        $extras['change_basis'] = (string)$changeRow['change_basis'];
+      }
       if (!isset($extras['source_priority']) && $sourceName !== '') {
         $extras['source_priority'] = match(strtolower($sourceName)) {
           'binance' => 100,
@@ -2094,6 +2203,8 @@ $prevRow = $prevMap[$sym.'|'.$type] ?? null;
             'type' => $type,
             'price' => $price,
             'change_pct' => $chgPct,
+            'open' => (float)($extras['open'] ?? 0),
+            'change_basis' => (string)($extras['change_basis'] ?? ''),
             'updated_at' => $persistTs,
             'source' => $sourceName,
             'central_ts' => $now,
@@ -2162,7 +2273,7 @@ function quote_fetch_external(string $symbol, string $type, array $meta = []): ?
             'updated_at' => quote_row_provider_ts($live, time()),
             'source' => (string)($live['source'] ?? 'eodhd'),
           ];
-          if (quote_yahoo_enabled() && in_array($providerType, ['forex','commodities','futures'], true) && quote_primary_row_is_stale($liveRow, $type, time())) {
+          if (quote_yahoo_enabled() && in_array($providerType, ['forex','commodities'], true) && quote_primary_row_is_stale($liveRow, $type, time())) {
             $rescue = quote_try_yahoo_rescue_row($symbol, $type, $meta, time());
             if (is_array($rescue) && (float)($rescue['price'] ?? 0) > 0) $liveRow = $rescue;
           }
@@ -2187,7 +2298,7 @@ function quote_fetch_external(string $symbol, string $type, array $meta = []): ?
     } catch (Throwable $e) { /* ignore */ }
   }
 
-  $allowYahooFallback = quote_yahoo_enabled() && !($providerType === 'commodities' && $isSpotMetal && quote_provider_prefers_eodhd($type, $meta, $symbol));
+  $allowYahooFallback = quote_yahoo_enabled() && $providerType !== 'futures' && !($providerType === 'commodities' && $isSpotMetal && quote_provider_prefers_eodhd($type, $meta, $symbol));
   if ($allowYahooFallback) try {
     $ySym = yahoo_ticker_for_market($symbol, $type, $meta) ?: $symbol;
     if (preg_match('/^[A-Z0-9._=\/-]{1,24}$/', strtoupper((string)$ySym))) {

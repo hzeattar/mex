@@ -199,6 +199,20 @@
   .spread-display { @apply text-[10px] text-spread font-mono font-bold; }
   .mobile-market-open { @apply fixed inset-0 z-[220] w-full bg-surface flex flex-col; }
   .trade-modal-open { @apply overflow-hidden; }
+  #chart-box {
+    @apply overflow-hidden;
+    min-height: 360px;
+    contain: layout paint;
+  }
+  #chart-box canvas {
+    max-width: none;
+  }
+  #chart-box .tv-lightweight-charts {
+    min-height: 100%;
+  }
+  #chart-box [class*="price-axis"] {
+    font-variant-numeric: tabular-nums;
+  }
 
   /* Chart overlay / legend / toolbar */
   .chart-loading-overlay {
@@ -209,22 +223,38 @@
   }
   .chart-loading-overlay.is-visible { @apply opacity-100; }
   .chart-legend {
-    @apply absolute z-10 flex flex-wrap items-center gap-x-2 gap-y-0.5 pointer-events-none;
+    @apply absolute z-10 flex flex-wrap items-center gap-x-2 gap-y-0.5 pointer-events-none rounded-md border border-line/60 px-2 py-1;
     top: 6px;
     left: 8px;
     font-family: ui-monospace, monospace;
     font-size: 10px;
     color: #8ba1cf;
+    max-width: calc(100% - 112px);
+    background: rgba(6, 10, 20, 0.68);
+    backdrop-filter: blur(6px);
   }
   .chart-legend b { @apply font-bold; color: #e8eefc; }
   .chart-legend .is-up, .chart-legend b.is-up { color: #00c087; }
   .chart-legend .is-down, .chart-legend b.is-down { color: #f6465d; }
   .chart-toolbar {
-    @apply absolute z-10 flex items-center gap-1;
+    @apply absolute z-10 flex items-center gap-1 rounded-md border border-line/60 px-1 py-1;
     bottom: 6px;
     left: 8px;
+    max-width: calc(100% - 16px);
+    overflow-x: auto;
+    background: rgba(6, 10, 20, 0.72);
+    backdrop-filter: blur(8px);
   }
   @media (max-width: 1023px) {
+    #chart-box {
+      min-height: 330px;
+    }
+    .chart-legend {
+      top: 5px;
+      left: 6px;
+      max-width: calc(100% - 74px);
+      font-size: 9px;
+    }
     .chart-toolbar {
       bottom: 52px;
     }
