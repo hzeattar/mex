@@ -27,7 +27,6 @@ $orderType = strtoupper((string)($body['order_type'] ?? 'MARKET'));
 $qty = (float)($body['qty'] ?? 0);
 $usdReq = (float)($body['usd'] ?? ($body['usd_amount'] ?? ($body['amount'] ?? 0)));
 $limit = (float)($body['price'] ?? 0);
-$clientPrice = (float)($body['price'] ?? $body['client_price'] ?? 0);
 // Demo/Real mode affects: which wallet currency is used + symbol prefix storage.
 // Portfolio endpoint filters Real positions by @R@ prefix.
 $mode = trade_mode_for_user($pdo, $uid, $body);
@@ -62,48 +61,17 @@ if ($sl <= 0) $sl = 0.0;
 // (No merge by symbol/side; each position is independent.)
 $mergePositions = false;
 
-// Demo fast path: trust the UI price directly to avoid slow/blocked quote lookups.
 $mark = 0.0;
 $quoteSnapshot = null;
-if (!$isReal && $clientPrice > 0) {
-  $mark = $clientPrice;
-  $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
-    'symbol' => $symbol,
-    'type' => $assetType,
-    'market' => $marketType,
-    'price' => $clientPrice,
-    'change_pct' => 0,
-    'updated_at' => time(),
-    'source' => 'demo_client_price',
-  ], ['mode' => 'display']);
-}
 
-// For real mode (or demo fallback without client price) fetch a quote.
-if (!($mark > 0)) {
-  $quoteMode = $isReal ? 'execution' : 'display';
-  $quoteSnapshot = qs_snapshot($symbol, $assetType, $marketType, ['mode' => $quoteMode]);
-  $mark = !empty($quoteSnapshot['execution_allowed']) ? qs_execution_price($quoteSnapshot, $side) : 0.0;
-  $cachedPriceForSanity = (float)($quoteSnapshot['price'] ?? 0);
-}
+// Execution price is always resolved server-side from a trusted quote snapshot.
+// Demo mode can trade delayed/closed non-crypto markets when the snapshot marks
+// them executable, but it must not trust UI-provided or synthetic prices.
+$quoteSnapshot = qs_snapshot($symbol, $assetType, $marketType, ['mode' => 'execution']);
+$mark = !empty($quoteSnapshot['execution_allowed']) ? qs_execution_price($quoteSnapshot, $side) : 0.0;
+$cachedPriceForSanity = (float)($quoteSnapshot['price'] ?? 0);
 
-// Demo fast fill: even if the quote isn't marked executable, trust the client
-// price if it is within a sane drift of the cached price.
-if (!$isReal && $clientPrice > 0) {
-  $mark = $clientPrice;
-  if (!$quoteSnapshot) {
-    $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
-      'symbol' => $symbol,
-      'type' => $assetType,
-      'market' => $marketType,
-      'price' => $clientPrice,
-      'change_pct' => 0,
-      'updated_at' => time(),
-      'source' => 'demo_client_price',
-    ], ['mode' => 'display']);
-  }
-}
-
-if ($isReal && (empty($quoteSnapshot['execution_allowed']) || !($mark > 0))) {
+if (empty($quoteSnapshot['execution_allowed']) || !($mark > 0)) {
   json_response([
     'ok' => false,
     'error' => 'Live executable price unavailable. Please wait for the quote to refresh and try again.',
@@ -112,26 +80,6 @@ if ($isReal && (empty($quoteSnapshot['execution_allowed']) || !($mark > 0))) {
   ], 409);
 }
 
-if ($mark <= 0 && !$isReal && $clientPrice > 0) {
-  $allowedDrift = in_array($assetType, ['forex'], true) ? 0.03 : 0.08;
-  $driftOk = $cachedPriceForSanity <= 0 || abs($clientPrice - $cachedPriceForSanity) / max($cachedPriceForSanity, 0.00000001) <= $allowedDrift;
-  if ($driftOk) $mark = $clientPrice;
-}
-
-if (!($mark > 0) && !$isReal) {
-  $mark = quote_price($symbol, (string)$marketType ?: 'spot', (string)$assetType ?: 'crypto');
-  if ($mark > 0) {
-    $quoteSnapshot = qs_snapshot_from_row($symbol, $assetType, $marketType, [
-      'symbol' => $symbol,
-      'type' => $assetType,
-      'market' => $marketType,
-      'price' => $mark,
-      'change_pct' => 0,
-      'updated_at' => time(),
-      'source' => 'demo_live_fallback',
-    ], ['mode' => 'display']);
-  }
-}
 if (!($mark > 0)) {
   json_response(['ok'=>false,'error'=>'Price unavailable. Please wait for the live quote to refresh and try again.','code'=>'price_unavailable'], 503);
 }

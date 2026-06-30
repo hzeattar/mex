@@ -241,6 +241,8 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
         'change_pct' => (float)($central['change_pct'] ?? 0),
         'updated_at' => (int)($central['updated_at'] ?? $central['central_ts'] ?? $central['received_at'] ?? 0),
         'source' => (string)($central['source'] ?? 'central'),
+        'open' => (float)($central['open'] ?? 0),
+        'change_basis' => (string)($central['change_basis'] ?? ''),
         'prev_close' => (float)($central['prev_close'] ?? $central['previous_close'] ?? 0),
       ];
     } elseif ((float)($cached['price'] ?? 0) <= 0) {
@@ -274,14 +276,23 @@ function qa_overlay_market_rows(array $rows, array $opts = []): array {
       $price = (float)($chosen['price'] ?? 0);
       $changePct = (float)($chosen['change_pct'] ?? 0);
       $prevClose = (float)($chosen['prev_close'] ?? $chosen['previous_close'] ?? 0);
+      $open = (float)($chosen['open'] ?? 0);
+      $changeBasis = (string)($chosen['change_basis'] ?? '');
       // WebSocket feeds (TwelveData/Binance) provide a live price but may omit
-      // change_pct. Recompute it from prev_close when it is available.
+      // change_pct. Recompute it from prev_close/open when an authoritative
+      // daily reference is available.
       if ($price > 0 && abs($changePct) < 0.000001 && $prevClose > 0 && abs($price - $prevClose) > 0.00000001) {
         $changePct = (($price - $prevClose) / $prevClose) * 100.0;
+        $changeBasis = $changeBasis !== '' ? $changeBasis : 'prev_close';
+      } elseif ($type === 'crypto' && $price > 0 && abs($changePct) < 0.000001 && $open > 0 && abs($price - $open) > 0.00000001) {
+        $changePct = (($price - $open) / $open) * 100.0;
+        $changeBasis = $changeBasis !== '' ? $changeBasis : 'binance_open_24h';
       }
       $out[$sym] = [
         'price' => $price,
         'change_pct' => $changePct,
+        'change_basis' => $changeBasis,
+        'open' => $open,
         'updated_at' => (int)($chosen['updated_at'] ?? 0),
         'source' => (string)($chosen['source'] ?? $chosen['provider'] ?? 'unavailable'),
         'is_stale' => false,

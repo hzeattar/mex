@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/market_resolver.php';
+require_once __DIR__ . '/asset_reference.php';
 require_once __DIR__ . '/marketdata.php';
 
 if (!function_exists('vp_quote_source_rank')) {
@@ -102,10 +103,27 @@ if (!function_exists('twelvedata_symbol_for_market')) {
         $symbol = strtoupper(trim($symbol));
         $assetType = vp_normalize_asset_type($assetType);
         $providerType = vp_provider_asset_type($assetType);
+        $metaEodhd = strtoupper(trim((string)($meta['eodhd_symbol'] ?? $meta['provider_symbol_eodhd'] ?? '')));
+        $metaTv = strtoupper(trim((string)($meta['tv_symbol'] ?? '')));
+        $looksLikeSaudiEquity = $assetType === 'arab'
+            || (preg_match('/^[0-9]{3,6}$/', $symbol)
+                && (($metaEodhd !== '' && str_ends_with($metaEodhd, '.SR')) || str_starts_with($metaTv, 'TADAWUL:')));
 
         // Check meta for explicit override
         $td = trim((string)($meta['twelvedata_ticker'] ?? ''));
-        if ($td !== '') return $td;
+        if ($td !== '') {
+            return ($looksLikeSaudiEquity && preg_match('/^[0-9]{3,6}$/', $td)) ? null : $td;
+        }
+
+        if (function_exists('vp_asset_reference')) {
+            $ref = vp_asset_reference($symbol, $assetType, $meta);
+            $mapped = trim((string)($ref['twelvedata_ticker'] ?? ''));
+            if ($mapped !== '') {
+                return ($looksLikeSaudiEquity && preg_match('/^[0-9]{3,6}$/', $mapped)) ? null : $mapped;
+            }
+            if (empty($ref['trade_supported'])) return null;
+        }
+        if ($looksLikeSaudiEquity) return null;
 
         if ($providerType === 'forex') {
             // EURUSD → EUR/USD
@@ -120,9 +138,16 @@ if (!function_exists('twelvedata_symbol_for_market')) {
             if (preg_match('/^(XAU|XAG|XPT|XPD)(USD)$/', $symbol, $m)) {
                 return $m[1] . '/' . $m[2];
             }
-            // USOIL → crude oil
-            if ($symbol === 'USOIL' || $symbol === 'UKOIL') {
-                return $symbol === 'USOIL' ? 'CL/USD' : 'BZ/USD';
+            // Spot energy / metals available on TwelveData commodities list
+            if ($symbol === 'USOIL' || $symbol === 'WTI') {
+                return 'WTI/USD';
+            }
+            if ($symbol === 'UKOIL' || $symbol === 'BRENT') {
+                return 'XBR/USD';
+            }
+            // Soft commodities / industrial metals not reliably available on the current plan.
+            if (in_array($symbol, ['COPPER','NGAS','NATGAS','NICKEL','ZINC','ALUMINIUM','LEAD','WHEAT','CORN','SOYBEAN','SUGAR','COTTON','COFFEE','COCOA','LUMBER'], true)) {
+                return null;
             }
             return null;
         }
@@ -137,14 +162,7 @@ if (!function_exists('twelvedata_symbol_for_market')) {
 
         // Stocks, arab, futures, indices — use as-is
         if ($providerType === 'futures') {
-            $map = [
-                'ES_F' => 'ES', 'NQ_F' => 'NQ', 'YM_F' => 'YM', 'RTY_F' => 'RTY',
-                'NKD_F' => 'NKD', 'CL_F' => 'CL', 'BZ_F' => 'BZ', 'GC_F' => 'GC',
-                'SI_F' => 'SI', 'NG_F' => 'NG', 'ZN_F' => 'ZN', 'ZB_F' => 'ZB',
-            ];
-            if (isset($map[$symbol])) return $map[$symbol];
-            if (preg_match('/^([A-Z0-9]+)_F$/', $symbol, $m)) return $m[1];
-            return preg_match('/^[A-Z0-9._\-]{1,20}$/', $symbol) ? $symbol : null;
+            return null;
         }
 
         if (in_array($providerType, ['stocks', 'arab', 'indices'], true)) {
@@ -173,8 +191,11 @@ if (!function_exists('twelvedata_quote_many')) {
 
         $out = [];
 
-        // TwelveData batch endpoint supports max 30 symbols per request
-        $chunks = array_chunk($tickers, 30);
+        // Large mixed commodity batches can fail the whole quote response even
+        // when every ticker works in smaller groups. Keep batches deliberately
+        // small so one provider-side edge case does not hide a full market list.
+        $batchSize = max(1, min(30, (int)env('TWELVEDATA_QUOTE_BATCH_SIZE', '8')));
+        $chunks = array_chunk($tickers, $batchSize);
         foreach ($chunks as $chunk) {
             try {
                 $url = 'https://api.twelvedata.com/quote?' . http_build_query([

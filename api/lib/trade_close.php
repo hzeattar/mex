@@ -149,13 +149,6 @@ function trade_close_resolve_price(string $symbol, string $assetType, string $ma
       $cached['source'] = trim((string)($cached['source'] ?? 'cache')) . '_manual_fallback';
       return $cached;
     }
-    // Last resort: accept client-supplied price if it's within 3% of the snapshot (prevents manipulation)
-    if ($clientPrice > 0) {
-      $snapPx = (float)($snapshot['price'] ?? 0);
-      if ($snapPx <= 0 || abs($clientPrice - $snapPx) / max(0.0001, $snapPx) <= 0.03) {
-        return ['price' => $clientPrice, 'source' => 'client_price', 'age_sec' => 0, 'cached' => false];
-      }
-    }
     throw new TradeCloseException('Live executable price unavailable. Please wait for the quote to refresh.', 409, 'price_not_executable', [
       'symbol' => $symbol,
       'asset_type' => $assetType,
@@ -185,37 +178,7 @@ function trade_close_resolve_price(string $symbol, string $assetType, string $ma
     }
   }
 
-  $attempts = [[$marketType, $quoteAssetType]];
-  if ($marketType !== 'spot') $attempts[] = ['spot', $quoteAssetType];
-  if ($quoteAssetType !== $assetType) $attempts[] = [$marketType, $assetType ?: 'crypto'];
-
   $errors = [];
-  foreach ($attempts as [$attemptMarket, $attemptAsset]) {
-    try {
-      $live = (float)quote_price($symbol, $attemptMarket ?: 'spot', $attemptAsset ?: 'crypto');
-      if ($live > 0) {
-        $fallbackSnapshot = qs_snapshot_from_row($symbol, $attemptAsset ?: 'crypto', $attemptMarket ?: 'spot', [
-          'symbol' => $symbol,
-          'type' => $attemptAsset ?: 'crypto',
-          'market' => $attemptMarket ?: 'spot',
-          'price' => $live,
-          'change_pct' => 0,
-          'updated_at' => time(),
-          'source' => 'demo_live_fallback',
-        ], ['mode' => 'display']);
-        return [
-          'price' => $live,
-          'source' => $attemptMarket === $marketType ? 'live' : 'live_' . $attemptMarket . '_fallback',
-          'age_sec' => 0,
-          'cached' => false,
-          'snapshot' => qs_meta($fallbackSnapshot),
-        ];
-      }
-    } catch (Throwable $e) {
-      $errors[] = $attemptMarket . '/' . $attemptAsset . ': ' . $e->getMessage();
-    }
-  }
-
   try {
     $bulk = quote_bulk_live([$symbol], $quoteAssetType ?: 'crypto', [], ['ttl' => 1, 'persist' => true]);
     $row = is_array($bulk[$symbol] ?? null) ? $bulk[$symbol] : null;

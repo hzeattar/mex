@@ -29,7 +29,7 @@ let macdHistSeries = null;
 let stochKSeries = null;
 let stochDSeries = null;
 let chartLegendEl = null;
-let chartSeriesKey = '';          // `${SYMBOL}|${tf}` the rendered series belongs to
+let chartSeriesKey = '';          // `${SYMBOL}|${TYPE}|${MARKET}|${tf}` the rendered series belongs to
 let allCandles = [];              // full merged dataset for the current key (oldest -> newest)
 let chartHistory = { loading: false, done: false, nextAt: 0 };
 let chartType = (() => { try { return localStorage.getItem('vp_chart_type') || 'candles'; } catch (_e) { return 'candles'; } })();
@@ -50,10 +50,15 @@ let chartLibPromise = null;
 let lastCandle = null;
 let liveCandleFrame = 0;
 let pendingLiveCandle = null;
+let chartDataController = null;
+let chartDataRequestSeq = 0;
+let chartReconcileTimer = 0;
 let orderInfoFrame = 0;
 let lastPriceFlashAt = 0;
 let tradeRunId = 0;
 const marketListCache = new Map();
+const chartCandleCache = new Map();
+let chartPriceLines = { last: null, bid: null, ask: null };
 const closingPositions = new Set();
 
 // Listeners bound to the persistent #view container must be disposed on cleanup,
@@ -95,11 +100,11 @@ const FALLBACK_MARKETS = {
   ],
   commodities: [
     ['XAUUSD', 'Gold Spot / US Dollar'], ['XAGUSD', 'Silver Spot / US Dollar'], ['USOIL', 'US Oil'], ['UKOIL', 'Brent Oil'],
-    ['NATGAS', 'Natural Gas'], ['COPPER', 'Copper'],
+    ['XPTUSD', 'Platinum Spot / US Dollar'], ['XPDUSD', 'Palladium Spot / US Dollar'], ['GAUUSD', 'Gold Gram / US Dollar'], ['GAUIDR', 'Gold Gram / Indonesian Rupiah'],
+    ['XAUEUR', 'Gold Spot / Euro'], ['XAUGBP', 'Gold Spot / Pound'], ['XAUJPY', 'Gold Spot / Yen'], ['XAUAUD', 'Gold Spot / Australian Dollar'],
+    ['XAUXAG', 'Gold / Silver Ratio'], ['XAGEUR', 'Silver Spot / Euro'], ['XAGGBP', 'Silver Spot / Pound'], ['XAGGUSD', 'Silver Gram / US Dollar'], ['URALS', 'Urals Crude Oil'],
   ],
-  futures: [
-    ['ES_F', 'S&P 500 Futures'], ['NQ_F', 'Nasdaq 100 Futures'], ['YM_F', 'Dow Jones Futures'], ['GC_F', 'Gold Futures'], ['CL_F', 'Crude Oil Futures'],
-  ],
+  futures: [],
   arab: [
     ['2222', 'Saudi Aramco'], ['1120', 'Al Rajhi Bank'], ['2010', 'SABIC'], ['7010', 'stc'], ['1211', 'Maaden'], ['1150', 'Alinma Bank'],
   ],
@@ -112,6 +117,11 @@ const CHART_MAX_INITIAL_LIMIT = 5000;
 const CHART_MAX_PAGE_LIMIT = 5000;
 const CHART_MONTH_PREFETCH_MAX_PAGES = 10;
 const CHART_MONTH_PREFETCH_DELAY = 750;
+const CHART_PROVIDER_FRESH_TFS = ['1m', '3m', '5m', '15m'];
+const CHART_NONCRYPTO_FRESH_LIMIT = 150;
+const CHART_FAST_INITIAL_TFS = ['1m', '3m', '5m', '15m'];
+const CHART_CRYPTO_FAST_INITIAL_LIMIT = 300;
+const CHART_CANDLE_CACHE_MAX = 36;
 
 function chartTargetBars(tf) {
   return Math.max(CHART_MIN_INITIAL_LIMIT, Math.ceil((CHART_HISTORY_DAYS * 86400) / Math.max(60, tfSeconds(tf))));
@@ -123,6 +133,18 @@ function chartInitialLimit(tf) {
 
 function chartPageLimit(tf) {
   return Math.max(CHART_MIN_INITIAL_LIMIT, Math.min(CHART_MAX_PAGE_LIMIT, chartTargetBars(tf)));
+}
+
+function usesFreshProviderWindow(type, tf) {
+  return normalizeType(type || 'crypto') !== 'crypto' && CHART_PROVIDER_FRESH_TFS.includes(String(tf || '').toLowerCase());
+}
+
+function chartInitialLimitFor(type, tf) {
+  if (usesFreshProviderWindow(type, tf)) return CHART_NONCRYPTO_FRESH_LIMIT;
+  if (normalizeType(type || 'crypto') === 'crypto' && CHART_FAST_INITIAL_TFS.includes(String(tf || '').toLowerCase())) {
+    return CHART_CRYPTO_FAST_INITIAL_LIMIT;
+  }
+  return chartInitialLimit(tf);
 }
 
 function defaultMarketForType(type) {
@@ -299,7 +321,7 @@ function renderOrderPanel() {
       <div class="text-center"><span class="spread-display" data-spread-val>${t('trade.spread','Spread')}: --</span></div>
       <div class="mobile-order-summary">
         <span><small>${t('trade.mode','Mode')}</small><strong>${esc(get('mode') === 'real' ? t('trade.real','Real') : t('trade.demo','Demo'))}</strong></span>
-        <span><small>${t('trade.symbol','Symbol')}</small><strong>${esc(get('symbol') || '--')}</strong></span>
+        <span><small>${t('trade.symbol','Symbol')}</small><strong data-order-symbol>${esc(get('symbol') || '--')}</strong></span>
         <span><small>${t('trade.type','Type')}</small><strong>${isPerp ? t('trade.perp_futures','Perp/Futures') : t('trade.spot','Spot')}</strong></span>
       </div>
       <div class="order-summary-box">
@@ -439,6 +461,7 @@ export function mount(container) {
 export function cleanup() {
   tradeRunId += 1;
   if (currentSetup?.container) cancelMonthHistoryPrefetch(currentSetup.container);
+  if (currentSetup?.container) cancelChartPrefetch(currentSetup.container);
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
@@ -459,6 +482,7 @@ export function cleanup() {
     chartLegendEl = null;
     lastCandle = null;
   }
+  clearChartPriceLines();
   chartSeriesKey = '';
   allCandles = [];
   chartHistory = { loading: false, done: false, nextAt: 0 };
@@ -474,6 +498,10 @@ export function cleanup() {
   stopActiveQuote();
   stopActivityRefresh();
   stopChartRefresh();
+  if (chartReconcileTimer) {
+    clearTimeout(chartReconcileTimer);
+    chartReconcileTimer = 0;
+  }
   cancelLiveCandleFrame();
   cancelOrderInfoFrame();
   disconnect();
@@ -481,6 +509,30 @@ export function cleanup() {
   eventDisposers = [];
   currentSetup = null;
   document.body.classList.remove('trade-modal-open');
+}
+
+function resetChartInstance() {
+  if (chart) {
+    try { chart.remove(); } catch (_e) {}
+  }
+  chart = null;
+  candleSeries = null;
+  volumeSeries = null;
+  ma7Series = null;
+  ma25Series = null;
+  lineSeries = null;
+  areaSeries = null;
+  ema20Series = null;
+  bollUpperSeries = null;
+  bollMidSeries = null;
+  bollLowerSeries = null;
+  chartLegendEl = null;
+  lastCandle = null;
+  allCandles = [];
+  chartSeriesKey = '';
+  pendingLiveCandle = null;
+  clearChartPriceLines();
+  cancelLiveCandleFrame();
 }
 
 async function setup(container) {
@@ -507,6 +559,7 @@ async function setup(container) {
         // Start SSE immediately (no delay) for instant price updates
         if (isCurrentRun(runId, symbol, type)) startLiveQuotes(container, mkts.items, runId, type);
         warmVisibleQuotes(container, mkts.items, runId, type).catch(() => {});
+        scheduleChartPrefetch(container, mkts.items, runId, type);
       }
     })
     .catch(() => {
@@ -612,16 +665,22 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   // aggressive without load concerns. No cache-buster: shared cache key.
   const interval = quoteType === 'crypto' ? 3000 : 1000;
   const focusUrl = `/quote_focus.php?symbols=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}`;
+  let pollCount = 0;
+  const staleFocusAge = quoteType === 'forex' ? 6 : (['commodities', 'futures'].includes(quoteType) ? 8 : 900);
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
     activeQuoteController = new AbortController();
     try {
+      pollCount += 1;
       let data = await api(focusUrl, { timeout: 2500, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
       let item = data?.items?.[0];
-      if (!(Number(item?.price || 0) > 0)) {
-        // Cold symbol: fall back to the legacy focus path (may warm caches).
-        const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus&_=${Date.now()}`;
-        data = await api(fbUrl, { timeout: quoteType === 'crypto' ? 1800 : 2400, retry: 0, signal: activeQuoteController.signal, cacheTtl: 200, cache: 'no-store' });
+      const ageSec = Number(item?.age_sec ?? 999999);
+      const needsFresh = quoteType !== 'crypto'
+        && (!(Number(item?.price || 0) > 0) || ageSec > staleFocusAge || pollCount % 4 === 0);
+      if (needsFresh || !(Number(item?.price || 0) > 0)) {
+        const direct = quoteType !== 'crypto' ? '&direct=1&fresh=1' : '';
+        const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus${direct}&_=${Date.now()}`;
+        data = await api(fbUrl, { timeout: quoteType === 'crypto' ? 1800 : 4200, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
         item = data?.items?.[0];
       }
       if (!isCurrentRun(runId, symbol, type)) return;
@@ -891,6 +950,8 @@ function updatePrice(container, q, runId = tradeRunId) {
   $$('[data-spread-val]', container).forEach(el => { el.textContent = p > 0 ? `${t('trade.spread','Spread')}: ${price(p * 0.0001, assetType)}` : `${t('trade.spread','Spread')}: --`; });
   scheduleOrderInfoUpdate(container);
   updateLiveCandle(p, runId, Number(q.provider_updated_at || q.updated_at || q.cache_updated_at || 0), normalizeType(q.type || assetType));
+  scheduleChartQuoteReconcile(container, p, runId, normalizeType(q.type || assetType));
+  updateChartPriceLines({ ...q, price: p, change_pct: chg });
   updateLivePnL(container, String(q.symbol || get('symbol')).toUpperCase(), p);
 }
 
@@ -1684,8 +1745,31 @@ function symbolListSkeleton(rows = 9) {
   return html;
 }
 
+function chartKeyFor(symbol = get('symbol'), type = get('type'), market = get('market'), tf = get('tf')) {
+  return [
+    String(symbol || '').toUpperCase(),
+    normalizeType(type || 'crypto'),
+    normalizeMarketForType(type || get('type') || 'crypto', market || get('market')),
+    String(tf || '1m').toLowerCase(),
+  ].join('|');
+}
+
 function currentChartKey() {
-  return `${String(get('symbol') || '').toUpperCase()}|${get('tf')}`;
+  return chartKeyFor();
+}
+
+function cancelActiveChartRequest() {
+  chartDataRequestSeq++;
+  if (chartDataController) {
+    try { chartDataController.abort(); } catch (_e) {}
+    chartDataController = null;
+  }
+}
+
+function isActiveChartRequest(requestId, runId, symbol, type, key) {
+  return requestId === chartDataRequestSeq
+    && isCurrentRun(runId, symbol, type)
+    && key === currentChartKey();
 }
 
 function mergeCandleSets(base, incoming) {
@@ -1693,6 +1777,75 @@ function mergeCandleSets(base, incoming) {
   (base || []).forEach(c => by.set(c.time, c));
   (incoming || []).forEach(c => by.set(c.time, c));
   return Array.from(by.values()).sort((a, b) => a.time - b.time);
+}
+
+function rememberChartCandles(key = currentChartKey(), candles = allCandles) {
+  const data = normalizeCandleRows(candles);
+  if (!key || !data.length) return;
+  chartCandleCache.delete(key);
+  chartCandleCache.set(key, data.slice(-CHART_MAX_INITIAL_LIMIT));
+  while (chartCandleCache.size > CHART_CANDLE_CACHE_MAX) {
+    const oldest = chartCandleCache.keys().next().value;
+    chartCandleCache.delete(oldest);
+  }
+}
+
+function cachedChartCandles(key = currentChartKey()) {
+  const data = chartCandleCache.get(key);
+  return Array.isArray(data) && data.length ? data.map(c => ({ ...c })) : [];
+}
+
+function cancelChartPrefetch(container) {
+  if (!container) return;
+  if (container.__chartPrefetchTimer) {
+    clearTimeout(container.__chartPrefetchTimer);
+    container.__chartPrefetchTimer = null;
+  }
+  container.__chartPrefetchToken = (Number(container.__chartPrefetchToken || 0) + 1);
+}
+
+function scheduleChartPrefetch(container, items, runId = tradeRunId, listType = null) {
+  if (!container || !Array.isArray(items) || !items.length || document.hidden) return;
+  cancelChartPrefetch(container);
+  const token = container.__chartPrefetchToken;
+  const activeSymbol = String(get('symbol') || '').toUpperCase();
+  const tf = get('tf') || '15m';
+  const baseType = normalizeType(listType || get('type') || 'crypto');
+  const max = baseType === 'crypto' ? 8 : 10;
+  const queue = items
+    .slice(0, 40)
+    .map(item => {
+      const symbol = String(item.symbol || '').toUpperCase();
+      const type = normalizeType(item.type || baseType);
+      const market = normalizeMarketForType(type, item.market || item.market_type || get('market') || defaultMarketForType(type));
+      return { symbol, type, market };
+    })
+    .filter(item => item.symbol && item.symbol !== activeSymbol)
+    .filter(item => !cachedChartCandles(chartKeyFor(item.symbol, item.type, item.market, tf)).length)
+    .slice(0, max);
+  if (!queue.length) return;
+
+  let index = 0;
+  const runNext = async () => {
+    if (container.__chartPrefetchToken !== token || !isCurrentRun(runId)) return;
+    const item = queue[index++];
+    if (!item) return;
+    const key = chartKeyFor(item.symbol, item.type, item.market, tf);
+    const limit = item.type === 'crypto' ? 120 : 90;
+    try {
+      const data = await api(`/trade/candles.php?symbol=${encodeURIComponent(item.symbol)}&type=${encodeURIComponent(item.type)}&market=${encodeURIComponent(item.market)}&tf=${encodeURIComponent(tf)}&limit=${limit}&fast=1`, {
+        timeout: item.type === 'crypto' ? 5000 : 6500,
+        retry: 0,
+        cacheTtl: 30000,
+      });
+      if (data?.items?.length) rememberChartCandles(key, data.items);
+    } catch (_e) {
+      // Background prefetch must never affect the active chart.
+    }
+    if (container.__chartPrefetchToken !== token || !isCurrentRun(runId)) return;
+    container.__chartPrefetchTimer = setTimeout(runNext, item.type === 'crypto' ? 350 : 650);
+  };
+  container.__chartPrefetchTimer = setTimeout(runNext, 350);
 }
 
 function applyChartData(candles, { fit = false, key = currentChartKey(), preserveRange = false, skipUnchanged = false } = {}) {
@@ -1708,6 +1861,7 @@ function applyChartData(candles, { fit = false, key = currentChartKey(), preserv
     chartHistory = { loading: false, done: false, nextAt: 0 };
   }
   chartSeriesKey = key;
+  rememberChartCandles(key, allCandles);
   renderChartSeries({ fit, preserveRange });
   return true;
 }
@@ -1751,6 +1905,7 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
   if (!data.length) return;
   let savedRange = null;
   if (preserveRange) { try { savedRange = chart.timeScale().getVisibleRange(); } catch (_e) {} }
+  applyChartPriceOptions(get('type'), get('symbol'));
   candleSeries.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
   const lineData = data.map(c => ({ time: c.time, value: c.close }));
   if (lineSeries) lineSeries.setData(lineData);
@@ -1795,9 +1950,11 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
   if (savedRange) { try { chart.timeScale().setVisibleRange(savedRange); } catch (_e) {} }
   else if (fit) chart.timeScale().fitContent();
   updateChartLegend(null);
+  updateChartPriceLines();
 }
 
 function clearChartForSwitch(container) {
+  cancelActiveChartRequest();
   cancelMonthHistoryPrefetch(container);
   cancelLiveCandleFrame();
   stopBinanceKlineWs();
@@ -1806,6 +1963,7 @@ function clearChartForSwitch(container) {
   allCandles = [];
   chartHistory = { loading: false, done: false, nextAt: 0 };
   lastPriceFlashAt = 0;
+  clearChartPriceLines();
   try {
     if (candleSeries) candleSeries.setData([]);
     if (volumeSeries) volumeSeries.setData([]);
@@ -1828,6 +1986,12 @@ function clearChartForSwitch(container) {
   } catch (_e) {}
   updateChartLegend(null);
   if (chart) showChartOverlay(container);
+  else {
+    const box = $('#chart-box', container);
+    if (box) {
+      box.innerHTML = '<div class="absolute inset-0 flex items-center justify-center"><div class="text-center"><div class="loading-spinner mx-auto"></div><p class="text-[10px] text-muted mt-2">Loading chart...</p></div></div>';
+    }
+  }
 }
 
 function showChartOverlay(container) {
@@ -1862,6 +2026,131 @@ function updateChartLegend(candle) {
     `<span>L <b>${price(c.low, type)}</b></span>` +
     `<span>C <b class="${cls}">${price(c.close, type)}</b></span>` +
     `<span class="${cls}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>`;
+}
+
+function chartPrecisionFor(type = get('type'), symbol = get('symbol')) {
+  const value = normalizeType(type || 'crypto');
+  const sym = String(symbol || '').toUpperCase();
+  if (value === 'forex') return sym.includes('JPY') ? 3 : 5;
+  if (value === 'crypto') {
+    const ref = Number(get('activeQuote')?.price || lastCandle?.close || 0);
+    if (ref >= 1000) return 2;
+    if (ref >= 1) return 4;
+    return 6;
+  }
+  if (['commodities', 'futures'].includes(value)) return 2;
+  return 2;
+}
+
+function chartPriceFormatFor(type = get('type'), symbol = get('symbol')) {
+  const precision = chartPrecisionFor(type, symbol);
+  return { type: 'price', precision, minMove: Math.pow(10, -precision) };
+}
+
+function applyChartPriceOptions(type = get('type'), symbol = get('symbol')) {
+  const priceFormat = chartPriceFormatFor(type, symbol);
+  try { candleSeries?.applyOptions({ priceFormat, lastValueVisible: true, priceLineVisible: true }); } catch (_e) {}
+  try { lineSeries?.applyOptions({ priceFormat, lastValueVisible: chartType === 'line' }); } catch (_e) {}
+  try { areaSeries?.applyOptions({ priceFormat, lastValueVisible: chartType === 'area' }); } catch (_e) {}
+  try {
+    chart?.applyOptions({
+      rightPriceScale: {
+        visible: true,
+        borderVisible: true,
+        borderColor: 'rgba(129,160,220,0.16)',
+        entireTextOnly: false,
+        alignLabels: true,
+        scaleMargins: { top: 0.1, bottom: 0.2 },
+      },
+    });
+  } catch (_e) {}
+}
+
+function derivedBidAsk(q = {}, fallbackPrice = 0) {
+  const p = Number(q.price || q.q_price || fallbackPrice || 0);
+  if (!(p > 0)) return { bid: 0, ask: 0 };
+  const bid = Number(q.bid || q.bid_price || q.best_bid || 0);
+  const ask = Number(q.ask || q.ask_price || q.best_ask || 0);
+  if (bid > 0 && ask > 0 && ask >= bid) return { bid, ask };
+  const type = normalizeType(q.type || get('type'));
+  const sym = String(q.symbol || get('symbol') || '').toUpperCase();
+  let spread;
+  if (type === 'forex') spread = sym.includes('JPY') ? 0.005 : 0.00005;
+  else if (type === 'crypto') spread = Math.max(p * 0.0001, p >= 1 ? 0.0001 : 0.000001);
+  else spread = Math.max(p * 0.0001, 0.01);
+  return { bid: p - spread, ask: p + spread };
+}
+
+function clearChartPriceLines() {
+  if (!candleSeries) {
+    chartPriceLines = { last: null, bid: null, ask: null };
+    return;
+  }
+  Object.values(chartPriceLines).forEach(line => {
+    if (!line) return;
+    try { candleSeries.removePriceLine(line); } catch (_e) {}
+  });
+  chartPriceLines = { last: null, bid: null, ask: null };
+}
+
+function addChartPriceLine(kind, priceValue, options) {
+  if (!candleSeries || !(Number(priceValue) > 0)) return null;
+  try {
+    return candleSeries.createPriceLine({
+      price: Number(priceValue),
+      axisLabelVisible: true,
+      lineVisible: true,
+      lineWidth: 1,
+      lineStyle: 2,
+      ...options,
+    });
+  } catch (_e) {
+    return null;
+  }
+}
+
+function setChartPriceLine(kind, priceValue, options) {
+  if (!candleSeries || !(Number(priceValue) > 0)) return null;
+  const lineOptions = {
+    price: Number(priceValue),
+    axisLabelVisible: true,
+    lineVisible: true,
+    lineWidth: 1,
+    lineStyle: 2,
+    ...options,
+  };
+  const existing = chartPriceLines[kind];
+  if (existing && typeof existing.applyOptions === 'function') {
+    try {
+      existing.applyOptions(lineOptions);
+      return existing;
+    } catch (_e) {
+      try { candleSeries.removePriceLine(existing); } catch (__e) {}
+      chartPriceLines[kind] = null;
+    }
+  }
+  return addChartPriceLine(kind, priceValue, options);
+}
+
+function updateChartPriceLines(q = get('activeQuote') || {}) {
+  if (!chart || !candleSeries || !chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
+  const p = Number(q.price || q.q_price || lastCandle?.close || 0);
+  if (!(p > 0)) return;
+  const { bid, ask } = derivedBidAsk(q, p);
+  chartPriceLines.last = setChartPriceLine('last', p, {
+    color: '#5d7cff',
+    title: 'LAST',
+    lineStyle: 0,
+    lineWidth: 2,
+  });
+  chartPriceLines.bid = setChartPriceLine('bid', bid, {
+    color: 'rgba(246,70,93,0.85)',
+    title: 'BID',
+  });
+  chartPriceLines.ask = setChartPriceLine('ask', ask, {
+    color: 'rgba(0,192,135,0.85)',
+    title: 'ASK',
+  });
 }
 
 function setChartType(type) {
@@ -1917,6 +2206,7 @@ function cancelMonthHistoryPrefetch(container) {
 }
 
 function scheduleMonthHistoryPrefetch(container, runId = tradeRunId) {
+  if (usesFreshProviderWindow(get('type'), get('tf'))) return;
   if (!container || hasMonthHistoryLoaded()) return;
   cancelMonthHistoryPrefetch(container);
   const key = currentChartKey();
@@ -1936,6 +2226,10 @@ function scheduleMonthHistoryPrefetch(container, runId = tradeRunId) {
 }
 
 async function loadOlderCandles(container, options = {}) {
+  if (usesFreshProviderWindow(get('type'), get('tf'))) {
+    chartHistory.done = true;
+    return;
+  }
   if (!chart || chartHistory.loading || chartHistory.done) return;
   if (!allCandles.length || allCandles.length < 50) return;
   const now = Date.now();
@@ -1949,8 +2243,9 @@ async function loadOlderCandles(container, options = {}) {
     const tf = get('tf');
     const oldest = allCandles[0].time;
     const pageLimit = chartPageLimit(tf);
+    const market = get('market') || defaultMarketForType(type);
     const data = await api(
-      `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${pageLimit}&end=${oldest - 1}`,
+      `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=${pageLimit}&end=${oldest - 1}`,
       { timeout: 12000, retry: 0, cacheTtl: 0 }
     );
     if (chartSeriesKey !== key || currentChartKey() !== key) return;
@@ -2007,13 +2302,16 @@ async function initChart(container, candles, runId = tradeRunId) {
   const { createChart } = await loadChartLib();
   if (!isCurrentRun(runId)) return;
   el.innerHTML = '';
+  const activeType = get('type');
+  const activeSymbol = get('symbol');
+  const mainPriceFormat = chartPriceFormatFor(activeType, activeSymbol);
 
   chart = createChart(el, {
     layout: { background: { color: '#060A14' }, textColor: '#8ba1cf', fontSize: 11, fontFamily: "'Inter', system-ui, sans-serif" },
     grid: { vertLines: { color: 'rgba(129,160,220,0.04)' }, horzLines: { color: 'rgba(129,160,220,0.04)' } },
     crosshair: { mode: 0, vertLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff', width: 1, style: 2, visible: true, labelVisible: true }, horzLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff', width: 1, style: 2, visible: true, labelVisible: true } },
-    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: 6, barSpacing: 8, minBarSpacing: 2, fixLeftEdge: false, fixRightEdge: false },
-    rightPriceScale: { borderColor: 'rgba(129,160,220,0.08)', scaleMargins: { top: 0.1, bottom: 0.2 }, autoScale: true, alignLabels: true },
+    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: 8, barSpacing: 8, minBarSpacing: 2, fixLeftEdge: false, fixRightEdge: false },
+    rightPriceScale: { visible: true, borderVisible: true, borderColor: 'rgba(129,160,220,0.16)', scaleMargins: { top: 0.1, bottom: 0.2 }, autoScale: true, alignLabels: true, entireTextOnly: false },
     watermark: { visible: true, text: 'MEX Group', color: 'rgba(93,124,255,0.06)', fontSize: 48, horzAlign: 'center', vertAlign: 'center' },
     width: Math.max(320, el.clientWidth),
     height: Math.max(260, el.clientHeight),
@@ -2037,15 +2335,18 @@ async function initChart(container, candles, runId = tradeRunId) {
     priceLineWidth: 1,
     priceLineStyle: 2,
     priceLineColor: '#5d7cff80',
+    priceFormat: mainPriceFormat,
   });
   lineSeries = chart.addLineSeries({
     color: '#5d7cff', lineWidth: 2, priceLineVisible: false,
     crosshairMarkerVisible: true, visible: chartType === 'line',
+    priceFormat: mainPriceFormat,
   });
   areaSeries = chart.addAreaSeries({
     lineColor: '#5d7cff', lineWidth: 2,
     topColor: 'rgba(93,124,255,0.30)', bottomColor: 'rgba(93,124,255,0.02)',
     priceLineVisible: false, crosshairMarkerVisible: true, visible: chartType === 'area',
+    priceFormat: mainPriceFormat,
   });
   volumeSeries = chart.addHistogramSeries({ 
     priceFormat: { type: 'volume' }, 
@@ -2159,6 +2460,7 @@ function updateInstrumentHeader(container, symbol, type) {
   if (mLogo) mLogo.innerHTML = marketLogo(sym, type, 'w-8 h-8 rounded-lg shrink-0');
   const mName = $('#mobile-order-symbol', container);
   if (mName) mName.textContent = sym;
+  $$('[data-order-symbol]', container).forEach(el => { el.textContent = sym || '--'; });
 }
 
 function switchSymbol(container, symbol, type) {
@@ -2196,11 +2498,10 @@ function switchSymbol(container, symbol, type) {
           markActiveSymbolRow(container, sym);
           warmVisibleQuotes(container, mkts.items, runId, nextType).catch(() => {});
           startLiveQuotes(container, mkts.items, runId, nextType);
+          scheduleChartPrefetch(container, mkts.items, runId, nextType);
         }
       })
       .catch(() => {});
-  } else if (Array.isArray(container.__marketItems) && container.__marketItems.length) {
-    startLiveQuotes(container, container.__marketItems, runId, nextType);
   }
 }
 
@@ -2243,6 +2544,7 @@ function bindEvents(container) {
       renderSymbolList(container, data.items);
       warmVisibleQuotes(container, data.items, tradeRunId, drawerType);
       startLiveQuotes(container, data.items, tradeRunId, drawerType);
+      scheduleChartPrefetch(container, data.items, tradeRunId, drawerType);
     }
     $$('[data-type-tab]', container).forEach(btn => {
       const active = btn === el;
@@ -2364,33 +2666,146 @@ function startChartRefresh(container, symbol, type, tf, runId = tradeRunId, char
   }, interval);
 }
 
+function chartQuoteTolerance(type) {
+  const value = normalizeType(type || 'crypto');
+  if (value === 'forex') return 0.0008;
+  if (['commodities', 'futures'].includes(value)) return 0.0015;
+  if (['stocks', 'arab'].includes(value)) return 0.03;
+  return 0.01;
+}
+
+function latestCandleQuoteDeviation(items, quotePrice) {
+  const data = normalizeCandleRows(items || []);
+  const p = Number(quotePrice || 0);
+  const last = data[data.length - 1];
+  if (!last || !(p > 0) || !(Number(last.close) > 0)) return 0;
+  return Math.abs(Number(last.close) - p) / Math.max(p, Number(last.close), 1);
+}
+
+function liveTailTolerance(type) {
+  const value = normalizeType(type || 'crypto');
+  if (value === 'forex') return 0.001;
+  if (['commodities', 'futures'].includes(value)) return 0.002;
+  if (['stocks', 'arab'].includes(value)) return 0.02;
+  return 0.01;
+}
+
+function scheduleChartQuoteReconcile(container, priceValue, runId = tradeRunId, assetType = get('type')) {
+  const type = normalizeType(assetType || get('type'));
+  if (type === 'crypto' || !(Number(priceValue) > 0) || !chart || !candleSeries || !lastCandle) return;
+  const key = currentChartKey();
+  if (!chartSeriesKey || chartSeriesKey !== key) return;
+  const close = Number(lastCandle.close || 0);
+  if (!(close > 0)) return;
+  const deviation = Math.abs(close - Number(priceValue)) / Math.max(close, Number(priceValue), 1);
+  if (deviation <= chartQuoteTolerance(type)) return;
+  const now = Date.now();
+  if (!container.__chartReconcileAt) container.__chartReconcileAt = new Map();
+  const lastRun = Number(container.__chartReconcileAt.get(key) || 0);
+  if (now - lastRun < 30000) return;
+  container.__chartReconcileAt.set(key, now);
+  if (chartReconcileTimer) clearTimeout(chartReconcileTimer);
+  chartReconcileTimer = setTimeout(() => {
+    chartReconcileTimer = 0;
+    if (!isCurrentRun(runId) || currentChartKey() !== key) return;
+    chartCandleCache.delete(key);
+    loadChartData(container, get('symbol'), get('type'), get('tf'), runId, loadChartLib(), {
+      silent: true,
+      refresh: true,
+    }).catch(() => null);
+  }, 250);
+}
+
 async function loadChartData(container, symbol, type, tf, runId = tradeRunId, chartReady = loadChartLib(), options = {}) {
   const chartBox = $('#chart-box', container);
   const hasChart = Boolean(chart && candleSeries);
-  const reqKey = `${String(symbol || '').toUpperCase()}|${tf}`;
+  const market = get('market') || defaultMarketForType(type);
+  const reqKey = chartKeyFor(symbol, type, market, tf);
+  let requestId = chartDataRequestSeq;
+  let requestController = null;
+  if (!options.silent) {
+    cancelActiveChartRequest();
+    requestId = ++chartDataRequestSeq;
+    requestController = new AbortController();
+    chartDataController = requestController;
+  }
   if (chartBox && !options.silent && !hasChart) {
     chartBox.innerHTML = '<div class="absolute inset-0 flex items-center justify-center"><div class="text-center"><div class="loading-spinner mx-auto"></div><p class="text-[10px] text-muted mt-2">Loading chart...</p></div></div>';
   } else if (hasChart && !options.silent) {
     showChartOverlay(container);
   }
-  if (!hasChart && !options.silent) {
-    scheduleSyntheticChartFallback(container, symbol, type, runId);
+  let paintedFromCache = false;
+  if (!options.silent && !options.refresh) {
+    const cached = cachedChartCandles(reqKey);
+    if (cached.length) {
+      await chartReady;
+      if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
+      if (chart && candleSeries) {
+        applyChartData(cached, { fit: false, key: reqKey, preserveRange: false });
+        hideChartOverlay(container);
+      } else {
+        await initChart(container, cached, runId);
+      }
+      paintedFromCache = true;
+      showChartOverlay(container);
+    }
   }
   try {
+    const freshProviderWindow = usesFreshProviderWindow(type, tf);
     const refreshParam = options.refresh ? '&refresh=1' : '';
-    const initialLimit = chartInitialLimit(tf);
+    const initialLimit = chartInitialLimitFor(type, tf);
     // No cache-buster param: lets the nginx micro-cache share identical candle
     // responses across users (the request itself is already no-store client-side).
-    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&tf=${encodeURIComponent(tf)}&limit=${initialLimit}&fast=1${refreshParam}`;
-    const candles = await api(url, { timeout: options.silent ? 10000 : 14000, retry: 1, cacheTtl: 0, cache: 'no-store' });
+    const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=${initialLimit}&fast=1${refreshParam}`;
+    const candles = await api(url, {
+      timeout: options.silent ? 8000 : 9000,
+      retry: options.silent ? 0 : 0,
+      cacheTtl: 0,
+      cache: 'no-store',
+      signal: requestController?.signal,
+    });
     await chartReady;
-    if (!isCurrentRun(runId, symbol, type)) return;
-    if (reqKey !== currentChartKey()) return; // stale response for a previous symbol/timeframe
+    if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
+    const chartUnsupported = candles?.source === 'unsupported'
+      || candles?.soft_error === 'futures_provider_unavailable'
+      || candles?.soft_error === 'unsupported_symbol';
+    if (chartUnsupported && !options.silent && !options.refresh) {
+      chartCandleCache.delete(reqKey);
+      resetChartInstance();
+      renderChartFallback(container, 'Chart data is unavailable for this instrument.');
+      return;
+    }
     let chartPainted = false;
     let chartItems = candles?.items || [];
     if (options.refresh && chartItems.length) {
       const activeBucket = currentBucketTime(0, type);
       chartItems = normalizeCandleRows(chartItems).filter(c => c.time < activeBucket);
+    }
+    if (freshProviderWindow && chartItems.length) {
+      const deviation = latestCandleQuoteDeviation(chartItems, get('activeQuote')?.price);
+      if (deviation > chartQuoteTolerance(type)) {
+        const freshUrl = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=100&refresh=1`;
+        const fresh = await api(freshUrl, {
+          timeout: 7000,
+          retry: 0,
+          cacheTtl: 0,
+          cache: 'no-store',
+          signal: requestController?.signal,
+        }).catch(() => null);
+        if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
+        if (fresh?.items?.length) chartItems = fresh.items;
+      }
+    } else if (freshProviderWindow && !chartItems.length && !options.refresh) {
+      const freshUrl = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=100&refresh=1`;
+      const fresh = await api(freshUrl, {
+        timeout: 7000,
+        retry: 0,
+        cacheTtl: 0,
+        cache: 'no-store',
+        signal: requestController?.signal,
+      }).catch(() => null);
+      if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
+      if (fresh?.items?.length) chartItems = fresh.items;
     }
     if (chartItems.length) {
       if (chart && candleSeries) {
@@ -2407,7 +2822,7 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       chartPainted = true;
     } else {
       if (options.silent || options.refresh) return;
-      if (!hasChart && !options.silent) {
+      if (!hasChart && !paintedFromCache && !options.silent) {
         renderChartFallback(container, 'Chart data is still loading from the market provider.');
       } else if (hasChart && !options.silent) {
         hideChartOverlay(container);
@@ -2419,10 +2834,13 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       startBinanceKlineWs(symbol, tf, runId);
     }
   } catch (e) {
-    if (!isCurrentRun(runId, symbol, type)) return;
+    if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
+    if (e?.code === 'aborted' || e?.name === 'RequestAbortError') return;
     console.error('Chart:', e);
     if (!hasChart && !options.silent) renderChartFallback(container, 'Chart stream is delayed. Live price and order ticket remain active.');
     else if (hasChart && !options.silent) hideChartOverlay(container);
+  } finally {
+    if (chartDataController === requestController) chartDataController = null;
   }
 }
 
@@ -2948,6 +3366,7 @@ function openMarketDrawer(container) {
           renderSymbolList(container, mkts.items);
           hydrateActiveFromMarketList(container, mkts.items, tradeRunId);
           warmVisibleQuotes(container, mkts.items, tradeRunId, drawerType);
+          scheduleChartPrefetch(container, mkts.items, tradeRunId, drawerType);
         }
       })
       .catch(() => {
@@ -3009,19 +3428,19 @@ function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetT
   if (!chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
   const type = normalizeType(assetType);
   const tf = get('tf') || '1m';
-  // Non-crypto live tail is only useful on larger timeframes; on 1m/3m/5m the
-  // per-second price polling creates long wicks that make the chart look jagged.
-  if (type !== 'crypto' && ['1m','3m','5m'].includes(tf)) return;
+  const guardedNonCryptoTail = type !== 'crypto' && ['1m','3m','5m','15m'].includes(tf);
   const bucket = currentBucketTime(sourceTime, assetType);
   const base = pendingLiveCandle?.candle || lastCandle;
+  if (guardedNonCryptoTail) {
+    const anchor = Number(base.close || base.open || 0);
+    const deviation = anchor > 0 ? Math.abs(priceValue - anchor) / Math.max(anchor, priceValue, 1) : 0;
+    if (deviation > liveTailTolerance(type)) return;
+  }
   let next;
   if (bucket <= base.time) {
-    next = {
-      ...base,
-      close: priceValue,
-      high: Math.max(base.high, priceValue),
-      low: Math.min(base.low, priceValue),
-    };
+    const high = guardedNonCryptoTail ? Math.max(base.high, priceValue) : Math.max(base.high, priceValue);
+    const low = guardedNonCryptoTail ? Math.min(base.low, priceValue) : Math.min(base.low, priceValue);
+    next = { ...base, close: priceValue, high, low };
   } else {
     next = { time: bucket, open: base.close, high: Math.max(base.close, priceValue), low: Math.min(base.close, priceValue), close: priceValue, volume: 0 };
   }
@@ -3046,8 +3465,11 @@ function flushLiveCandleFrame() {
     const tail = allCandles[allCandles.length - 1];
     if (tail.time === lastCandle.time) allCandles[allCandles.length - 1] = { ...lastCandle };
     else if (lastCandle.time > tail.time) allCandles.push({ ...lastCandle });
+    rememberChartCandles(currentChartKey(), allCandles);
   }
   updateChartLegend(null);
+  updateChartPriceLines();
+  try { chart?.timeScale?.().scrollToRealTime?.(); } catch (_e) {}
 }
 
 function cancelLiveCandleFrame() {
@@ -3244,8 +3666,8 @@ function marketListUrl(type) {
     crypto: 50,
     forex: 30,
     stocks: 20,
-    commodities: 20,
-    arab: 10,
+    commodities: 30,
+    arab: 30,
     futures: 20,
   };
   const limit = limitByType[actual] || 20;

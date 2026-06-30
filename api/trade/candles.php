@@ -17,6 +17,7 @@ require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/quote_authority.php';
 require_once __DIR__ . '/../lib/marketdata.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
+require_once __DIR__ . '/../lib/asset_reference.php';
 require_once __DIR__ . '/../lib/quote_central.php';
 
 $symbol = strtoupper(trim((string)($_GET['symbol'] ?? '')));
@@ -67,6 +68,20 @@ $dbType = vp_normalize_asset_type((string)($mr['type'] ?? $typeRaw));
 if ($typeRaw === '' || $typeRaw === 'all') $typeRaw = $dbType;
 $fallbackMeta = candles_default_market_meta($symbol, $typeRaw ?: $dbType);
 if ($fallbackMeta) $meta = array_merge($fallbackMeta, $meta);
+$assetRef = function_exists('vp_asset_reference') ? vp_asset_reference($symbol, $typeRaw ?: $dbType, $meta) : [];
+if ($assetRef) {
+  foreach (['tv_symbol','twelvedata_ticker','eodhd_symbol'] as $assetRefKey) {
+    if (!empty($assetRef[$assetRefKey]) && empty($meta[$assetRefKey])) $meta[$assetRefKey] = $assetRef[$assetRefKey];
+  }
+}
+if ($assetRef && empty($assetRef['trade_supported'])) {
+  candles_json_response([
+    'ok' => true,
+    'source' => 'unsupported',
+    'soft_error' => (string)($assetRef['unsupported_reason'] ?? 'unsupported_symbol'),
+    'synthetic' => false,
+  ], [], $limit, $end);
+}
 $ctx = vp_market_context($symbol, $typeRaw ?: $dbType, $market, $meta);
 $type = (string)($ctx['asset_type'] ?? vp_normalize_asset_type($typeRaw));
 $providerType = (string)($ctx['provider_type'] ?? vp_provider_asset_type($type));
@@ -137,38 +152,38 @@ function candles_default_market_meta(string $symbol, string $type): array {
       'FEEDER_CATTLE' => ['yahoo_ticker' => 'GF=F', 'tv_symbol' => 'CME:GF1!'],
     ],
     'futures' => [
-      'ES_F' => ['yahoo_ticker' => 'ES=F', 'tv_symbol' => 'CME_MINI:ES1!'],
-      'NQ_F' => ['yahoo_ticker' => 'NQ=F', 'tv_symbol' => 'CME_MINI:NQ1!'],
-      'YM_F' => ['yahoo_ticker' => 'YM=F', 'tv_symbol' => 'CBOT_MINI:YM1!'],
-      'RTY_F' => ['yahoo_ticker' => 'RTY=F', 'tv_symbol' => 'CME_MINI:RTY1!'],
-      'CL_F' => ['yahoo_ticker' => 'CL=F', 'tv_symbol' => 'NYMEX:CL1!'],
-      'GC_F' => ['yahoo_ticker' => 'GC=F', 'tv_symbol' => 'COMEX:GC1!'],
-      'ZN_F' => ['yahoo_ticker' => 'ZN=F', 'tv_symbol' => 'CBOT:ZN1!'],
-      'ZB_F' => ['yahoo_ticker' => 'ZB=F', 'tv_symbol' => 'CBOT:ZB1!'],
-      'ZC_F' => ['yahoo_ticker' => 'ZC=F', 'tv_symbol' => 'CBOT:ZC1!'],
-      'ZS_F' => ['yahoo_ticker' => 'ZS=F', 'tv_symbol' => 'CBOT:ZS1!'],
-      'ZW_F' => ['yahoo_ticker' => 'ZW=F', 'tv_symbol' => 'CBOT:ZW1!'],
-      'SI_F' => ['yahoo_ticker' => 'SI=F', 'tv_symbol' => 'COMEX:SI1!'],
-      'HG_F' => ['yahoo_ticker' => 'HG=F', 'tv_symbol' => 'COMEX:HG1!'],
-      'NG_F' => ['yahoo_ticker' => 'NG=F', 'tv_symbol' => 'NYMEX:NG1!'],
-      'RB_F' => ['yahoo_ticker' => 'RB=F', 'tv_symbol' => 'NYMEX:RB1!'],
-      'HO_F' => ['yahoo_ticker' => 'HO=F', 'tv_symbol' => 'NYMEX:HO1!'],
-      'VX_F' => ['yahoo_ticker' => '^VIX', 'tv_symbol' => 'CBOE:VX1!'],
-      'BTC_F' => ['yahoo_ticker' => 'BTC=F', 'tv_symbol' => 'CME:BTC1!'],
-      'ETH_F' => ['yahoo_ticker' => 'ETH=F', 'tv_symbol' => 'CME:ETH1!'],
-      'DX_F' => ['yahoo_ticker' => 'DX-Y.NYB', 'tv_symbol' => 'CAPITALCOM:DXY'],
-      '6E_F' => ['yahoo_ticker' => 'EURUSD=X', 'tv_symbol' => 'CME:6E1!'],
-      '6B_F' => ['yahoo_ticker' => '6B=F', 'tv_symbol' => 'CME:6B1!'],
-      '6J_F' => ['yahoo_ticker' => 'JPY=X', 'tv_symbol' => 'CME:6J1!'],
-      '6C_F' => ['yahoo_ticker' => 'CAD=X', 'tv_symbol' => 'CME:6C1!'],
-      '6A_F' => ['yahoo_ticker' => 'AUDUSD=X', 'tv_symbol' => 'CME:6A1!'],
-      'PA_F' => ['yahoo_ticker' => 'PA=F', 'tv_symbol' => 'COMEX:PA1!'],
-      'PL_F' => ['yahoo_ticker' => 'PL=F', 'tv_symbol' => 'COMEX:PL1!'],
-      'LE_F' => ['yahoo_ticker' => 'LE=F', 'tv_symbol' => 'CME:LE1!'],
-      'HE_F' => ['yahoo_ticker' => 'HE=F', 'tv_symbol' => 'CME:HE1!'],
-      'NKD_F' => ['yahoo_ticker' => 'NKD=F', 'tv_symbol' => 'OSE:NK2251!'],
-      'BZ_F' => ['yahoo_ticker' => 'BZ=F', 'tv_symbol' => 'ICEEUR:BRN1!'],
-      'EMD_F' => ['yahoo_ticker' => 'EMD=F', 'tv_symbol' => 'CME_MINI:EMD1!'],
+      'ES_F' => ['tv_symbol' => 'CME_MINI:ES1!'],
+      'NQ_F' => ['tv_symbol' => 'CME_MINI:NQ1!'],
+      'YM_F' => ['tv_symbol' => 'CBOT_MINI:YM1!'],
+      'RTY_F' => ['tv_symbol' => 'CME_MINI:RTY1!'],
+      'CL_F' => ['tv_symbol' => 'NYMEX:CL1!'],
+      'GC_F' => ['tv_symbol' => 'COMEX:GC1!'],
+      'ZN_F' => ['tv_symbol' => 'CBOT:ZN1!'],
+      'ZB_F' => ['tv_symbol' => 'CBOT:ZB1!'],
+      'ZC_F' => ['tv_symbol' => 'CBOT:ZC1!'],
+      'ZS_F' => ['tv_symbol' => 'CBOT:ZS1!'],
+      'ZW_F' => ['tv_symbol' => 'CBOT:ZW1!'],
+      'SI_F' => ['tv_symbol' => 'COMEX:SI1!'],
+      'HG_F' => ['tv_symbol' => 'COMEX:HG1!'],
+      'NG_F' => ['tv_symbol' => 'NYMEX:NG1!'],
+      'RB_F' => ['tv_symbol' => 'NYMEX:RB1!'],
+      'HO_F' => ['tv_symbol' => 'NYMEX:HO1!'],
+      'VX_F' => ['tv_symbol' => 'CBOE:VX1!'],
+      'BTC_F' => ['tv_symbol' => 'CME:BTC1!'],
+      'ETH_F' => ['tv_symbol' => 'CME:ETH1!'],
+      'DX_F' => ['tv_symbol' => 'CAPITALCOM:DXY'],
+      '6E_F' => ['tv_symbol' => 'CME:6E1!'],
+      '6B_F' => ['tv_symbol' => 'CME:6B1!'],
+      '6J_F' => ['tv_symbol' => 'CME:6J1!'],
+      '6C_F' => ['tv_symbol' => 'CME:6C1!'],
+      '6A_F' => ['tv_symbol' => 'CME:6A1!'],
+      'PA_F' => ['tv_symbol' => 'COMEX:PA1!'],
+      'PL_F' => ['tv_symbol' => 'COMEX:PL1!'],
+      'LE_F' => ['tv_symbol' => 'CME:LE1!'],
+      'HE_F' => ['tv_symbol' => 'CME:HE1!'],
+      'NKD_F' => ['tv_symbol' => 'OSE:NK2251!'],
+      'BZ_F' => ['tv_symbol' => 'ICEEUR:BRN1!'],
+      'EMD_F' => ['tv_symbol' => 'CME_MINI:EMD1!'],
     ],
     'arab' => [
       '2222' => ['yahoo_ticker' => '2222.SR', 'tv_symbol' => 'TADAWUL:2222'],
@@ -242,6 +257,9 @@ function candles_source_allowed_for_type(string $source, string $type): bool {
   $kind = vp_normalize_asset_type($type ?: 'generic');
   if ($kind === 'crypto') {
     return in_array($src, ['binance_spot_klines','binance_futures_klines','binance_ws','binance'], true);
+  }
+  if ($kind === 'arab') {
+    return in_array($src, ['eodhd_intraday','eodhd','eodhd_rest','provider_live','twelvedata_time_series','twelvedata','twelvedata_ws'], true);
   }
   if ((int)env('CANDLES_REQUIRE_TWELVEDATA_NONCRYPTO', '1') === 1) {
     return in_array($src, ['twelvedata_time_series','twelvedata','twelvedata_ws'], true);
@@ -866,7 +884,7 @@ function candles_best_live_price(string $symbol, string $market, string $assetTy
   try {
     $bulk = quote_bulk_live([$symbol], $assetType, [$symbol => $meta], [
       'direct_budget' => 1,
-      'direct_yahoo_budget' => 1,
+      'direct_yahoo_budget' => vp_provider_asset_type($assetType) === 'futures' ? 0 : 1,
       'chart_budget' => 1,
       'ttl' => ($assetType === 'crypto' ? 1 : 2),
     ]);
@@ -1147,7 +1165,8 @@ try {
   $items = [];
   $paidAggsKey = trim((string)env('POLYGON_API_KEY', env('MASSIVE_API_KEY', '')));
   $hasAggsProvider = $paidAggsKey !== '';
-  $strictTwelveDataOnly = (int)env('NONCRYPTO_TWELVEDATA_ONLY', '1') === 1;
+  $strictTwelveDataOnly = $type !== 'arab'
+    && ((int)env('NONCRYPTO_TWELVEDATA_ONLY', '1') === 1 || (int)env('CANDLES_REQUIRE_TWELVEDATA_NONCRYPTO', '1') === 1);
   $preferAggsForSymbol = $hasAggsProvider && (($providerType === 'forex') || ($providerType === 'commodities' && vp_is_spot_metal_symbol($symbol, $typeRaw ?: $providerType)));
   $triedYahooChart = false;
 
@@ -1184,7 +1203,7 @@ try {
     candles_cached_or_empty_response($symbol, $market, $tf, $type, $end, $limit, 'twelvedata_unavailable');
   }
 
-  if (candles_yahoo_enabled() && !$preferAggsForSymbol && !vp_is_spot_metal_symbol($symbol, $type) && in_array($providerType, ['stocks','arab','futures','commodities','forex','indices'], true)) {
+  if (candles_yahoo_enabled() && !$preferAggsForSymbol && !vp_is_spot_metal_symbol($symbol, $type) && in_array($providerType, ['stocks','arab','commodities','forex','indices'], true)) {
     try {
       $ySymbol = yahoo_ticker_for_market($symbol, $type, $meta) ?: yahoo_ticker_for_market($symbol, $providerType, $meta);
       if ($ySymbol) {
@@ -1195,7 +1214,7 @@ try {
           $merged = array_merge($cachedAll, $items);
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
           candles_cache_save($symbol,$market,$tf, $merged, $type);
-          if (in_array($providerType, ['stocks','arab','commodities','futures'], true)) {
+          if (in_array($providerType, ['stocks','arab','commodities'], true)) {
             if (candles_has_display_history($out, $limit, $providerType)) {
               candles_json_response(['ok'=>true,'source'=>'yahoo_chart','warm'=>true], $out, $limit, $end);
             }
@@ -1380,7 +1399,7 @@ try {
         'allow_crypto_seed' => true,
         'allow_noncrypto_seed' => false,
         'direct_budget' => 1,
-        'direct_yahoo_budget' => 1,
+        'direct_yahoo_budget' => $providerType === 'futures' ? 0 : 1,
         'chart_budget' => 1,
       ]);
       $qaItem = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
@@ -1451,7 +1470,7 @@ try {
           'allow_crypto_seed' => true,
           'allow_noncrypto_seed' => false,
           'direct_budget' => 1,
-          'direct_yahoo_budget' => 1,
+          'direct_yahoo_budget' => $providerType === 'futures' ? 0 : 1,
           'chart_budget' => 1,
         ]);
         $qaItem = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;

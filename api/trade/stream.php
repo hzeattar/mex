@@ -213,7 +213,7 @@ if ($quoteSymbols) {
         'yahoo_ttl' => 1,
         'massive_ttl' => 1,
         'direct_budget' => $streamBudget,
-        'direct_yahoo_budget' => $streamBudget,
+        'direct_yahoo_budget' => $reqType === 'futures' ? 0 : $streamBudget,
         'chart_budget' => $streamLiteLargeNonCrypto ? max(0, min(2, count($quoteSymbols))) : (in_array($reqType, ['arab','futures'], true) ? max(8, min(count($quoteSymbols), 20)) : 8),
       ]);
     } catch (Throwable $e) {
@@ -346,7 +346,7 @@ if ($quoteSymbols) {
           'allow_crypto_seed' => true,
           'allow_noncrypto_seed' => false,
           'direct_budget' => 1,
-          'direct_yahoo_budget' => 1,
+          'direct_yahoo_budget' => $assetTypeForSym === 'futures' ? 0 : 1,
           'chart_budget' => 1,
         ]);
         $item = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
@@ -543,7 +543,7 @@ if ($quoteSymbols) {
           'allow_live' => true,
           'allow_noncrypto_seed' => false,
           'direct_budget' => min(count($groupSymbols), $lite ? 10 : 6),
-          'direct_yahoo_budget' => min(count($groupSymbols), $lite ? 10 : 4),
+          'direct_yahoo_budget' => $assetTypeForGroup === 'futures' ? 0 : min(count($groupSymbols), $lite ? 10 : 4),
           'chart_budget' => in_array($assetTypeForGroup, ['stocks','arab'], true) ? 0 : min(count($groupSymbols), 4),
         ]);
         $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 // back to crypto and become unavailable.
 require_once __DIR__ . '/lib/common.php';
 require_once __DIR__ . '/lib/market_resolver.php';
+require_once __DIR__ . '/lib/asset_reference.php';
 require_once __DIR__ . '/lib/quote_store.php';
 require_once __DIR__ . '/lib/quote_central.php';
 require_once __DIR__ . '/lib/quote_snapshot.php';
@@ -52,13 +53,28 @@ foreach ($list as $sym) {
 
 // Build empty snapshots so every requested symbol always appears in output.
 $items = [];
+$unsupported = [];
 foreach ($list as $sym) {
-  $items[$sym] = qs_empty_snapshot($sym, $typesForSymbol[$sym], 'spot');
+  $empty = qs_empty_snapshot($sym, $typesForSymbol[$sym], 'spot');
+  if (function_exists('vp_asset_reference')) {
+    $metaRaw = $defsBySym[$sym]['meta'] ?? [];
+    $meta = is_array($metaRaw) ? $metaRaw : (is_string($metaRaw) ? (json_decode($metaRaw, true) ?: []) : []);
+    $ref = vp_asset_reference($sym, $typesForSymbol[$sym], $meta);
+    if (empty($ref['trade_supported'])) {
+      $empty['source'] = 'unsupported';
+      $empty['timing_class'] = 'unsupported';
+      $empty['quality'] = 'unsupported';
+      $empty['execution_block_reason'] = (string)($ref['unsupported_reason'] ?? 'unsupported_symbol');
+      $unsupported[$sym] = true;
+    }
+  }
+  $items[$sym] = $empty;
 }
 
 // Group by resolved type and fetch snapshots per type.
 $byType = [];
 foreach ($list as $sym) {
+  if (isset($unsupported[$sym])) continue;
   $byType[$typesForSymbol[$sym]][] = $sym;
 }
 

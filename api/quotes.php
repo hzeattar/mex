@@ -74,7 +74,7 @@ if ($centralWarm && !$bypassCentral && $list) {
 // upstream cannot return anything newer than what the worker just wrote,
 // it only adds 1-3s of provider latency. Tight per-type freshness windows
 // keep this honest: crypto refreshes every ~3s, forex/commodities ~15s.
-if ($centralWarm && $bypassCentral && $list) {
+if ($centralWarm && $bypassCentral && !$direct && $list) {
   $freshWindow = match ($typeAlias) {
     'crypto' => max(2, min(30, (int)env('QUOTES_FRESH_CENTRAL_MAX_AGE_CRYPTO', '8'))),
     'forex', 'commodities', 'futures' => max(5, min(120, (int)env('QUOTES_FRESH_CENTRAL_MAX_AGE_FOREX', '25'))),

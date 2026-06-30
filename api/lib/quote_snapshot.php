@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/market_resolver.php';
+require_once __DIR__ . '/asset_reference.php';
 require_once __DIR__ . '/quotes.php';
 require_once __DIR__ . '/quote_central.php';
 require_once __DIR__ . '/quote_authority.php';
@@ -176,6 +177,16 @@ function qs_snapshot_from_row(string $symbol, string $type, string $market, ?arr
   $type = vp_normalize_asset_type((string)($row['type'] ?? $type));
   if ($type === '') $type = vp_normalize_asset_type((string)($opts['type'] ?? 'crypto')) ?: 'crypto';
   $market = qs_normalize_market($type, (string)($row['market'] ?? $market));
+  if (function_exists('vp_asset_reference')) {
+    $ref = vp_asset_reference($symbol, $type, []);
+    if (empty($ref['trade_supported'])) {
+      $snap['source'] = 'unsupported';
+      $snap['timing_class'] = 'unsupported';
+      $snap['quality'] = 'unsupported';
+      $snap['execution_block_reason'] = (string)($ref['unsupported_reason'] ?? 'unsupported_symbol');
+      return $snap;
+    }
+  }
 
   $last = (float)($row['price'] ?? 0);
   $mark = (float)($row['mark_price'] ?? 0);
@@ -276,6 +287,7 @@ function qs_snapshot_from_row(string $symbol, string $type, string $market, ?arr
     'spread' => $spread,
     'spread_bps' => $spreadBps,
     'change_pct' => $changePct,
+    'change_basis' => (string)($row['change_basis'] ?? ''),
     'open' => (float)($row['open'] ?? 0),
     'prev_close' => $prevClose,
     'source' => $source !== '' ? $source : 'cache',
@@ -393,6 +405,7 @@ function qs_public_item(array $snapshot): array {
     'spread' => (float)($snapshot['spread'] ?? 0),
     'spread_bps' => (float)($snapshot['spread_bps'] ?? 0),
     'change_pct' => (float)($snapshot['change_pct'] ?? 0),
+    'change_basis' => (string)($snapshot['change_basis'] ?? ''),
     'open' => (float)($snapshot['open'] ?? 0),
     'prev_close' => (float)($snapshot['prev_close'] ?? 0),
     'updated_at' => (int)($snapshot['updated_at'] ?? 0),
