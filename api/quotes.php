@@ -462,7 +462,7 @@ if ($isUiFastPath) {
   // Keep live watchlist warming limited to small batches. Forex/commodities/arab
   // are TwelveData-backed, so missing visible rows can be filled without Yahoo.
   $nonCryptoMarketOpen = !function_exists('qa_market_is_open') || qa_market_is_open($typeAlias);
-  $watchlistLiveDefault = in_array($typeAlias, ['forex', 'commodities', 'arab'], true) ? '1' : '0';
+  $watchlistLiveDefault = in_array($typeAlias, ['forex', 'commodities', 'futures', 'arab'], true) ? '1' : '0';
   $watchlistLiveNonCrypto = !$cacheOnly
     && $isWatchlistRequest
     && $typeAlias !== 'crypto'
@@ -520,7 +520,7 @@ if ($isNonCrypto) {
   $nonCryptoLiveLimit = match ($typeAlias) {
     'forex', 'commodities' => max(3, min(12, (int)env('QUOTES_LIVE_BATCH_LIMIT_FOREX_COMMODITIES', '12'))),
     'stocks', 'arab' => max(3, min(10, (int)env('QUOTES_LIVE_BATCH_LIMIT_EQUITIES', '8'))),
-    'futures' => 0,
+    'futures' => max(3, min(8, (int)env('QUOTES_LIVE_BATCH_LIMIT_FUTURES', '6'))),
     default => max(3, min(8, (int)env('QUOTES_LIVE_BATCH_LIMIT_NONCRYPTO', '6'))),
   };
   $allowLive = !$cacheOnly && ($isLiveFocusRequest && count($list) <= $nonCryptoLiveLimit && !$visible);

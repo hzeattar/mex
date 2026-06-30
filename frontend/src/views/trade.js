@@ -108,7 +108,10 @@ const FALLBACK_MARKETS = {
     ['XAUEUR', 'Gold Spot / Euro'], ['XAUGBP', 'Gold Spot / Pound'], ['XAUJPY', 'Gold Spot / Yen'], ['XAUAUD', 'Gold Spot / Australian Dollar'],
     ['XAUXAG', 'Gold / Silver Ratio'], ['XAGEUR', 'Silver Spot / Euro'], ['XAGGBP', 'Silver Spot / Pound'], ['XAGGUSD', 'Silver Gram / US Dollar'], ['URALS', 'Urals Crude Oil'],
   ],
-  futures: [],
+  futures: [
+    ['GC_F', 'Gold Continuous'], ['SI_F', 'Silver Continuous'], ['CL_F', 'WTI Crude Continuous'], ['BZ_F', 'Brent Crude Continuous'],
+    ['PL_F', 'Platinum Continuous'], ['PA_F', 'Palladium Continuous'],
+  ],
   arab: [
     ['2222', 'Saudi Aramco'], ['1120', 'Al Rajhi Bank'], ['2010', 'SABIC'], ['7010', 'stc'], ['1211', 'Maaden'], ['1150', 'Alinma Bank'],
   ],
@@ -677,9 +680,9 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   const interval = quoteType === 'crypto' ? 3000 : 1000;
   const focusUrl = `/quote_focus.php?symbols=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}`;
   let pollCount = 0;
-  const preferDirectLive = ['forex', 'commodities'].includes(quoteType);
-  const directCadence = preferDirectLive ? 1 : (['stocks', 'arab'].includes(quoteType) ? 6 : 4);
-  const staleFocusAge = quoteType === 'forex' ? 4 : (quoteType === 'commodities' ? 4 : (quoteType === 'futures' ? 8 : 900));
+  const preferDirectLive = quoteType !== 'crypto';
+  const directCadence = preferDirectLive ? 1 : 4;
+  const staleFocusAge = quoteType === 'forex' ? 4 : (quoteType === 'commodities' ? 4 : (quoteType === 'futures' ? 4 : 900));
   const fetchDirectQuote = () => {
     const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus&direct=1&fresh=1&_=${Date.now()}`;
     return api(fbUrl, {
@@ -2538,6 +2541,27 @@ function updateInstrumentHeader(container, symbol, type) {
   $$('[data-order-symbol]', container).forEach(el => { el.textContent = sym || '--'; });
 }
 
+function resetActiveQuoteDisplay(container, type) {
+  set('activeQuote', null);
+  const livePrice = $('#live-price', container);
+  if (livePrice) {
+    livePrice.textContent = '--';
+    livePrice.className = 'text-xs font-mono font-bold text-muted';
+  }
+  const liveChange = $('#live-change', container);
+  if (liveChange) {
+    liveChange.textContent = '--';
+    liveChange.className = 'text-[10px] text-muted';
+  }
+  $$('[data-sell-price]', container).forEach(el => { el.textContent = '--'; });
+  $$('[data-buy-price]', container).forEach(el => { el.textContent = '--'; });
+  $$('[data-spread-val]', container).forEach(el => { el.textContent = `${t('trade.spread','Spread')}: --`; });
+  lastFlashPrice = 0;
+  lastPriceFlashAt = 0;
+  clearChartPriceLines();
+  scheduleOrderInfoUpdate(container);
+}
+
 function switchSymbol(container, symbol, type) {
   const sym = String(symbol || '').toUpperCase();
   if (!sym) return;
@@ -2546,13 +2570,12 @@ function switchSymbol(container, symbol, type) {
   const nextType = normalizeType(nextTypeRaw);
   const typeChanged = nextType !== prevType;
   const tf = get('tf');
+  const runId = tradeRunId;
   stopActiveQuote();
   stopChartRefresh();
   clearChartForSwitch(container);
-  lastFlashPrice = 0;
   persistTradeSelection(sym, nextType, get('market'));
-  set('activeQuote', null);
-  const runId = tradeRunId;
+  resetActiveQuoteDisplay(container, nextType);
   currentSetup = { container, symbol: sym, type: nextType, tf, runId };
   syncTradeUrl(sym, nextType, tf);
   updateInstrumentHeader(container, sym, nextType);
@@ -3751,7 +3774,7 @@ function marketListUrl(type) {
     futures: 20,
   };
   const limit = limitByType[actual] || 20;
-  const rescueParam = ['commodities', 'arab'].includes(actual)
+  const rescueParam = ['commodities', 'futures', 'arab'].includes(actual)
     ? 'rescue=1&rescue_noncrypto=1'
     : 'no_rescue=1';
   return `/markets.php?type=${encodeURIComponent(actual)}&scope=trade&supported=1&lite=1&with_quotes=1&${rescueParam}&limit=${limit}`;

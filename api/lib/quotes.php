@@ -267,7 +267,6 @@ function quote_provider_prefers_twelvedata(string $assetType, array $meta = [], 
   if (!function_exists('twelvedata_enabled') || !twelvedata_enabled()) return false;
   $assetType = vp_normalize_asset_type($assetType);
   $providerType = vp_provider_asset_type($assetType);
-  if ($providerType === 'futures') return false;
   if (function_exists('vp_asset_reference')) {
     $ref = vp_asset_reference($symbol, $assetType, $meta);
     if (empty($ref['trade_supported'])) return false;
@@ -293,7 +292,7 @@ function quote_source_blocked_for_symbol(string $symbol, string $assetType, ?str
   $assetType = vp_normalize_asset_type($assetType);
   $src = strtolower(trim((string)$source));
   if ($symbol === '' || $src === '') return false;
-  if ($assetType === 'futures' && in_array($src, ['yahoo','yahoo_rest','yahoo_chart','yahoo_chart_live','yahoo_crypto_chart','twelvedata','twelvedata_ws'], true)) {
+  if ($assetType === 'futures' && in_array($src, ['yahoo','yahoo_rest','yahoo_chart','yahoo_chart_live','yahoo_crypto_chart'], true)) {
     return true;
   }
   if ($assetType === 'commodities' && $symbol === 'LEAD' && !quote_source_is_untrusted($src)) {

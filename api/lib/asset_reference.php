@@ -144,11 +144,28 @@ if (!function_exists('vp_asset_reference')) {
     }
 
     if ($providerType === 'futures') {
+      $tdMap = [
+        'GC_F' => ['XAU/USD', 'COMEX:GC1!'],
+        'SI_F' => ['XAG/USD', 'COMEX:SI1!'],
+        'CL_F' => ['WTI/USD', 'NYMEX:CL1!'],
+        'BZ_F' => ['XBR/USD', 'ICEEUR:BRN1!'],
+        'PL_F' => ['XPT/USD', 'COMEX:PL1!'],
+        'PA_F' => ['XPD/USD', 'COMEX:PA1!'],
+      ];
       $eodMap = [
         'ES_F' => 'ES.F', 'NQ_F' => 'NQ.F', 'YM_F' => 'YM.F', 'CL_F' => 'CL.F',
         'BZ_F' => 'BZ.F', 'GC_F' => 'GC.F', 'SI_F' => 'SI.F', 'NG_F' => 'NG.F',
         'HG_F' => 'HG.F', 'ZC_F' => 'ZC.F', 'ZS_F' => 'ZS.F', 'ZW_F' => 'ZW.F',
+        'PL_F' => 'PL.F', 'PA_F' => 'PA.F',
       ];
+      if (isset($tdMap[$symbol])) {
+        $ref['price_provider'] = 'twelvedata';
+        $ref['candles_provider'] = 'twelvedata';
+        $ref['twelvedata_ticker'] = $ref['twelvedata_ticker'] ?: $tdMap[$symbol][0];
+        $ref['tv_symbol'] = $ref['tv_symbol'] ?: $tdMap[$symbol][1];
+        $ref['eodhd_symbol'] = $ref['eodhd_symbol'] ?: ($eodMap[$symbol] ?? '');
+        return $ref;
+      }
       $ref['trade_supported'] = false;
       $ref['unsupported_reason'] = isset($eodMap[$symbol]) ? 'futures_provider_unavailable' : 'unsupported_future_symbol';
       $ref['price_provider'] = '';

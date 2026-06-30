@@ -365,7 +365,7 @@ function vp_supported_defs_for(string $typeAlias, string $scope = ''): array {
     $defs = array_values(array_filter($defs, static fn($d) => vp_normalize_asset_type((string)$d['type']) === $typeAlias));
   }
   usort($defs, static fn($a, $b) => ((int)($a['sort_order'] ?? 999)) <=> ((int)($b['sort_order'] ?? 999)));
-  $counts = ['crypto' => 0, 'forex' => 0, 'stocks' => 0, 'commodities' => 0, 'arab' => 0];
+  $counts = ['crypto' => 0, 'forex' => 0, 'stocks' => 0, 'commodities' => 0, 'futures' => 0, 'arab' => 0];
   $out = [];
   foreach ($defs as $def) {
     $defType = vp_normalize_asset_type((string)($def['type'] ?? ''));
@@ -502,7 +502,7 @@ function vp_rescue_supported_market_quotes(array $items, string $scope): array {
   $started = microtime(true);
   $budgetMs = max(300, min(5000, (int)env('MARKETS_RESCUE_BUDGET_MS', $scope === 'home' ? '3000' : '1500')));
   $requestType = vp_normalize_asset_type((string)($_GET['type'] ?? ''));
-  $defaultNonCryptoRescue = ($scope === 'trade' && in_array($requestType, ['arab','commodities'], true)) ? '1' : '0';
+  $defaultNonCryptoRescue = ($scope === 'trade' && in_array($requestType, ['arab','commodities','futures'], true)) ? '1' : '0';
   $allowNonCryptoRescue = ((int)($_GET['rescue_noncrypto'] ?? env('MARKETS_RESCUE_NONCRYPTO', $defaultNonCryptoRescue)) === 1);
 
   $defsByKey = [];
@@ -725,7 +725,7 @@ function vp_filter_priced_supported_items(array $items, string $scope, bool $wit
 
 function vp_overlay_supported_live_quotes(array $items, string $typeAlias, string $scope): array {
   $typeAlias = vp_normalize_asset_type($typeAlias);
-  if (!$items || $scope !== 'trade' || !in_array($typeAlias, ['arab','commodities'], true)) return $items;
+  if (!$items || $scope !== 'trade' || !in_array($typeAlias, ['arab','commodities','futures'], true)) return $items;
 
   $symbols = [];
   $metaBySymbol = [];
@@ -747,6 +747,9 @@ function vp_overlay_supported_live_quotes(array $items, string $typeAlias, strin
   if ($typeAlias === 'commodities') {
     $commodityOverlayLimit = max(6, min(30, (int)env('MARKETS_COMMODITIES_LIVE_OVERLAY_LIMIT', '22')));
     if (count($symbols) > $commodityOverlayLimit) $symbols = array_slice($symbols, 0, $commodityOverlayLimit);
+  } elseif ($typeAlias === 'futures') {
+    $futuresOverlayLimit = max(4, min(12, (int)env('MARKETS_FUTURES_LIVE_OVERLAY_LIMIT', '6')));
+    if (count($symbols) > $futuresOverlayLimit) $symbols = array_slice($symbols, 0, $futuresOverlayLimit);
   }
   if (!$symbols) return $items;
 
