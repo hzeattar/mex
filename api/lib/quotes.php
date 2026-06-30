@@ -790,26 +790,29 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
           'source' => 'twelvedata',
         ];
       }
-      foreach ($fetchMap as $sym => $ticker) {
-        if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
-        try {
-          $singleRows = twelvedata_quote_many_cached([$ticker], $ttl);
-          $row = is_array($singleRows[$ticker] ?? null) ? $singleRows[$ticker] : null;
-          if (!$row) continue;
-          $p = (float)($row['price'] ?? 0);
-          if (!($p > 0)) continue;
-          $out[$sym] = [
-            'symbol' => $sym,
-            'type' => $assetType,
-            'price' => $p,
-            'change_pct' => (float)($row['change_pct'] ?? 0.0),
-            'open' => (float)($row['open'] ?? 0),
-            'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
-            'updated_at' => $now,
-            'source' => 'twelvedata',
-          ];
-        } catch (Throwable $singleError) {
-          continue;
+      $singleRescueMax = max(1, min(8, (int)($opts['twelvedata_single_rescue_max'] ?? env('TWELVEDATA_SINGLE_RESCUE_MAX_SYMBOLS', '6'))));
+      if (count($fetchMap) <= $singleRescueMax) {
+        foreach ($fetchMap as $sym => $ticker) {
+          if (isset($out[$sym]) && (float)($out[$sym]['price'] ?? 0) > 0) continue;
+          try {
+            $singleRows = twelvedata_quote_many_cached([$ticker], $ttl);
+            $row = is_array($singleRows[$ticker] ?? null) ? $singleRows[$ticker] : null;
+            if (!$row) continue;
+            $p = (float)($row['price'] ?? 0);
+            if (!($p > 0)) continue;
+            $out[$sym] = [
+              'symbol' => $sym,
+              'type' => $assetType,
+              'price' => $p,
+              'change_pct' => (float)($row['change_pct'] ?? 0.0),
+              'open' => (float)($row['open'] ?? 0),
+              'prev_close' => (float)($row['prev_close'] ?? $row['previous_close'] ?? 0),
+              'updated_at' => $now,
+              'source' => 'twelvedata',
+            ];
+          } catch (Throwable $singleError) {
+            continue;
+          }
         }
       }
     } catch (Throwable $e) {}

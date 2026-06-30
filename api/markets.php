@@ -744,7 +744,10 @@ function vp_overlay_supported_live_quotes(array $items, string $typeAlias, strin
     $metaBySymbol[$sym] = $meta;
   }
   $symbols = array_values(array_unique($symbols));
-  if ($typeAlias === 'commodities' && count($symbols) > 30) $symbols = array_slice($symbols, 0, 30);
+  if ($typeAlias === 'commodities') {
+    $commodityOverlayLimit = max(6, min(30, (int)env('MARKETS_COMMODITIES_LIVE_OVERLAY_LIMIT', '22')));
+    if (count($symbols) > $commodityOverlayLimit) $symbols = array_slice($symbols, 0, $commodityOverlayLimit);
+  }
   if (!$symbols) return $items;
 
   try {
