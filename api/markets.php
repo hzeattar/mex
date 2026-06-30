@@ -474,8 +474,8 @@ function vp_supported_rescue_limits(string $scope, string $type): array {
       'ttl' => 2,
     ],
     'arab' => [
-      'batch' => $isHome ? 8 : 30,
-      'direct_budget' => $isHome ? 8 : 30,
+      'batch' => $isHome ? 8 : 10,
+      'direct_budget' => $isHome ? 8 : 10,
       'direct_yahoo_budget' => 0,
       'chart_budget' => 0,
       'ttl' => 2,
@@ -750,6 +750,9 @@ function vp_overlay_supported_live_quotes(array $items, string $typeAlias, strin
   } elseif ($typeAlias === 'futures') {
     $futuresOverlayLimit = max(4, min(12, (int)env('MARKETS_FUTURES_LIVE_OVERLAY_LIMIT', '6')));
     if (count($symbols) > $futuresOverlayLimit) $symbols = array_slice($symbols, 0, $futuresOverlayLimit);
+  } elseif ($typeAlias === 'arab') {
+    $arabOverlayLimit = max(4, min(16, (int)env('MARKETS_ARAB_LIVE_OVERLAY_LIMIT', '10')));
+    if (count($symbols) > $arabOverlayLimit) $symbols = array_slice($symbols, 0, $arabOverlayLimit);
   }
   if (!$symbols) return $items;
 
