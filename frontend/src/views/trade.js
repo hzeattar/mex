@@ -644,6 +644,7 @@ function startLiveQuotes(container, marketItems, runId = tradeRunId, listType = 
   const quoteType = type === 'favorites' ? 'crypto' : type;
   const active = get('symbol');
   const isCrypto = quoteType === 'crypto';
+  if (quoteType === 'arab') return;
   const max = isCrypto ? 42 : 30;
   const symbols = [...new Set(marketItems
     .slice(0, max)
@@ -1072,6 +1073,13 @@ function renderSymbolList(container, items) {
       </div>
     </div>`;
   }).join('');
+
+  if (!container.__quoteQuality) container.__quoteQuality = new Map();
+  visible.forEach((m) => {
+    const symbol = String(m.symbol || '').toUpperCase();
+    const p = Number(m.price || m.q_price || 0);
+    if (symbol && p > 0) container.__quoteQuality.set(symbol, quoteQuality(m));
+  });
 }
 
 async function warmVisibleQuotes(container, items, runId = tradeRunId, listType = null) {
@@ -1089,10 +1097,16 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId, listType 
   const warmTimeout = type === 'crypto' ? 4500 : 9000;
   const unique = [...new Set(missing)].slice(0, limit);
   const unresolved = [];
+  const quoteUrl = (chunk) => {
+    const symbols = encodeURIComponent(chunk.join(','));
+    const base = `/quotes.php?symbols=${symbols}&type=${encodeURIComponent(type)}&purpose=watchlist`;
+    if (type === 'crypto') return `${base}&visible=1&_=${Date.now()}`;
+    return `${base}&direct=1&fresh=1&_=${Date.now()}`;
+  };
   const fetchChunk = async (chunk) => {
-    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
+    const data = await api(quoteUrl(chunk), {
       timeout: type === 'crypto' ? 2600 : Math.min(warmTimeout, 5000),
-      cacheTtl: 500,
+      cacheTtl: type === 'crypto' ? 500 : 0,
       cache: 'no-store',
     }).catch(() => null);
     if (!isCurrentRun(runId)) return;
@@ -1114,9 +1128,9 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId, listType 
   const rescueList = [...new Set(unresolved)].slice(0, type === 'crypto' ? 24 : 24);
   for (let i = 0; i < rescueList.length; i += rescueChunkSize) {
     const chunk = rescueList.slice(i, i + rescueChunkSize);
-    const data = await api(`/quotes.php?symbols=${encodeURIComponent(chunk.join(','))}&type=${encodeURIComponent(type)}&visible=1&purpose=watchlist&_=${Date.now()}`, {
+    const data = await api(quoteUrl(chunk), {
       timeout: type === 'crypto' ? 2600 : Math.min(warmTimeout, 5000),
-      cacheTtl: 500,
+      cacheTtl: type === 'crypto' ? 500 : 0,
       cache: 'no-store',
     }).catch(() => null);
     if (!isCurrentRun(runId)) return;
