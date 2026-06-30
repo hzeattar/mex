@@ -364,7 +364,7 @@ function db(): PDO {
 
   $railway = railway_runtime();
   $cli = PHP_SAPI === 'cli';
-  $currentRequestId = $cli ? 'cli' : (string)(uniqid('', true));
+  $currentRequestId = $cli ? 'cli' : (defined('TP_REQ_ID') ? (string)TP_REQ_ID : 'web');
 
   // On Railway web requests, static variables survive across requests inside the
   // same PHP-FPM worker. The public TCP proxy may close idle connections,
@@ -446,12 +446,12 @@ function db(): PDO {
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
       PDO::ATTR_TIMEOUT => $connectTimeout,
     ];
-    // Persistent connections: default ON for classic hosting, default OFF on
-    // Railway (containers restart often), but allow explicit DB_PERSISTENT=1
-    // opt-in on Railway — it saves a full TCP+auth handshake per request,
-    // which matters a lot when MySQL is reached over the network.
+    // Persistent connections can retain open transactions after FastCGI
+    // timeouts. Keep them unavailable on Railway unless explicitly forced.
     $persistentRaw = strtolower(trim((string)env('DB_PERSISTENT', $railway ? '0' : '1')));
+    $persistentForce = strtolower(trim((string)env('DB_PERSISTENT_FORCE', '0')));
     $persistentEnabled = PHP_SAPI !== 'cli'
+      && (!$railway || in_array($persistentForce, ['1', 'true', 'yes', 'on'], true))
       && !in_array($persistentRaw, ['0', 'false', 'no', 'off'], true);
     if ($persistentEnabled) {
       $pdoOptions[PDO::ATTR_PERSISTENT] = true;
