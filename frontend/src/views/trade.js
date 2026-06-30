@@ -61,6 +61,10 @@ const chartCandleCache = new Map();
 let chartPriceLines = { live: null, series: null };
 const closingPositions = new Set();
 
+function safeChartOp(fn) {
+  try { return fn(); } catch (_e) { return null; }
+}
+
 // Listeners bound to the persistent #view container must be disposed on cleanup,
 // otherwise they accumulate on every navigation back to the trade page.
 let eventDisposers = [];
@@ -472,8 +476,9 @@ export function cleanup() {
     resizeObserver.disconnect();
     resizeObserver = null;
   }
+  clearChartPriceLines();
   if (chart) {
-    chart.remove();
+    try { chart.remove(); } catch (_e) {}
     chart = null;
     candleSeries = null;
     volumeSeries = null;
@@ -488,7 +493,6 @@ export function cleanup() {
     chartLegendEl = null;
     lastCandle = null;
   }
-  clearChartPriceLines();
   chartSeriesKey = '';
   allCandles = [];
   chartHistory = { loading: false, done: false, nextAt: 0 };
@@ -518,6 +522,7 @@ export function cleanup() {
 }
 
 function resetChartInstance() {
+  clearChartPriceLines();
   if (chart) {
     try { chart.remove(); } catch (_e) {}
   }
@@ -537,7 +542,7 @@ function resetChartInstance() {
   allCandles = [];
   chartSeriesKey = '';
   pendingLiveCandle = null;
-  clearChartPriceLines();
+  chartPriceLines = { live: null, series: null };
   cancelLiveCandleFrame();
 }
 
@@ -804,10 +809,14 @@ function startBinanceKlineWs(symbol, tf, runId) {
         } else if (lastCandle && candleTime > lastCandle.time) {
           lastCandle = { ...candleData };
         }
-        candleSeries.update(candleData);
-        if (volumeSeries) volumeSeries.update({ time: candleTime, value: candleData.volume, color: candleData.close >= candleData.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' });
-        if (lineSeries) lineSeries.update({ time: candleTime, value: p });
-        if (areaSeries) areaSeries.update({ time: candleTime, value: p });
+        const updated = safeChartOp(() => {
+          candleSeries.update(candleData);
+          if (volumeSeries) volumeSeries.update({ time: candleTime, value: candleData.volume, color: candleData.close >= candleData.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' });
+          if (lineSeries) lineSeries.update({ time: candleTime, value: p });
+          if (areaSeries) areaSeries.update({ time: candleTime, value: p });
+          return true;
+        });
+        if (!updated) return;
         // Also update allCandles array
         if (allCandles.length) {
           const tail = allCandles[allCandles.length - 1];
@@ -1981,52 +1990,54 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
   if (!data.length) return;
   let savedRange = null;
   if (preserveRange) { try { savedRange = chart.timeScale().getVisibleRange(); } catch (_e) {} }
-  applyChartPriceOptions(get('type'), get('symbol'));
-  candleSeries.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
-  const lineData = data.map(c => ({ time: c.time, value: c.close }));
-  if (lineSeries) lineSeries.setData(lineData);
-  if (areaSeries) areaSeries.setData(lineData);
-  volumeSeries.setData(data.map(c => ({ time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' })));
-  const closes = data.map(d => ({ time: d.time, close: d.close }));
-  if (ma7Series) ma7Series.setData(chartIndicators.ma ? calcMA(closes, 7) : []);
-  if (ma25Series) ma25Series.setData(chartIndicators.ma ? calcMA(closes, 25) : []);
-  if (ema20Series) ema20Series.setData(chartIndicators.ema ? calcEMA(closes, 20) : []);
-  if (bollUpperSeries && bollMidSeries && bollLowerSeries) {
-    const bands = chartIndicators.boll ? calcBoll(closes, 20, 2) : { upper: [], mid: [], lower: [] };
-    bollUpperSeries.setData(bands.upper);
-    bollMidSeries.setData(bands.mid);
-    bollLowerSeries.setData(bands.lower);
-  }
-  if (rsiSeries) {
-    const rsiData = chartIndicators.rsi ? calcRSI(closes, 14) : [];
-    rsiSeries.setData(rsiData);
-    // RSI reference lines at 30 and 70
-    if (rsiRefLine30 && rsiRefLine70 && rsiData.length) {
-      const ref30 = rsiData.map(p => ({ time: p.time, value: 30 }));
-      const ref70 = rsiData.map(p => ({ time: p.time, value: 70 }));
-      rsiRefLine30.setData(chartIndicators.rsi ? ref30 : []);
-      rsiRefLine70.setData(chartIndicators.rsi ? ref70 : []);
+  try {
+    applyChartPriceOptions(get('type'), get('symbol'));
+    candleSeries.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
+    const lineData = data.map(c => ({ time: c.time, value: c.close }));
+    if (lineSeries) lineSeries.setData(lineData);
+    if (areaSeries) areaSeries.setData(lineData);
+    volumeSeries.setData(data.map(c => ({ time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' })));
+    const closes = data.map(d => ({ time: d.time, close: d.close }));
+    if (ma7Series) ma7Series.setData(chartIndicators.ma ? calcMA(closes, 7) : []);
+    if (ma25Series) ma25Series.setData(chartIndicators.ma ? calcMA(closes, 25) : []);
+    if (ema20Series) ema20Series.setData(chartIndicators.ema ? calcEMA(closes, 20) : []);
+    if (bollUpperSeries && bollMidSeries && bollLowerSeries) {
+      const bands = chartIndicators.boll ? calcBoll(closes, 20, 2) : { upper: [], mid: [], lower: [] };
+      bollUpperSeries.setData(bands.upper);
+      bollMidSeries.setData(bands.mid);
+      bollLowerSeries.setData(bands.lower);
     }
-    try { chart.priceScale('rsi').applyOptions({ visible: chartIndicators.rsi }); } catch (_e) {}
-  }
-  if (macdSeries && macdSignalSeries && macdHistSeries) {
-    const m = chartIndicators.macd ? calcMACD(closes, 12, 26, 9) : { macd: [], signal: [], hist: [] };
-    macdSeries.setData(m.macd);
-    macdSignalSeries.setData(m.signal);
-    macdHistSeries.setData(m.hist);
-    try { chart.priceScale('macd').applyOptions({ visible: chartIndicators.macd }); } catch (_e) {}
-  }
-  if (stochKSeries && stochDSeries) {
-    const s = chartIndicators.stoch ? calcStochastic(closes, 14, 3, 3) : { k: [], d: [] };
-    stochKSeries.setData(s.k);
-    stochDSeries.setData(s.d);
-    try { chart.priceScale('stoch').applyOptions({ visible: chartIndicators.stoch }); } catch (_e) {}
-  }
-  lastCandle = { ...data[data.length - 1] };
-  if (savedRange) { try { chart.timeScale().setVisibleRange(savedRange); } catch (_e) {} }
-  else if (fit) chart.timeScale().fitContent();
-  updateChartLegend(null);
-  updateChartPriceLines();
+    if (rsiSeries) {
+      const rsiData = chartIndicators.rsi ? calcRSI(closes, 14) : [];
+      rsiSeries.setData(rsiData);
+      // RSI reference lines at 30 and 70
+      if (rsiRefLine30 && rsiRefLine70 && rsiData.length) {
+        const ref30 = rsiData.map(p => ({ time: p.time, value: 30 }));
+        const ref70 = rsiData.map(p => ({ time: p.time, value: 70 }));
+        rsiRefLine30.setData(chartIndicators.rsi ? ref30 : []);
+        rsiRefLine70.setData(chartIndicators.rsi ? ref70 : []);
+      }
+      try { chart.priceScale('rsi').applyOptions({ visible: chartIndicators.rsi }); } catch (_e) {}
+    }
+    if (macdSeries && macdSignalSeries && macdHistSeries) {
+      const m = chartIndicators.macd ? calcMACD(closes, 12, 26, 9) : { macd: [], signal: [], hist: [] };
+      macdSeries.setData(m.macd);
+      macdSignalSeries.setData(m.signal);
+      macdHistSeries.setData(m.hist);
+      try { chart.priceScale('macd').applyOptions({ visible: chartIndicators.macd }); } catch (_e) {}
+    }
+    if (stochKSeries && stochDSeries) {
+      const s = chartIndicators.stoch ? calcStochastic(closes, 14, 3, 3) : { k: [], d: [] };
+      stochKSeries.setData(s.k);
+      stochDSeries.setData(s.d);
+      try { chart.priceScale('stoch').applyOptions({ visible: chartIndicators.stoch }); } catch (_e) {}
+    }
+    lastCandle = { ...data[data.length - 1] };
+    if (savedRange) { try { chart.timeScale().setVisibleRange(savedRange); } catch (_e) {} }
+    else if (fit) chart.timeScale().fitContent();
+    updateChartLegend(null);
+    updateChartPriceLines();
+  } catch (_e) {}
 }
 
 function clearChartForSwitch(container) {
@@ -2220,9 +2231,11 @@ function setChartType(type) {
   if (!['candles', 'line', 'area'].includes(type)) return;
   chartType = type;
   try { localStorage.setItem('vp_chart_type', type); } catch (_e) {}
-  if (candleSeries) candleSeries.applyOptions({ visible: type === 'candles' });
-  if (lineSeries) lineSeries.applyOptions({ visible: type === 'line' });
-  if (areaSeries) areaSeries.applyOptions({ visible: type === 'area' });
+  safeChartOp(() => {
+    if (candleSeries) candleSeries.applyOptions({ visible: type === 'candles' });
+    if (lineSeries) lineSeries.applyOptions({ visible: type === 'line' });
+    if (areaSeries) areaSeries.applyOptions({ visible: type === 'area' });
+  });
   clearChartPriceLines();
   updateChartPriceLines();
   syncChartToolbar();
@@ -2250,7 +2263,7 @@ function toggleChartFullscreen(container) {
   box.classList.toggle('chart-fullscreen', on);
   document.body.classList.toggle('chart-fullscreen-open', on);
   setTimeout(() => {
-    if (chart && box) chart.applyOptions({ width: Math.max(320, box.clientWidth), height: Math.max(260, box.clientHeight) });
+    if (chart && box) safeChartOp(() => chart.applyOptions({ width: Math.max(320, box.clientWidth), height: Math.max(260, box.clientHeight) }));
   }, 60);
 }
 
@@ -2469,7 +2482,7 @@ async function initChart(container, candles, runId = tradeRunId) {
 
   resizeObserver = new ResizeObserver(() => {
     if (!chart || !el) return;
-    chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) });
+    safeChartOp(() => chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) }));
   });
   resizeObserver.observe(el);
   // Force correct size on first paint â€” el.clientWidth may be 0 before layout settles
@@ -2477,8 +2490,10 @@ async function initChart(container, candles, runId = tradeRunId) {
     if (!chart || !el) return;
     const w = Math.max(320, el.clientWidth);
     const h = Math.max(260, el.clientHeight);
-    chart.applyOptions({ width: w, height: h });
-    chart.timeScale().fitContent();
+    safeChartOp(() => {
+      chart.applyOptions({ width: w, height: h });
+      chart.timeScale().fitContent();
+    });
   });
 }
 
@@ -3518,10 +3533,14 @@ function flushLiveCandleFrame() {
   pendingLiveCandle = null;
   if (!pending || pending.runId !== tradeRunId || pending.key !== currentChartKey() || !candleSeries) return;
   lastCandle = { ...pending.candle };
-  candleSeries.update({ time: lastCandle.time, open: lastCandle.open, high: lastCandle.high, low: lastCandle.low, close: lastCandle.close });
-  if (volumeSeries) volumeSeries.update({ time: lastCandle.time, value: lastCandle.volume || 0, color: lastCandle.close >= lastCandle.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' });
-  if (lineSeries) lineSeries.update({ time: lastCandle.time, value: lastCandle.close });
-  if (areaSeries) areaSeries.update({ time: lastCandle.time, value: lastCandle.close });
+  const updated = safeChartOp(() => {
+    candleSeries.update({ time: lastCandle.time, open: lastCandle.open, high: lastCandle.high, low: lastCandle.low, close: lastCandle.close });
+    if (volumeSeries) volumeSeries.update({ time: lastCandle.time, value: lastCandle.volume || 0, color: lastCandle.close >= lastCandle.open ? 'rgba(0,192,135,0.25)' : 'rgba(246,70,93,0.2)' });
+    if (lineSeries) lineSeries.update({ time: lastCandle.time, value: lastCandle.close });
+    if (areaSeries) areaSeries.update({ time: lastCandle.time, value: lastCandle.close });
+    return true;
+  });
+  if (!updated) return;
   if (allCandles.length) {
     const tail = allCandles[allCandles.length - 1];
     if (tail.time === lastCandle.time) allCandles[allCandles.length - 1] = { ...lastCandle };
