@@ -3789,7 +3789,8 @@ async function loadMarketItems(type, runId = tradeRunId, force = false) {
 
   let data = null;
   try {
-    data = await api(marketListUrl(resolved), { timeout: 8000, retry: 1, cacheTtl: 6000, cache: 'no-store' });
+    const url = marketListUrl(resolved) + (force ? `&_=${Date.now()}` : '');
+    data = await api(url, { timeout: 8000, retry: 1, cacheTtl: force ? 0 : 6000, cache: 'no-store' });
   } catch (_e) {
     if (cached?.data?.items?.length) return cached.data;
     data = null;
