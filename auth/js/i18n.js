@@ -77,6 +77,43 @@
       const val = t(titleKey);
       if (val) document.title = val;
     }
+
+    // Translate static Arabic text inside product subpages when a non-Arabic locale is active.
+    // The site ships with Arabic hard-coded in many places; this reverse-translates those strings.
+    if (current !== 'ar' && window.TRANSLATIONS && window.TRANSLATIONS._arToEn) {
+      const map = window.TRANSLATIONS._arToEn;
+      const arKeys = Object.keys(map).sort(function(a, b){ return b.length - a.length; });
+      if (arKeys.length) {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+          acceptNode: function(node){
+            if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+            const parent = node.parentNode;
+            if (!parent) return NodeFilter.FILTER_REJECT;
+            // Skip scripts/styles/code tags
+            const tag = parent.nodeName.toLowerCase();
+            if (tag === 'script' || tag === 'style' || tag === 'code' || tag === 'pre') return NodeFilter.FILTER_REJECT;
+            // Skip elements already managed by data-i18n
+            if (parent.hasAttribute && parent.hasAttribute('data-i18n')) return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        });
+        let node;
+        while ((node = walker.nextNode())) {
+          let text = node.nodeValue;
+          if (/[\u0600-\u06FF]/.test(text)) {
+            let changed = false;
+            for (let i = 0; i < arKeys.length; i++) {
+              const ar = arKeys[i];
+              if (text.indexOf(ar) !== -1) {
+                text = text.split(ar).join(map[ar]);
+                changed = true;
+              }
+            }
+            if (changed) node.nodeValue = text;
+          }
+        }
+      }
+    }
   }
 
   /* ------------------------------------------------------------
