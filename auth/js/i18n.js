@@ -9,17 +9,44 @@
   'use strict';
 
   const LANGS = {
-    ar: { name: 'العربية',  flag: '🇸🇦', dir: 'rtl', short: 'AR' },
-    en: { name: 'English',  flag: '🇺🇸', dir: 'ltr', short: 'EN' },
-    ru: { name: 'Русский',  flag: '🇷🇺', dir: 'ltr', short: 'RU' },
-    tr: { name: 'Türkçe',   flag: '🇹🇷', dir: 'ltr', short: 'TR' },
-    es: { name: 'Español',  flag: '🇪🇸', dir: 'ltr', short: 'ES' },
-    fr: { name: 'Français', flag: '🇫🇷', dir: 'ltr', short: 'FR' },
-    zh: { name: '中文',      flag: '🇨🇳', dir: 'ltr', short: 'ZH' }
+    ar: { name: 'Arabic',  flag: 'AR', dir: 'rtl', short: 'AR' },
+    en: { name: 'English', flag: 'EN', dir: 'ltr', short: 'EN' },
+    ru: { name: 'Russian', flag: 'RU', dir: 'ltr', short: 'RU' },
+    tr: { name: 'Turkish', flag: 'TR', dir: 'ltr', short: 'TR' },
+    es: { name: 'Spanish', flag: 'ES', dir: 'ltr', short: 'ES' },
+    fr: { name: 'French',  flag: 'FR', dir: 'ltr', short: 'FR' },
+    zh: { name: 'Chinese', flag: 'ZH', dir: 'ltr', short: 'ZH' }
   };
-
   const STORAGE_KEY = 'mex_lang';
-  const DEFAULT_LANG = 'ar';
+  const SPA_STORAGE_KEY = 'vp_lang';
+  const EXPLICIT_STORAGE_KEY = 'vp_lang_explicit';
+  const DEFAULT_LANG = 'en';
+  const PAGE_TITLE_FALLBACKS = {
+    'index.html': 'MEX Global',
+    'login.html': 'Log in | MEX Global',
+    'register.html': 'Create Account | MEX Global',
+    'about.html': 'About MEX Global',
+    'forex.html': 'Forex Trading | MEX Global',
+    'crypto.html': 'Crypto Trading | MEX Global',
+    'stocks.html': 'Stock Trading | MEX Global',
+    'commodities.html': 'Commodities Trading | MEX Global',
+    'metals.html': 'Metals Trading | MEX Global',
+    'indices.html': 'Indices Trading | MEX Global',
+    'cfds.html': 'CFD Trading | MEX Global',
+    'deposits.html': 'Deposits | MEX Global',
+    'withdrawals.html': 'Withdrawals | MEX Global',
+    'support.html': 'Support | MEX Global',
+    'security.html': 'Security | MEX Global',
+    'regulation.html': 'Regulation | MEX Global',
+    'education.html': 'Education | MEX Global',
+    'rewards.html': 'Rewards | MEX Global',
+    'ecn.html': 'ECN Account | MEX Global',
+    'account-beginner.html': 'Beginner Account | MEX Global',
+    'account-silver.html': 'Silver Account | MEX Global',
+    'account-gold.html': 'Gold Account | MEX Global',
+    'account-platinum.html': 'Platinum Account | MEX Global',
+    'account-vip.html': 'VIP Account | MEX Global'
+  };
 
   // Current language state
   let current = DEFAULT_LANG;
@@ -31,9 +58,8 @@
   function t(key){
     const dict = getDict(current);
     if (dict[key] != null) return dict[key];
-    // Fallback to Arabic
-    const ar = getDict('ar');
-    if (ar[key] != null) return ar[key];
+    const en = getDict('en');
+    if (en[key] != null) return en[key];
     return key; // last resort: show the key itself
   }
 
@@ -91,6 +117,10 @@
         }
         if (newTitle !== document.title) document.title = newTitle;
       }
+      if (/[\u0600-\u06FF]/u.test(document.title)) {
+        const page = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+        document.title = PAGE_TITLE_FALLBACKS[page] || 'MEX Global';
+      }
     }
 
     // Translate static Arabic text inside product subpages when a non-Arabic locale is active.
@@ -106,6 +136,22 @@
     if (!arKeys.length) return;
     const body = document.body || document.documentElement;
 
+    // Helper for text replacement
+    function replaceArabicText(text){
+      if (!/[\u0600-\u06FF]/u.test(text)) return text;
+      let changed = false;
+      for (let i = 0; i < arKeys.length; i++) {
+        const ar = arKeys[i];
+        let idx = text.indexOf(ar);
+        while (idx !== -1) {
+          text = text.slice(0, idx) + map[ar] + text.slice(idx + ar.length);
+          changed = true;
+          idx = text.indexOf(ar, idx + map[ar].length);
+        }
+      }
+      return changed ? text : null;
+    }
+
     // 1) Text nodes
     const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
       acceptNode: function(node){
@@ -120,26 +166,24 @@
     });
     let node;
     while ((node = walker.nextNode())) {
-      let text = node.nodeValue;
-      if (/[\u0600-\u06FF]/u.test(text)) {
-        let changed = false;
-        for (let i = 0; i < arKeys.length; i++) {
-          const ar = arKeys[i];
-          let idx = text.indexOf(ar);
-          while (idx !== -1) {
-            text = text.slice(0, idx) + map[ar] + text.slice(idx + ar.length);
-            changed = true;
-            idx = text.indexOf(ar, idx + map[ar].length);
-          }
-        }
-        if (changed) node.nodeValue = text;
-      }
+      const text = node.nodeValue;
+      const newText = replaceArabicText(text);
+      if (newText !== null) node.nodeValue = newText;
     }
 
-    // 2) data-label attributes used by products.js price table (kept Arabic; set data-label-en)
+    // 2) title/alt/aria-label/placeholder attributes (excluding data-i18n-*)
+    document.querySelectorAll('[title],[alt],[aria-label],[placeholder]').forEach(function(el){
+      if (el.dataset && (el.dataset.i18n || el.dataset.i18nTitle || el.dataset.i18nAria || el.dataset.i18nPlaceholder)) return;
+      ['title','alt','aria-label','placeholder'].forEach(function(attr){
+        const val = el.getAttribute(attr);
+        if (!val) return;
+        const newVal = replaceArabicText(val);
+        if (newVal !== null) el.setAttribute(attr, newVal);
+      });
+    });
+
+    // 3) data-label attributes used by products.js price table (kept Arabic; set data-label-en)
     document.querySelectorAll('[data-label]').forEach(function(el){
-      const map = window.TRANSLATIONS && window.TRANSLATIONS._arToEn;
-      if (!map) return;
       const original = el.getAttribute('data-label-original') || el.getAttribute('data-label');
       if (!el.getAttribute('data-label-original')) el.setAttribute('data-label-original', original);
       const translated = map[original] || original;
@@ -154,10 +198,15 @@
     if (!LANGS[lang]) lang = DEFAULT_LANG;
     current = lang;
     if (persist !== false){
-      try { localStorage.setItem(STORAGE_KEY, lang); } catch(_){}
+      try {
+        localStorage.setItem(STORAGE_KEY, lang);
+        localStorage.setItem(SPA_STORAGE_KEY, lang);
+        localStorage.setItem(EXPLICIT_STORAGE_KEY, '1');
+      } catch(_){}
       try {
         var d = new Date(); d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
-        document.cookie = 'vp_lang=' + lang + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+        document.cookie = 'vp_lang=' + encodeURIComponent(lang) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+        document.cookie = EXPLICIT_STORAGE_KEY + '=1;expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
       } catch(_){}
     }
     const html = document.documentElement;
@@ -165,6 +214,7 @@
     html.setAttribute('dir', LANGS[lang].dir);
     html.setAttribute('data-lang', lang);
     applyTranslations();
+    html.setAttribute('data-i18n-ready', '1');
     updateSwitcherTrigger();
     // Custom event for any listener (e.g. dynamic content)
     document.dispatchEvent(new CustomEvent('lang:changed', { detail: { lang: lang } }));
@@ -383,6 +433,20 @@
   /* ------------------------------------------------------------
      Initial detection — load saved or detect from browser
      ------------------------------------------------------------ */
+  function readCookie(name){
+    try {
+      var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/+^])/g, '\\$1') + '=([^;]*)'));
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch(_){ return null; }
+  }
+
+  function hasExplicitLocaleChoice(){
+    try {
+      if (localStorage.getItem(EXPLICIT_STORAGE_KEY) === '1') return true;
+    } catch(_){}
+    return readCookie(EXPLICIT_STORAGE_KEY) === '1';
+  }
+
   function detectInitialLang(){
     try {
       const m = location.search.match(/[?&]lang=([^&#]+)/);
@@ -391,16 +455,20 @@
         if (LANGS[urlLang]) return urlLang;
       }
     } catch(_){}
+    if (!hasExplicitLocaleChoice()) return DEFAULT_LANG;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved && LANGS[saved]) return saved;
     } catch(_){}
-    // Detect from browser language
-    const nav = (navigator.language || navigator.userLanguage || 'ar').toLowerCase();
-    const code = nav.split('-')[0];
-    if (LANGS[code]) return code;
-    // ar variants
-    if (nav.indexOf('ar') === 0) return 'ar';
+    try {
+      const savedSpa = localStorage.getItem(SPA_STORAGE_KEY);
+      if (savedSpa && LANGS[savedSpa]) return savedSpa;
+    } catch(_){}
+    // Cookie from SPA
+    try {
+      const ckLang = String(readCookie(SPA_STORAGE_KEY) || '').toLowerCase();
+      if (ckLang && LANGS[ckLang]) return ckLang;
+    } catch(_){}
     return DEFAULT_LANG;
   }
 

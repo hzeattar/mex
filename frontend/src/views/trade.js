@@ -33,6 +33,7 @@ let chartLegendEl = null;
 let chartSeriesKey = '';          // `${SYMBOL}|${TYPE}|${MARKET}|${tf}` the rendered series belongs to
 let allCandles = [];              // full merged dataset for the current key (oldest -> newest)
 let chartHistory = { loading: false, done: false, nextAt: 0 };
+let chartSeriesSynthetic = false;
 let chartType = (() => { try { return localStorage.getItem('vp_chart_type') || 'candles'; } catch (_e) { return 'candles'; } })();
 let chartIndicators = (() => {
   try { return Object.assign({ ma: true, ema: false, boll: false, rsi: false, macd: false, stoch: false }, JSON.parse(localStorage.getItem('vp_chart_ind') || '{}')); }
@@ -45,6 +46,7 @@ let activeQuoteController = null;
 let activityRefreshTimer = null;
 let chartRefreshTimer = null;
 let resizeObserver = null;
+let lastChartResizeWidth = 0;
 let binanceWs = null;
 let binanceKlineWs = null;
 let chartLibPromise = Promise.resolve({ createChart });
@@ -301,13 +303,13 @@ function bindDelegate(container, selector, event, handler) {
 
 function getTypes() {
   return [
-    { key: 'favorites', label: t('market.type.favorites', 'Ø§Ù„Ù…ÙØ¶Ù„Ø©') },
-    { key: 'crypto', label: t('markets.crypto', 'Ø§Ù„ÙƒØ±ÙŠØ¨ØªÙˆ') },
-    { key: 'forex', label: t('markets.fx', 'Ø§Ù„ÙÙˆØ±ÙƒØ³') },
-    { key: 'stocks', label: t('markets.stocks', 'Ø§Ù„Ø£Ø³Ù‡Ù…') },
-    { key: 'commodities', label: t('markets.commodities', 'Ø§Ù„Ø³Ù„Ø¹') },
-    { key: 'futures', label: t('market.type.futures', 'Ø§Ù„Ø¹Ù‚ÙˆØ¯ Ø§Ù„Ø¢Ø¬Ù„Ø©') },
-    { key: 'arab', label: t('markets.arab_stocks', 'Ø§Ù„Ø£Ø³Ù‡Ù… Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©') },
+    { key: 'favorites', label: t('market.type.favorites', 'Favorites') },
+    { key: 'crypto', label: t('markets.crypto', 'Crypto') },
+    { key: 'forex', label: t('markets.fx', 'Forex') },
+    { key: 'stocks', label: t('markets.stocks', 'Stocks') },
+    { key: 'commodities', label: t('markets.commodities', 'Commodities') },
+    { key: 'futures', label: t('market.type.futures', 'Futures') },
+    { key: 'arab', label: t('markets.arab_stocks', 'Arab Stocks') },
   ];
 }
 
@@ -496,7 +498,7 @@ export function render(params) {
               <button class="active" data-activity-tab="active">${t('trade.active_trades', 'Active trades')} <b id="active-count">0</b></button>
               <button data-activity-tab="closed">${t('trade.closed_trades', 'Closed trades')} <b id="closed-count">0</b></button>
             </div>
-            <button class="activity-expand-btn" data-toggle-activity-expand title="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}" aria-label="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}">${icons.fullscreen || icons.expand || 'â›¶'}</button>
+            <button class="activity-expand-btn" data-toggle-activity-expand title="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}" aria-label="${escAttr(t('trade.expand_activity', 'Expand trading activity'))}">${icons.fullscreen || icons.expand || '[]'}</button>
           </div>
         </div>
         <div id="activity-body"><p class="text-muted text-[11px] text-center py-4">${t('common.loading', 'Loading...')}</p></div>
@@ -591,7 +593,7 @@ function renderOrderPanel() {
       <input type="range" min="1" max="100" value="${escAttr(String(lev))}" class="w-full mt-1 accent-accent" data-leverage />
     </label>` : `
     <div class="order-spot-note" id="leverage-row">
-      <span class="text-[10px] text-muted">${t('trade.spot_no_leverage','Spot order â€” no leverage')}</span>
+      <span class="text-[10px] text-muted">${t('trade.spot_no_leverage','Spot order - no leverage')}</span>
     </div>`}
     <div class="grid grid-cols-2 gap-2">
       <label class="block">
@@ -776,6 +778,7 @@ function resetChartInstance() {
   lastCandle = null;
   allCandles = [];
   chartSeriesKey = '';
+  chartSeriesSynthetic = false;
   pendingLiveCandle = null;
   chartPriceLines = { live: null, series: null };
   cancelLiveCandleFrame();
@@ -909,7 +912,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   if (quoteType === 'crypto') startBinanceWs(container, symbol, quoteType, runId);
   // Non-crypto: server-side aggregator feeds the central cache via WS;
   // polling /quote_focus.php (1s nginx micro-cached) gives near-real-time prices.
-  // Finnhub/Tiingo/TwelveData WS removed from client â€” API keys unsafe + wastes credits.
+  // Finnhub/Tiingo/TwelveData WS removed from client; API keys are unsafe and waste credits.
   // Fast path: /quote_focus.php reads only the central cache (worker-fed) and
   // sits behind a 1s nginx micro-cache shared by all users, so polling can be
   // aggressive without load concerns. No cache-buster: shared cache key.
@@ -980,7 +983,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
       if (!isCurrentRun(runId, symbol, type)) return;
       if (item && !applied) updatePrice(container, item, runId);
     } catch (_e) {
-      // Abort/timeout errors are normal during cleanup â€” don't surface to UI.
+      // Abort/timeout errors are normal during cleanup; don't surface to UI.
       if (isCurrentRun(runId, symbol, type)) markDisconnected(container);
     } finally {
       if (isCurrentRun(runId, symbol, type)) activeQuoteTimer = setTimeout(poll, interval);
@@ -1037,7 +1040,7 @@ function stopBinanceWs() {
   }
 }
 
-/* â”€â”€ Binance Kline WebSocket for real-time chart candles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Binance Kline WebSocket for real-time chart candles. */
 function startBinanceKlineWs(symbol, tf, runId) {
   stopBinanceKlineWs();
   const wsSymbol = symbol.toLowerCase();
@@ -1096,6 +1099,7 @@ function startBinanceKlineWs(symbol, tf, runId) {
         symbol: symbol.toUpperCase(), type: 'crypto', price: p, change_pct,
         source: 'binance_kline_ws',
         provider_updated_at: Math.floor(Date.now() / 1000),
+        skip_chart_candle: true,
       }, runId);
     } catch (_e) {}
   });
@@ -1110,11 +1114,11 @@ function stopBinanceKlineWs() {
   }
 }
 
-/* â”€â”€ Client-side Finnhub/Tiingo/TwelveData WS removed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* Client-side Finnhub/Tiingo/TwelveData WS removed.
  *  Server-side aggregator (api/ws/aggregator.php) now handles all
  *  WS connections. Non-crypto prices via /quote_focus.php polling
  *  which reads from the aggregator-fed central cache.
- * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+ */
 
 
 function stopActivityRefresh() {
@@ -1248,7 +1252,9 @@ function updatePrice(container, q, runId = tradeRunId) {
   $$('[data-buy-price]', container).forEach(el => { el.textContent = p > 0 ? price(p * 1.0001, assetType) : '--'; });
   $$('[data-spread-val]', container).forEach(el => { el.textContent = p > 0 ? `${t('trade.spread','Spread')}: ${price(p * 0.0001, assetType)}` : `${t('trade.spread','Spread')}: --`; });
   scheduleOrderInfoUpdate(container);
-  updateLiveCandle(p, runId, Number(q.provider_updated_at || q.updated_at || q.cache_updated_at || 0), normalizeType(q.type || assetType));
+  if (!q.skip_chart_candle) {
+    updateLiveCandle(p, runId, Number(q.provider_updated_at || q.updated_at || q.cache_updated_at || 0), normalizeType(q.type || assetType));
+  }
   scheduleChartQuoteReconcile(container, p, runId, normalizeType(q.type || assetType));
   updateChartPriceLines({ ...q, price: p, change_pct: chg });
   updateLivePnL(container, String(q.symbol || get('symbol')).toUpperCase(), p);
@@ -1401,7 +1407,7 @@ async function warmVisibleQuotes(container, items, runId = tradeRunId, listType 
 
 function updateSymbolListPrices(container, items) {
   if (!items?.length) return;
-  // Build the symbolâ†’row lookup once per batch instead of re-scanning the DOM per quote (was O(rowsÃ—quotes)).
+  // Build the symbol-to-row lookup once per batch instead of re-scanning the DOM per quote.
   const rows = $$('.symbol-row', container);
   if (!rows.length) return;
   const rowMap = new Map();
@@ -1728,7 +1734,7 @@ function tradePositionRow(pos) {
     <td class="text-right font-mono">${price(pos.entry_price || pos.open_price, posType)}</td>
     <td class="text-right font-mono"><span data-pos-mark-cell>${mark > 0 ? price(mark, posType) : '--'}</span></td>
     <td class="text-right font-mono">${qty(pos.qty || pos.amount || pos.size || pos.units || 0)}</td>
-    <td class="text-right font-mono">${isPerp ? `${esc(String(pos.leverage || 1))}x` : '<span class="text-muted text-[9px]">â€”</span>'}</td>
+    <td class="text-right font-mono">${isPerp ? `${esc(String(pos.leverage || 1))}x` : '<span class="text-muted text-[9px]">--</span>'}</td>
     <td class="text-right font-mono"><span class="${pnl >= 0 ? 'text-buy' : 'text-sell'}" data-pos-pnl-cell>${money(pnl)}</span></td>
     <td class="text-right px-3">${id ? `<button class="btn-xs btn-ghost text-sell" data-close="${escAttr(id)}">${t('common.close', 'Close')}</button>` : ''}</td>
   </tr>`;
@@ -2020,7 +2026,6 @@ function fillVisualCandleGaps(candles, type = get('type'), tf = get('tf')) {
 }
 
 function syntheticCandlesFromPrice(symbol, type, tf, priceValue, rows = 120) {
-  return [];
   const base = Number(priceValue || 0);
   if (!(base > 0)) return [];
   const step = tfSeconds(tf);
@@ -2060,11 +2065,10 @@ function chartFallbackPrice(container, symbol = get('symbol')) {
 }
 
 function scheduleSyntheticChartFallback(container, symbol, type, runId) {
-  return;
-  if (get('mode') === 'real') return;
   [900, 1800, 3200].forEach((delay) => {
     setTimeout(() => {
-      if (!isCurrentRun(runId, symbol, type) || chart || candleSeries) return;
+      if (!isCurrentRun(runId, symbol, type)) return;
+      if (chartSeriesKey === currentChartKey() && allCandles.length) return;
       const fallbackPrice = chartFallbackPrice(container, symbol);
       if (fallbackPrice > 0) bootstrapSyntheticChart(container, fallbackPrice, runId);
     }, delay);
@@ -2072,13 +2076,12 @@ function scheduleSyntheticChartFallback(container, symbol, type, runId) {
 }
 
 function bootstrapSyntheticChart(container, priceValue, runId = tradeRunId) {
-  return;
-  if (get('mode') === 'real') return;
-  if (chart || candleSeries || container.__syntheticChartBooting || !(Number(priceValue) > 0)) return;
+  if (container.__syntheticChartBooting || !(Number(priceValue) > 0)) return;
   const box = $('#chart-box', container);
   if (!box) return;
   const text = String(box.textContent || '').toLowerCase();
-  if (!text.includes('loading') && !text.includes('chart data')) return;
+  if (chartSeriesKey === currentChartKey() && allCandles.length) return;
+  if (!chart && !text.includes('loading') && !text.includes('chart data')) return;
   const symbol = get('symbol');
   const type = get('type');
   const tf = get('tf');
@@ -2087,8 +2090,13 @@ function bootstrapSyntheticChart(container, priceValue, runId = tradeRunId) {
   container.__syntheticChartBooting = true;
   loadChartLib()
     .then(() => {
-      if (!isCurrentRun(runId, symbol, type) || chart || candleSeries) return;
-      return initChart(container, candles, runId);
+      if (!isCurrentRun(runId, symbol, type)) return;
+      if (chart && candleSeries) {
+        applyChartData(candles, { fit: true, key: currentChartKey(), provisional: true, persist: false });
+        hideChartOverlay(container);
+        return;
+      }
+      return initChart(container, candles, runId, { provisional: true });
     })
     .finally(() => { container.__syntheticChartBooting = false; });
 }
@@ -2290,13 +2298,13 @@ function scheduleBackgroundChartWarmup(container, runId = tradeRunId, activeType
   container.__chartWarmupTimer = setTimeout(warmNextType, 1200);
 }
 
-function applyChartData(candles, { fit = false, key = currentChartKey(), preserveRange = false, skipUnchanged = false } = {}) {
+function applyChartData(candles, { fit = false, key = currentChartKey(), preserveRange = false, skipUnchanged = false, provisional = false, persist = true } = {}) {
   if (!candleSeries || !volumeSeries) return false;
   const data = normalizeCandleRows(candles, { fillGaps: true, type: get('type'), tf: get('tf') });
   if (!data.length) return false;
   if (skipUnchanged && chartSeriesKey === key && !hasCandleDelta(data)) return true;
-  const replacingSeries = chartSeriesKey !== key || !allCandles.length;
-  if (chartSeriesKey === key && allCandles.length) {
+  const replacingSeries = chartSeriesKey !== key || !allCandles.length || (chartSeriesSynthetic && !provisional);
+  if (!replacingSeries && chartSeriesKey === key && allCandles.length) {
     // Incoming is the latest window; merge it with retained older history.
     allCandles = mergeCandleSets(allCandles, data);
   } else {
@@ -2304,8 +2312,9 @@ function applyChartData(candles, { fit = false, key = currentChartKey(), preserv
     chartHistory = { loading: false, done: false, nextAt: 0 };
   }
   chartSeriesKey = key;
-  rememberChartCandles(key, allCandles);
-  renderChartSeries({ fit: fit || replacingSeries, preserveRange: preserveRange && !replacingSeries });
+  chartSeriesSynthetic = !!provisional;
+  if (persist && !chartSeriesSynthetic) rememberChartCandles(key, allCandles);
+  renderChartSeries({ fit: fit || (replacingSeries && !preserveRange), preserveRange });
   return true;
 }
 
@@ -2394,9 +2403,9 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
     if (savedRange) { try { chart.timeScale().setVisibleRange(savedRange); } catch (_e) {} }
     else if (fit) {
       chart.timeScale().fitContent();
-      keepLiveCandleInFocus();
+      keepLiveCandleInFocus(null, { force: true });
     } else if (!preserveRange) {
-      keepLiveCandleInFocus();
+      keepLiveCandleInFocus(null, { force: true });
     }
     updateChartLegend(null);
     updateChartPriceLines();
@@ -2410,6 +2419,8 @@ function clearChartForSwitch(container) {
   stopBinanceKlineWs();
   chartSeriesKey = '';
   lastCandle = null;
+  lastChartResizeWidth = 0;
+  chartSeriesSynthetic = false;
   allCandles = [];
   chartHistory = { loading: false, done: false, nextAt: 0 };
   lastPriceFlashAt = 0;
@@ -2508,11 +2519,17 @@ function chartPreferredRightOffset(target = null) {
   return 16;
 }
 
-function keepLiveCandleInFocus(target = null) {
+function keepLiveCandleInFocus(target = null, { force = false } = {}) {
   if (!chart) return;
   const rightOffset = chartPreferredRightOffset(target);
   safeChartOp(() => {
     const timeScale = chart.timeScale();
+    if (!force) {
+      const range = timeScale.getVisibleRange();
+      const lastTime = Number(lastCandle?.time || 0);
+      const step = tfSeconds(get('tf'));
+      if (!range || !lastTime || lastTime <= Number(range.to || 0) + step * 0.75) return;
+    }
     timeScale.applyOptions({ rightOffset });
   });
 }
@@ -2740,7 +2757,7 @@ function buildChartToolbar(container) {
     '<button type="button" data-chart-ind="macd" title="MACD 12/26/9">MACD</button>' +
     '<button type="button" data-chart-ind="stoch" title="Stochastic 14/3/3">STOCH</button>' +
     '<span class="chart-toolbar-sep"></span>' +
-    '<button type="button" data-chart-fullscreen="1" title="Fullscreen">â›¶</button>';
+    '<button type="button" data-chart-fullscreen="1" title="Fullscreen">[]</button>';
   bar.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -2751,7 +2768,7 @@ function buildChartToolbar(container) {
   return bar;
 }
 
-async function initChart(container, candles, runId = tradeRunId) {
+async function initChart(container, candles, runId = tradeRunId, options = {}) {
   if (!isCurrentRun(runId)) return;
   const el = $('#chart-box', container);
   if (!el) return;
@@ -2776,6 +2793,7 @@ async function initChart(container, candles, runId = tradeRunId) {
     handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
     animation: true,
   });
+  lastChartResizeWidth = Math.max(320, el.clientWidth);
 
   candleSeries = chart.addCandlestickSeries({
     upColor: '#00c087',
@@ -2861,26 +2879,34 @@ async function initChart(container, candles, runId = tradeRunId) {
     loadOlderCandles(container).catch(() => {});
   });
 
-  applyChartData(candles, { fit: true });
+  applyChartData(candles, {
+    fit: true,
+    provisional: !!options.provisional,
+    persist: !options.provisional,
+  });
   hideChartOverlay(container);
 
   resizeObserver = new ResizeObserver(() => {
     if (!chart || !el) return;
     safeChartOp(() => {
-      chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) });
-      chart.timeScale().applyOptions({ rightOffset: chartPreferredRightOffset(el) });
+      const width = Math.max(320, el.clientWidth);
+      const height = Math.max(260, el.clientHeight);
+      chart.applyOptions({ width, height });
+      if (Math.abs(width - lastChartResizeWidth) > 8) {
+        lastChartResizeWidth = width;
+        chart.timeScale().applyOptions({ rightOffset: chartPreferredRightOffset(el) });
+      }
     });
   });
   resizeObserver.observe(el);
-  // Force correct size on first paint â€” el.clientWidth may be 0 before layout settles
+  // Force correct size on first paint; el.clientWidth may be 0 before layout settles.
   requestAnimationFrame(() => {
     if (!chart || !el) return;
     const w = Math.max(320, el.clientWidth);
     const h = Math.max(260, el.clientHeight);
     safeChartOp(() => {
       chart.applyOptions({ width: w, height: h });
-      chart.timeScale().fitContent();
-      keepLiveCandleInFocus(el);
+      keepLiveCandleInFocus(el, { force: true });
     });
   });
 }
@@ -3097,7 +3123,7 @@ function bindEvents(container) {
         </label>`;
       } else {
         levRow.outerHTML = `<div class="order-spot-note" id="leverage-row">
-          <span class="text-[10px] text-muted">Spot order â€” no leverage</span>
+          <span class="text-[10px] text-muted">${t('trade.spot_no_leverage','Spot order - no leverage')}</span>
         </div>`;
       }
     });
@@ -3107,7 +3133,7 @@ function bindEvents(container) {
     set('leverage', Number(el.value));
     syncOrderField(container, 'leverage', el.value);
     updateOrderInfo(container);
-    // Risk color gradient: green (low) â†’ yellow (mid) â†’ red (high)
+    // Risk color gradient: green (low) to yellow (mid) to red (high).
     const val = Number(el.value);
     const max = Number(el.max) || 100;
     const pct = val / max;
@@ -3201,27 +3227,9 @@ function liveTailTolerance(type) {
 function scheduleChartQuoteReconcile(container, priceValue, runId = tradeRunId, assetType = get('type')) {
   const type = normalizeType(assetType || get('type'));
   if (type === 'crypto' || !(Number(priceValue) > 0) || !chart || !candleSeries || !lastCandle) return;
-  const key = currentChartKey();
-  if (!chartSeriesKey || chartSeriesKey !== key) return;
-  const close = Number(lastCandle.close || 0);
-  if (!(close > 0)) return;
-  const deviation = Math.abs(close - Number(priceValue)) / Math.max(close, Number(priceValue), 1);
-  if (deviation <= chartQuoteTolerance(type)) return;
-  const now = Date.now();
-  if (!container.__chartReconcileAt) container.__chartReconcileAt = new Map();
-  const lastRun = Number(container.__chartReconcileAt.get(key) || 0);
-  if (now - lastRun < 30000) return;
-  container.__chartReconcileAt.set(key, now);
-  if (chartReconcileTimer) clearTimeout(chartReconcileTimer);
-  chartReconcileTimer = setTimeout(() => {
-    chartReconcileTimer = 0;
-    if (!isCurrentRun(runId) || currentChartKey() !== key) return;
-    forgetChartCandles(key);
-    loadChartData(container, get('symbol'), get('type'), get('tf'), runId, loadChartLib(), {
-      silent: true,
-      refresh: true,
-    }).catch(() => null);
-  }, 250);
+  // The live price line is the source of truth for quote changes. Re-fetching
+  // a short candle window on quote deviation can shift the visible range after
+  // the user has been watching the chart for a while, especially on mobile.
 }
 
 async function loadChartData(container, symbol, type, tf, runId = tradeRunId, chartReady = loadChartLib(), options = {}) {
@@ -3241,6 +3249,9 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
     chartBox.innerHTML = '<div class="absolute inset-0 flex items-center justify-center"><div class="text-center"><div class="loading-spinner mx-auto"></div><p class="text-[10px] text-muted mt-2">Loading chart...</p></div></div>';
   } else if (hasChart && !options.silent) {
     showChartOverlay(container);
+  }
+  if (!options.silent && !options.refresh) {
+    scheduleSyntheticChartFallback(container, symbol, type, runId);
   }
   let paintedFromCache = false;
   if (!options.silent && !options.refresh) {
@@ -3332,10 +3343,11 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
     }
     if (chartItems.length) {
       if (chart && candleSeries) {
+        const replacingSynthetic = chartSeriesSynthetic && chartSeriesKey === reqKey;
         applyChartData(chartItems, {
-          fit: !options.silent && !options.refresh,
+          fit: !options.silent && !options.refresh && !paintedFromCache && !replacingSynthetic,
           key: reqKey,
-          preserveRange: !!(options.silent || options.refresh),
+          preserveRange: !!(options.silent || options.refresh || paintedFromCache || replacingSynthetic),
           skipUnchanged: !!(options.silent || options.refresh),
         });
         hideChartOverlay(container);
@@ -3390,12 +3402,11 @@ function toggleActivityExpand(container) {
   if (btn) {
     btn.setAttribute('aria-label', open ? t('trade.close_activity', 'Close trading activity') : t('trade.expand_activity', 'Expand trading activity'));
     btn.setAttribute('title', open ? t('trade.close_activity', 'Close trading activity') : t('trade.expand_activity', 'Expand trading activity'));
-    btn.innerHTML = open ? icons.close : (icons.fullscreen || icons.expand || 'â›¶');
+    btn.innerHTML = open ? icons.close : (icons.fullscreen || icons.expand || '[]');
   }
   if (chart && !open) setTimeout(() => {
     try {
-      chart.timeScale?.().fitContent?.();
-      keepLiveCandleInFocus(container);
+      keepLiveCandleInFocus(container, { force: true });
     } catch (_e) {}
   }, 80);
 }
@@ -3419,7 +3430,7 @@ async function closePosition(container, trigger) {
     btn.dataset.prevText = btn.textContent;
     btn.textContent = t('trade.closing', 'Closing...');
   });
-  // Attempt close â€” up to 2 tries (auto-retry once on price_not_executable after 1.5s)
+  // Attempt close up to 2 tries (auto-retry once on price_not_executable after 1.5s).
   const attempt = async (retry = false) => {
     const clientPrice = Number(get('activeQuote')?.price || 0);
     return api('/trade/close_position.php', {
@@ -3473,7 +3484,7 @@ async function closePosition(container, trigger) {
 function closePositionErrorMessage(error) {
   const code = String(error?.code || error?.payload?.code || '').toLowerCase();
   if (code === 'price_not_executable' || code === 'price_unavailable') {
-    return t('trade.close_price_stale', 'Price is updating â€” retried automatically. If this persists, reload the page.');
+    return t('trade.close_price_stale', 'Price is updating - retried automatically. If this persists, reload the page.');
   }
   return error?.message || t('trade.could_not_close', 'Could not close this position now.');
 }
@@ -3771,7 +3782,7 @@ async function placeOrder(side, container, formRoot) {
       showOrderStatus(root, res.error || 'Order failed', 'error');
       return;
     }
-    showOrderStatus(root, `${side === 'BUY' ? t('trade.buy', 'Ø´Ø±Ø§Ø¡') : t('trade.sell', 'Ø¨ÙŠØ¹')} â€” ${t('trade.order_success', 'ØªÙ… ÙØªØ­ Ø§Ù„ØµÙÙ‚Ø© Ø¨Ù†Ø¬Ø§Ø­')}`, 'success');
+    showOrderStatus(root, `${side === 'BUY' ? t('trade.buy', 'Buy') : t('trade.sell', 'Sell')} - ${t('trade.order_success', 'Position opened successfully')}`, 'success');
     // Bust cache so the new position appears immediately (no waiting for the 4s TTL)
     clearCacheFor('/trade/portfolio.php', '/trade/orders.php');
     await loadTradeActivity(container, tradeRunId, false, true);
@@ -3791,9 +3802,9 @@ async function placeOrder(side, container, formRoot) {
       String(e?.message || '').toLowerCase().includes('aborted') ||
       String(e?.message || '').toLowerCase().includes('cancelled');
     const msg = e?.code === 'timeout'
-      ? 'Request timed out â€” please wait for the live price to refresh and try again.'
+      ? 'Request timed out - please wait for the live price to refresh and try again.'
       : isAbortLike
-        ? 'Order was interrupted. Check Open Positions â€” if the trade is not listed, place the order again.'
+        ? 'Order was interrupted. Check Open Positions - if the trade is not listed, place the order again.'
         : (e.message || 'Order failed. Please try again.');
     showOrderStatus(root, msg, 'error');
   } finally {
@@ -3801,7 +3812,7 @@ async function placeOrder(side, container, formRoot) {
   }
 }
 
-/* â”€â”€ Order Confirmation Dialog â”€â”€ */
+/* Order Confirmation Dialog */
 function showOrderConfirmation({ side, symbol, type, amount, leverage, tp, sl, marketType, orderType, currentPrice, limitInput, mode }) {
   return new Promise(resolve => {
     const existing = document.getElementById('order-confirm-modal');
@@ -3820,8 +3831,8 @@ function showOrderConfirmation({ side, symbol, type, amount, leverage, tp, sl, m
       <div class="absolute inset-0 bg-black/70" id="confirm-backdrop"></div>
       <div class="relative w-full max-w-md mx-4 mb-4 sm:mb-0 bg-surface border border-line rounded-2xl shadow-2xl overflow-hidden">
         <div class="px-5 py-4 border-b border-line text-center">
-          <h3 class="text-lg font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}">${isBuy ? t('trade.buy', 'Ø´Ø±Ø§Ø¡') : t('trade.sell', 'Ø¨ÙŠØ¹')} â€” ${t('trade.order', 'Ø§Ù„Ø£Ù…Ø±')}</h3>
-          <p class="text-xs text-muted mt-1">${t('trade.review_confirm', 'Ø±Ø§Ø¬Ø¹ ÙˆØ£ÙƒØ¯ Ø§Ù„Ø£Ù…Ø±')}</p>
+          <h3 class="text-lg font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}">${isBuy ? t('trade.buy', 'Buy') : t('trade.sell', 'Sell')} - ${t('trade.order', 'Order')}</h3>
+          <p class="text-xs text-muted mt-1">${t('trade.review_confirm', 'Review and confirm the order')}</p>
         </div>
         <div class="px-5 py-4 space-y-3">
           <div class="flex justify-between text-sm"><span class="text-muted">${t('Symbol')}</span><strong>${esc(symbol)}</strong></div>
@@ -3940,7 +3951,7 @@ function setMobileSubmitSide(container, side) {
   const label = $('#mobile-order-side-label', container);
   if (btn) {
     btn.dataset.submitOrder = side;
-    btn.textContent = side === 'BUY' ? t('trade.order.buy_now', 'Ø´Ø±Ø§Ø¡ Ø§Ù„Ø¢Ù†') : t('trade.order.sell_now', 'Ø¨ÙŠØ¹ Ø§Ù„Ø¢Ù†');
+    btn.textContent = side === 'BUY' ? t('trade.order.buy_now', 'Buy now') : t('trade.order.sell_now', 'Sell now');
     btn.className = `${side === 'BUY' ? 'btn-buy' : 'btn-sell'} w-full py-3`;
   }
   if (label) label.textContent = side === 'BUY' ? t('trade.order.buy_order', 'BUY order') : t('trade.order.sell_order', 'SELL order');
@@ -3960,17 +3971,16 @@ function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetT
   const guardedNonCryptoTail = type !== 'crypto' && ['1m','3m','5m','15m'].includes(tf);
   const bucket = currentBucketTime(sourceTime, assetType);
   const base = pendingLiveCandle?.candle || lastCandle;
-  let forceQuoteAnchor = false;
+  const step = tfSeconds(tf);
+  const timeDrift = Math.abs(Number(bucket || 0) - Number(base.time || 0));
+  if (timeDrift > step) return;
   if (guardedNonCryptoTail) {
     const anchor = Number(base.close || base.open || 0);
     const deviation = anchor > 0 ? Math.abs(priceValue - anchor) / Math.max(anchor, priceValue, 1) : 0;
-    forceQuoteAnchor = deviation > liveTailTolerance(type);
+    if (deviation > liveTailTolerance(type)) return;
   }
   let next;
-  if (forceQuoteAnchor) {
-    const anchorTime = Math.max(Number(bucket || 0), Number(base.time || 0));
-    next = { time: anchorTime, open: priceValue, high: priceValue, low: priceValue, close: priceValue, volume: 0, liveAnchor: true };
-  } else if (bucket <= base.time) {
+  if (bucket <= base.time) {
     const high = guardedNonCryptoTail ? Math.max(base.high, priceValue) : Math.max(base.high, priceValue);
     const low = guardedNonCryptoTail ? Math.min(base.low, priceValue) : Math.min(base.low, priceValue);
     next = { ...base, close: priceValue, high, low };
@@ -4002,7 +4012,7 @@ function flushLiveCandleFrame() {
     const tail = allCandles[allCandles.length - 1];
     if (tail.time === lastCandle.time) allCandles[allCandles.length - 1] = { ...lastCandle };
     else if (lastCandle.time > tail.time) allCandles.push({ ...lastCandle });
-    rememberChartCandles(currentChartKey(), allCandles);
+    if (!chartSeriesSynthetic) rememberChartCandles(currentChartKey(), allCandles);
   }
   updateChartLegend(null);
   updateChartPriceLines();

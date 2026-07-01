@@ -75,6 +75,12 @@ async function boot() {
   } catch (_e) {}
 
   // ── Phase 1: Instant skeleton shell (no API wait) ──────────────────
+  try {
+    await initI18n();
+  } catch (i18nErr) {
+    console.warn('[boot] i18n initialization failed:', i18nErr);
+  }
+
   set('booted', true);
   renderShell(app);
   translateDom(app);
@@ -89,8 +95,6 @@ async function boot() {
   }, 15000);
 
   try {
-    // i18n is already initialized by now (import-time), but ensure translations
-    await initI18n();
     translateDom(app);
 
     // Load bootstrap data (user, wallet, brand, level, kyc)

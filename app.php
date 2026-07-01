@@ -60,8 +60,15 @@ $appRtl  = false;
 try {
   if (function_exists('site_locale')) { $appLang = site_locale(); $appRtl = site_is_rtl($appLang); }
   else {
-    $l = strtolower((string)($_COOKIE['vp_lang'] ?? $_GET['lang'] ?? 'en'));
+    $requested = strtolower(substr((string)($_GET['lang'] ?? ''), 0, 2));
+    $explicit = (string)($_COOKIE['vp_lang_explicit'] ?? '') === '1';
+    $cookieLang = $explicit ? strtolower(substr((string)($_COOKIE['vp_lang'] ?? ''), 0, 2)) : '';
+    $l = $requested !== '' ? $requested : ($cookieLang !== '' ? $cookieLang : 'en');
     $appLang = in_array($l, ['en','ar','ru','tr','fr','de','es','it','pt','nl','pl','zh','ja','ko','vi'],true) ? $l : 'en';
+    if ($requested !== '' && $appLang === $requested) {
+      setcookie('vp_lang', $appLang, ['expires'=>time()+31536000,'path'=>'/','samesite'=>'Lax','httponly'=>false,'secure'=>false]);
+      setcookie('vp_lang_explicit', '1', ['expires'=>time()+31536000,'path'=>'/','samesite'=>'Lax','httponly'=>false,'secure'=>false]);
+    }
     $appRtl  = $appLang === 'ar';
   }
 } catch (Throwable $_e) {}

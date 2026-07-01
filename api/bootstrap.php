@@ -106,7 +106,10 @@ function vp_boot_kyc(PDO $pdo, int $uid): ?array {
 }
 
 function vp_boot_lang(): string {
-  $lang = strtolower(trim((string)($_GET['lang'] ?? ($_COOKIE['vp_lang'] ?? 'en'))));
+  $requested = strtolower(substr(trim((string)($_GET['lang'] ?? '')), 0, 2));
+  $explicit = (string)($_COOKIE['vp_lang_explicit'] ?? '') === '1';
+  $cookie = $explicit ? strtolower(substr(trim((string)($_COOKIE['vp_lang'] ?? '')), 0, 2)) : '';
+  $lang = $requested !== '' ? $requested : ($cookie !== '' ? $cookie : 'en');
   return in_array($lang, ['en', 'ar', 'ru'], true) ? $lang : 'en';
 }
 

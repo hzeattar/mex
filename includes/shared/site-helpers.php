@@ -37,6 +37,7 @@ function site_locale(): string
 {
     $requested = strtolower(substr((string)($_GET['lang'] ?? ''), 0, 2));
     $cookie = strtolower(substr((string)($_COOKIE['vp_lang'] ?? ''), 0, 2));
+    $explicit = (string)($_COOKIE['vp_lang_explicit'] ?? '') === '1';
 
     if ($requested !== '' && in_array($requested, site_langs(), true)) {
         setcookie('vp_lang', $requested, [
@@ -46,18 +47,18 @@ function site_locale(): string
             'samesite' => 'Lax',
             'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
         ]);
+        setcookie('vp_lang_explicit', '1', [
+            'expires' => time() + 31536000,
+            'path' => '/',
+            'httponly' => false,
+            'samesite' => 'Lax',
+            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        ]);
         return $requested;
     }
 
-    if ($cookie !== '' && in_array($cookie, site_langs(), true)) {
+    if ($explicit && $cookie !== '' && in_array($cookie, site_langs(), true)) {
         return $cookie;
-    }
-
-    $accept = strtolower((string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
-    foreach (site_langs() as $lang) {
-        if ($lang !== 'en' && str_starts_with($accept, $lang)) {
-            return $lang;
-        }
     }
 
     return 'en';

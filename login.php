@@ -4,11 +4,16 @@ declare(strict_types=1);
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 if ($method !== 'POST') {
   $next = (string)($_GET['next'] ?? '/app.php#/home');
-  $lang = strtolower((string)($_GET['lang'] ?? ($_COOKIE['vp_lang'] ?? 'en')));
+  $requestedLang = strtolower(substr((string)($_GET['lang'] ?? ''), 0, 2));
+  $explicitLang = (string)($_COOKIE['vp_lang_explicit'] ?? '') === '1';
+  $cookieLang = $explicitLang ? strtolower(substr((string)($_COOKIE['vp_lang'] ?? ''), 0, 2)) : '';
+  $lang = $requestedLang !== '' ? $requestedLang : ($cookieLang !== '' ? $cookieLang : 'en');
   if (!in_array($lang, ['en','ar','ru'], true)) $lang = 'en';
   $rtl = ($lang === 'ar');
-  // Persist language choice so the SPA picks it up after login
-  setcookie('vp_lang', $lang, ['expires'=>time()+31536000,'path'=>'/','samesite'=>'Lax','httponly'=>false,'secure'=>false]);
+  if ($requestedLang !== '' && $requestedLang === $lang) {
+    setcookie('vp_lang', $lang, ['expires'=>time()+31536000,'path'=>'/','samesite'=>'Lax','httponly'=>false,'secure'=>false]);
+    setcookie('vp_lang_explicit', '1', ['expires'=>time()+31536000,'path'=>'/','samesite'=>'Lax','httponly'=>false,'secure'=>false]);
+  }
   $T = [
     'en' => ['title'=>'Log in','sub'=>'Access your trading workspace, funding, and account controls.','email'=>'Email','pass'=>'Password','login'=>'Log in','back'=>'Back to site','create'=>'Create account','fail'=>'Login failed.'],
     'ar' => ['title'=>'تسجيل الدخول','sub'=>'ادخل إلى مساحة التداول والإيداع وإدارة حسابك.','email'=>'البريد الإلكتروني','pass'=>'كلمة المرور','login'=>'تسجيل الدخول','back'=>'العودة إلى الموقع','create'=>'إنشاء حساب','fail'=>'فشل تسجيل الدخول.'],

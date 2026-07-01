@@ -1,6 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
+<style id="i18n-fouc">html{opacity:0}html[data-i18n-ready]{opacity:1}</style>
+<script>(function(){try{var allowed={en:1,ar:1,ru:1,tr:1,es:1,fr:1,zh:1};function cookie(name){try{var parts=('; '+document.cookie).split('; '+name+'=');return parts.length===2?decodeURIComponent(parts.pop().split(';').shift()||''):'';}catch(_){return '';}}function stored(name){try{return localStorage.getItem(name)||'';}catch(_){return '';}}var saved='en';var url='';try{var m=location.search.match(/[?&]lang=([^&#]+)/);if(m)url=decodeURIComponent(m[1]).toLowerCase().slice(0,2);}catch(_){}if(url&&allowed[url]){saved=url;}else{var explicit=stored('vp_lang_explicit')==='1'||cookie('vp_lang_explicit')==='1';if(explicit){var candidate=(stored('mex_lang')||stored('vp_lang')||cookie('vp_lang')||'en').toLowerCase().slice(0,2);saved=allowed[candidate]?candidate:'en';}}var html=document.documentElement;html.setAttribute('lang',saved);html.setAttribute('dir',saved==='ar'?'rtl':'ltr');html.setAttribute('data-lang',saved);setTimeout(function(){if(!html.hasAttribute('data-i18n-ready'))html.setAttribute('data-i18n-ready','1');},3000);}catch(_){document.documentElement.setAttribute('lang','en');document.documentElement.setAttribute('dir','ltr');document.documentElement.setAttribute('data-lang','en');document.documentElement.setAttribute('data-i18n-ready','1');}})();</script>
+
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="description" content="مركز الدعم والمساعدة — MEX Global Markets. أسئلة شائعة، نموذج اتصال، قنوات الدعم 24/5، ومركز معرفة شامل." />
@@ -14,7 +17,6 @@
 <link rel="stylesheet" href="css/subpages.css" />
 <link rel="stylesheet" href="css/i18n.css" />
 
-  <script>(function(){ try { var urlLang; try { var m = location.search.match(/[?&]lang=([^&#]+)/); if (m) urlLang = decodeURIComponent(m[1]).toLowerCase(); } catch(_){} var saved = urlLang || localStorage.getItem('mex_lang'); if (!saved && navigator.language) { var nav = navigator.language.toLowerCase().split('-')[0]; if (nav === 'ru' || nav === 'tr' || nav === 'es' || nav === 'fr' || nav === 'zh') saved = nav; else if (nav !== 'ar') saved = 'en'; } saved = saved || 'ar'; var html = document.documentElement; html.setAttribute('lang', saved); html.setAttribute('dir', saved === 'ar' ? 'rtl' : 'ltr'); html.setAttribute('data-lang', saved); } catch(_){} })();</script>
 </head>
 <body>
 
@@ -718,7 +720,7 @@
 </button>
 
 <script src="js/translations.js"></script>
-<script src="js/i18n.js"></script>
+<script src="js/i18n.js?v=6c62ca9d"></script>
 <script src="js/main.js"></script>
 
 <!-- FAQ accordion script -->

@@ -4,43 +4,45 @@ const SUPPORTED = ['en','ar','ru','tr','fr','de','es','it','pt','nl','pl','zh','
 
 const LANG_NAMES = {
   en: 'English',
-  ar: 'العربية',
-  ru: 'Русский',
-  tr: 'Türkçe',
-  fr: 'Français',
-  de: 'Deutsch',
-  es: 'Español',
-  it: 'Italiano',
-  pt: 'Português',
-  nl: 'Nederlands',
-  pl: 'Polski',
-  zh: '中文',
-  ja: '日本語',
-  ko: '한국어',
-  vi: 'Tiếng Việt',
-  hi: 'हिन्दी',
+  ar: 'Arabic',
+  ru: 'Russian',
+  tr: 'Turkish',
+  fr: 'French',
+  de: 'German',
+  es: 'Spanish',
+  it: 'Italian',
+  pt: 'Portuguese',
+  nl: 'Dutch',
+  pl: 'Polish',
+  zh: 'Chinese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  vi: 'Vietnamese',
+  hi: 'Hindi',
 };
 
 const LANG_FLAGS = {
-  en: '🇺🇸',
-  ar: '🇸🇦',
-  ru: '🇷🇺',
-  tr: '🇹🇷',
-  fr: '🇫🇷',
-  de: '🇩🇪',
-  es: '🇪🇸',
-  it: '🇮🇹',
-  pt: '🇵🇹',
-  nl: '🇳🇱',
-  pl: '🇵🇱',
-  zh: '🇨🇳',
-  ja: '🇯🇵',
-  ko: '🇰🇷',
-  vi: '🇻🇳',
-  hi: '🇮🇳',
+  en: 'EN',
+  ar: 'AR',
+  ru: 'RU',
+  tr: 'TR',
+  fr: 'FR',
+  de: 'DE',
+  es: 'ES',
+  it: 'IT',
+  pt: 'PT',
+  nl: 'NL',
+  pl: 'PL',
+  zh: 'ZH',
+  ja: 'JA',
+  ko: 'KO',
+  vi: 'VI',
+  hi: 'HI',
 };
-
 const FALLBACK_LOCALE = 'en';
+const LOCALE_STORAGE_KEY = 'vp_lang';
+const AUTH_LOCALE_STORAGE_KEY = 'mex_lang';
+const LOCALE_EXPLICIT_STORAGE_KEY = 'vp_lang_explicit';
 
 const BUILT_INS = {
   en: {
@@ -2492,7 +2494,35 @@ function readCookie(name) {
     return m ? decodeURIComponent(m[1]) : null;
   } catch (_e) { return null; }
 }
-let locale = readCookie('vp_lang') || localStorage.getItem('vp_lang') || navigator.language?.slice(0, 2) || FALLBACK_LOCALE;
+
+function readStorage(name) {
+  try { return localStorage.getItem(name); } catch (_e) { return null; }
+}
+
+function writeStorage(name, value) {
+  try { localStorage.setItem(name, value); } catch (_e) {}
+}
+
+function writeCookie(name, value) {
+  try {
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000; SameSite=Lax`;
+  } catch (_e) {}
+}
+
+function hasExplicitLocaleChoice() {
+  return readStorage(LOCALE_EXPLICIT_STORAGE_KEY) === '1'
+    || readCookie(LOCALE_EXPLICIT_STORAGE_KEY) === '1';
+}
+
+function initialLocale() {
+  if (!hasExplicitLocaleChoice()) return FALLBACK_LOCALE;
+  return readStorage(LOCALE_STORAGE_KEY)
+    || readStorage(AUTH_LOCALE_STORAGE_KEY)
+    || readCookie(LOCALE_STORAGE_KEY)
+    || FALLBACK_LOCALE;
+}
+
+let locale = initialLocale();
 let translations = { ...BUILT_INS.en };
 
 function normalizeLocale(lang) {
@@ -2508,12 +2538,18 @@ export async function initI18n() {
 export async function loadLocale(lang) {
   locale = normalizeLocale(lang);
 
+  const COMMON_LANGS = ['en','ar','ru','tr','es','fr','zh'];
+  const authLocale = COMMON_LANGS.includes(locale) ? locale : 'en';
+  writeStorage(AUTH_LOCALE_STORAGE_KEY, authLocale);
+
   let remote = {};
-  try {
-    const res = await fetch(`/assets/i18n/${locale}.json`, { cache: 'no-store' });
-    if (res.ok) remote = await res.json();
-  } catch (_e) {
-    remote = {};
+  if (locale !== FALLBACK_LOCALE) {
+    try {
+      const res = await fetch(`/assets/i18n/${locale}.json`, { cache: 'no-store' });
+      if (res.ok) remote = await res.json();
+    } catch (_e) {
+      remote = {};
+    }
   }
 
   translations = {
@@ -2524,8 +2560,8 @@ export async function loadLocale(lang) {
 
   const rtlLangs = ['ar', 'he', 'fa', 'ur'];
   const isRtl = rtlLangs.includes(locale);
-  localStorage.setItem('vp_lang', locale);
-  document.cookie = `vp_lang=${encodeURIComponent(locale)}; path=/; max-age=31536000; SameSite=Lax`;
+  writeStorage(LOCALE_STORAGE_KEY, locale);
+  writeCookie(LOCALE_STORAGE_KEY, locale);
   document.documentElement.lang = locale;
   document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
   document.body?.classList.toggle('rtl', isRtl);
@@ -2551,6 +2587,8 @@ export function isRTL() {
 
 export function setLocale(lang, options = {}) {
   const shouldReload = options.reload !== false;
+  writeStorage(LOCALE_EXPLICIT_STORAGE_KEY, '1');
+  writeCookie(LOCALE_EXPLICIT_STORAGE_KEY, '1');
   return loadLocale(lang).then(() => {
     try {
       window.dispatchEvent(new CustomEvent('vp:localechange', { detail: { locale } }));
