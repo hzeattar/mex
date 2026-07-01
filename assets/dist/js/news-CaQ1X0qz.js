@@ -1,4 +1,4 @@
-import{k as p,g as s,v as r,e as m,c as y}from"./main-aB5-nE75.js";let f=[];function E(){return`
+import{k as p,g as s,v as r,e as m,c as y}from"./main--zvmH5p_.js";let f=[];function E(){return`
     <div class="space-y-6 animate-fade-in">
       <section class="news-hero card">
         <div class="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

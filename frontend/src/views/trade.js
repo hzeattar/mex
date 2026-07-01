@@ -64,6 +64,7 @@ const closingPositions = new Set();
 const MARKET_LIST_STORAGE_KEY = 'vp_trade_market_lists_v2';
 const QUOTE_SEED_STORAGE_KEY = 'vp_trade_quote_seeds_v1';
 const CHART_CANDLE_STORAGE_KEY = 'vp_trade_chart_candles_v2';
+const CHART_WARMUP_STORAGE_KEY = 'vp_trade_chart_warmup_v1';
 const MARKET_LIST_STORAGE_MAX_AGE = 15 * 60 * 1000;
 const QUOTE_SEED_MAX_AGE = 10 * 60 * 1000;
 const QUOTE_SEED_MAX = 120;
@@ -354,6 +355,8 @@ const CHART_NONCRYPTO_FAST_PAGE_LIMIT = 1200;
 const CHART_FAST_INITIAL_TFS = ['1m', '3m', '5m', '15m'];
 const CHART_CRYPTO_FAST_INITIAL_LIMIT = 300;
 const CHART_CANDLE_CACHE_MAX = 36;
+const CHART_WARMUP_TYPES = ['crypto', 'forex', 'commodities', 'futures', 'stocks', 'arab'];
+const CHART_WARMUP_TTL = 10 * 60 * 1000;
 
 function chartTargetBars(tf) {
   return Math.max(CHART_MIN_INITIAL_LIMIT, Math.ceil((CHART_HISTORY_DAYS * 86400) / Math.max(60, tfSeconds(tf))));
@@ -703,6 +706,7 @@ export function cleanup() {
   tradeRunId += 1;
   if (currentSetup?.container) cancelMonthHistoryPrefetch(currentSetup.container);
   if (currentSetup?.container) cancelChartPrefetch(currentSetup.container);
+  if (currentSetup?.container) cancelBackgroundChartWarmup(currentSetup.container);
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
@@ -804,6 +808,7 @@ async function setup(container) {
         if (isCurrentRun(runId, symbol, type)) startLiveQuotes(container, mkts.items, runId, type);
         warmVisibleQuotes(container, mkts.items, runId, type).catch(() => {});
         scheduleChartPrefetch(container, mkts.items, runId, type);
+        scheduleBackgroundChartWarmup(container, runId, type);
       }
     })
     .catch(() => {
@@ -2175,7 +2180,7 @@ function scheduleChartPrefetch(container, items, runId = tradeRunId, listType = 
   const activeSymbol = String(get('symbol') || '').toUpperCase();
   const tf = get('tf') || '15m';
   const baseType = normalizeType(listType || get('type') || 'crypto');
-  const max = baseType === 'crypto' ? 8 : 10;
+  const max = baseType === 'crypto' ? 12 : 12;
   const queue = items
     .slice(0, 40)
     .map(item => {
@@ -2192,24 +2197,97 @@ function scheduleChartPrefetch(container, items, runId = tradeRunId, listType = 
   let index = 0;
   const runNext = async () => {
     if (container.__chartPrefetchToken !== token || !isCurrentRun(runId)) return;
-    const item = queue[index++];
-    if (!item) return;
-    const key = chartKeyFor(item.symbol, item.type, item.market, tf);
-    const limit = item.type === 'crypto' ? 120 : 90;
-    try {
-      const data = await api(`/trade/candles.php?symbol=${encodeURIComponent(item.symbol)}&type=${encodeURIComponent(item.type)}&market=${encodeURIComponent(item.market)}&tf=${encodeURIComponent(tf)}&limit=${limit}&fast=1`, {
-        timeout: item.type === 'crypto' ? 5000 : 6500,
-        retry: 0,
-        cacheTtl: 30000,
-      });
-      if (data?.items?.length) rememberChartCandles(key, data.items);
-    } catch (_e) {
-      // Background prefetch must never affect the active chart.
-    }
+    const concurrency = baseType === 'crypto' ? 3 : 2;
+    const batch = queue.slice(index, index + concurrency);
+    index += batch.length;
+    if (!batch.length) return;
+    await Promise.allSettled(batch.map(item => prefetchChartCandles(item, tf)));
     if (container.__chartPrefetchToken !== token || !isCurrentRun(runId)) return;
-    container.__chartPrefetchTimer = setTimeout(runNext, item.type === 'crypto' ? 350 : 650);
+    if (index < queue.length) {
+      container.__chartPrefetchTimer = setTimeout(runNext, baseType === 'crypto' ? 220 : 400);
+    }
   };
-  container.__chartPrefetchTimer = setTimeout(runNext, 350);
+  container.__chartPrefetchTimer = setTimeout(runNext, 80);
+}
+
+function cancelBackgroundChartWarmup(container) {
+  if (!container?.__chartWarmupTimer) return;
+  clearTimeout(container.__chartWarmupTimer);
+  container.__chartWarmupTimer = null;
+}
+
+async function prefetchChartCandles(item, tf = get('tf') || '15m', options = {}) {
+  const symbol = String(item?.symbol || '').toUpperCase();
+  const type = normalizeType(item?.type || get('type') || 'crypto');
+  if (!symbol || !type) return false;
+  const market = normalizeMarketForType(type, item?.market || item?.market_type || defaultMarketForType(type));
+  const key = chartKeyFor(symbol, type, market, tf);
+  if (!options.force && cachedChartCandles(key).length) return true;
+  const limit = Number(options.limit || (type === 'crypto' ? 160 : 140));
+  try {
+    const data = await api(`/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=${limit}&fast=1`, {
+      timeout: type === 'crypto' ? 5000 : 7500,
+      retry: 0,
+      cacheTtl: 120000,
+    });
+    if (data?.items?.length) {
+      rememberChartCandles(key, data.items);
+      return true;
+    }
+  } catch (_e) {
+    // Background prefetch must never affect the active chart.
+  }
+  return false;
+}
+
+function chartWarmupStore() {
+  return readJsonStorage(CHART_WARMUP_STORAGE_KEY, { entries: {} }) || { entries: {} };
+}
+
+function markChartWarmupScheduled(tf) {
+  const key = String(tf || '15m').toLowerCase();
+  const store = chartWarmupStore();
+  const entries = store.entries && typeof store.entries === 'object' ? store.entries : {};
+  const now = Date.now();
+  if (now - Number(entries[key] || 0) < CHART_WARMUP_TTL) return false;
+  entries[key] = now;
+  writeJsonStorage(CHART_WARMUP_STORAGE_KEY, { version: 1, entries });
+  return true;
+}
+
+function scheduleBackgroundChartWarmup(container, runId = tradeRunId, activeType = get('type')) {
+  if (!container || document.hidden || container.__chartWarmupTimer) return;
+  const tf = get('tf') || '15m';
+  if (!markChartWarmupScheduled(tf)) return;
+  const first = normalizeType(activeType || 'crypto');
+  const types = [first, ...CHART_WARMUP_TYPES].filter((value, index, arr) => value && arr.indexOf(value) === index);
+  let typeIndex = 0;
+  const warmNextType = async () => {
+    container.__chartWarmupTimer = null;
+    if (!isCurrentRun(runId) || document.hidden) return;
+    const type = types[typeIndex++];
+    if (!type) return;
+    const data = await loadMarketItems(type, runId).catch(() => null);
+    const sourceItems = data?.items?.length ? data.items : fallbackMarketItems(type);
+    const queue = sourceItems
+      .slice(0, 6)
+      .map(item => ({
+        symbol: String(item.symbol || '').toUpperCase(),
+        type: normalizeType(item.type || type),
+        market: normalizeMarketForType(item.type || type, item.market || item.market_type || defaultMarketForType(type)),
+      }))
+      .filter(item => item.symbol && !cachedChartCandles(chartKeyFor(item.symbol, item.type, item.market, tf)).length)
+      .slice(0, 4);
+    const concurrency = type === 'crypto' ? 3 : 2;
+    for (let i = 0; i < queue.length; i += concurrency) {
+      if (!isCurrentRun(runId) || document.hidden) return;
+      await Promise.allSettled(queue.slice(i, i + concurrency).map(item => prefetchChartCandles(item, tf)));
+    }
+    if (typeIndex < types.length && isCurrentRun(runId) && !document.hidden) {
+      container.__chartWarmupTimer = setTimeout(warmNextType, type === 'crypto' ? 260 : 520);
+    }
+  };
+  container.__chartWarmupTimer = setTimeout(warmNextType, 1200);
 }
 
 function applyChartData(candles, { fit = false, key = currentChartKey(), preserveRange = false, skipUnchanged = false } = {}) {
@@ -2424,19 +2502,10 @@ function chartPreferredRightOffset(target = null) {
     ? target
     : (target?.querySelector ? $('#chart-box', target) : document.getElementById('chart-box'));
   const width = Math.max(320, Number(box?.clientWidth || 0));
-  const estimatedBarSpacing = width >= 900 ? 5 : 3.5;
-  const desired = (width * (width >= 900 ? 0.32 : 0.28)) / estimatedBarSpacing;
-  const min = width >= 900 ? 60 : 42;
-  const max = width >= 900 ? 120 : 86;
-  return Math.round(Math.max(min, Math.min(max, desired)));
-}
-
-function chartLiveCandleTargetRatio(target = null) {
-  const box = target?.id === 'chart-box'
-    ? target
-    : (target?.querySelector ? $('#chart-box', target) : document.getElementById('chart-box'));
-  const width = Math.max(320, Number(box?.clientWidth || 0));
-  return width >= 720 ? 0.68 : 0.72;
+  if (width >= 1200) return 34;
+  if (width >= 900) return 28;
+  if (width >= 640) return 22;
+  return 16;
 }
 
 function keepLiveCandleInFocus(target = null) {
@@ -2445,14 +2514,6 @@ function keepLiveCandleInFocus(target = null) {
   safeChartOp(() => {
     const timeScale = chart.timeScale();
     timeScale.applyOptions({ rightOffset });
-    if (!allCandles.length || typeof timeScale.getVisibleLogicalRange !== 'function' || typeof timeScale.setVisibleLogicalRange !== 'function') return;
-    const range = timeScale.getVisibleLogicalRange();
-    if (!range || !(Number(range.to) > Number(range.from))) return;
-    const span = Math.max(20, Number(range.to) - Number(range.from));
-    const lastIndex = allCandles.length - 1;
-    const targetRatio = chartLiveCandleTargetRatio(target);
-    const nextTo = lastIndex + (span * (1 - targetRatio));
-    timeScale.setVisibleLogicalRange({ from: nextTo - span, to: nextTo });
   });
 }
 
@@ -3201,14 +3262,15 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
     const freshProviderWindow = usesFreshProviderWindow(type, tf);
     const refreshParam = options.refresh ? '&refresh=1' : '';
     const initialLimit = chartInitialLimitFor(type, tf);
-    // No cache-buster param: lets the nginx micro-cache share identical candle
-    // responses across users (the request itself is already no-store client-side).
+    // No cache-buster param: lets the nginx micro-cache and client request
+    // de-dupe share identical candle responses across fast symbol switches.
     const url = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=${initialLimit}&fast=1${refreshParam}`;
+    const chartFetchCacheTtl = options.refresh ? 0 : (options.silent ? 30000 : 45000);
     const candles = await api(url, {
       timeout: options.silent ? 8000 : 9000,
       retry: options.silent ? 0 : 0,
-      cacheTtl: 0,
-      cache: 'no-store',
+      cacheTtl: chartFetchCacheTtl,
+      cache: options.refresh ? 'no-store' : 'default',
       signal: requestController?.signal,
     });
     await chartReady;
