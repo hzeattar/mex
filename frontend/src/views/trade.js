@@ -8,6 +8,7 @@ import { navigate } from '../router.js';
 import { marketIconPath, marketInitial } from '../utils/marketIcon.js';
 import { t } from '../utils/i18n.js';
 import { trySwitchToReal } from '../utils/gates.js';
+import { createChart } from 'lightweight-charts';
 
 let chart = null;
 let candleSeries = null;
@@ -46,7 +47,7 @@ let chartRefreshTimer = null;
 let resizeObserver = null;
 let binanceWs = null;
 let binanceKlineWs = null;
-let chartLibPromise = null;
+let chartLibPromise = Promise.resolve({ createChart });
 let lastCandle = null;
 let liveCandleFrame = 0;
 let pendingLiveCandle = null;
@@ -60,9 +61,232 @@ const marketListCache = new Map();
 const chartCandleCache = new Map();
 let chartPriceLines = { live: null, series: null };
 const closingPositions = new Set();
+const MARKET_LIST_STORAGE_KEY = 'vp_trade_market_lists_v2';
+const QUOTE_SEED_STORAGE_KEY = 'vp_trade_quote_seeds_v1';
+const CHART_CANDLE_STORAGE_KEY = 'vp_trade_chart_candles_v2';
+const MARKET_LIST_STORAGE_MAX_AGE = 15 * 60 * 1000;
+const QUOTE_SEED_MAX_AGE = 10 * 60 * 1000;
+const QUOTE_SEED_MAX = 120;
+const CHART_CANDLE_PERSIST_MAX = 18;
+const CHART_CANDLE_PERSIST_ROWS = 900;
+let persistentChartCache = null;
+let chartCachePersistTimer = 0;
+const quoteSeedLastWrite = new Map();
 
 function safeChartOp(fn) {
   try { return fn(); } catch (_e) { return null; }
+}
+
+function readJsonStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (_e) {
+    return fallback;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (_e) {}
+}
+
+function cloneRows(rows) {
+  return Array.isArray(rows) ? rows.map(row => ({ ...row })) : [];
+}
+
+function quoteSeedKey(symbol = get('symbol'), type = get('type')) {
+  return `${String(symbol || '').toUpperCase()}|${normalizeType(type || 'crypto')}`;
+}
+
+function quoteSeedForDisplay(q, symbol = get('symbol'), type = get('type')) {
+  const p = Number(q?.price || q?.q_price || 0);
+  if (!(p > 0)) return null;
+  return {
+    ...q,
+    symbol: String(symbol || q?.symbol || '').toUpperCase(),
+    type: normalizeType(type || q?.type || get('type')),
+    price: p,
+    q_price: p,
+    change_pct: Number(q?.change_pct || q?.q_change || 0),
+    q_change: Number(q?.change_pct || q?.q_change || 0),
+    provider_updated_at: 0,
+    provider_ts: 0,
+    updated_at: 0,
+    cache_updated_at: 0,
+    received_at: 0,
+    ingested_at: 0,
+    source: 'client_seed_cache',
+    timing_class: 'seed',
+  };
+}
+
+function rememberQuoteSeed(q) {
+  const symbol = String(q?.symbol || get('symbol') || '').toUpperCase();
+  const type = normalizeType(q?.type || get('type') || 'crypto');
+  const priceValue = Number(q?.price || q?.q_price || 0);
+  if (!symbol || !(priceValue > 0)) return;
+  const key = quoteSeedKey(symbol, type);
+  const now = Date.now();
+  const lastWrite = Number(quoteSeedLastWrite.get(key) || 0);
+  if (now - lastWrite < 5000) return;
+  quoteSeedLastWrite.set(key, now);
+  const store = readJsonStorage(QUOTE_SEED_STORAGE_KEY, { entries: {} }) || { entries: {} };
+  const entries = store.entries && typeof store.entries === 'object' ? store.entries : {};
+  entries[key] = {
+    t: now,
+    q: {
+      symbol,
+      type,
+      price: priceValue,
+      change_pct: Number(q?.change_pct || q?.q_change || 0),
+      name: q?.name || '',
+    },
+  };
+  const ordered = Object.entries(entries).sort((a, b) => Number(b[1]?.t || 0) - Number(a[1]?.t || 0));
+  writeJsonStorage(QUOTE_SEED_STORAGE_KEY, {
+    version: 1,
+    entries: Object.fromEntries(ordered.slice(0, QUOTE_SEED_MAX)),
+  });
+}
+
+function storedQuoteSeed(symbol = get('symbol'), type = get('type')) {
+  const store = readJsonStorage(QUOTE_SEED_STORAGE_KEY, null);
+  const entry = store?.entries?.[quoteSeedKey(symbol, type)];
+  if (!entry || Date.now() - Number(entry.t || 0) > QUOTE_SEED_MAX_AGE) return null;
+  return quoteSeedForDisplay(entry.q, symbol, type);
+}
+
+function hydrateActiveFromStoredQuote(container, symbol = get('symbol'), type = get('type'), runId = tradeRunId) {
+  const q = storedQuoteSeed(symbol, type);
+  if (!q) return false;
+  updatePrice(container, q, runId);
+  return true;
+}
+
+function storedMarketStore() {
+  const store = readJsonStorage(MARKET_LIST_STORAGE_KEY, { entries: {} }) || { entries: {} };
+  if (!store.entries || typeof store.entries !== 'object') store.entries = {};
+  return store;
+}
+
+function marketListCacheKey(type) {
+  return normalizeType(type || 'crypto') || 'crypto';
+}
+
+function markMarketItemsAsSeed(items, type) {
+  return (items || []).map(item => {
+    const symbol = String(item?.symbol || '').toUpperCase();
+    const p = Number(item?.price || item?.q_price || 0);
+    return {
+      ...item,
+      symbol,
+      type: normalizeType(item?.type || type || get('type')),
+      price: p,
+      q_price: p,
+      source: 'client_seed_cache',
+      timing_class: 'seed',
+      provider_updated_at: 0,
+      provider_ts: 0,
+      updated_at: 0,
+      cache_updated_at: 0,
+      received_at: 0,
+      ingested_at: 0,
+    };
+  }).filter(item => item.symbol);
+}
+
+function rememberStoredMarketList(type, data) {
+  const items = Array.isArray(data?.items) ? data.items : [];
+  if (!items.length) return;
+  const key = marketListCacheKey(type);
+  const store = storedMarketStore();
+  store.entries[key] = {
+    t: Date.now(),
+    data: { ...(data || {}), items: items.slice(0, 120) },
+  };
+  writeJsonStorage(MARKET_LIST_STORAGE_KEY, store);
+}
+
+function storedMarketList(type) {
+  const key = marketListCacheKey(type);
+  const entry = storedMarketStore().entries?.[key];
+  if (!entry || Date.now() - Number(entry.t || 0) > MARKET_LIST_STORAGE_MAX_AGE) return null;
+  const items = markMarketItemsAsSeed(entry.data?.items || [], key);
+  return items.length ? { ...(entry.data || {}), items, fromStorage: true } : null;
+}
+
+function paintStoredMarketList(container, type, runId = tradeRunId, { startStreams = false } = {}) {
+  const cached = storedMarketList(type);
+  if (!cached?.items?.length) return null;
+  container.__marketItems = cached.items;
+  renderSymbolList(container, cached.items);
+  markActiveSymbolRow(container, get('symbol'));
+  hydrateActiveFromMarketList(container, cached.items, runId, { seed: true });
+  if (startStreams) {
+    startLiveQuotes(container, cached.items, runId, type);
+    scheduleChartPrefetch(container, cached.items, runId, type);
+  }
+  return cached;
+}
+
+function persistentChartMaxAge(key) {
+  const tf = String(key || '').split('|')[3] || get('tf');
+  if (['1d', '1w'].includes(tf)) return 14 * 24 * 60 * 60 * 1000;
+  return 18 * 60 * 60 * 1000;
+}
+
+function persistentChartEntries() {
+  if (persistentChartCache) return persistentChartCache;
+  persistentChartCache = new Map();
+  const raw = readJsonStorage(CHART_CANDLE_STORAGE_KEY, null);
+  const entries = raw?.entries && typeof raw.entries === 'object' ? raw.entries : {};
+  const now = Date.now();
+  Object.entries(entries).forEach(([key, entry]) => {
+    const rows = normalizeCandleRows(entry?.data || []);
+    const t = Number(entry?.t || 0);
+    if (!key || !rows.length || now - t > persistentChartMaxAge(key)) return;
+    persistentChartCache.set(key, { t, data: rows.slice(-CHART_CANDLE_PERSIST_ROWS) });
+  });
+  return persistentChartCache;
+}
+
+function trimPersistentChartEntries() {
+  const entries = persistentChartEntries();
+  const ordered = [...entries.entries()].sort((a, b) => Number(b[1]?.t || 0) - Number(a[1]?.t || 0));
+  entries.clear();
+  ordered.slice(0, CHART_CANDLE_PERSIST_MAX).forEach(([key, value]) => entries.set(key, value));
+}
+
+function flushPersistentChartCache() {
+  chartCachePersistTimer = 0;
+  const entries = persistentChartEntries();
+  trimPersistentChartEntries();
+  writeJsonStorage(CHART_CANDLE_STORAGE_KEY, {
+    version: 2,
+    entries: Object.fromEntries([...entries.entries()].map(([key, value]) => [key, value])),
+  });
+}
+
+function schedulePersistentChartCacheWrite() {
+  if (chartCachePersistTimer) return;
+  chartCachePersistTimer = setTimeout(flushPersistentChartCache, 700);
+}
+
+function rememberPersistentChartCandles(key, candles) {
+  const data = normalizeCandleRows(candles).slice(-CHART_CANDLE_PERSIST_ROWS);
+  if (!key || !data.length) return;
+  const entries = persistentChartEntries();
+  entries.delete(key);
+  entries.set(key, { t: Date.now(), data });
+  trimPersistentChartEntries();
+  schedulePersistentChartCacheWrite();
+}
+
+function forgetChartCandles(key) {
+  if (!key) return;
+  chartCandleCache.delete(key);
+  const entries = persistentChartEntries();
+  if (entries.delete(key)) schedulePersistentChartCacheWrite();
 }
 
 // Listeners bound to the persistent #view container must be disposed on cleanup,
@@ -219,8 +443,12 @@ export function render(params) {
           <span class="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted">${icons.search}</span>
         </div>
       </div>
-      <div class="flex gap-1 p-2 overflow-x-auto border-b border-line" id="type-tabs">
-        ${getTypes().map(tp => `<button class="btn-xs ${tp.key === type ? 'bg-accent/20 text-accent border-accent/40' : 'text-muted border-line'} border rounded-md whitespace-nowrap" data-type-tab="${tp.key}">${tp.label}</button>`).join('')}
+      <div class="market-tabs-shell">
+        <button type="button" class="market-tabs-arrow" data-type-tabs-scroll="-1" aria-label="Scroll markets left">${icons.back}</button>
+        <div class="market-tabs-rail" id="type-tabs">
+          ${getTypes().map(tp => `<button class="market-tab ${tp.key === type ? 'active bg-accent/20 text-accent border-accent/40' : 'text-muted border-line'}" data-type-tab="${tp.key}">${tp.label}</button>`).join('')}
+        </div>
+        <button type="button" class="market-tabs-arrow market-tabs-arrow-next" data-type-tabs-scroll="1" aria-label="Scroll markets right">${icons.back}</button>
       </div>
       <div class="flex-1 overflow-auto p-1" id="symbol-list">${symbolListSkeleton()}</div>
     </aside>
@@ -561,6 +789,8 @@ async function setup(container) {
   bindEvents(container);
   bindVisibilityPause();
   updateOrderInfo(container);
+  hydrateActiveFromStoredQuote(container, symbol, type, runId);
+  paintStoredMarketList(container, type, runId, { startStreams: true });
   startActiveQuote(container, symbol, type, runId);
 
   loadMarketItems(type, runId)
@@ -687,7 +917,7 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
   const fetchDirectQuote = () => {
     const fbUrl = `/quotes.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(quoteType)}&purpose=focus&direct=1&fresh=1&_=${Date.now()}`;
     return api(fbUrl, {
-      timeout: preferDirectLive ? 3200 : (quoteType === 'crypto' ? 1800 : 3800),
+      timeout: preferDirectLive ? 2400 : (quoteType === 'crypto' ? 1800 : 3800),
       retry: 0,
       signal: activeQuoteController.signal,
       cacheTtl: 0,
@@ -695,30 +925,55 @@ function startActiveQuote(container, symbol, type, runId = tradeRunId) {
     });
   };
   const hasUsablePrice = (item) => Number(item?.price || item?.q_price || 0) > 0;
+  const hasFastFocusPrice = (item) => {
+    if (!hasUsablePrice(item)) return false;
+    const ageSec = Number(item?.age_sec ?? 999999);
+    const timing = String(item?.timing_class || '').toLowerCase();
+    return ageSec <= staleFocusAge || timing === 'market_closed' || timing === 'delayed';
+  };
   const poll = async () => {
     if (!isCurrentRun(runId, symbol, type)) return;
     activeQuoteController = new AbortController();
     try {
       pollCount += 1;
-      let data = null;
       let item = null;
-      if (preferDirectLive && pollCount % directCadence === 0) {
-        data = await fetchDirectQuote().catch(() => null);
+      let applied = false;
+      const applyItem = (next) => {
+        if (!hasUsablePrice(next) || !isCurrentRun(runId, symbol, type)) return false;
+        updatePrice(container, next, runId);
+        item = next;
+        applied = true;
+        return true;
+      };
+      if (preferDirectLive) {
+        const focusPromise = api(focusUrl, {
+          timeout: 850,
+          retry: 0,
+          signal: activeQuoteController.signal,
+          cacheTtl: 0,
+          cache: 'no-store',
+        }).then(data => data?.items?.[0]).catch(() => null);
+        const directPromise = pollCount % directCadence === 0
+          ? fetchDirectQuote().then(data => data?.items?.[0]).catch(() => null)
+          : Promise.resolve(null);
+        const focusItem = await focusPromise;
+        if (hasFastFocusPrice(focusItem)) applyItem(focusItem);
+        const directItem = await directPromise;
+        if (hasUsablePrice(directItem)) applyItem(directItem);
+        if (!item) item = directItem || focusItem;
+      } else {
+        const data = await api(focusUrl, { timeout: 1800, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
         item = data?.items?.[0];
-      }
-      if (!hasUsablePrice(item)) {
-        data = await api(focusUrl, { timeout: 1800, retry: 0, signal: activeQuoteController.signal, cacheTtl: 0, cache: 'no-store' });
-        item = data?.items?.[0];
-      }
-      const ageSec = Number(item?.age_sec ?? 999999);
-      const needsFresh = quoteType !== 'crypto'
-        && (!hasUsablePrice(item) || ageSec > staleFocusAge || pollCount % directCadence === 0);
-      if (!preferDirectLive && (needsFresh || !hasUsablePrice(item))) {
-        data = await fetchDirectQuote();
-        item = data?.items?.[0];
+        const ageSec = Number(item?.age_sec ?? 999999);
+        const needsFresh = quoteType !== 'crypto'
+          && (!hasUsablePrice(item) || ageSec > staleFocusAge || pollCount % directCadence === 0);
+        if (needsFresh || !hasUsablePrice(item)) {
+          const fresh = await fetchDirectQuote();
+          item = fresh?.items?.[0];
+        }
       }
       if (!isCurrentRun(runId, symbol, type)) return;
-      if (item) updatePrice(container, item, runId);
+      if (item && !applied) updatePrice(container, item, runId);
     } catch (_e) {
       // Abort/timeout errors are normal during cleanup â€” don't surface to UI.
       if (isCurrentRun(runId, symbol, type)) markDisconnected(container);
@@ -960,6 +1215,7 @@ function updatePrice(container, q, runId = tradeRunId) {
   const chg = Number(q.change_pct || q.q_change || 0) || deriveChangePct(q);
   const assetType = get('type');
   set('activeQuote', { ...q, price: p, change_pct: chg });
+  rememberQuoteSeed({ ...q, price: p, change_pct: chg, type: q.type || assetType, symbol: q.symbol || get('symbol') });
   const liveTrend = trendClass(container, q.symbol || get('symbol'), p, chg);
   updateSymbolListPrices(container, [{ ...q, price: p, change_pct: chg }]);
 
@@ -1890,11 +2146,17 @@ function rememberChartCandles(key = currentChartKey(), candles = allCandles) {
     const oldest = chartCandleCache.keys().next().value;
     chartCandleCache.delete(oldest);
   }
+  rememberPersistentChartCandles(key, data);
 }
 
 function cachedChartCandles(key = currentChartKey()) {
   const data = chartCandleCache.get(key);
-  return Array.isArray(data) && data.length ? data.map(c => ({ ...c })) : [];
+  if (Array.isArray(data) && data.length) return cloneRows(data);
+  const persisted = persistentChartEntries().get(key);
+  if (!persisted?.data?.length || Date.now() - Number(persisted.t || 0) > persistentChartMaxAge(key)) return [];
+  const rows = cloneRows(persisted.data);
+  chartCandleCache.set(key, rows);
+  return cloneRows(rows);
 }
 
 function cancelChartPrefetch(container) {
@@ -2343,6 +2605,7 @@ async function loadOlderCandles(container, options = {}) {
     if (!older.length) { chartHistory.done = true; return; }
     allCandles = mergeCandleSets(older, allCandles);
     renderChartSeries({ preserveRange: true });
+    rememberChartCandles(key, allCandles);
     if (data?.has_more === false || older.length < 20) chartHistory.done = true;
   } catch (_e) {
     // transient failure: retry later via cooldown
@@ -2585,6 +2848,10 @@ function switchSymbol(container, symbol, type) {
   const typeChanged = nextType !== prevType;
   const tf = get('tf');
   const runId = tradeRunId;
+  if (typeChanged && sseClean) {
+    sseClean();
+    sseClean = null;
+  }
   stopActiveQuote();
   stopChartRefresh();
   clearChartForSwitch(container);
@@ -2595,7 +2862,13 @@ function switchSymbol(container, symbol, type) {
   updateInstrumentHeader(container, sym, nextType);
   markActiveSymbolRow(container, sym);
   updateOrderInfo(container);
-  hydrateActiveFromMarketList(container, container.__marketItems || [], runId);
+  let seeded = hydrateActiveFromMarketList(container, container.__marketItems || [], runId);
+  if (!seeded && typeChanged) {
+    const cached = paintStoredMarketList(container, nextType, runId, { startStreams: true });
+    if (cached) markActiveSymbolRow(container, sym);
+    seeded = !!cached && hydrateActiveFromMarketList(container, cached.items || [], runId, { seed: true });
+  }
+  if (!seeded) hydrateActiveFromStoredQuote(container, sym, nextType, runId);
   const chartReady = loadChartLib();
   startActiveQuote(container, sym, nextType, runId);
   loadChartData(container, sym, nextType, tf, runId, chartReady);
@@ -2650,7 +2923,20 @@ function bindEvents(container) {
   bindDelegate(container,'[data-type-tab]', 'click', async (e, el) => {
     const drawerType = normalizeType(el.dataset.typeTab || get('type') || 'crypto');
     container.__marketDrawerType = drawerType;
+    const cached = paintStoredMarketList(container, drawerType, tradeRunId, { startStreams: true });
+    if (!cached) {
+      const list = $('#symbol-list', container);
+      if (list) list.innerHTML = symbolListSkeleton(7);
+    }
+    $$('[data-type-tab]', container).forEach(btn => {
+      const active = btn === el;
+      btn.classList.toggle('active', active);
+      btn.classList.toggle('bg-accent/20', active);
+      btn.classList.toggle('text-accent', active);
+      btn.classList.toggle('border-accent/40', active);
+    });
     const data = await loadMarketItems(drawerType, tradeRunId, true).catch(() => null);
+    if (container.__marketDrawerType !== drawerType || !isCurrentRun(tradeRunId)) return;
     if (data?.items) {
       container.__marketItems = data.items;
       renderSymbolList(container, data.items);
@@ -2658,12 +2944,13 @@ function bindEvents(container) {
       startLiveQuotes(container, data.items, tradeRunId, drawerType);
       scheduleChartPrefetch(container, data.items, tradeRunId, drawerType);
     }
-    $$('[data-type-tab]', container).forEach(btn => {
-      const active = btn === el;
-      btn.classList.toggle('bg-accent/20', active);
-      btn.classList.toggle('text-accent', active);
-      btn.classList.toggle('border-accent/40', active);
-    });
+  });
+
+  bindDelegate(container,'[data-type-tabs-scroll]', 'click', (e, el) => {
+    const rail = $('#type-tabs', container);
+    if (!rail) return;
+    const dir = Number(el.dataset.typeTabsScroll || 1);
+    rail.scrollBy({ left: dir * Math.max(150, Math.floor(rail.clientWidth * 0.72)), behavior: 'smooth' });
   });
 
   bindDelegate(container,'[data-trade-gate]', 'click', (e) => {
@@ -2821,7 +3108,7 @@ function scheduleChartQuoteReconcile(container, priceValue, runId = tradeRunId, 
   chartReconcileTimer = setTimeout(() => {
     chartReconcileTimer = 0;
     if (!isCurrentRun(runId) || currentChartKey() !== key) return;
-    chartCandleCache.delete(key);
+    forgetChartCandles(key);
     loadChartData(container, get('symbol'), get('type'), get('tf'), runId, loadChartLib(), {
       silent: true,
       refresh: true,
@@ -2883,7 +3170,7 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       || candles?.soft_error === 'futures_provider_unavailable'
       || candles?.soft_error === 'unsupported_symbol';
     if (chartUnsupported && !options.silent && !options.refresh) {
-      chartCandleCache.delete(reqKey);
+      forgetChartCandles(reqKey);
       resetChartInstance();
       renderChartFallback(container, 'Chart data is unavailable for this instrument.');
       return;
@@ -3614,7 +3901,6 @@ function tfSeconds(tf) {
 }
 
 function loadChartLib() {
-  if (!chartLibPromise) chartLibPromise = import('lightweight-charts');
   return chartLibPromise;
 }
 
@@ -3812,15 +4098,18 @@ async function loadMarketItems(type, runId = tradeRunId, force = false) {
   const normalized = normalizeMarketListPayload(data, resolved);
   if (!isCurrentRun(runId)) return normalized;
   marketListCache.set(key, { data: normalized, expires: Date.now() + 6000 });
+  rememberStoredMarketList(resolved, normalized);
   return normalized;
 }
 
-function hydrateActiveFromMarketList(container, items, runId = tradeRunId) {
+function hydrateActiveFromMarketList(container, items, runId = tradeRunId, options = {}) {
   const active = String(get('symbol') || '').toUpperCase();
   const item = (items || []).find((m) => String(m.symbol || '').toUpperCase() === active);
-  if (!item) return;
+  if (!item) return false;
   const p = Number(item.price || item.q_price || 0);
-  if (p > 0) updatePrice(container, item, runId);
+  if (!(p > 0)) return false;
+  updatePrice(container, options.seed ? (quoteSeedForDisplay(item, active, item.type || get('type')) || item) : item, runId);
+  return true;
 }
 
 function quoteClass(market) {

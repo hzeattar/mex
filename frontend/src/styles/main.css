@@ -195,6 +195,33 @@
   .symbol-row.active { @apply bg-accent/10 border-l-2 border-l-accent; }
   .symbol-skeleton-row { @apply flex items-center gap-2 px-3 py-2; }
   .skeleton-block { @apply bg-panel animate-pulse; }
+  .market-tabs-shell {
+    @apply flex items-center gap-1 border-b border-line bg-surface px-1.5 py-2;
+  }
+  .market-tabs-rail {
+    @apply flex min-w-0 flex-1 gap-1.5 overflow-x-auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .market-tabs-rail::-webkit-scrollbar { display: none; }
+  .market-tab {
+    @apply shrink-0 whitespace-nowrap rounded-md border px-3 py-1.5 text-[11px] font-semibold transition-colors;
+    min-height: 30px;
+    scroll-snap-align: start;
+  }
+  .market-tab:hover { @apply text-text border-accent/30; }
+  .market-tab.active { @apply bg-accent/20 text-accent border-accent/40; }
+  .market-tabs-arrow {
+    @apply grid place-items-center shrink-0 rounded-md border border-line text-muted transition-colors hover:text-text hover:border-accent/30;
+    width: 28px;
+    height: 30px;
+    background: rgba(13, 18, 32, 0.72);
+  }
+  .market-tabs-arrow svg {
+    width: 14px;
+    height: 14px;
+  }
+  .market-tabs-arrow-next svg { transform: rotate(180deg); }
   .status-dot { @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full; }
   .spread-display { @apply text-[10px] text-spread font-mono font-bold; }
   .mobile-market-open { @apply fixed inset-0 z-[220] w-full bg-surface flex flex-col; }
