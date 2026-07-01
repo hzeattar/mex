@@ -127,8 +127,9 @@ if (!function_exists('stream_enrich_market_meta')) {
     if ($symbol === '' || !function_exists('vp_asset_reference')) return $meta;
     try {
       $ref = vp_asset_reference($symbol, $type, $meta);
+      $overrideReference = ($type === 'futures');
       foreach (['twelvedata_ticker','eodhd_symbol','tv_symbol'] as $key) {
-        if (!empty($ref[$key]) && empty($meta[$key])) $meta[$key] = $ref[$key];
+        if (!empty($ref[$key]) && ($overrideReference || empty($meta[$key]))) $meta[$key] = $ref[$key];
       }
     } catch (Throwable $e) {
       // Keep DB metadata if the reference map is unavailable for any reason.
@@ -301,14 +302,16 @@ if ($quoteSymbols) {
 
   // Fill missing symbols with a quote from central cache or fallback.
   foreach ($quoteSymbols as $sym) {
-    if (isset($quotes[$sym]) && (float)($quotes[$sym]['price'] ?? 0) > 0) continue;
     $ctxForSym = $resolveStreamContext($sym);
     $assetTypeForSym = $resolveStreamQuoteType($sym);
+    $forceSmallLiveVerify = $lite && count($quoteSymbols) <= 3 && in_array($assetTypeForSym, ['futures'], true);
+    if (isset($quotes[$sym]) && (float)($quotes[$sym]['price'] ?? 0) > 0 && !$forceSmallLiveVerify) continue;
     $effectiveMarketForSym = (string)($ctxForSym['effective_market'] ?? (($assetTypeForSym === 'crypto' && $reqMarket === 'perp') ? 'perp' : 'spot'));
-    $p = 0.0;
-    $chg = 0.0;
-    $src = '';
-    $updTs = $now;
+    $existingQuote = is_array($quotes[$sym] ?? null) ? $quotes[$sym] : null;
+    $p = (float)($existingQuote['price'] ?? 0.0);
+    $chg = (float)($existingQuote['change_pct'] ?? 0.0);
+    $src = (string)($existingQuote['source'] ?? '');
+    $updTs = (int)($existingQuote['updated_at'] ?? $now) ?: $now;
 
     // ── Try central cache first ──
     $centralRow = null;
@@ -363,7 +366,7 @@ if ($quoteSymbols) {
     if ($p <= 0 && function_exists('qa_quote_payload')) {
       try {
         $allowSmallLiveFallback = !$streamLiteLargeNonCrypto || count($quoteSymbols) <= 3;
-        if ($assetTypeForSym !== 'crypto' && $allowSmallLiveFallback && function_exists('quote_bulk_live')) {
+        if ($assetTypeForSym !== 'crypto' && $allowSmallLiveFallback && ($p <= 0 || $forceSmallLiveVerify) && function_exists('quote_bulk_live')) {
           $metaArr = is_array($marketInfoBySymbol[$sym]['meta'] ?? null) ? $marketInfoBySymbol[$sym]['meta'] : [];
           $liveMap = quote_bulk_live([$sym], $assetTypeForSym, [$sym => $metaArr], [
             'ttl' => 1,

@@ -690,6 +690,11 @@ function quote_bulk_live(array $symbols, string $assetType, array $metaBySymbol 
     if (function_exists('vp_asset_reference')) {
       $ref = vp_asset_reference($sym, $assetType, $meta);
       if (empty($ref['trade_supported'])) continue;
+      $overrideReference = ($assetType === 'futures');
+      foreach (['twelvedata_ticker','eodhd_symbol','tv_symbol'] as $key) {
+        if (!empty($ref[$key]) && ($overrideReference || empty($meta[$key]))) $meta[$key] = $ref[$key];
+      }
+      $metaBySymbol[$sym] = $meta;
     }
     if ($providerType === 'forex' && (int)env('ALLOW_REFERENCE_FX_FALLBACK', '0') === 1) {
       $frankfurterRow = quote_frankfurter_row($sym, $assetType, $now);
