@@ -3,6 +3,7 @@ require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/quotes.php';
 require_once __DIR__ . '/../lib/quote_central.php';
 require_once __DIR__ . '/../lib/market_resolver.php';
+require_once __DIR__ . '/../lib/asset_reference.php';
 require_once __DIR__ . '/../lib/quote_authority.php';
 require_once __DIR__ . '/../lib/quote_snapshot.php';
 require_once __DIR__ . '/../lib/risk.php';
@@ -119,6 +120,22 @@ $streamLiteLargeNonCrypto = $streamLiteLargeBatch && strtolower($providerType) !
 
 $quotes = [];
 $marketInfoBySymbol = [];
+if (!function_exists('stream_enrich_market_meta')) {
+  function stream_enrich_market_meta(string $symbol, string $type, array $meta): array {
+    $symbol = strtoupper(trim($symbol));
+    $type = vp_normalize_asset_type($type);
+    if ($symbol === '' || !function_exists('vp_asset_reference')) return $meta;
+    try {
+      $ref = vp_asset_reference($symbol, $type, $meta);
+      foreach (['twelvedata_ticker','eodhd_symbol','tv_symbol'] as $key) {
+        if (!empty($ref[$key]) && empty($meta[$key])) $meta[$key] = $ref[$key];
+      }
+    } catch (Throwable $e) {
+      // Keep DB metadata if the reference map is unavailable for any reason.
+    }
+    return $meta;
+  }
+}
 $resolveStreamContext = static function(string $sym) use (&$marketInfoBySymbol, $reqTypeRaw, $reqMarket): array {
   $sym = strtoupper(trim($sym));
   $info = $marketInfoBySymbol[$sym] ?? [];
@@ -191,9 +208,12 @@ if ($quoteSymbols) {
     $metaSt = $pdo->prepare("SELECT symbol,type,meta FROM markets WHERE symbol IN ($in)");
     $metaSt->execute($quoteSymbols);
     foreach (($metaSt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $mr) {
-      $marketInfoBySymbol[strtoupper((string)($mr['symbol'] ?? ''))] = [
-        'type' => strtolower((string)($mr['type'] ?? '')),
-        'meta' => market_meta($mr['meta'] ?? null),
+      $sym = strtoupper((string)($mr['symbol'] ?? ''));
+      if ($sym === '') continue;
+      $mType = vp_normalize_asset_type((string)($mr['type'] ?? $reqType));
+      $marketInfoBySymbol[$sym] = [
+        'type' => $mType,
+        'meta' => stream_enrich_market_meta($sym, $mType, market_meta($mr['meta'] ?? null)),
       ];
     }
   } catch (Throwable $e) {
@@ -302,63 +322,85 @@ if ($quoteSymbols) {
       $chg = (float)($centralRow['change_pct'] ?? 0);
       $src = (string)($centralRow['source'] ?? 'central');
       $updTs = (int)($centralRow['central_ts'] ?? $centralRow['updated_at'] ?? $now) ?: $now;
-    } else {
-    try {
-      if ($lite && $assetTypeForSym !== 'crypto') {
-        $p = 0.0;
-        $qrow = quote_get($sym, $assetTypeForSym);
-        $rowOkay = $streamQuoteRowUsable($qrow, $assetTypeForSym) || ($streamLiteLargeNonCrypto && $streamQuoteRowFallbackUsable($qrow, $assetTypeForSym));
-        if (is_array($qrow) && $rowOkay) {
-          $p = (float)($qrow['price'] ?? 0.0);
-          $chg = (float)($qrow['change_pct'] ?? 0.0);
-          $src = (string)($qrow['source'] ?? '');
-          $updTs = (int)($qrow['updated_at'] ?? $now) ?: $now;
-        }
-      } else {
-        $p = (float)quote_price_fresh($sym, $assetTypeForSym);
-        $qrow = quote_get($sym, $assetTypeForSym);
-        if (is_array($qrow)) {
-          $chg = (float)($qrow['change_pct'] ?? 0.0);
-          $src = (string)($qrow['source'] ?? '');
-          $updTs = (int)($qrow['updated_at'] ?? $now) ?: $now;
-          if ($p <= 0) $p = (float)($qrow['price'] ?? 0);
-        }
-      }
-    } catch (Throwable $e) {
-      if (!$lite || $assetTypeForSym === 'crypto') {
-        try {
-          $p = (float)quote_price($sym, $effectiveMarketForSym, $assetTypeForSym);
+    }
+    if ($p <= 0) {
+      try {
+        if ($lite && $assetTypeForSym !== 'crypto') {
+          $qrow = quote_get($sym, $assetTypeForSym);
+          $rowOkay = $streamQuoteRowUsable($qrow, $assetTypeForSym) || ($streamLiteLargeNonCrypto && $streamQuoteRowFallbackUsable($qrow, $assetTypeForSym));
+          if (is_array($qrow) && $rowOkay) {
+            $p = (float)($qrow['price'] ?? 0.0);
+            $chg = (float)($qrow['change_pct'] ?? 0.0);
+            $src = (string)($qrow['source'] ?? '');
+            $updTs = (int)($qrow['updated_at'] ?? $now) ?: $now;
+          }
+        } else {
+          $p = (float)quote_price_fresh($sym, $assetTypeForSym);
           $qrow = quote_get($sym, $assetTypeForSym);
           if (is_array($qrow)) {
-            $chg = (float)($qrow['change_pct'] ?? $chg);
-            $src = (string)($qrow['source'] ?? $src);
-            $updTs = (int)($qrow['updated_at'] ?? $updTs) ?: $updTs;
+            $chg = (float)($qrow['change_pct'] ?? 0.0);
+            $src = (string)($qrow['source'] ?? '');
+            $updTs = (int)($qrow['updated_at'] ?? $now) ?: $now;
+            if ($p <= 0) $p = (float)($qrow['price'] ?? 0);
           }
-        } catch (Throwable $ignored) { $p = 0.0; }
-      } else {
-        $p = 0.0;
+        }
+      } catch (Throwable $e) {
+        if (!$lite || $assetTypeForSym === 'crypto') {
+          try {
+            $p = (float)quote_price($sym, $effectiveMarketForSym, $assetTypeForSym);
+            $qrow = quote_get($sym, $assetTypeForSym);
+            if (is_array($qrow)) {
+              $chg = (float)($qrow['change_pct'] ?? $chg);
+              $src = (string)($qrow['source'] ?? $src);
+              $updTs = (int)($qrow['updated_at'] ?? $updTs) ?: $updTs;
+            }
+          } catch (Throwable $ignored) { $p = 0.0; }
+        } else {
+          $p = 0.0;
+        }
       }
     }
     if ($p <= 0 && function_exists('qa_quote_payload')) {
       try {
-        $qa = qa_quote_payload($assetTypeForSym, [$sym], [
-          'allow_live' => ($assetTypeForSym === 'crypto'),
-          'allow_crypto_seed' => true,
-          'allow_noncrypto_seed' => false,
-          'direct_budget' => 1,
-          'direct_yahoo_budget' => 0,
-          'chart_budget' => 1,
-        ]);
-        $item = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
-        if ($item && (float)($item['price'] ?? 0) > 0) {
-          $p = (float)$item['price'];
-          $chg = (float)($item['change_pct'] ?? $chg);
-          $src = (string)($item['source'] ?? $src);
-          $updTs = (int)($item['updated_at'] ?? $updTs) ?: $updTs;
+        $allowSmallLiveFallback = !$streamLiteLargeNonCrypto || count($quoteSymbols) <= 3;
+        if ($assetTypeForSym !== 'crypto' && $allowSmallLiveFallback && function_exists('quote_bulk_live')) {
+          $metaArr = is_array($marketInfoBySymbol[$sym]['meta'] ?? null) ? $marketInfoBySymbol[$sym]['meta'] : [];
+          $liveMap = quote_bulk_live([$sym], $assetTypeForSym, [$sym => $metaArr], [
+            'ttl' => 1,
+            'yahoo_ttl' => 0,
+            'massive_ttl' => 1,
+            'direct_budget' => 1,
+            'direct_yahoo_budget' => 0,
+            'chart_budget' => 1,
+            'chart_budget_ms' => 1500,
+          ]);
+          $liveRow = is_array($liveMap[$sym] ?? null) ? $liveMap[$sym] : null;
+          if ($liveRow && (float)($liveRow['price'] ?? 0) > 0) {
+            $p = (float)$liveRow['price'];
+            $chg = (float)($liveRow['change_pct'] ?? $chg);
+            $src = (string)($liveRow['source'] ?? $src ?: 'provider_live');
+            $updTs = (int)($liveRow['updated_at'] ?? $updTs) ?: $updTs;
+          }
+        }
+        if ($p <= 0) {
+          $qa = qa_quote_payload($assetTypeForSym, [$sym], [
+            'allow_live' => ($assetTypeForSym === 'crypto' || $allowSmallLiveFallback),
+            'allow_crypto_seed' => true,
+            'allow_noncrypto_seed' => false,
+            'direct_budget' => 1,
+            'direct_yahoo_budget' => 0,
+            'chart_budget' => 1,
+          ]);
+          $item = is_array($qa['items'][0] ?? null) ? $qa['items'][0] : null;
+          if ($item && (float)($item['price'] ?? 0) > 0) {
+            $p = (float)$item['price'];
+            $chg = (float)($item['change_pct'] ?? $chg);
+            $src = (string)($item['source'] ?? $src);
+            $updTs = (int)($item['updated_at'] ?? $updTs) ?: $updTs;
+          }
         }
       } catch (Throwable $ignored) {}
     }
-    } // end else (central cache miss)
     $quotes[$sym] = [
       'symbol' => $sym,
       'type' => $resolveStreamReturnType($sym) ?: ($marketInfoBySymbol[$sym]['type'] ?? $returnType ?: $assetTypeForSym ?: 'crypto'),
@@ -476,7 +518,7 @@ if ($quoteSymbols) {
           $ctxType = vp_provider_asset_type($tt);
           if (!in_array($ctxType, ['stocks','commodities','futures'], true) && $tt !== 'arab') continue;
 
-          $metaArr = market_meta($mr['meta'] ?? null);
+          $metaArr = stream_enrich_market_meta($sym, $tt, market_meta($mr['meta'] ?? null));
           if ($tt === 'commodities' && vp_is_spot_metal_symbol($sym, $tt)) {
             continue;
           }
