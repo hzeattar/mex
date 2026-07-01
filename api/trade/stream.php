@@ -147,6 +147,28 @@ if (!function_exists('stream_latest_cached_candle_quote')) {
     $safe = substr((string)$safe, 0, 40);
     $safeType = preg_replace('/[^a-z0-9_]/', '_', strtolower($type ?: 'generic'));
     $best = null;
+    $sourceAllowed = static function(string $source) use ($type): bool {
+      $src = strtolower(trim($source));
+      if ($src === '' || in_array($src, ['seed','synthetic','synthetic_error_fallback','yahoo','yahoo_chart','yahoo_chart_fallback','aggs'], true)) return false;
+      if ($type === 'arab') return in_array($src, ['eodhd_intraday','eodhd','eodhd_rest','provider_live','twelvedata_time_series','twelvedata','twelvedata_ws'], true);
+      return in_array($src, ['twelvedata_time_series','twelvedata','twelvedata_ws','eodhd_intraday','eodhd','eodhd_rest','provider_live'], true);
+    };
+    $considerRow = static function($row) use (&$best, $sourceAllowed): void {
+      if (!is_array($row)) return;
+      $quality = strtolower((string)($row['quality'] ?? ''));
+      if (!empty($row['synthetic']) || in_array($quality, ['synthetic','seed','gap_fill'], true)) return;
+      if (!$sourceAllowed((string)($row['source'] ?? ''))) return;
+      $price = (float)($row['close'] ?? $row['c'] ?? 0);
+      $time = (int)($row['time'] ?? $row['t'] ?? 0);
+      if (!($price > 0) || $time <= 0) return;
+      if (!is_array($best) || $time > (int)($best['updated_at'] ?? 0)) {
+        $best = [
+          'price' => $price,
+          'open' => (float)($row['open'] ?? $row['o'] ?? 0),
+          'updated_at' => $time,
+        ];
+      }
+    };
     foreach (['1m','5m','15m','30m','1h','1d'] as $tf) {
       $path = __DIR__ . '/../data/candles_v5_' . $market . '_' . $safeType . '_' . strtolower($safe) . '_' . $tf . '.json';
       if (!is_file($path)) continue;
@@ -156,21 +178,28 @@ if (!function_exists('stream_latest_cached_candle_quote')) {
       if (!is_array($rows) || !$rows) continue;
       for ($i = count($rows) - 1; $i >= 0; $i--) {
         $row = is_array($rows[$i] ?? null) ? $rows[$i] : null;
-        if (!$row) continue;
-        $quality = strtolower((string)($row['quality'] ?? ''));
-        if (!empty($row['synthetic']) || in_array($quality, ['synthetic','seed','gap_fill'], true)) continue;
-        $price = (float)($row['close'] ?? $row['c'] ?? 0);
-        $time = (int)($row['time'] ?? $row['t'] ?? 0);
-        if (!($price > 0) || $time <= 0) continue;
-        if (!is_array($best) || $time > (int)($best['updated_at'] ?? 0)) {
-          $best = [
-            'price' => $price,
-            'open' => (float)($row['open'] ?? $row['o'] ?? 0),
-            'updated_at' => $time,
-          ];
-        }
-        break;
+        $before = is_array($best) ? (int)($best['updated_at'] ?? 0) : 0;
+        $considerRow($row);
+        if (is_array($best) && (int)($best['updated_at'] ?? 0) > $before) break;
       }
+    }
+    try {
+      $pdo = db();
+      foreach (['1m','5m','15m','30m','1h','1d'] as $tf) {
+        $st = $pdo->prepare("SELECT time,open,close,source,quality FROM market_candles WHERE symbol=? AND type=? AND market=? AND tf=? ORDER BY time DESC LIMIT 12");
+        $st->execute([$symbol, $type, $market, $tf]);
+        foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+          $before = is_array($best) ? (int)($best['updated_at'] ?? 0) : 0;
+          $considerRow($row);
+          if (is_array($best) && (int)($best['updated_at'] ?? 0) > $before) break;
+        }
+      }
+    } catch (Throwable $e) {
+      // DB candle cache may not be enabled in every environment.
+    }
+    if (is_array($best)) {
+      $maxAge = in_array($type, ['stocks','arab'], true) ? 604800 : 259200;
+      if ((time() - (int)($best['updated_at'] ?? 0)) > $maxAge) return null;
     }
     return $best;
   }
