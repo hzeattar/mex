@@ -3286,23 +3286,37 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
     }
     let chartPainted = false;
     let chartItems = candles?.items || [];
+    let deferredFreshChartUpdate = null;
     if (options.refresh && chartItems.length) {
       const activeBucket = currentBucketTime(0, type);
       chartItems = normalizeCandleRows(chartItems).filter(c => c.time < activeBucket);
     }
-    if (freshProviderWindow && chartItems.length) {
+    if (freshProviderWindow && chartItems.length && !options.refresh) {
       const deviation = latestCandleQuoteDeviation(chartItems, get('activeQuote')?.price);
       if (deviation > chartQuoteTolerance(type)) {
         const freshUrl = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=100&refresh=1`;
-        const fresh = await api(freshUrl, {
-          timeout: 7000,
-          retry: 0,
-          cacheTtl: 0,
-          cache: 'no-store',
-          signal: requestController?.signal,
-        }).catch(() => null);
-        if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
-        if (fresh?.items?.length) chartItems = fresh.items;
+        deferredFreshChartUpdate = () => {
+          api(freshUrl, {
+            timeout: 7000,
+            retry: 0,
+            cacheTtl: 0,
+            cache: 'no-store',
+            signal: requestController?.signal,
+          }).then(async (fresh) => {
+            if (!fresh?.items?.length) return;
+            await chartReady;
+            if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
+            if (chart && candleSeries) {
+              applyChartData(fresh.items, {
+                fit: false,
+                key: reqKey,
+                preserveRange: true,
+                skipUnchanged: true,
+              });
+              hideChartOverlay(container);
+            }
+          }).catch(() => {});
+        };
       }
     } else if (freshProviderWindow && !chartItems.length && !options.refresh) {
       const freshUrl = `/trade/candles.php?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}&limit=100&refresh=1`;
@@ -3338,6 +3352,7 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       }
     }
     if (chartPainted && !options.silent && !options.refresh) scheduleMonthHistoryPrefetch(container, runId);
+    if (chartPainted && deferredFreshChartUpdate) deferredFreshChartUpdate();
     // Start Binance kline WebSocket for crypto: real-time candle updates without polling
     if (chartPainted && normalizeType(type) === 'crypto' && !options.refresh) {
       startBinanceKlineWs(symbol, tf, runId);
