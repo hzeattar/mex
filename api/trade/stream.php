@@ -373,6 +373,7 @@ if ($quoteSymbols) {
   foreach ($quoteSymbols as $sym) {
     $ctxForSym = $resolveStreamContext($sym);
     $assetTypeForSym = $resolveStreamQuoteType($sym);
+    $returnTypeForSym = $resolveStreamReturnType($sym) ?: $assetTypeForSym;
     $forceSmallLiveVerify = $lite && count($quoteSymbols) <= 3 && in_array($assetTypeForSym, ['futures'], true);
     if (isset($quotes[$sym]) && (float)($quotes[$sym]['price'] ?? 0) > 0 && !$forceSmallLiveVerify) continue;
     $effectiveMarketForSym = (string)($ctxForSym['effective_market'] ?? (($assetTypeForSym === 'crypto' && $reqMarket === 'perp') ? 'perp' : 'spot'));
@@ -473,14 +474,14 @@ if ($quoteSymbols) {
         }
       } catch (Throwable $ignored) {}
     }
-    if (($p <= 0 && in_array($assetTypeForSym, ['stocks','arab'], true)) || $assetTypeForSym === 'arab') {
+    if (($p <= 0 && in_array($returnTypeForSym, ['stocks','arab'], true)) || $returnTypeForSym === 'arab') {
       try {
-        $candleQuote = stream_latest_cached_candle_quote($sym, $effectiveMarketForSym, $assetTypeForSym);
+        $candleQuote = stream_latest_cached_candle_quote($sym, $effectiveMarketForSym, $returnTypeForSym);
         if (is_array($candleQuote) && (float)($candleQuote['price'] ?? 0) > 0) {
           $candlePrice = (float)$candleQuote['price'];
           $drift = ($p > 0 && $candlePrice > 0) ? abs($p - $candlePrice) / max(0.000001, $candlePrice) : 1.0;
-          $marketClosed = function_exists('qa_market_is_open') ? !qa_market_is_open($assetTypeForSym) : true;
-          if ($p <= 0 || ($assetTypeForSym === 'arab' && ($marketClosed || $drift > 0.05))) {
+          $marketClosed = function_exists('qa_market_is_open') ? !qa_market_is_open($returnTypeForSym) : true;
+          if ($p <= 0 || ($returnTypeForSym === 'arab' && ($marketClosed || $drift > 0.05))) {
             $p = $candlePrice;
             $open = (float)($candleQuote['open'] ?? 0);
             $chg = $open > 0 ? (($p / $open) - 1.0) * 100.0 : $chg;
