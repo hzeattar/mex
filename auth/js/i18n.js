@@ -77,43 +77,74 @@
       const val = t(titleKey);
       if (val) document.title = val;
     }
+    // Dynamic translation of hard-coded Arabic title on product subpages
+    if (current !== 'ar' && document.title && /[\u0600-\u06FF]/u.test(document.title)) {
+      const map = window.TRANSLATIONS && window.TRANSLATIONS._arToEn;
+      if (map) {
+        let newTitle = document.title;
+        for (const ar of Object.keys(map).sort((a,b)=>b.length-a.length)) {
+          let idx = newTitle.indexOf(ar);
+          while (idx !== -1) {
+            newTitle = newTitle.slice(0, idx) + map[ar] + newTitle.slice(idx + ar.length);
+            idx = newTitle.indexOf(ar, idx + map[ar].length);
+          }
+        }
+        if (newTitle !== document.title) document.title = newTitle;
+      }
+    }
 
     // Translate static Arabic text inside product subpages when a non-Arabic locale is active.
     // The site ships with Arabic hard-coded in many places; this reverse-translates those strings.
-    if (current !== 'ar' && window.TRANSLATIONS && window.TRANSLATIONS._arToEn) {
-      const map = window.TRANSLATIONS._arToEn;
-      const arKeys = Object.keys(map).sort(function(a, b){ return b.length - a.length; });
-      if (arKeys.length) {
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-          acceptNode: function(node){
-            if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-            const parent = node.parentNode;
-            if (!parent) return NodeFilter.FILTER_REJECT;
-            // Skip scripts/styles/code tags
-            const tag = parent.nodeName.toLowerCase();
-            if (tag === 'script' || tag === 'style' || tag === 'code' || tag === 'pre') return NodeFilter.FILTER_REJECT;
-            // Skip elements already managed by data-i18n
-            if (parent.hasAttribute && parent.hasAttribute('data-i18n')) return NodeFilter.FILTER_REJECT;
-            return NodeFilter.FILTER_ACCEPT;
-          }
-        });
-        let node;
-        while ((node = walker.nextNode())) {
-          let text = node.nodeValue;
-          if (/[\u0600-\u06FF]/.test(text)) {
-            let changed = false;
-            for (let i = 0; i < arKeys.length; i++) {
-              const ar = arKeys[i];
-              if (text.indexOf(ar) !== -1) {
-                text = text.split(ar).join(map[ar]);
-                changed = true;
-              }
-            }
-            if (changed) node.nodeValue = text;
+    translateHardcodedArabic();
+  }
+
+  function translateHardcodedArabic(){
+    if (current === 'ar') return;
+    const map = window.TRANSLATIONS && window.TRANSLATIONS._arToEn;
+    if (!map) return;
+    const arKeys = Object.keys(map).sort(function(a, b){ return b.length - a.length; });
+    if (!arKeys.length) return;
+    const body = document.body || document.documentElement;
+
+    // 1) Text nodes
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node){
+        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        const p = node.parentNode;
+        if (!p) return NodeFilter.FILTER_REJECT;
+        const tag = p.nodeName.toLowerCase();
+        if (tag === 'script' || tag === 'style' || tag === 'code' || tag === 'pre') return NodeFilter.FILTER_REJECT;
+        if (p.dataset && (p.dataset.i18n || p.dataset.i18nHtml || p.dataset.i18nPlaceholder || p.dataset.i18nTitle || p.dataset.i18nAria)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    let node;
+    while ((node = walker.nextNode())) {
+      let text = node.nodeValue;
+      if (/[\u0600-\u06FF]/u.test(text)) {
+        let changed = false;
+        for (let i = 0; i < arKeys.length; i++) {
+          const ar = arKeys[i];
+          let idx = text.indexOf(ar);
+          while (idx !== -1) {
+            text = text.slice(0, idx) + map[ar] + text.slice(idx + ar.length);
+            changed = true;
+            idx = text.indexOf(ar, idx + map[ar].length);
           }
         }
+        if (changed) node.nodeValue = text;
       }
     }
+
+    // 2) data-label attributes used by products.js price table (kept Arabic; set data-label-en)
+    document.querySelectorAll('[data-label]').forEach(function(el){
+      const map = window.TRANSLATIONS && window.TRANSLATIONS._arToEn;
+      if (!map) return;
+      const original = el.getAttribute('data-label-original') || el.getAttribute('data-label');
+      if (!el.getAttribute('data-label-original')) el.setAttribute('data-label-original', original);
+      const translated = map[original] || original;
+      el.setAttribute('data-label-en', translated === original ? '' : translated);
+    });
   }
 
   /* ------------------------------------------------------------
@@ -124,6 +155,10 @@
     current = lang;
     if (persist !== false){
       try { localStorage.setItem(STORAGE_KEY, lang); } catch(_){}
+      try {
+        var d = new Date(); d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
+        document.cookie = 'vp_lang=' + lang + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+      } catch(_){}
     }
     const html = document.documentElement;
     html.setAttribute('lang', lang);
@@ -349,6 +384,13 @@
      Initial detection — load saved or detect from browser
      ------------------------------------------------------------ */
   function detectInitialLang(){
+    try {
+      const m = location.search.match(/[?&]lang=([^&#]+)/);
+      if (m) {
+        const urlLang = decodeURIComponent(m[1]).toLowerCase();
+        if (LANGS[urlLang]) return urlLang;
+      }
+    } catch(_){}
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved && LANGS[saved]) return saved;

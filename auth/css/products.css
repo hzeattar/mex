@@ -1135,13 +1135,17 @@
   .pr-sym{ grid-column: 1 / -1; padding-bottom: 8px; border-bottom: 1px dashed rgba(255,255,255,.06); margin-bottom: 4px; }
   .pr-bid{ position:relative; }
   .pr-bid::before{ content: "بيع"; display:block; font-size: 10px; color: rgba(255,255,255,.5); font-weight: 600; letter-spacing: 1px; margin-bottom: 2px; font-family: inherit; }
+  html[data-lang="en"] .pr-bid::before{ content: "Bid"; }
   .pr-ask{ position:relative; }
   .pr-ask::before{ content: "شراء"; display:block; font-size: 10px; color: rgba(255,255,255,.5); font-weight: 600; letter-spacing: 1px; margin-bottom: 2px; font-family: inherit; }
+  html[data-lang="en"] .pr-ask::before{ content: "Ask"; }
   .pr-chg-cell{ grid-column: 1 / -1; }
   .pr-hl{ position:relative; }
   .pr-hl::before{ content: attr(data-label); display:block; font-size: 10px; color: rgba(255,255,255,.5); font-weight: 600; letter-spacing: 1px; margin-bottom: 2px; font-family: inherit; }
+  html[data-lang="en"] .pr-hl::before{ content: attr(data-label-en); }
   .pr-spread-cell{ position:relative; }
   .pr-spread-cell::before{ content: "السبريد"; display:block; font-size: 10px; color: rgba(255,255,255,.5); font-weight: 600; letter-spacing: 1px; margin-bottom: 2px; }
+  html[data-lang="en"] .pr-spread-cell::before{ content: "Spread"; }
   .pr-spark{ grid-column: 1 / -1; height: 56px; }
   .pr-btn-cell{ grid-column: 1 / -1; }
   .pr-btn{ width: 100%; padding: 12px; font-size: 13.5px; }

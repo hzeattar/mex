@@ -205,11 +205,11 @@
       +   '<div><span class="pr-bid">' + fmt(s.bid, s.dec) + '</span></div>'
       +   '<div><span class="pr-ask">' + fmt(s.ask, s.dec) + '</span></div>'
       +   '<div class="pr-chg-cell"><span class="pr-chg ' + (isUp ? 'is-up' : 'is-down') + '">' + arrowSvg(isUp) + (isUp ? '+' : '') + s.changePct + '%</span></div>'
-      +   '<div class="pr-hl pr-high" data-label="أعلى">' + fmt(s.high, s.dec) + '</div>'
-      +   '<div class="pr-hl pr-low" data-label="أدنى">' + fmt(s.low, s.dec) + '</div>'
+      +   '<div class="pr-hl pr-high" data-i18n-aria="quote.high" data-label="أعلى">' + fmt(s.high, s.dec) + '</div>'
+      +   '<div class="pr-hl pr-low" data-i18n-aria="quote.low" data-label="أدنى">' + fmt(s.low, s.dec) + '</div>'
       +   '<div class="pr-spread-cell"><span class="pr-spread">' + (s.spread % 1 === 0 ? s.spread : s.spread.toFixed(1)) + '</span></div>'
       +   '<div class="pr-spark">' + sparkSvg(s.history, isUp) + '</div>'
-      +   '<div class="pr-btn-cell"><a href="#" class="pr-btn">تداول</a></div>'
+      +   '<div class="pr-btn-cell"><a href="#" class="pr-btn" data-i18n="trade.btn">تداول</a></div>'
       + '</div>';
   }
 
