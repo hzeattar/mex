@@ -2424,18 +2424,36 @@ function chartPreferredRightOffset(target = null) {
     ? target
     : (target?.querySelector ? $('#chart-box', target) : document.getElementById('chart-box'));
   const width = Math.max(320, Number(box?.clientWidth || 0));
-  const barSpacing = 8;
-  const visibleBars = width / barSpacing;
-  const desired = visibleBars * (width >= 900 ? 0.32 : 0.28);
-  const min = width >= 900 ? 36 : 16;
-  const max = width >= 900 ? 64 : 42;
+  const estimatedBarSpacing = width >= 900 ? 5 : 3.5;
+  const desired = (width * (width >= 900 ? 0.32 : 0.28)) / estimatedBarSpacing;
+  const min = width >= 900 ? 60 : 42;
+  const max = width >= 900 ? 120 : 86;
   return Math.round(Math.max(min, Math.min(max, desired)));
+}
+
+function chartLiveCandleTargetRatio(target = null) {
+  const box = target?.id === 'chart-box'
+    ? target
+    : (target?.querySelector ? $('#chart-box', target) : document.getElementById('chart-box'));
+  const width = Math.max(320, Number(box?.clientWidth || 0));
+  return width >= 720 ? 0.68 : 0.72;
 }
 
 function keepLiveCandleInFocus(target = null) {
   if (!chart) return;
   const rightOffset = chartPreferredRightOffset(target);
-  safeChartOp(() => chart.timeScale().applyOptions({ rightOffset }));
+  safeChartOp(() => {
+    const timeScale = chart.timeScale();
+    timeScale.applyOptions({ rightOffset });
+    if (!allCandles.length || typeof timeScale.getVisibleLogicalRange !== 'function' || typeof timeScale.setVisibleLogicalRange !== 'function') return;
+    const range = timeScale.getVisibleLogicalRange();
+    if (!range || !(Number(range.to) > Number(range.from))) return;
+    const span = Math.max(20, Number(range.to) - Number(range.from));
+    const lastIndex = allCandles.length - 1;
+    const targetRatio = chartLiveCandleTargetRatio(target);
+    const nextTo = lastIndex + (span * (1 - targetRatio));
+    timeScale.setVisibleLogicalRange({ from: nextTo - span, to: nextTo });
+  });
 }
 
 function applyChartPriceOptions(type = get('type'), symbol = get('symbol')) {
