@@ -217,7 +217,8 @@ function candles_cached_or_empty_response(string $symbol, string $market, string
   if ($cached) {
     $items = candles_from_cache($cached, $end, $limit);
     $out = candles_finalize_items($items, $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-    if (candles_has_display_history($out, $limit, vp_provider_asset_type($type))) {
+    $providerType = vp_provider_asset_type($type);
+    if (candles_fast_cache_safe($out, $symbol, $market, $tf, $type, $providerType, $limit, $end)) {
       candles_json_response([
         'ok' => true,
         'cached' => true,
@@ -234,9 +235,9 @@ function candles_cache_path(string $symbol, string $market, string $tf, string $
   $safe = preg_replace('/[^A-Z0-9_]/', '_', strtoupper($symbol));
   $safe = substr($safe, 0, 40);
   $safeType = preg_replace('/[^a-z0-9_]/', '_', strtolower($type ?: 'generic'));
-  // Version suffix invalidates older synthetic/stale candle caches after the
-  // TwelveData 3m rollup fix.
-  return __DIR__ . '/../data/candles_v4_' . strtolower($market) . '_' . $safeType . '_' . strtolower($safe) . '_' . strtolower($tf) . '.json';
+  // Version suffix invalidates older stale/mismatched fast caches after the
+  // live-price consistency guard.
+  return __DIR__ . '/../data/candles_v5_' . strtolower($market) . '_' . $safeType . '_' . strtolower($safe) . '_' . strtolower($tf) . '.json';
 }
 function candles_retention_days(string $type, string $tf): int {
   $kind = vp_normalize_asset_type($type ?: 'generic');
@@ -923,18 +924,73 @@ function candles_recent_anchor_close(array $items, int $take = 6): float {
 function candles_series_matches_live(array $items, string $symbol, string $market, string $assetType): bool {
   if (!$items) return true;
   $kind = strtolower(trim($assetType));
-  if ($kind === 'crypto' && !candles_series_has_real_movement($items, 24)) return false;
-  if ((int)env('CANDLES_VALIDATE_LIVE_MATCH', '0') !== 1) return true;
-  if (candles_request_over_budget((int)env('CANDLES_LIVE_MATCH_RESERVE_MS', '1000'))) return true;
-  $live = candles_best_live_price($symbol, $market, $assetType);
+  if (!candles_series_has_real_movement($items, 24)) return false;
+  if (!candles_live_match_required($kind)) return true;
+  $live = candles_cached_live_price($symbol, $assetType);
+  if (!($live > 0) && (int)env('CANDLES_VALIDATE_LIVE_MATCH_FETCH', '0') === 1 && !candles_request_over_budget((int)env('CANDLES_LIVE_MATCH_RESERVE_MS', '1000'))) {
+    $live = candles_best_live_price($symbol, $market, $assetType);
+  }
   if (!($live > 0)) return true;
   $anchor = candles_recent_anchor_close($items, 8);
   if (!($anchor > 0)) return true;
   $drift = abs($live - $anchor) / max(1.0, abs($anchor));
-  if ($kind === 'futures') return $drift <= 0.12;
-  if ($kind === 'commodities') return $drift <= 0.10;
-  if ($kind === 'stocks' || $kind === 'arab') return $drift <= 0.20;
-  return $drift <= 0.25;
+  return $drift <= candles_live_match_tolerance($kind, $symbol);
+}
+
+function candles_live_match_required(string $kind): bool {
+  $setting = strtolower(trim((string)env('CANDLES_VALIDATE_LIVE_MATCH', 'auto')));
+  if ($setting === '0' || $setting === 'false' || $setting === 'off') return false;
+  if ($setting === '1' || $setting === 'true' || $setting === 'on') return true;
+  return in_array($kind, ['forex', 'commodities', 'futures'], true);
+}
+
+function candles_live_match_tolerance(string $kind, string $symbol): float {
+  $symbol = strtoupper(trim($symbol));
+  if ($kind === 'forex') return (float)env('CANDLES_LIVE_MATCH_TOLERANCE_FOREX', '0.003');
+  if ($kind === 'commodities') {
+    $isMetal = preg_match('/^X(?:AU|AG|PT|PD)USD$/', $symbol) === 1 || vp_is_spot_metal_symbol($symbol, 'commodities');
+    return (float)env($isMetal ? 'CANDLES_LIVE_MATCH_TOLERANCE_METALS' : 'CANDLES_LIVE_MATCH_TOLERANCE_COMMODITIES', $isMetal ? '0.008' : '0.015');
+  }
+  if ($kind === 'futures') return (float)env('CANDLES_LIVE_MATCH_TOLERANCE_FUTURES', '0.02');
+  if ($kind === 'stocks' || $kind === 'arab') return (float)env('CANDLES_LIVE_MATCH_TOLERANCE_EQUITIES', '0.08');
+  if ($kind === 'crypto') return (float)env('CANDLES_LIVE_MATCH_TOLERANCE_CRYPTO', '0.035');
+  return 0.03;
+}
+
+function candles_cached_live_price(string $symbol, string $assetType): float {
+  $symbol = strtoupper(trim($symbol));
+  $assetType = vp_normalize_asset_type($assetType);
+  if ($symbol === '') return 0.0;
+  $maxAge = max(30, min(1800, (int)env('CANDLES_LIVE_MATCH_CACHE_AGE', in_array($assetType, ['stocks', 'arab'], true) ? '900' : '300')));
+  try {
+    if (function_exists('quote_central_get')) {
+      $row = quote_central_get($symbol, $assetType, $maxAge);
+      $p = (float)($row['price'] ?? 0);
+      $src = strtolower(trim((string)($row['source'] ?? '')));
+      if ($p > 0 && ($src === '' || quote_source_is_liveish($src, $assetType))) return $p;
+    }
+  } catch (Throwable $e) {}
+  try {
+    $row = quote_get($symbol, $assetType);
+    $p = (float)($row['price'] ?? 0);
+    $src = strtolower(trim((string)($row['source'] ?? '')));
+    $ts = max((int)($row['provider_ts'] ?? 0), (int)($row['provider_updated_at'] ?? 0), (int)($row['updated_at'] ?? 0), (int)($row['cache_updated_at'] ?? 0), (int)($row['received_at'] ?? 0));
+    $fresh = $ts <= 0 || (time() - $ts) <= $maxAge;
+    if ($p > 0 && $fresh && ($src === '' || quote_source_is_liveish($src, $assetType))) return $p;
+  } catch (Throwable $e) {}
+  return 0.0;
+}
+
+function candles_fast_cache_safe(array $items, string $symbol, string $market, string $tf, string $assetType, string $providerType, int $limit, int $end = 0): bool {
+  if (!candles_has_display_history($items, $limit, $providerType)) return false;
+  if ($end > 0) return true;
+  $hasComparableLive = $providerType === 'crypto' || candles_cached_live_price($symbol, $assetType) > 0;
+  if ($hasComparableLive
+      && in_array($providerType, ['crypto', 'forex', 'commodities', 'futures'], true)
+      && !candles_cache_recent_enough($items, tf_seconds($tf), $providerType, $end)) {
+    return false;
+  }
+  return candles_series_matches_live($items, $symbol, $market, $assetType);
 }
 
 function candles_quote_seed_items(float $price, int $now, int $step, int $limit): array {
@@ -1001,7 +1057,7 @@ try {
     $step = tf_seconds($tf);
     if ($cachedAll) {
       $fastItems = candles_finalize_items(candles_from_cache($cachedAll, 0, $limit), $symbol, $market, $type, $step, 0, $tf);
-      if ($fastItems && candles_has_display_history($fastItems, $limit, $providerType)) {
+      if ($fastItems && candles_fast_cache_safe($fastItems, $symbol, $market, $tf, $type, $providerType, $limit, 0)) {
         candles_json_response(['ok'=>true,'cached'=>true,'source'=>'cache_fast','fast'=>true], $fastItems, $limit, 0);
       }
       @unlink($cacheFile);
@@ -1024,10 +1080,10 @@ try {
       $allowWarmNonCrypto = in_array($providerType, ['stocks','arab','commodities','futures','forex'], true);
       $cacheDeepEnough = candles_cache_depth_enough($fastItems, $limit, $providerType, $tf);
       $cacheMovesEnough = candles_series_has_real_movement($fastItems, 24);
-      if ($allowWarmNonCrypto && $cacheDeepEnough && $cacheMovesEnough) {
+      $fastMatchesLive = candles_series_matches_live($fastItems, $symbol, $market, $type);
+      if ($allowWarmNonCrypto && $cacheDeepEnough && $cacheMovesEnough && $fastMatchesLive) {
         candles_json_response(['ok'=>true,'cached'=>true, 'warm'=>true, 'source'=>'cache_warm'], $fastItems, $limit, 0);
       }
-      $fastMatchesLive = candles_series_matches_live($fastItems, $symbol, $market, $type);
       if ($fastMatchesLive && ($providerType !== 'crypto' || $cacheDeepEnough)) {
         candles_json_response(['ok'=>true,'cached'=>true, 'warm'=>false, 'cache_age'=>$age, 'cache_ttl'=>$maxStale], $fastItems, $limit, 0);
       }
@@ -1184,8 +1240,8 @@ try {
           $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
           $merged = array_merge($cachedAll, $items);
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-          candles_cache_save($symbol,$market,$tf, $merged, $type);
-          if (candles_has_display_history($out, $limit, $providerType)) {
+          if (candles_fast_cache_safe($out, $symbol, $market, $tf, $type, $providerType, $limit, $end)) {
+            candles_cache_save($symbol,$market,$tf, $merged, $type);
             candles_json_response(['ok'=>true,'source'=>'twelvedata_time_series','warm'=>true], $out, $limit, $end);
           }
         }
@@ -1213,14 +1269,11 @@ try {
           $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
           $merged = array_merge($cachedAll, $items);
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-          candles_cache_save($symbol,$market,$tf, $merged, $type);
-          if (in_array($providerType, ['stocks','arab','commodities'], true)) {
-            if (candles_has_display_history($out, $limit, $providerType)) {
+          if (candles_fast_cache_safe($out, $symbol, $market, $tf, $type, $providerType, $limit, $end)) {
+            candles_cache_save($symbol,$market,$tf, $merged, $type);
+            if (in_array($providerType, ['stocks','arab','commodities'], true)) {
               candles_json_response(['ok'=>true,'source'=>'yahoo_chart','warm'=>true], $out, $limit, $end);
             }
-          }
-          $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
-          if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
             candles_json_response(['ok'=>true,'source'=>'yahoo_chart','warm'=>false], $out, $limit, $end);
           }
         }
@@ -1261,8 +1314,10 @@ try {
           $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
           $merged = array_merge($cachedAll, $items);
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-          candles_cache_save($symbol,$market,$tf, $merged, $type);
-          candles_json_response(['ok'=>true,'source'=>'eodhd_intraday','warm'=>false], $out, $limit, $end);
+          if (candles_fast_cache_safe($out, $symbol, $market, $tf, $type, $providerType, $limit, $end)) {
+            candles_cache_save($symbol,$market,$tf, $merged, $type);
+            candles_json_response(['ok'=>true,'source'=>'eodhd_intraday','warm'=>false], $out, $limit, $end);
+          }
         }
       }
     } catch (Throwable $e) {
@@ -1312,14 +1367,11 @@ try {
       $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
       $merged = array_merge($cachedAll, $items);
       $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-      candles_cache_save($symbol,$market,$tf, $merged, $type);
-      if (in_array($providerType, ['stocks','arab','commodities','futures','forex'], true)) {
-        if (candles_has_display_history($out, $limit, $providerType)) {
+      if (candles_fast_cache_safe($out, $symbol, $market, $tf, $type, $providerType, $limit, $end)) {
+        candles_cache_save($symbol,$market,$tf, $merged, $type);
+        if (in_array($providerType, ['stocks','arab','commodities','futures','forex'], true)) {
           candles_json_response(['ok'=>true,'source'=>'aggs','warm'=>true], $out, $limit, $end);
         }
-      }
-      $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
-      if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
         candles_json_response(['ok'=>true,'source'=>'aggs','warm'=>false], $out, $limit, $end);
       }
     }
@@ -1344,14 +1396,11 @@ try {
           $cachedAll = candles_cache_load($symbol,$market,$tf,$type);
           $merged = array_merge($cachedAll, $items);
           $out = candles_finalize_items(candles_from_cache($merged, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-          candles_cache_save($symbol,$market,$tf, $merged, $type);
-          if (in_array($providerType, ['forex','commodities'], true)) {
-            if (candles_has_display_history($out, $limit, $providerType)) {
+          if (candles_fast_cache_safe($out, $symbol, $market, $tf, $type, $providerType, $limit, $end)) {
+            candles_cache_save($symbol,$market,$tf, $merged, $type);
+            if (in_array($providerType, ['forex','commodities'], true)) {
               candles_json_response(['ok'=>true,'source'=>'yahoo_chart_fallback','warm'=>true], $out, $limit, $end);
             }
-          }
-          $outMatchesLive = candles_series_matches_live($out, $symbol, $market, $type);
-          if ($outMatchesLive && candles_has_display_history($out, $limit, $providerType)) {
             candles_json_response(['ok'=>true,'source'=>'yahoo_chart_fallback','warm'=>false], $out, $limit, $end);
           }
         }
@@ -1368,7 +1417,7 @@ try {
   // Before synthetic fallback, preserve any real cached history we already have.
   if (!empty($cachedAll)) {
     $cachedOut = candles_finalize_items(candles_from_cache($cachedAll, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-    if (count($cachedOut) >= max(24, (int)ceil($limit * 0.25)) && candles_has_display_history($cachedOut, $limit, $providerType)) {
+    if (count($cachedOut) >= max(24, (int)ceil($limit * 0.25)) && candles_fast_cache_safe($cachedOut, $symbol, $market, $tf, $type, $providerType, $limit, $end)) {
       candles_json_response(['ok'=>true,'cached'=>true,'source'=>'cache_preserve'], $cachedOut, $limit, $end);
     }
   }
@@ -1443,7 +1492,8 @@ try {
     $fallbackCached = candles_cache_load($symbol,$market,$tf,$type);
     if ($fallbackCached) {
       $out = candles_finalize_items(candles_from_cache($fallbackCached, $end, $limit), $symbol, $market, $type, tf_seconds($tf), $end, $tf);
-      if (candles_has_display_history($out, $limit, vp_provider_asset_type($type))) {
+      $fallbackProviderType = vp_provider_asset_type($type);
+      if (candles_fast_cache_safe($out, $symbol, $market, $tf, $type, $fallbackProviderType, $limit, $end)) {
         candles_json_response(['ok'=>true,'cached'=>true,'soft_error'=>'provider_unavailable'], $out, $limit, $end);
       }
     }

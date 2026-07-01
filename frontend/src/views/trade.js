@@ -65,7 +65,7 @@ let chartPriceLines = { live: null, series: null };
 const closingPositions = new Set();
 const MARKET_LIST_STORAGE_KEY = 'vp_trade_market_lists_v2';
 const QUOTE_SEED_STORAGE_KEY = 'vp_trade_quote_seeds_v1';
-const CHART_CANDLE_STORAGE_KEY = 'vp_trade_chart_candles_v2';
+const CHART_CANDLE_STORAGE_KEY = 'vp_trade_chart_candles_v3';
 const CHART_WARMUP_STORAGE_KEY = 'vp_trade_chart_warmup_v1';
 const MARKET_LIST_STORAGE_MAX_AGE = 15 * 60 * 1000;
 const QUOTE_SEED_MAX_AGE = 10 * 60 * 1000;
@@ -265,7 +265,7 @@ function flushPersistentChartCache() {
   const entries = persistentChartEntries();
   trimPersistentChartEntries();
   writeJsonStorage(CHART_CANDLE_STORAGE_KEY, {
-    version: 2,
+    version: 3,
     entries: Object.fromEntries([...entries.entries()].map(([key, value]) => [key, value])),
   });
 }
@@ -1969,6 +1969,10 @@ function normalizeCandleRows(candles, options = {}) {
       low: Number(c.low || c.l),
       close: Number(c.close || c.c),
       volume: Number(c.volume || c.v || 0),
+      source: String(c.source || ''),
+      quality: String(c.quality || ''),
+      synthetic: !!c.synthetic,
+      visualGap: !!c.visualGap,
     }))
     .filter(c => c.time > 0 && c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0)
     .sort((a, b) => a.time - b.time);
@@ -2025,6 +2029,94 @@ function fillVisualCandleGaps(candles, type = get('type'), tf = get('tf')) {
   return out;
 }
 
+function candleRowsHaveMovement(candles, sample = 30) {
+  const rows = normalizeCandleRows(candles).slice(-Math.max(3, sample));
+  if (rows.length < 3) return false;
+  let min = Infinity;
+  let max = 0;
+  rows.forEach((c) => {
+    ['open', 'high', 'low', 'close'].forEach((key) => {
+      const v = Number(c[key] || 0);
+      if (v > 0) {
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+    });
+  });
+  if (!(max > 0) || !Number.isFinite(min)) return false;
+  return Math.abs(max - min) / Math.max(1, max) > 0.0000005;
+}
+
+function chartQuoteMatchTolerance(type = get('type'), symbol = get('symbol')) {
+  const value = normalizeType(type || 'crypto');
+  const sym = String(symbol || '').toUpperCase();
+  if (value === 'forex') return sym.includes('JPY') ? 0.004 : 0.003;
+  if (value === 'commodities') return /^X(?:AU|AG|PT|PD)USD$/.test(sym) ? 0.008 : 0.015;
+  if (value === 'futures') return 0.02;
+  if (value === 'crypto') return 0.035;
+  if (['stocks', 'arab'].includes(value)) return 0.08;
+  return 0.03;
+}
+
+function chartCacheMaxLagSeconds(type = get('type'), tf = get('tf')) {
+  const value = normalizeType(type || 'crypto');
+  const step = tfSeconds(tf);
+  if (value === 'crypto') return Math.max(step * 3, 600);
+  if (['forex', 'commodities', 'futures'].includes(value)) return Math.max(step * 12, 3600);
+  return Math.max(step * 48, 86400);
+}
+
+function chartDataIsFreshEnough(candles, type = get('type'), tf = get('tf'), quote = get('activeQuote')) {
+  const rows = normalizeCandleRows(candles);
+  const last = rows[rows.length - 1];
+  if (!last) return false;
+  const value = normalizeType(type || 'crypto');
+  if (!['crypto', 'forex', 'commodities', 'futures'].includes(value)) return true;
+  const qState = quote ? quoteStateKey(quote) : '';
+  if (qState && !['live', 'cached'].includes(qState)) return true;
+  const lag = Math.floor(Date.now() / 1000) - Number(last.time || 0);
+  return lag <= chartCacheMaxLagSeconds(value, tf);
+}
+
+function chartDataMatchesQuote(candles, type = get('type'), symbol = get('symbol'), quote = get('activeQuote')) {
+  const rows = normalizeCandleRows(candles);
+  const p = Number(quote?.price || quote?.q_price || 0);
+  if (!rows.length || !(p > 0)) return true;
+  const qState = quoteStateKey(quote);
+  if (['reference', 'stale', 'unavailable', 'chart_quote'].includes(qState)) return true;
+  const tail = rows.slice(-8).map(c => Number(c.close || 0)).filter(v => v > 0).sort((a, b) => a - b);
+  const anchor = tail.length ? tail[Math.floor((tail.length - 1) / 2)] : Number(rows[rows.length - 1].close || 0);
+  if (!(anchor > 0)) return true;
+  const deviation = Math.abs(anchor - p) / Math.max(1, Math.abs(anchor), Math.abs(p));
+  return deviation <= chartQuoteMatchTolerance(type, symbol);
+}
+
+function chartDataUsableForDisplay(candles, { type = get('type'), symbol = get('symbol'), tf = get('tf'), quote = get('activeQuote'), strict = false } = {}) {
+  const rows = normalizeCandleRows(candles);
+  if (rows.length < 10) return false;
+  if (!candleRowsHaveMovement(rows, 24)) return false;
+  const hasSynthetic = rows.some(c => c.synthetic || String(c.source || '').includes('synthetic') || String(c.quality || '').includes('synthetic'));
+  if (hasSynthetic && strict) return false;
+  if (strict && !chartDataIsFreshEnough(rows, type, tf, quote)) return false;
+  return chartDataMatchesQuote(rows, type, symbol, quote);
+}
+
+function livePriceCompatibleWithChart(priceValue, type = get('type'), symbol = get('symbol')) {
+  const p = Number(priceValue || 0);
+  if (!(p > 0) || !allCandles.length) return p > 0;
+  const rows = normalizeCandleRows(allCandles).slice(-90);
+  if (!rows.length) return true;
+  let low = Infinity;
+  let high = 0;
+  rows.forEach((c) => {
+    low = Math.min(low, Number(c.low || c.close || 0));
+    high = Math.max(high, Number(c.high || c.close || 0));
+  });
+  if (!(high > 0) || !Number.isFinite(low)) return true;
+  const pad = Math.max((high - low) * 1.4, high * chartQuoteMatchTolerance(type, symbol));
+  return p >= Math.max(0, low - pad) && p <= high + pad;
+}
+
 function syntheticCandlesFromPrice(symbol, type, tf, priceValue, rows = 120) {
   const base = Number(priceValue || 0);
   if (!(base > 0)) return [];
@@ -2065,6 +2157,7 @@ function chartFallbackPrice(container, symbol = get('symbol')) {
 }
 
 function scheduleSyntheticChartFallback(container, symbol, type, runId) {
+  if (window.__MEX_ALLOW_SYNTHETIC_CHART__ !== true) return;
   [900, 1800, 3200].forEach((delay) => {
     setTimeout(() => {
       if (!isCurrentRun(runId, symbol, type)) return;
@@ -2153,6 +2246,8 @@ function mergeCandleSets(base, incoming) {
 function rememberChartCandles(key = currentChartKey(), candles = allCandles) {
   const data = normalizeCandleRows(candles);
   if (!key || !data.length) return;
+  const quote = key === currentChartKey() ? get('activeQuote') : null;
+  if (!chartDataUsableForDisplay(data, { strict: false, quote })) return;
   chartCandleCache.delete(key);
   chartCandleCache.set(key, data.slice(-CHART_MAX_INITIAL_LIMIT));
   while (chartCandleCache.size > CHART_CANDLE_CACHE_MAX) {
@@ -2238,7 +2333,7 @@ async function prefetchChartCandles(item, tf = get('tf') || '15m', options = {})
       retry: 0,
       cacheTtl: 120000,
     });
-    if (data?.items?.length) {
+    if (data?.items?.length && !data?.synthetic && !String(data?.source || '').includes('synthetic')) {
       rememberChartCandles(key, data.items);
       return true;
     }
@@ -2302,6 +2397,7 @@ function applyChartData(candles, { fit = false, key = currentChartKey(), preserv
   if (!candleSeries || !volumeSeries) return false;
   const data = normalizeCandleRows(candles, { fillGaps: true, type: get('type'), tf: get('tf') });
   if (!data.length) return false;
+  if (!provisional && !chartDataUsableForDisplay(data, { strict: true })) return false;
   if (skipUnchanged && chartSeriesKey === key && !hasCandleDelta(data)) return true;
   const replacingSeries = chartSeriesKey !== key || !allCandles.length || (chartSeriesSynthetic && !provisional);
   if (!replacingSeries && chartSeriesKey === key && allCandles.length) {
@@ -2539,6 +2635,7 @@ function applyChartPriceOptions(type = get('type'), symbol = get('symbol')) {
   try { candleSeries?.applyOptions({ priceFormat, lastValueVisible: false, priceLineVisible: false }); } catch (_e) {}
   try { lineSeries?.applyOptions({ priceFormat, lastValueVisible: false, priceLineVisible: false }); } catch (_e) {}
   try { areaSeries?.applyOptions({ priceFormat, lastValueVisible: false, priceLineVisible: false }); } catch (_e) {}
+  try { volumeSeries?.applyOptions({ lastValueVisible: false, priceLineVisible: false }); } catch (_e) {}
   try {
     chart?.applyOptions({
       rightPriceScale: {
@@ -2617,8 +2714,11 @@ function setChartPriceLine(kind, priceValue, options) {
 
 function updateChartPriceLines(q = get('activeQuote') || {}) {
   if (!chart || !candleSeries || !chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
-  const p = Number(q.price || q.q_price || lastCandle?.close || 0);
-  if (!(p > 0)) return;
+  const p = Number(q.price || q.q_price || 0);
+  if (!(p > 0) || !livePriceCompatibleWithChart(p, get('type'), get('symbol'))) {
+    clearChartPriceLines();
+    return;
+  }
   chartPriceLines.live = setChartPriceLine('live', p, {
     color: '#00e5ff',
     title: 'LIVE',
@@ -2823,12 +2923,14 @@ async function initChart(container, candles, runId = tradeRunId, options = {}) {
     priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, visible: chartType === 'area',
     priceFormat: mainPriceFormat,
   });
-  volumeSeries = chart.addHistogramSeries({ 
-    priceFormat: { type: 'volume' }, 
+  volumeSeries = chart.addHistogramSeries({
+    priceFormat: { type: 'volume' },
     priceScaleId: 'vol',
     color: 'rgba(93,124,255,0.3)',
+    lastValueVisible: false,
+    priceLineVisible: false,
   });
-  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 }, visible: false, borderVisible: false });
 
   // Indicators
   ma7Series = chart.addLineSeries({ color: 'rgba(255,193,7,0.55)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
@@ -2839,7 +2941,7 @@ async function initChart(container, candles, runId = tradeRunId, options = {}) {
   bollLowerSeries = chart.addLineSeries({ color: 'rgba(186,104,200,0.45)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
 
   // RSI (separate price scale)
-  rsiSeries = chart.addLineSeries({ color: '#e040fb', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, priceScaleId: 'rsi', visible: false });
+  rsiSeries = chart.addLineSeries({ color: '#e040fb', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'rsi', visible: false });
   rsiRefLine30 = chart.addLineSeries({ color: 'rgba(0,192,135,0.25)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'rsi', visible: false });
   rsiRefLine70 = chart.addLineSeries({ color: 'rgba(246,70,93,0.25)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'rsi', visible: false });
   chart.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.76, bottom: 0.02 }, visible: false });
@@ -2847,11 +2949,11 @@ async function initChart(container, candles, runId = tradeRunId, options = {}) {
   // MACD (separate price scale)
   macdSeries = chart.addLineSeries({ color: '#5d7cff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'macd', visible: false });
   macdSignalSeries = chart.addLineSeries({ color: '#ff6d00', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'macd', visible: false });
-  macdHistSeries = chart.addHistogramSeries({ priceFormat: { type: 'price', precision: 4 }, priceScaleId: 'macd', visible: false });
+  macdHistSeries = chart.addHistogramSeries({ priceFormat: { type: 'price', precision: 4 }, priceScaleId: 'macd', visible: false, lastValueVisible: false, priceLineVisible: false });
   chart.priceScale('macd').applyOptions({ scaleMargins: { top: 0.76, bottom: 0.02 }, visible: false });
 
   // Stochastic (separate price scale)
-  stochKSeries = chart.addLineSeries({ color: '#00bcd4', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, priceScaleId: 'stoch', visible: false });
+  stochKSeries = chart.addLineSeries({ color: '#00bcd4', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'stoch', visible: false });
   stochDSeries = chart.addLineSeries({ color: '#ff9800', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceScaleId: 'stoch', visible: false });
   chart.priceScale('stoch').applyOptions({ scaleMargins: { top: 0.76, bottom: 0.02 }, visible: false });
 
@@ -3256,7 +3358,7 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
   let paintedFromCache = false;
   if (!options.silent && !options.refresh) {
     const cached = cachedChartCandles(reqKey);
-    if (cached.length) {
+    if (cached.length && chartDataUsableForDisplay(cached, { type, symbol, tf, quote: get('activeQuote'), strict: true })) {
       await chartReady;
       if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
       if (chart && candleSeries) {
@@ -3267,6 +3369,8 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       }
       paintedFromCache = true;
       showChartOverlay(container);
+    } else if (cached.length) {
+      forgetChartCandles(reqKey);
     }
   }
   try {
@@ -3341,7 +3445,8 @@ async function loadChartData(container, symbol, type, tf, runId = tradeRunId, ch
       if (!isActiveChartRequest(requestId, runId, symbol, type, reqKey)) return;
       if (fresh?.items?.length) chartItems = fresh.items;
     }
-    if (chartItems.length) {
+    const responseIsSynthetic = !!candles?.synthetic || String(candles?.source || '').includes('synthetic');
+    if (chartItems.length && !responseIsSynthetic && chartDataUsableForDisplay(chartItems, { type, symbol, tf, quote: get('activeQuote'), strict: true })) {
       if (chart && candleSeries) {
         const replacingSynthetic = chartSeriesSynthetic && chartSeriesKey === reqKey;
         applyChartData(chartItems, {
@@ -3966,6 +4071,7 @@ function syncOrderField(container, field, value) {
 function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetType = get('type')) {
   if (!isCurrentRun(runId) || !candleSeries || !lastCandle || !(priceValue > 0)) return;
   if (!chartSeriesKey || chartSeriesKey !== currentChartKey()) return;
+  if (!livePriceCompatibleWithChart(priceValue, assetType, get('symbol'))) return;
   const type = normalizeType(assetType);
   const tf = get('tf') || '1m';
   const guardedNonCryptoTail = type !== 'crypto' && ['1m','3m','5m','15m'].includes(tf);
