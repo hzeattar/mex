@@ -9,6 +9,8 @@ if ($method !== 'POST') {
   $lang = strtolower((string)($_GET['lang'] ?? ($_COOKIE['vp_lang'] ?? 'en')));
   if (!in_array($lang, ['en','ar','ru'], true)) $lang = 'en';
   $rtl = ($lang === 'ar');
+  // Persist language choice so the SPA picks it up after registration
+  setcookie('vp_lang', $lang, ['expires'=>time()+31536000,'path'=>'/','samesite'=>'Lax','httponly'=>false,'secure'=>false]);
   $countries = auth_registration_countries($lang);
   $defaultCountry = strtoupper(trim((string)($_GET['country'] ?? 'US')));
   if (!auth_registration_country_by_code($defaultCountry, $lang)) $defaultCountry = 'US';

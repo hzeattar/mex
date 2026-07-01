@@ -18,6 +18,10 @@ try {
 }
 $isLoggedIn = false;
 try { $isLoggedIn = session_user_id() > 0; } catch (Throwable $e) {}
+// Persist language choice so the SPA picks it up
+if (!isset($_COOKIE['vp_lang']) || $_COOKIE['vp_lang'] !== $lang) {
+  setcookie('vp_lang', $lang, ['expires'=>time()+31536000,'path'=>'/','samesite'=>'Lax','httponly'=>false,'secure'=>false]);
+}
 function _h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 $txt = function(string $key) use ($lang): string {
   static $T = null;
