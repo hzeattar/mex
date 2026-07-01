@@ -3831,13 +3831,17 @@ function updateLiveCandle(priceValue, runId = tradeRunId, sourceTime = 0, assetT
   const guardedNonCryptoTail = type !== 'crypto' && ['1m','3m','5m','15m'].includes(tf);
   const bucket = currentBucketTime(sourceTime, assetType);
   const base = pendingLiveCandle?.candle || lastCandle;
+  let forceQuoteAnchor = false;
   if (guardedNonCryptoTail) {
     const anchor = Number(base.close || base.open || 0);
     const deviation = anchor > 0 ? Math.abs(priceValue - anchor) / Math.max(anchor, priceValue, 1) : 0;
-    if (deviation > liveTailTolerance(type)) return;
+    forceQuoteAnchor = deviation > liveTailTolerance(type);
   }
   let next;
-  if (bucket <= base.time) {
+  if (forceQuoteAnchor) {
+    const anchorTime = Math.max(Number(bucket || 0), Number(base.time || 0));
+    next = { time: anchorTime, open: priceValue, high: priceValue, low: priceValue, close: priceValue, volume: 0, liveAnchor: true };
+  } else if (bucket <= base.time) {
     const high = guardedNonCryptoTail ? Math.max(base.high, priceValue) : Math.max(base.high, priceValue);
     const low = guardedNonCryptoTail ? Math.min(base.low, priceValue) : Math.min(base.low, priceValue);
     next = { ...base, close: priceValue, high, low };
