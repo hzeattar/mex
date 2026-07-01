@@ -157,7 +157,9 @@ if (!function_exists('stream_latest_cached_candle_quote')) {
       if (!is_array($row)) return;
       $quality = strtolower((string)($row['quality'] ?? ''));
       if (!empty($row['synthetic']) || in_array($quality, ['synthetic','seed','gap_fill'], true)) return;
-      if (!$sourceAllowed((string)($row['source'] ?? ''))) return;
+      $source = strtolower(trim((string)($row['source'] ?? '')));
+      $realCachedCandle = ($source === '' || in_array($source, ['cache','cache_fast'], true)) && str_starts_with($quality, 'real');
+      if (!$sourceAllowed($source) && !$realCachedCandle) return;
       $price = (float)($row['close'] ?? $row['c'] ?? 0);
       $time = (int)($row['time'] ?? $row['t'] ?? 0);
       if (!($price > 0) || $time <= 0) return;
@@ -471,15 +473,20 @@ if ($quoteSymbols) {
         }
       } catch (Throwable $ignored) {}
     }
-    if ($p <= 0 && in_array($assetTypeForSym, ['stocks','arab'], true)) {
+    if (($p <= 0 && in_array($assetTypeForSym, ['stocks','arab'], true)) || $assetTypeForSym === 'arab') {
       try {
         $candleQuote = stream_latest_cached_candle_quote($sym, $effectiveMarketForSym, $assetTypeForSym);
         if (is_array($candleQuote) && (float)($candleQuote['price'] ?? 0) > 0) {
-          $p = (float)$candleQuote['price'];
-          $open = (float)($candleQuote['open'] ?? 0);
-          $chg = $open > 0 ? (($p / $open) - 1.0) * 100.0 : $chg;
-          $src = 'twelvedata';
-          $updTs = (int)($candleQuote['updated_at'] ?? $updTs) ?: $updTs;
+          $candlePrice = (float)$candleQuote['price'];
+          $drift = ($p > 0 && $candlePrice > 0) ? abs($p - $candlePrice) / max(0.000001, $candlePrice) : 1.0;
+          $marketClosed = function_exists('qa_market_is_open') ? !qa_market_is_open($assetTypeForSym) : true;
+          if ($p <= 0 || ($assetTypeForSym === 'arab' && ($marketClosed || $drift > 0.05))) {
+            $p = $candlePrice;
+            $open = (float)($candleQuote['open'] ?? 0);
+            $chg = $open > 0 ? (($p / $open) - 1.0) * 100.0 : $chg;
+            $src = 'twelvedata';
+            $updTs = (int)($candleQuote['updated_at'] ?? $updTs) ?: $updTs;
+          }
         }
       } catch (Throwable $ignoredCandleQuote) {}
     }
