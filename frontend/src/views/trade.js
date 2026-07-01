@@ -2217,6 +2217,7 @@ function applyChartData(candles, { fit = false, key = currentChartKey(), preserv
   const data = normalizeCandleRows(candles, { fillGaps: true, type: get('type'), tf: get('tf') });
   if (!data.length) return false;
   if (skipUnchanged && chartSeriesKey === key && !hasCandleDelta(data)) return true;
+  const replacingSeries = chartSeriesKey !== key || !allCandles.length;
   if (chartSeriesKey === key && allCandles.length) {
     // Incoming is the latest window; merge it with retained older history.
     allCandles = mergeCandleSets(allCandles, data);
@@ -2226,7 +2227,7 @@ function applyChartData(candles, { fit = false, key = currentChartKey(), preserv
   }
   chartSeriesKey = key;
   rememberChartCandles(key, allCandles);
-  renderChartSeries({ fit, preserveRange });
+  renderChartSeries({ fit: fit || replacingSeries, preserveRange: preserveRange && !replacingSeries });
   return true;
 }
 
@@ -2313,7 +2314,12 @@ function renderChartSeries({ fit = false, preserveRange = false } = {}) {
     }
     lastCandle = { ...data[data.length - 1] };
     if (savedRange) { try { chart.timeScale().setVisibleRange(savedRange); } catch (_e) {} }
-    else if (fit) chart.timeScale().fitContent();
+    else if (fit) {
+      chart.timeScale().fitContent();
+      keepLiveCandleInFocus();
+    } else if (!preserveRange) {
+      keepLiveCandleInFocus();
+    }
     updateChartLegend(null);
     updateChartPriceLines();
   } catch (_e) {}
@@ -2411,6 +2417,25 @@ function chartPrecisionFor(type = get('type'), symbol = get('symbol')) {
 function chartPriceFormatFor(type = get('type'), symbol = get('symbol')) {
   const precision = chartPrecisionFor(type, symbol);
   return { type: 'price', precision, minMove: Math.pow(10, -precision) };
+}
+
+function chartPreferredRightOffset(target = null) {
+  const box = target?.id === 'chart-box'
+    ? target
+    : (target?.querySelector ? $('#chart-box', target) : document.getElementById('chart-box'));
+  const width = Math.max(320, Number(box?.clientWidth || 0));
+  const barSpacing = 8;
+  const visibleBars = width / barSpacing;
+  const desired = visibleBars * (width >= 900 ? 0.32 : 0.28);
+  const min = width >= 900 ? 36 : 16;
+  const max = width >= 900 ? 64 : 42;
+  return Math.round(Math.max(min, Math.min(max, desired)));
+}
+
+function keepLiveCandleInFocus(target = null) {
+  if (!chart) return;
+  const rightOffset = chartPreferredRightOffset(target);
+  safeChartOp(() => chart.timeScale().applyOptions({ rightOffset }));
 }
 
 function applyChartPriceOptions(type = get('type'), symbol = get('symbol')) {
@@ -2663,7 +2688,7 @@ async function initChart(container, candles, runId = tradeRunId) {
     layout: { background: { color: '#060A14' }, textColor: '#8ba1cf', fontSize: 11, fontFamily: "'Inter', system-ui, sans-serif" },
     grid: { vertLines: { color: 'rgba(129,160,220,0.04)' }, horzLines: { color: 'rgba(129,160,220,0.04)' } },
     crosshair: { mode: 0, vertLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff', width: 1, style: 2, visible: true, labelVisible: true }, horzLine: { color: 'rgba(93,124,255,0.3)', labelBackgroundColor: '#5d7cff', width: 1, style: 2, visible: true, labelVisible: true } },
-    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: 8, barSpacing: 8, minBarSpacing: 2, fixLeftEdge: false, fixRightEdge: false },
+    timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(129,160,220,0.08)', rightOffset: chartPreferredRightOffset(el), barSpacing: 8, minBarSpacing: 2, fixLeftEdge: false, fixRightEdge: false },
     rightPriceScale: { visible: true, borderVisible: true, borderColor: 'rgba(129,160,220,0.16)', scaleMargins: { top: 0.1, bottom: 0.2 }, autoScale: true, alignLabels: true, entireTextOnly: false },
     watermark: { visible: true, text: 'MEX Group', color: 'rgba(93,124,255,0.06)', fontSize: 48, horzAlign: 'center', vertAlign: 'center' },
     width: Math.max(320, el.clientWidth),
@@ -2762,7 +2787,10 @@ async function initChart(container, candles, runId = tradeRunId) {
 
   resizeObserver = new ResizeObserver(() => {
     if (!chart || !el) return;
-    safeChartOp(() => chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) }));
+    safeChartOp(() => {
+      chart.applyOptions({ width: Math.max(320, el.clientWidth), height: Math.max(260, el.clientHeight) });
+      chart.timeScale().applyOptions({ rightOffset: chartPreferredRightOffset(el) });
+    });
   });
   resizeObserver.observe(el);
   // Force correct size on first paint â€” el.clientWidth may be 0 before layout settles
@@ -2773,6 +2801,7 @@ async function initChart(container, candles, runId = tradeRunId) {
     safeChartOp(() => {
       chart.applyOptions({ width: w, height: h });
       chart.timeScale().fitContent();
+      keepLiveCandleInFocus(el);
     });
   });
 }
@@ -3268,7 +3297,12 @@ function toggleActivityExpand(container) {
     btn.setAttribute('title', open ? t('trade.close_activity', 'Close trading activity') : t('trade.expand_activity', 'Expand trading activity'));
     btn.innerHTML = open ? icons.close : (icons.fullscreen || icons.expand || 'â›¶');
   }
-  if (chart && !open) setTimeout(() => chart.timeScale?.().fitContent?.(), 80);
+  if (chart && !open) setTimeout(() => {
+    try {
+      chart.timeScale?.().fitContent?.();
+      keepLiveCandleInFocus(container);
+    } catch (_e) {}
+  }, 80);
 }
 
 async function closePosition(container, trigger) {
@@ -3877,7 +3911,7 @@ function flushLiveCandleFrame() {
   }
   updateChartLegend(null);
   updateChartPriceLines();
-  try { chart?.timeScale?.().scrollToRealTime?.(); } catch (_e) {}
+  keepLiveCandleInFocus();
 }
 
 function cancelLiveCandleFrame() {

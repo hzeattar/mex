@@ -11,7 +11,7 @@
     "name": "vendor"
   },
   "src/main.js": {
-    "file": "js/main-DTznaWyb.js",
+    "file": "js/main-BeKja_Va.js",
     "name": "main",
     "src": "src/main.js",
     "isEntry": true,
@@ -38,7 +38,7 @@
     "isDynamicEntry": true
   },
   "src/views/account.js": {
-    "file": "js/account-Xm9iF7qt.js",
+    "file": "js/account-NgxQeN_6.js",
     "name": "account",
     "src": "src/views/account.js",
     "isDynamicEntry": true,
@@ -47,7 +47,7 @@
     ]
   },
   "src/views/funding.js": {
-    "file": "js/funding-BDzM6V8I.js",
+    "file": "js/funding-rsDjHUGg.js",
     "name": "funding",
     "src": "src/views/funding.js",
     "isDynamicEntry": true,
@@ -56,7 +56,7 @@
     ]
   },
   "src/views/home.js": {
-    "file": "js/home-Ctrubbvg.js",
+    "file": "js/home-CkoK23WV.js",
     "name": "home",
     "src": "src/views/home.js",
     "isDynamicEntry": true,
@@ -66,7 +66,7 @@
     ]
   },
   "src/views/invest.js": {
-    "file": "js/invest-CydDlMu3.js",
+    "file": "js/invest-Dahg2m11.js",
     "name": "invest",
     "src": "src/views/invest.js",
     "isDynamicEntry": true,
@@ -75,7 +75,7 @@
     ]
   },
   "src/views/kyc.js": {
-    "file": "js/kyc-Cl2g2sMr.js",
+    "file": "js/kyc-CgX47KJn.js",
     "name": "kyc",
     "src": "src/views/kyc.js",
     "isDynamicEntry": true,
@@ -84,7 +84,7 @@
     ]
   },
   "src/views/news.js": {
-    "file": "js/news-DYXDauZb.js",
+    "file": "js/news-O7ROEryv.js",
     "name": "news",
     "src": "src/views/news.js",
     "isDynamicEntry": true,
@@ -93,7 +93,7 @@
     ]
   },
   "src/views/portfolio.js": {
-    "file": "js/portfolio-D-6XstBU.js",
+    "file": "js/portfolio-jYKhLXDx.js",
     "name": "portfolio",
     "src": "src/views/portfolio.js",
     "isDynamicEntry": true,
@@ -102,7 +102,7 @@
     ]
   },
   "src/views/support.js": {
-    "file": "js/support-DXknw0li.js",
+    "file": "js/support-C_lvWb2s.js",
     "name": "support",
     "src": "src/views/support.js",
     "isDynamicEntry": true,
@@ -111,7 +111,7 @@
     ]
   },
   "src/views/trade.js": {
-    "file": "js/trade-BNioHf8F.js",
+    "file": "js/trade-BoBD08zA.js",
     "name": "trade",
     "src": "src/views/trade.js",
     "isDynamicEntry": true,
