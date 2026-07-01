@@ -137,6 +137,44 @@ if (!function_exists('stream_enrich_market_meta')) {
     return $meta;
   }
 }
+if (!function_exists('stream_latest_cached_candle_quote')) {
+  function stream_latest_cached_candle_quote(string $symbol, string $market, string $type): ?array {
+    $symbol = strtoupper(trim($symbol));
+    if ($symbol === '' || !preg_match('/^[A-Z0-9:._-]{1,32}$/', $symbol)) return null;
+    $market = strtolower(trim($market)) === 'perp' ? 'perp' : 'spot';
+    $type = vp_normalize_asset_type($type ?: 'generic');
+    $safe = preg_replace('/[^A-Z0-9_]/', '_', $symbol);
+    $safe = substr((string)$safe, 0, 40);
+    $safeType = preg_replace('/[^a-z0-9_]/', '_', strtolower($type ?: 'generic'));
+    $best = null;
+    foreach (['1m','5m','15m','30m','1h','1d'] as $tf) {
+      $path = __DIR__ . '/../data/candles_v5_' . $market . '_' . $safeType . '_' . strtolower($safe) . '_' . $tf . '.json';
+      if (!is_file($path)) continue;
+      $raw = @file_get_contents($path);
+      if (!is_string($raw) || $raw === '') continue;
+      $rows = json_decode($raw, true);
+      if (!is_array($rows) || !$rows) continue;
+      for ($i = count($rows) - 1; $i >= 0; $i--) {
+        $row = is_array($rows[$i] ?? null) ? $rows[$i] : null;
+        if (!$row) continue;
+        $quality = strtolower((string)($row['quality'] ?? ''));
+        if (!empty($row['synthetic']) || in_array($quality, ['synthetic','seed','gap_fill'], true)) continue;
+        $price = (float)($row['close'] ?? $row['c'] ?? 0);
+        $time = (int)($row['time'] ?? $row['t'] ?? 0);
+        if (!($price > 0) || $time <= 0) continue;
+        if (!is_array($best) || $time > (int)($best['updated_at'] ?? 0)) {
+          $best = [
+            'price' => $price,
+            'open' => (float)($row['open'] ?? $row['o'] ?? 0),
+            'updated_at' => $time,
+          ];
+        }
+        break;
+      }
+    }
+    return $best;
+  }
+}
 $resolveStreamContext = static function(string $sym) use (&$marketInfoBySymbol, $reqTypeRaw, $reqMarket): array {
   $sym = strtoupper(trim($sym));
   $info = $marketInfoBySymbol[$sym] ?? [];
@@ -403,6 +441,18 @@ if ($quoteSymbols) {
           }
         }
       } catch (Throwable $ignored) {}
+    }
+    if ($p <= 0 && in_array($assetTypeForSym, ['stocks','arab'], true)) {
+      try {
+        $candleQuote = stream_latest_cached_candle_quote($sym, $effectiveMarketForSym, $assetTypeForSym);
+        if (is_array($candleQuote) && (float)($candleQuote['price'] ?? 0) > 0) {
+          $p = (float)$candleQuote['price'];
+          $open = (float)($candleQuote['open'] ?? 0);
+          $chg = $open > 0 ? (($p / $open) - 1.0) * 100.0 : $chg;
+          $src = 'twelvedata';
+          $updTs = (int)($candleQuote['updated_at'] ?? $updTs) ?: $updTs;
+        }
+      } catch (Throwable $ignoredCandleQuote) {}
     }
     $quotes[$sym] = [
       'symbol' => $sym,
