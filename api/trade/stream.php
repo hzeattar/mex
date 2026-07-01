@@ -433,7 +433,7 @@ if ($quoteSymbols) {
         }
       }
     }
-    if ($p <= 0 && function_exists('qa_quote_payload')) {
+    if (($p <= 0 || $forceSmallLiveVerify) && function_exists('qa_quote_payload')) {
       try {
         $allowSmallLiveFallback = !$streamLiteLargeNonCrypto || count($quoteSymbols) <= 3;
         if ($assetTypeForSym !== 'crypto' && $allowSmallLiveFallback && ($p <= 0 || $forceSmallLiveVerify) && function_exists('quote_bulk_live')) {
